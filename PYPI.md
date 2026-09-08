@@ -22,6 +22,19 @@ correct, and prove that bounded operation before replacing a production path.
 Review the [compatibility matrix](https://wolfxl.com/docs/migration/compatibility-matrix/?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09)
 and [known limitations](https://wolfxl.com/docs/trust/limitations/?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
 
+## Compare openpyxl alternatives, measured
+
+WolfXL Community is benchmarked against the maintained open-source Python Excel
+libraries on a committed run. On 2026-08-18 (AMD EPYC 9655, Python 3.13.15,
+median of 5 rounds, 200,000-row x 8-column workbook), Community 2.0.1 wrote 1.6
+million cells in 0.73 s (11.10x openpyxl 3.1.5, 6.46x XlsxWriter 3.2.9, 5.01x
+PyExcelerate 0.13.0) and read them back in 0.39 s (11.85x openpyxl), with the
+lowest read peak memory in the field. Raw results and the harness are published
+under [`benchmarks/`](https://github.com/SynthGL/wolfxl-community/tree/main/benchmarks).
+
+Full tables, capability scope, and reproduction commands:
+[openpyxl alternatives, measured](https://wolfxl.com/openpyxl-alternatives?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
+
 ## Choose the right edition
 
 Community is the free option when supported workbook I/O is sufficient.
