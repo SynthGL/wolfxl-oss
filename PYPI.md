@@ -1,9 +1,10 @@
 # WolfXL Community
 
-WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported
-workbook creation, reading, writing, streaming exports, and existing-workbook
-edits. It is a free product, not a trial.
+**High-performance, openpyxl-compatible Excel library for Python, backed by Rust.**
 
+WolfXL is the fastest Python library to edit existing Excel (`.xlsx`, `.xlsm`) workbooks in place without rewriting from scratch. It is a drop-in openpyxl alternative designed to modify workbooks while preserving formatting, formulas, charts, drawing objects, and VBA macros.
+
+WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported workbook creation, reading, writing, streaming exports, and existing-workbook edits. It is a free product, not a trial.
 ## Install
 
 ```bash

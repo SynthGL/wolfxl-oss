@@ -11,7 +11,22 @@ requires-python = ">=3.9"
 dependencies = ["defusedxml>=0.7.1,<1.0"]
 license = { text = "MIT" }
 authors = [{ name = "Wolfgang Schoenberger" }]
-keywords = ["excel", "xlsx", "openpyxl", "rust", "performance", "spreadsheet", "formula", "calc", "financial"]
+keywords = [
+    "excel",
+    "xlsx",
+    "openpyxl",
+    "openpyxl-alternative",
+    "in-place-editing",
+    "preserve-formatting",
+    "rust",
+    "performance",
+    "fast-excel",
+    "spreadsheet",
+    "calamine",
+    "formula",
+    "calc",
+    "financial",
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",

@@ -1,13 +1,10 @@
 # WolfXL
 
-Openpyxl-compatible Excel I/O for Python, backed by Rust.
+**High-performance, openpyxl-compatible Excel library for Python, backed by Rust.**
 
-WolfXL Community is the maintained, MIT-licensed 2.0 generation of WolfXL for
-workbook creation, reading, writing, and streaming exports. Most openpyxl code
-runs unchanged after an import swap. Native recalculation, rendering, and
-format conversion ship separately in
-[WolfXL Commercial](https://wolfxl.com).
+WolfXL is the fastest Python library to edit existing Excel (`.xlsx`, `.xlsm`) workbooks in place without rewriting from scratch. It is a drop-in openpyxl alternative designed to modify workbooks while preserving formatting, formulas, charts, drawing objects, and VBA macros without corrupting the workbook structure.
 
+WolfXL Community is the maintained, MIT-licensed 2.0 release line for workbook creation, reading, writing, streaming exports, and template preservation. Most openpyxl code runs unchanged after a single import swap (`from wolfxl import load_workbook`). Native formula recalculation, headless PDF/image rendering, and format conversion ship separately in [WolfXL Commercial](https://wolfxl.com).
 [![PyPI](https://img.shields.io/pypi/v/wolfxl)](https://pypi.org/project/wolfxl/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/wolfxl/)
 [![License: MIT](https://img.shields.io/github/license/SynthGL/wolfxl-community)](LICENSE)
