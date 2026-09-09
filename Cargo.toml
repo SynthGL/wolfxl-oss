@@ -5,7 +5,7 @@ members = ["crates/wolfxl-core", "crates/wolfxl-cli", "crates/wolfxl-writer", "c
 [workspace.package]
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/SynthGL/wolfxl-community"
+repository = "https://github.com/SynthGL/wolfxl-oss"
 authors = ["Wolfgang Schoenberger"]
 
 [workspace.dependencies]

@@ -62,9 +62,9 @@ test = [
 
 [project.urls]
 Homepage = "https://wolfxl.com"
-Repository = "https://github.com/SynthGL/wolfxl-community"
-Issues = "https://github.com/SynthGL/wolfxl-community/issues"
-Changelog = "https://github.com/SynthGL/wolfxl-community/releases"
+Repository = "https://github.com/SynthGL/wolfxl-oss"
+Issues = "https://github.com/SynthGL/wolfxl-oss/issues"
+Changelog = "https://github.com/SynthGL/wolfxl-oss/releases"
 
 [tool.maturin]
 bindings = "pyo3"

@@ -8,7 +8,7 @@ WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported 
 ## Install
 
 ```bash
-python -m pip install wolfxl
+python -m pip install wolfxl==2.0.2
 ```
 
 Most supported openpyxl-shaped code starts with one import change:
@@ -31,7 +31,7 @@ median of 5 rounds, 200,000-row x 8-column workbook), Community 2.0.1 wrote 1.6
 million cells in 0.73 s (11.10x openpyxl 3.1.5, 6.46x XlsxWriter 3.2.9, 5.01x
 PyExcelerate 0.13.0) and read them back in 0.39 s (11.85x openpyxl), with the
 lowest read peak memory in the field. Raw results and the harness are published
-under [`benchmarks/`](https://github.com/SynthGL/wolfxl-community/tree/main/benchmarks).
+under [`benchmarks/`](https://github.com/SynthGL/wolfxl-oss/tree/main/benchmarks).
 
 Full tables, capability scope, and reproduction commands:
 [openpyxl alternatives, measured](https://wolfxl.com/openpyxl-alternatives?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).

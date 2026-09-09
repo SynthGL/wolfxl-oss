@@ -7,7 +7,7 @@ WolfXL is the fastest Python library to edit existing Excel (`.xlsx`, `.xlsm`) w
 WolfXL Community is the maintained, MIT-licensed 2.0 release line for workbook creation, reading, writing, streaming exports, and template preservation. Most openpyxl code runs unchanged after a single import swap (`from wolfxl import load_workbook`). Native formula recalculation, headless PDF/image rendering, and format conversion ship separately in [WolfXL Commercial](https://wolfxl.com).
 [![PyPI](https://img.shields.io/pypi/v/wolfxl)](https://pypi.org/project/wolfxl/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/wolfxl/)
-[![License: MIT](https://img.shields.io/github/license/SynthGL/wolfxl-community)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/SynthGL/wolfxl-oss)](LICENSE)
 
 [Quick start](#quick-start) ·
 [Migrating from openpyxl](#migrating-from-openpyxl) ·
@@ -16,7 +16,7 @@ WolfXL Community is the maintained, MIT-licensed 2.0 release line for workbook c
 [Community vs Commercial](#community-and-commercial) ·
 [wolfxl.com](https://wolfxl.com)
 
-![Median speedup over openpyxl 3.1.5 by benchmark case, from the committed results file](https://raw.githubusercontent.com/SynthGL/wolfxl-community/main/assets/benchmarks/speedup-vs-openpyxl.svg)
+![Median speedup over openpyxl 3.1.5 by benchmark case, from the committed results file](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/speedup-vs-openpyxl.svg)
 
 Median speedups over openpyxl 3.1.5 range from 2.6x on small in-place edits to
 27x on styled row writes, with most reads and writes between 7x and 14x
@@ -78,9 +78,9 @@ import openpyxl
 Full openpyxl comparison from the committed benchmark run (wolfxl 2.0.1 PyPI
 wheel, Apple M4 Pro, Python 3.13.9, median of 5 rounds):
 
-![1.6 million cells: wall-clock seconds for wolfxl and openpyxl](https://raw.githubusercontent.com/SynthGL/wolfxl-community/main/assets/benchmarks/large-file-seconds.svg)
+![1.6 million cells: wall-clock seconds for wolfxl and openpyxl](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/large-file-seconds.svg)
 
-![1.6 million cells: peak memory for wolfxl and openpyxl](https://raw.githubusercontent.com/SynthGL/wolfxl-community/main/assets/benchmarks/large-file-memory.svg)
+![1.6 million cells: peak memory for wolfxl and openpyxl](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/large-file-memory.svg)
 
 ### Against other open-source Python Excel libraries
 
@@ -95,17 +95,17 @@ mode, and pandas with the xlsxwriter engine. Each library is measured only
 inside its supported scope; write-only, read-only, DataFrame, and SQL
 specialists are labeled:
 
-![Write 200,000 x 8 plain values across thirteen libraries](https://raw.githubusercontent.com/SynthGL/wolfxl-community/main/assets/benchmarks/ecosystem-write-large.svg)
+![Write 200,000 x 8 plain values across thirteen libraries](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/ecosystem-write-large.svg)
 
-![Write 10,000 x 5 mixed types across thirteen libraries](https://raw.githubusercontent.com/SynthGL/wolfxl-community/main/assets/benchmarks/ecosystem-write-mixed.svg)
+![Write 10,000 x 5 mixed types across thirteen libraries](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/ecosystem-write-mixed.svg)
 
-![Write 100,000 x 5 unique strings across thirteen libraries](https://raw.githubusercontent.com/SynthGL/wolfxl-community/main/assets/benchmarks/ecosystem-write-strings.svg)
+![Write 100,000 x 5 unique strings across thirteen libraries](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/ecosystem-write-strings.svg)
 
-![Read 200,000 x 8, all values, across thirteen libraries](https://raw.githubusercontent.com/SynthGL/wolfxl-community/main/assets/benchmarks/ecosystem-read-large.svg)
+![Read 200,000 x 8, all values, across thirteen libraries](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/ecosystem-read-large.svg)
 
-![Peak memory: write 200,000 x 8 across thirteen libraries](https://raw.githubusercontent.com/SynthGL/wolfxl-community/main/assets/benchmarks/ecosystem-memory-write.svg)
+![Peak memory: write 200,000 x 8 across thirteen libraries](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/ecosystem-memory-write.svg)
 
-![Peak memory: read 200,000 x 8 across thirteen libraries](https://raw.githubusercontent.com/SynthGL/wolfxl-community/main/assets/benchmarks/ecosystem-memory-read.svg)
+![Peak memory: read 200,000 x 8 across thirteen libraries](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/ecosystem-memory-read.svg)
 
 wolfxl leads every case in this run, including reads (387 ms vs 394 ms for
 Polars and 403 ms for fastexcel, which return Arrow-backed tables rather than

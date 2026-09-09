@@ -13,7 +13,7 @@ should use the support channel included with their plan.
 ## Reporting a vulnerability
 
 Report vulnerabilities privately through
-[GitHub private vulnerability reporting](https://github.com/SynthGL/wolfxl-community/security/advisories/new).
+[GitHub private vulnerability reporting](https://github.com/SynthGL/wolfxl-oss/security/advisories/new).
 Do not open a public issue for a security report.
 
 Include the wolfxl version, a minimal reproducing workbook or script, and the
