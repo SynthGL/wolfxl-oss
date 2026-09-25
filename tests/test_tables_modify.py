@@ -29,8 +29,10 @@ Manual / out-of-band check (documented but not asserted in CI):
 
 from __future__ import annotations
 
+import re
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import openpyxl
 import pytest
@@ -323,3 +325,111 @@ def test_two_sheet_id_allocation_is_global(tmp_path: Path) -> None:
     assert "../tables/table2.xml" in s2_rels
     assert "../tables/table2.xml" not in s1_rels
     assert "../tables/table1.xml" not in s2_rels
+
+
+def _grow_existing(ws: Any, ref: str, new_columns: list[str]) -> None:
+    table = ws.tables["Existing"]
+    for name in new_columns:
+        table.tableColumns.append(TableColumn(id=len(table.tableColumns) + 1, name=name))
+    table.ref = ref
+
+
+def test_loaded_table_grows_rows_and_columns(tmp_path: Path) -> None:
+    """Widening and lengthening a loaded table rewrites its part in place:
+    new ref, matching autoFilter, appended column with a fresh id."""
+    src = tmp_path / "src.xlsx"
+    out = tmp_path / "out.xlsx"
+    _make_one_table_fixture(src)
+
+    wb = load_workbook(src, modify=True)
+    ws = wb.active
+    ws["D1"] = "Total"
+    for r in range(2, 8):
+        ws[f"D{r}"] = f"=A{r}+B{r}"
+    _grow_existing(ws, "A1:D7", ["Total"])
+    wb.save(out)
+    wb.close()
+
+    table_xml = _read_zip_text(out, "xl/tables/table1.xml")
+    assert 'ref="A1:D7"' in table_xml
+    assert re.search(r'<autoFilter[^>]*ref="A1:D7"', table_xml)
+    assert '<tableColumns count="4">' in table_xml
+    assert '<tableColumn id="4" name="Total"' in table_xml
+    assert _zip_namelist(out).count("xl/tables/table1.xml") == 1
+
+    reread = openpyxl.load_workbook(out)["Sheet1"].tables["Existing"]
+    assert reread.ref == "A1:D7"
+    assert [c.name for c in reread.tableColumns] == ["A", "B", "C", "Total"]
+
+
+def test_loaded_table_growth_alone_is_saved(tmp_path: Path) -> None:
+    """A save whose only change is a table's range still writes it."""
+    src = tmp_path / "src.xlsx"
+    out = tmp_path / "out.xlsx"
+    _make_one_table_fixture(src)
+
+    wb = load_workbook(src, modify=True)
+    wb.active.tables["Existing"].ref = "A1:C4"
+    wb.save(out)
+    wb.close()
+
+    assert 'ref="A1:C4"' in _read_zip_text(out, "xl/tables/table1.xml")
+
+
+def test_unchanged_loaded_table_part_is_untouched(tmp_path: Path) -> None:
+    src = tmp_path / "src.xlsx"
+    out = tmp_path / "out.xlsx"
+    _make_one_table_fixture(src)
+
+    wb = load_workbook(src, modify=True)
+    ws = wb.active
+    assert ws.tables["Existing"].ref == "A1:C5"
+    ws["E1"] = "note"
+    wb.save(out)
+    wb.close()
+
+    with zipfile.ZipFile(src) as a, zipfile.ZipFile(out) as b:
+        assert a.read("xl/tables/table1.xml") == b.read("xl/tables/table1.xml")
+
+
+def test_loaded_table_growth_across_two_saves(tmp_path: Path) -> None:
+    """The second save applies only the further growth, once."""
+    src = tmp_path / "src.xlsx"
+    first = tmp_path / "first.xlsx"
+    second = tmp_path / "second.xlsx"
+    _make_one_table_fixture(src)
+
+    wb = load_workbook(src, modify=True)
+    ws = wb.active
+    _grow_existing(ws, "A1:D5", ["D"])
+    wb.save(first)
+    _grow_existing(ws, "A1:E5", ["E"])
+    wb.save(second)
+    wb.close()
+
+    table_xml = _read_zip_text(second, "xl/tables/table1.xml")
+    assert 'ref="A1:E5"' in table_xml
+    assert table_xml.count('name="D"') == 1
+    assert [
+        c.name for c in openpyxl.load_workbook(second)["Sheet1"].tables["Existing"].tableColumns
+    ] == ["A", "B", "C", "D", "E"]
+
+
+@pytest.mark.parametrize(
+    ("ref", "new_columns", "message"),
+    [
+        ("B1:D5", ["D"], "top-left"),
+        ("A1:E5", ["D"], "spans 5 columns"),
+    ],
+)
+def test_loaded_table_growth_rejects_unsupported_shapes(
+    tmp_path: Path, ref: str, new_columns: list[str], message: str
+) -> None:
+    src = tmp_path / "src.xlsx"
+    _make_one_table_fixture(src)
+
+    wb = load_workbook(src, modify=True)
+    _grow_existing(wb.active, ref, new_columns)
+    with pytest.raises(ValueError, match=message):
+        wb.save(tmp_path / "out.xlsx")
+    wb.close()

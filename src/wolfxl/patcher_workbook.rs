@@ -1807,6 +1807,7 @@ pub(super) fn has_pending_save_work(patcher: &XlsxPatcher) -> bool {
         || !patcher.queued_hyperlinks.is_empty()
         || !patcher.queued_defined_names.is_empty()
         || !patcher.queued_tables.is_empty()
+        || !patcher.queued_table_growth.is_empty()
         || !patcher.queued_comments.is_empty()
         || !patcher.queued_sheet_renames.is_empty()
         || !patcher.queued_sheet_moves.is_empty()

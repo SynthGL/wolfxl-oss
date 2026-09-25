@@ -582,6 +582,19 @@ def _modify_mode_has_pending_changes(wb: Any) -> bool:
             return True
     if _has_pending_source_chart_authoring(wb):
         return True
+    if _has_pending_loaded_table_growth(wb):
+        return True
+    return False
+
+
+def _has_pending_loaded_table_growth(wb: Any) -> bool:
+    for ws in getattr(wb, "_sheets", {}).values():
+        loaded = getattr(getattr(ws, "_tables_cache", None), "loaded", None)
+        for table, saved_ref, saved_columns in (loaded or {}).values():
+            if table.ref != saved_ref:
+                return True
+            if tuple(column.name for column in table.tableColumns) != saved_columns:
+                return True
     return False
 
 

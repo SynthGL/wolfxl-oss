@@ -43,11 +43,64 @@ def flush_pending_tables_to_patcher(wb: Any) -> None:
         return
     for ws in wb._sheets.values():  # noqa: SLF001
         pending = ws._pending_tables  # noqa: SLF001
-        if not pending:
-            continue
         for table in pending:
             patcher.queue_table(ws.title, _table_payload(table))
         pending.clear()
+        loaded_tables = getattr(ws._tables_cache, "loaded", None)  # noqa: SLF001
+        if loaded_tables:
+            _queue_loaded_table_growth(patcher, ws.title, loaded_tables)
+
+
+def _queue_loaded_table_growth(
+    patcher: Any,
+    sheet: str,
+    loaded_tables: dict[str, tuple[Any, str, tuple[str, ...]]],
+) -> None:
+    """Queue growth of tables read from the source file.
+
+    A loaded table may grow down and to the right: its top-left cell and
+    existing columns stay fixed, and each new column is appended to
+    ``tableColumns``. The recorded state then advances so a later save
+    queues only further growth.
+    """
+    from wolfxl.utils.cell import get_column_letter, range_boundaries
+
+    for name, (table, saved_ref, saved_columns) in loaded_tables.items():
+        columns = tuple(column.name for column in table.tableColumns)
+        if table.ref == saved_ref and columns == saved_columns:
+            continue
+        min_col, min_row, max_col, max_row = range_boundaries(table.ref)
+        saved_min_col, saved_min_row, _, _ = range_boundaries(saved_ref)
+        if (min_col, min_row) != (saved_min_col, saved_min_row):
+            raise ValueError(
+                f"table '{name}' on '{sheet}': moving a loaded table's top-left "
+                f"cell is not supported (was {saved_ref}, now {table.ref})"
+            )
+        if columns[: len(saved_columns)] != saved_columns:
+            raise ValueError(
+                f"table '{name}' on '{sheet}': existing columns must stay as loaded; "
+                "append new TableColumn entries after them"
+            )
+        width = max_col - min_col + 1
+        if width != len(columns):
+            raise ValueError(
+                f"table '{name}' on '{sheet}': range {table.ref} spans {width} "
+                f"columns but the table lists {len(columns)}; append one "
+                "TableColumn per new column"
+            )
+        filter_max_row = max_row - (table.totalsRowCount or 0)
+        auto_filter_ref = (
+            f"{get_column_letter(min_col)}{min_row}:"
+            f"{get_column_letter(max_col)}{filter_max_row}"
+        )
+        patcher.queue_table_growth(
+            sheet,
+            name,
+            table.ref,
+            auto_filter_ref,
+            [str(column) for column in columns[len(saved_columns) :]],
+        )
+        loaded_tables[name] = (table, table.ref, columns)
 
 
 def _table_payload(table: Any) -> dict[str, Any]:

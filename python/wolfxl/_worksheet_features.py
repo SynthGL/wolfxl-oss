@@ -238,7 +238,7 @@ def get_tables_map(ws: Worksheet) -> Any:
             TableColumn(id=index + 1, name=str(column))
             for index, column in enumerate(columns_raw)
         ]
-        result[name] = Table(
+        table = Table(
             name=name,
             displayName=entry.get("displayName") or name,
             ref=entry.get("ref", ""),
@@ -249,6 +249,12 @@ def get_tables_map(ws: Worksheet) -> Any:
             totalsRowShown=entry.get("totals_row_shown"),
             tableStyleInfo=table_style_info,
             tableColumns=table_columns,
+        )
+        result[name] = table
+        result.loaded[name] = (
+            table,
+            table.ref,
+            tuple(column.name for column in table_columns),
         )
     ws._tables_cache = result  # noqa: SLF001
     return result
