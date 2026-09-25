@@ -117,7 +117,7 @@ never edited by hand.
 Install the current Community release:
 
 ```bash
-python -m pip install wolfxl==2.0.3
+python -m pip install wolfxl==2.0.4
 ```
 
 WolfXL Community supports Python 3.9 and newer CPython versions for which a
