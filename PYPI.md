@@ -33,9 +33,10 @@ and [known limitations](https://wolfxl.com/docs/trust/limitations/?utm_source=py
 - **openpyxl is slow or runs out of memory on a large file.** Read the
   [large-file receipts](https://wolfxl.com/openpyxl-large-files?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09):
   seconds and peak memory for 1.6-million-cell reads, writes, and edits.
-- **You need to edit an existing workbook without losing formatting.** Use
-  `load_workbook(path, modify=True)` and review the
-  [template preservation approach](https://wolfxl.com/openpyxl-preservation?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
+- **openpyxl drops parts of your template when it saves.** On a sheet with an
+  extension data validation and a sparkline, one cell edit saved by openpyxl
+  3.1.5 removed both; `load_workbook(path, modify=True)` in WolfXL 2.0.2 kept
+  both. [Why openpyxl loses template parts](https://wolfxl.com/openpyxl-preservation?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
 - **You are moving existing openpyxl code.** Follow the
   [openpyxl migration guide](https://wolfxl.com/openpyxl-migration?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
 
@@ -69,6 +70,7 @@ Commercial 2.1+ is a separate option for the following workflow requirements:
 | Support | Public Community documentation and issues | [Scope an evaluation](https://wolfxl.com/pilot?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09) |
 
 For existing-template work, review the [bounded preservation approach](https://wolfxl.com/openpyxl-preservation?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
+Coming from Aspose.Cells for Python? See [when WolfXL fits instead](https://wolfxl.com/aspose-cells-python-alternative?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
 Use the [local fit check](https://wolfxl.com/fit-check?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09)
 to scope a representative-workbook test. Commercial self-service pricing is
 [$30/month or $299/year for one seat](https://wolfxl.com/pricing?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
