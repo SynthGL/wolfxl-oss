@@ -13,7 +13,7 @@ WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported 
 ## Install
 
 ```bash
-python -m pip install wolfxl==2.0.2
+python -m pip install wolfxl==2.0.3
 ```
 
 Most supported openpyxl-shaped code starts with one import change:

@@ -19,11 +19,11 @@ COMMERCIAL_MODULES = (
 
 
 def test_community_distribution_reports_its_release_and_backends() -> None:
-    assert wolfxl.__version__ == "2.0.2"
+    assert wolfxl.__version__ == "2.0.3"
 
     build = _rust.build_info()
     assert build["package"] == "wolfxl"
-    assert build["package_version"] == "2.0.2"
+    assert build["package_version"] == "2.0.3"
     assert set(build["enabled_backends"]) == {
         "native-xlsx",
         "native-xlsb",
