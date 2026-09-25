@@ -141,6 +141,15 @@ print(loaded["Summary"]["B1"].value)
 loaded.close()
 ```
 
+### For AI coding agents
+
+[`skills/wolfxl-xlsx`](skills/wolfxl-xlsx/SKILL.md) is an agent skill for
+editing existing workbooks without losing the parts the edit did not touch.
+It tells the agent to edit in modify mode, recalculate with WolfXL instead of
+a LibreOffice round trip, and run `verify` to confirm that every package part
+and sheet feature from the source is still present. Copy the directory into
+your agent's skills folder, for example `~/.claude/skills/wolfxl-xlsx`.
+
 ## Performance
 
 Full openpyxl comparison from the committed benchmark run (wolfxl 2.0.1 PyPI
