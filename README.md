@@ -79,11 +79,14 @@ Step-by-step guide: [openpyxl migration](https://wolfxl.com/openpyxl-migration).
   (python-calamine 0.58 s). python-calamine and fastexcel only read files;
   WolfXL reads, writes, and edits them.
   [openpyxl alternatives, measured](https://wolfxl.com/openpyxl-alternatives).
-- **You need to edit an existing workbook without losing formatting.**
-  `load_workbook(path, modify=True)` saves the cells you change and preserves
-  unchanged workbook parts where possible, within the documented boundaries.
-  Add `keep_vba=True` to keep `.xlsm` macros.
-  [Template preservation](https://wolfxl.com/openpyxl-preservation).
+- **openpyxl drops parts of your template when it saves.** openpyxl warns
+  that it will remove data validations, conditional formats, and sparklines
+  it does not support, and its documentation says shapes are lost. On a sheet
+  with an extension data validation and a sparkline, one cell edit saved by
+  openpyxl 3.1.5 lost both; `load_workbook(path, modify=True)` in WolfXL 2.0.2
+  kept both. Modify mode saves the cells you change and preserves unchanged
+  parts within the documented boundaries; add `keep_vba=True` for `.xlsm`
+  macros. [Why openpyxl loses template parts](https://wolfxl.com/openpyxl-preservation?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09).
 - **You are moving existing openpyxl code.** Check the
   [compatibility matrix](https://wolfxl.com/docs/migration/compatibility-matrix/)
   for the API you use and the
@@ -92,8 +95,13 @@ Step-by-step guide: [openpyxl migration](https://wolfxl.com/openpyxl-migration).
 
 Community does not include native formula recalculation, PDF or image
 rendering, format conversion, or VBA and Power Query operations. Those ship in
-[WolfXL Commercial](https://wolfxl.com); see
-[Community and Commercial](#community-and-commercial).
+[WolfXL Commercial](https://wolfxl.com/pricing?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09):
+
+- [Recalculate formulas openpyxl leaves stale](https://wolfxl.com/calculate-excel-formulas-python?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09)
+- [Render sheets and charts to PDF or PNG without LibreOffice](https://wolfxl.com/render-excel-python?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09)
+- [Coming from Aspose.Cells for Python](https://wolfxl.com/aspose-cells-python-alternative?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09)
+
+See [Community and Commercial](#community-and-commercial).
 
 ![Median speedup over openpyxl 3.1.5 by benchmark case, from the committed results file](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/speedup-vs-openpyxl.svg)
 
