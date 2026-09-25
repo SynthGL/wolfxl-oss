@@ -1,28 +1,108 @@
 # WolfXL
 
-**High-performance, openpyxl-compatible Excel library for Python, backed by Rust.**
+**openpyxl-compatible Excel read/write for Python, backed by Rust. MIT licensed.**
 
-WolfXL is the fastest Python library to edit existing Excel (`.xlsx`, `.xlsm`) workbooks in place without rewriting from scratch. It is a drop-in openpyxl alternative designed to modify workbooks while preserving formatting, formulas, charts, drawing objects, and VBA macros without corrupting the workbook structure.
+WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
+through the openpyxl API, with parsing, serialization, and cell storage
+implemented in Rust. It is for Python developers whose openpyxl jobs are slow
+or run out of memory on large workbooks, and for teams that edit existing
+Excel templates and need the untouched parts of the file kept intact. Most
+openpyxl code runs after a one-line import change.
 
-WolfXL Community is the maintained, MIT-licensed 2.0 release line for workbook creation, reading, writing, streaming exports, and template preservation. Most openpyxl code runs unchanged after a single import swap (`from wolfxl import load_workbook`). Native formula recalculation, headless PDF/image rendering, and format conversion ship separately in [WolfXL Commercial](https://wolfxl.com).
+```bash
+python -m pip install wolfxl
+```
+
 [![PyPI](https://img.shields.io/pypi/v/wolfxl)](https://pypi.org/project/wolfxl/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/wolfxl/)
 [![License: MIT](https://img.shields.io/github/license/SynthGL/wolfxl-oss)](LICENSE)
 
+[Switch from openpyxl](#switch-from-openpyxl) ·
+[When to use WolfXL](#when-to-use-wolfxl) ·
 [Quick start](#quick-start) ·
-[Migrating from openpyxl](#migrating-from-openpyxl) ·
 [Benchmarks](#performance) ·
 [Fidelity](#fidelity) ·
 [Community vs Commercial](#community-and-commercial) ·
 [wolfxl.com](https://wolfxl.com)
 
+## Switch from openpyxl
+
+Most openpyxl-shaped code needs only an import change:
+
+```diff
+- from openpyxl import Workbook, load_workbook
++ from wolfxl import Workbook, load_workbook
+```
+
+The rest of the code stays the same:
+
+```python
+from wolfxl import Workbook, load_workbook
+
+workbook = Workbook()
+sheet = workbook.active
+sheet.append(["region", "revenue"])
+for row in [("North", 1200), ("South", 950)]:
+    sheet.append(row)
+workbook.save("sales.xlsx")
+
+workbook = load_workbook("sales.xlsx", read_only=True)
+for row in workbook.active.iter_rows(min_row=2, values_only=True):
+    print(row)
+workbook.close()
+```
+
+For applications that cannot change every import, install the runtime alias
+once at process startup:
+
+```python
+import wolfxl
+
+wolfxl.install_as_openpyxl()
+
+import openpyxl
+```
+
+Step-by-step guide: [openpyxl migration](https://wolfxl.com/openpyxl-migration).
+
+## When to use WolfXL
+
+- **openpyxl is slow or runs out of memory on a large file.** On a
+  200,000-row by 8-column workbook (1.6 million cells), a full read with
+  WolfXL took 0.60 s against 6.43 s for openpyxl 3.1.5 at 0.36x the peak
+  memory, and the edit-two-cells-and-save phase took 0.25 s against 18.43 s.
+  [Large-file receipts](https://wolfxl.com/openpyxl-large-files).
+- **You are comparing openpyxl alternatives.** A 13-library run on one machine
+  covers PyExcelerate, XlsxWriter, python-calamine, fastexcel, pandas, Polars,
+  DuckDB, and others. Writing 1.6 million cells took 0.73 s with WolfXL
+  (PyExcelerate 3.64 s, XlsxWriter 4.69 s), and reading them back took 0.39 s
+  (python-calamine 0.58 s). python-calamine and fastexcel only read files;
+  WolfXL reads, writes, and edits them.
+  [openpyxl alternatives, measured](https://wolfxl.com/openpyxl-alternatives).
+- **You need to edit an existing workbook without losing formatting.**
+  `load_workbook(path, modify=True)` saves the cells you change and preserves
+  unchanged workbook parts where possible, within the documented boundaries.
+  Add `keep_vba=True` to keep `.xlsm` macros.
+  [Template preservation](https://wolfxl.com/openpyxl-preservation).
+- **You are moving existing openpyxl code.** Check the
+  [compatibility matrix](https://wolfxl.com/docs/migration/compatibility-matrix/)
+  for the API you use and the
+  [known limitations](https://wolfxl.com/docs/trust/limitations/) before
+  switching a production path.
+
+Community does not include native formula recalculation, PDF or image
+rendering, format conversion, or VBA and Power Query operations. Those ship in
+[WolfXL Commercial](https://wolfxl.com); see
+[Community and Commercial](#community-and-commercial).
+
 ![Median speedup over openpyxl 3.1.5 by benchmark case, from the committed results file](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/speedup-vs-openpyxl.svg)
 
 Median speedups over openpyxl 3.1.5 range from 2.6x on small in-place edits to
-27x on styled row writes, with most reads and writes between 7x and 14x
-(wolfxl 2.0.1 PyPI wheel, Apple M4 Pro, Python 3.13.9, median of 5 rounds).
-Every chart in this README is generated from a
-[committed raw results file](benchmarks/results/), never edited by hand.
+27x on styled row writes through the bulk `write_styled_rows` API, with most
+reads and writes between 7x and 14x (wolfxl 2.0.1 PyPI wheel, Apple M4 Pro,
+Python 3.13.9, median of 5 rounds). Every chart in this README is generated
+from a [committed raw results file](benchmarks/results/2026-08-18-community-2.0.1-vs-openpyxl-3.1.5.md),
+never edited by hand.
 
 ## Quick start
 
@@ -51,26 +131,6 @@ workbook.save("report.xlsx")
 loaded = load_workbook("report.xlsx")
 print(loaded["Summary"]["B1"].value)
 loaded.close()
-```
-
-## Migrating from openpyxl
-
-Most openpyxl-shaped code needs only an import change:
-
-```diff
-- from openpyxl import Workbook, load_workbook
-+ from wolfxl import Workbook, load_workbook
-```
-
-For applications that cannot change every import, install the runtime alias
-once at process startup:
-
-```python
-import wolfxl
-
-wolfxl.install_as_openpyxl()
-
-import openpyxl
 ```
 
 ## Performance
