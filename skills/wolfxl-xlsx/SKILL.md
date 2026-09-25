@@ -131,8 +131,8 @@ JSON.
   Refresh in Excel, and note any filters that could change what a refresh
   shows.
 - **Excel tables do not grow on their own.** Writing a column or row next to
-  a table leaves it outside the table's range. With Commercial, extend the
-  table in the same modify-mode session:
+  a table leaves it outside the table's range. Extend the table in the same
+  modify-mode session (Commercial, or Community 2.0.4 and later):
 
   ```python
   from wolfxl.worksheet.table import TableColumn
@@ -143,8 +143,9 @@ JSON.
   table.ref = "A1:H38"  # the table's new full range
   ```
 
-  Community 2.0 ignores table range changes in modify mode. There, tell the
-  user the new cells sit outside the table. Do not hand-edit the table XML.
+  Community 2.0.3 and earlier ignore table range changes in modify mode
+  (check `wolfxl.__version__`). There, tell the user the new cells sit
+  outside the table. Do not hand-edit the table XML.
 
 ## Ambiguous requests
 
