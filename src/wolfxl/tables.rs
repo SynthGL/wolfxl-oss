@@ -49,6 +49,20 @@ pub struct TablePatch {
     pub autofilter: bool,
 }
 
+/// Growth of an existing table part, resolved by table name through the
+/// worksheet's table relationships. The top-left anchor and the existing
+/// columns stay fixed: `ref_range` replaces the table range,
+/// `auto_filter_ref` replaces the range of the table's own `<autoFilter>`
+/// when it has one, and `appended_columns` become new `<tableColumn>`
+/// entries after the existing ones, with ids allocated from the part.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableGrowthPatch {
+    pub table_name: String,
+    pub ref_range: String,
+    pub auto_filter_ref: String,
+    pub appended_columns: Vec<String>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TableStylePatch {
     pub name: String,
@@ -205,6 +219,268 @@ pub fn parse_table_root_attrs(xml: &[u8]) -> (Option<u32>, Option<String>) {
         }
         buf.clear();
     }
+}
+
+/// Resolve the table part named `table_name` among the table
+/// relationships of the worksheet at `sheet_path` in the source package.
+pub fn find_table_part_by_name<R: std::io::Read + std::io::Seek>(
+    zip: &mut ZipArchive<R>,
+    sheet_path: &str,
+    table_name: &str,
+) -> Result<Option<String>, String> {
+    let rels_path = wolfxl_rels::rels_path_for(sheet_path)
+        .ok_or_else(|| format!("no relationship part for '{sheet_path}'"))?;
+    let rels_xml = match read_zip_entry(zip, &rels_path)? {
+        Some(bytes) => bytes,
+        None => return Ok(None),
+    };
+    let sheet_dir = sheet_path.rsplit_once('/').map_or("", |(dir, _)| dir);
+    let graph =
+        RelsGraph::parse(&rels_xml).map_err(|error| format!("parse '{rels_path}': {error}"))?;
+    for rel in graph.find_by_type(rt::TABLE) {
+        let part_path = wolfxl_rels::resolve_target(sheet_dir, &rel.target);
+        let Some(table_xml) = read_zip_entry(zip, &part_path)? else {
+            continue;
+        };
+        if parse_table_root_attrs(&table_xml).1.as_deref() == Some(table_name) {
+            return Ok(Some(part_path));
+        }
+    }
+    Ok(None)
+}
+
+fn read_zip_entry<R: std::io::Read + std::io::Seek>(
+    zip: &mut ZipArchive<R>,
+    path: &str,
+) -> Result<Option<Vec<u8>>, String> {
+    let mut entry = match zip.by_name(path) {
+        Ok(entry) => entry,
+        Err(_) => return Ok(None),
+    };
+    let mut bytes = Vec::with_capacity(entry.size() as usize);
+    std::io::Read::read_to_end(&mut entry, &mut bytes)
+        .map_err(|error| format!("read '{path}': {error}"))?;
+    Ok(Some(bytes))
+}
+
+/// Apply a [`TableGrowthPatch`] to table part XML. Only the table `ref`,
+/// the direct `<autoFilter ref>`, the `<tableColumns count>`, and the
+/// appended `<tableColumn>` elements change; every other byte is kept.
+pub fn patch_table_growth(xml: &[u8], patch: &TableGrowthPatch) -> Result<Vec<u8>, String> {
+    let mut reader = XmlReader::from_reader(xml);
+    let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut saw_table = false;
+    let mut in_columns = false;
+    // Start-tag span and element prefix (e.g. `x:`) of `<tableColumns>`.
+    let mut columns_tag: Option<(usize, usize, Vec<u8>)> = None;
+    let mut columns_close: Option<usize> = None;
+    let mut existing_names: Vec<String> = Vec::new();
+    let mut max_id = 0u32;
+    let mut replacements: Vec<(usize, usize, Vec<u8>)> = Vec::new();
+
+    loop {
+        let pre = reader.buffer_position() as usize;
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|error| format!("parse table XML: {error}"))?;
+        let post = reader.buffer_position() as usize;
+        match event {
+            Event::Start(element) if depth == 0 => {
+                if element.local_name().as_ref() != b"table" {
+                    return Err("table root not found".to_string());
+                }
+                let (start, end) = attribute_value_range(&xml[pre..post], b"ref")?
+                    .ok_or_else(|| "table root has no ref attribute".to_string())?;
+                replacements.push((
+                    pre + start,
+                    pre + end,
+                    escape_xml_attribute(&patch.ref_range),
+                ));
+                saw_table = true;
+                depth = 1;
+            }
+            Event::Empty(_) if depth == 0 => {
+                return Err("table part has no columns".to_string());
+            }
+            Event::Start(element) => {
+                let local = element.local_name();
+                if depth == 1 && local.as_ref() == b"autoFilter" {
+                    replace_ref(&mut replacements, xml, pre, post, &patch.auto_filter_ref)?;
+                } else if depth == 1 && local.as_ref() == b"tableColumns" {
+                    let qualified = element.name();
+                    let prefix_len = qualified.as_ref().len() - local.as_ref().len();
+                    columns_tag = Some((pre, post, qualified.as_ref()[..prefix_len].to_vec()));
+                    in_columns = true;
+                } else if depth == 2 && in_columns && local.as_ref() == b"tableColumn" {
+                    record_table_column(&element, &mut existing_names, &mut max_id)?;
+                }
+                depth += 1;
+            }
+            Event::Empty(element) => {
+                let local = element.local_name();
+                if depth == 1 && local.as_ref() == b"autoFilter" {
+                    replace_ref(&mut replacements, xml, pre, post, &patch.auto_filter_ref)?;
+                } else if depth == 2 && in_columns && local.as_ref() == b"tableColumn" {
+                    record_table_column(&element, &mut existing_names, &mut max_id)?;
+                }
+            }
+            Event::End(_) => {
+                depth = depth.saturating_sub(1);
+                if depth == 1 && in_columns {
+                    in_columns = false;
+                    columns_close = Some(pre);
+                }
+                if depth == 0 {
+                    break;
+                }
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    if !saw_table {
+        return Err("table root not found".to_string());
+    }
+    if !patch.appended_columns.is_empty() {
+        let (Some((tag_start, tag_end, prefix)), Some(close)) = (columns_tag, columns_close) else {
+            return Err("table has no <tableColumns> element".to_string());
+        };
+        let mut seen: HashSet<String> = existing_names.iter().map(|n| n.to_lowercase()).collect();
+        let mut inserted = Vec::new();
+        for (offset, name) in patch.appended_columns.iter().enumerate() {
+            if name.is_empty() {
+                return Err("table column names must not be empty".to_string());
+            }
+            if !seen.insert(name.to_lowercase()) {
+                return Err(format!("table already has a column named '{name}'"));
+            }
+            let id = max_id + 1 + offset as u32;
+            inserted.extend_from_slice(b"<");
+            inserted.extend_from_slice(&prefix);
+            inserted.extend_from_slice(format!("tableColumn id=\"{id}\" name=\"").as_bytes());
+            inserted.extend(escape_xml_attribute(name));
+            inserted.extend_from_slice(b"\"/>");
+        }
+        let count = existing_names.len() + patch.appended_columns.len();
+        if let Some((start, end)) = attribute_value_range(&xml[tag_start..tag_end], b"count")? {
+            replacements.push((
+                tag_start + start,
+                tag_start + end,
+                count.to_string().into_bytes(),
+            ));
+        }
+        replacements.push((close, close, inserted));
+    }
+
+    replacements.sort_unstable_by_key(|(start, _, _)| *start);
+    let mut output = xml.to_vec();
+    for (start, end, replacement) in replacements.into_iter().rev() {
+        output.splice(start..end, replacement);
+    }
+    Ok(output)
+}
+
+fn replace_ref(
+    replacements: &mut Vec<(usize, usize, Vec<u8>)>,
+    xml: &[u8],
+    pre: usize,
+    post: usize,
+    value: &str,
+) -> Result<(), String> {
+    let (start, end) = attribute_value_range(&xml[pre..post], b"ref")?
+        .ok_or_else(|| "table autoFilter has no ref attribute".to_string())?;
+    replacements.push((pre + start, pre + end, escape_xml_attribute(value)));
+    Ok(())
+}
+
+fn record_table_column(
+    element: &quick_xml::events::BytesStart<'_>,
+    names: &mut Vec<String>,
+    max_id: &mut u32,
+) -> Result<(), String> {
+    for attr in element.attributes().with_checks(false).flatten() {
+        match attr.key.as_ref() {
+            b"id" => {
+                let id = std::str::from_utf8(attr.value.as_ref())
+                    .ok()
+                    .and_then(|value| value.trim().parse::<u32>().ok())
+                    .ok_or_else(|| "tableColumn has a non-numeric id".to_string())?;
+                *max_id = (*max_id).max(id);
+            }
+            b"name" => names.push(
+                attr.unescape_value()
+                    .map_err(|error| format!("tableColumn name: {error}"))?
+                    .into_owned(),
+            ),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Byte range of the value of attribute `name` within one start tag.
+fn attribute_value_range(tag: &[u8], name: &[u8]) -> Result<Option<(usize, usize)>, String> {
+    let mut cursor = 1usize;
+    while cursor < tag.len() && !tag[cursor].is_ascii_whitespace() && tag[cursor] != b'>' {
+        cursor += 1;
+    }
+    while cursor < tag.len() {
+        while cursor < tag.len() && tag[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if cursor >= tag.len() || tag[cursor] == b'/' || tag[cursor] == b'>' {
+            return Ok(None);
+        }
+        let name_start = cursor;
+        while cursor < tag.len()
+            && !tag[cursor].is_ascii_whitespace()
+            && !matches!(tag[cursor], b'=' | b'/' | b'>')
+        {
+            cursor += 1;
+        }
+        let name_end = cursor;
+        while cursor < tag.len() && tag[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if cursor >= tag.len() || tag[cursor] != b'=' {
+            return Err("malformed XML attribute".to_string());
+        }
+        cursor += 1;
+        while cursor < tag.len() && tag[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        let quote = *tag
+            .get(cursor)
+            .ok_or_else(|| "unterminated XML attribute".to_string())?;
+        if quote != b'\'' && quote != b'"' {
+            return Err("unquoted XML attribute".to_string());
+        }
+        cursor += 1;
+        let value_start = cursor;
+        while cursor < tag.len() && tag[cursor] != quote {
+            cursor += 1;
+        }
+        if cursor == tag.len() {
+            return Err("unterminated XML attribute".to_string());
+        }
+        let value_end = cursor;
+        cursor += 1;
+        if &tag[name_start..name_end] == name {
+            return Ok(Some((value_start, value_end)));
+        }
+    }
+    Ok(None)
+}
+
+fn escape_xml_attribute(value: &str) -> Vec<u8> {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('"', "&quot;")
+        .into_bytes()
 }
 
 /// Lowest positive integer `i` such that `i` is not in `ids`.
@@ -685,5 +961,41 @@ mod tests {
         let mut archive = open_zip(z);
         let inv = scan_existing_tables(&mut archive).unwrap();
         assert_eq!(inv.count, 0);
+    }
+    fn growth(ref_range: &str, filter: &str, cols: &[&str]) -> TableGrowthPatch {
+        TableGrowthPatch {
+            table_name: "T".to_string(),
+            ref_range: ref_range.to_string(),
+            auto_filter_ref: filter.to_string(),
+            appended_columns: cols.iter().map(|c| c.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn table_growth_keeps_prefix_and_column_children() {
+        let xml = br#"<?xml version="1.0"?><x:table xmlns:x="urn:x" id="3" ref="A1:B3" name="T"><x:autoFilter ref="A1:B3"/><x:tableColumns count="2"><x:tableColumn id="1" name="A"/><x:tableColumn id="5" name="B"><x:calculatedColumnFormula>A2*2</x:calculatedColumnFormula></x:tableColumn></x:tableColumns><x:tableStyleInfo name="S"/></x:table>"#;
+        let out = patch_table_growth(xml, &growth("A1:C4", "A1:C4", &["C&D"])).unwrap();
+        let out = String::from_utf8(out).unwrap();
+        assert_eq!(
+            out,
+            r#"<?xml version="1.0"?><x:table xmlns:x="urn:x" id="3" ref="A1:C4" name="T"><x:autoFilter ref="A1:C4"/><x:tableColumns count="3"><x:tableColumn id="1" name="A"/><x:tableColumn id="5" name="B"><x:calculatedColumnFormula>A2*2</x:calculatedColumnFormula></x:tableColumn><x:tableColumn id="6" name="C&amp;D"/></x:tableColumns><x:tableStyleInfo name="S"/></x:table>"#
+        );
+    }
+
+    #[test]
+    fn table_growth_without_autofilter_adds_none() {
+        let xml = br#"<table id="1" ref="A1:A2" name="T"><tableColumns count="1"><tableColumn id="1" name="A"/></tableColumns></table>"#;
+        let out = patch_table_growth(xml, &growth("A1:A9", "A1:A9", &[])).unwrap();
+        assert_eq!(
+            out,
+            br#"<table id="1" ref="A1:A9" name="T"><tableColumns count="1"><tableColumn id="1" name="A"/></tableColumns></table>"#
+        );
+    }
+
+    #[test]
+    fn table_growth_rejects_duplicate_column_name() {
+        let xml = br#"<table id="1" ref="A1:A2" name="T"><tableColumns count="1"><tableColumn id="1" name="Sales"/></tableColumns></table>"#;
+        let err = patch_table_growth(xml, &growth("A1:B2", "A1:B2", &["sales"])).unwrap_err();
+        assert!(err.contains("already has a column named"), "{err}");
     }
 }

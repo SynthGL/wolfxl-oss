@@ -10,7 +10,8 @@ use zip::ZipArchive;
 use crate::ooxml_util;
 
 use super::patcher_workbook::{
-    load_or_empty_rels, minimal_styles_xml, parse_n_from_part_path, sheet_rels_path_for,
+    load_or_empty_rels, minimal_styles_xml, parse_n_from_part_path, patched_or_source_part_bytes,
+    sheet_rels_path_for,
 };
 use super::{
     autofilter, autofilter_helpers, comments, content_types, hyperlinks, sheet_patcher, tables,
@@ -242,6 +243,53 @@ pub(super) fn apply_tables_phase(
         }
     }
 
+    Ok(())
+}
+
+/// Grow existing tables that the Python side widened or lengthened in
+/// modify mode. Each queued [`tables::TableGrowthPatch`] resolves its
+/// part through the sheet's table relationships and rewrites only the
+/// table and autoFilter ranges and the appended column entries. Runs
+/// before Phase 3 so later structural shifts see the grown ranges.
+pub(super) fn apply_table_growth_phase(
+    patcher: &XlsxPatcher,
+    file_patches: &mut HashMap<String, Vec<u8>>,
+    zip: &mut ZipArchive<File>,
+) -> PyResult<()> {
+    for sheet_name in &patcher.sheet_order {
+        let Some(patches) = patcher.queued_table_growth.get(sheet_name) else {
+            continue;
+        };
+        let Some(sheet_path) = patcher.sheet_paths.get(sheet_name) else {
+            continue;
+        };
+        for patch in patches {
+            let part_path = tables::find_table_part_by_name(zip, sheet_path, &patch.table_name)
+                .map_err(|error| {
+                    PyValueError::new_err(format!(
+                        "resolve table '{}' on '{sheet_name}': {error}",
+                        patch.table_name
+                    ))
+                })?
+                .ok_or_else(|| {
+                    PyValueError::new_err(format!(
+                        "table '{}' was not found on '{sheet_name}'",
+                        patch.table_name
+                    ))
+                })?;
+            let xml =
+                patched_or_source_part_bytes(file_patches, zip, &part_path).ok_or_else(|| {
+                    PyIOError::new_err(format!("table part '{part_path}' is missing"))
+                })?;
+            let patched = tables::patch_table_growth(&xml, patch).map_err(|error| {
+                PyValueError::new_err(format!(
+                    "grow table '{}' on '{sheet_name}': {error}",
+                    patch.table_name
+                ))
+            })?;
+            file_patches.insert(part_path, patched);
+        }
+    }
     Ok(())
 }
 

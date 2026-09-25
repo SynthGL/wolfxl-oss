@@ -380,11 +380,15 @@ class TableList(dict[str, Any]):
     pending-tables queue so save picks them up automatically.
     """
 
-    __slots__ = ("worksheet",)
+    __slots__ = ("loaded", "worksheet")
 
     def __init__(self, worksheet: Any = None, values: dict[str, Any] | None = None) -> None:
         super().__init__(values or {})
         self.worksheet = worksheet
+        # Tables read from the source file in modify mode, keyed by their
+        # source name: (table, saved ref, saved column names). Save compares
+        # each table against this record to queue growth of the part.
+        self.loaded: dict[str, tuple[Table, str, tuple[str, ...]]] = {}
 
     # ------------------------------------------------------------------
     # openpyxl-shape API

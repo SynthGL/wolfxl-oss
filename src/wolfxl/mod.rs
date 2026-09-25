@@ -221,6 +221,9 @@ pub struct XlsxPatcher {
     /// `SheetBlock::TableParts` per sheet. Insertion order via Vec
     /// matches openpyxl's "first add → first slot" semantics.
     queued_tables: HashMap<String, Vec<tables::TablePatch>>,
+    /// Per-sheet growth of existing tables (range, autoFilter range, and
+    /// appended columns), keyed by sheet title. Drained before Phase 3.
+    queued_table_growth: HashMap<String, Vec<tables::TableGrowthPatch>>,
     /// Per-sheet comment ops pending flush (RFC-023). Outer key is
     /// sheet name; inner is coordinate → op. `Set` adds/replaces a
     /// comment with the supplied text/author/width/height; `Delete`
@@ -539,6 +542,7 @@ impl XlsxPatcher {
             queued_hyperlinks: HashMap::new(),
             queued_defined_names: Vec::new(),
             queued_tables: HashMap::new(),
+            queued_table_growth: HashMap::new(),
             queued_comments: HashMap::new(),
             queued_threaded_comments: HashMap::new(),
             queued_persons: Vec::new(),
@@ -1198,6 +1202,7 @@ impl XlsxPatcher {
         rename_hash_key(&mut self.queued_content_type_ops, old_name, new_name);
         rename_hash_key(&mut self.queued_hyperlinks, old_name, new_name);
         rename_hash_key(&mut self.queued_tables, old_name, new_name);
+        rename_hash_key(&mut self.queued_table_growth, old_name, new_name);
         rename_hash_key(&mut self.queued_comments, old_name, new_name);
         rename_hash_key(&mut self.queued_threaded_comments, old_name, new_name);
         rename_hash_key(&mut self.queued_images, old_name, new_name);
@@ -1255,6 +1260,7 @@ impl XlsxPatcher {
         self.format_patches.retain(|(sheet, _), _| sheet != title);
         self.queued_hyperlinks.remove(title);
         self.queued_tables.remove(title);
+        self.queued_table_growth.remove(title);
         self.queued_comments.remove(title);
         self.queued_threaded_comments.remove(title);
         self.queued_images.remove(title);
@@ -1348,6 +1354,37 @@ impl XlsxPatcher {
             .entry(sheet.to_string())
             .or_default()
             .push(patch);
+        Ok(())
+    }
+
+    /// Queue growth of an existing table on `sheet` (modify mode).
+    ///
+    /// `ref_range` is the new table range; its top-left cell and the
+    /// existing columns stay fixed. `auto_filter_ref` replaces the table's
+    /// own autoFilter range when the table has one. `appended_columns`
+    /// become new `<tableColumn>` entries after the existing ones.
+    fn queue_table_growth(
+        &mut self,
+        sheet: &str,
+        table_name: &str,
+        ref_range: &str,
+        auto_filter_ref: &str,
+        appended_columns: Vec<String>,
+    ) -> PyResult<()> {
+        if table_name.is_empty() || ref_range.is_empty() {
+            return Err(PyValueError::new_err(
+                "table growth requires a table name and a range",
+            ));
+        }
+        self.queued_table_growth
+            .entry(sheet.to_string())
+            .or_default()
+            .push(tables::TableGrowthPatch {
+                table_name: table_name.to_string(),
+                ref_range: ref_range.to_string(),
+                auto_filter_ref: auto_filter_ref.to_string(),
+                appended_columns,
+            });
         Ok(())
     }
 
@@ -2603,6 +2640,12 @@ impl XlsxPatcher {
                 &mut zip,
             )?
         };
+
+        // --- Phase 2.5t: Existing-table growth ---
+        //
+        // Rewrites only the grown table parts, before Phase 3 and the
+        // structural axis shifts that read table parts from file_patches.
+        patcher_sheet_blocks::apply_table_growth_phase(self, &mut save.file_patches, &mut zip)?;
 
         // --- Phase 3: Patch worksheet XMLs ---
         //
