@@ -304,9 +304,13 @@ class WorkbookEvaluator:
         self._graph = DependencyGraph()
         self._named_ranges.clear()
 
-        # Load named ranges first (needed for dependency graph)
-        for name, refers_to in workbook.defined_names.items():
-            self._named_ranges[name.upper()] = refers_to
+        # Load named ranges first (needed for dependency graph). Loaded
+        # workbooks map each name to a DefinedName; its ``value`` holds the
+        # reference text.
+        for name, defined_name in workbook.defined_names.items():
+            refers_to = getattr(defined_name, "value", defined_name)
+            if refers_to is not None:
+                self._named_ranges[name.upper()] = str(refers_to)
 
         nr = self._named_ranges if self._named_ranges else None
 

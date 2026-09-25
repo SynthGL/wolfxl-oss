@@ -830,3 +830,33 @@ class TestNamedRanges:
         """Write-mode workbook returns empty defined_names."""
         wb = wolfxl.Workbook()
         assert wb.defined_names == {}
+
+    def test_loaded_workbook_defined_names(self, tmp_path) -> None:
+        """Names read from a saved file drive calculation and recalculation."""
+        from wolfxl.workbook.defined_name import DefinedName
+
+        wb = wolfxl.Workbook()
+        ws = wb.active
+        ws.title = "My Data"
+        for row, value in enumerate([10, 20, 30], start=1):
+            ws[f"A{row}"] = value
+        ws["B1"] = 0.5
+        ws["C1"] = "=SUM(Sales)*Rate"
+        wb.defined_names["Sales"] = DefinedName(
+            "Sales", attr_text="'My Data'!$A$1:$A$3"
+        )
+        wb.defined_names["Rate"] = DefinedName("Rate", attr_text="'My Data'!$B$1")
+        path = tmp_path / "names.xlsx"
+        wb.save(str(path))
+
+        loaded = wolfxl.load_workbook(str(path), modify=True)
+        try:
+            ev = WorkbookEvaluator()
+            ev.load(loaded)
+            assert ev.calculate()["My Data!C1"] == 30.0
+            recalc = ev.recalculate({"My Data!A1": 110})
+            assert [(d.cell_ref, d.new_value) for d in recalc.deltas] == [
+                ("My Data!C1", 80.0)
+            ]
+        finally:
+            loaded.close()

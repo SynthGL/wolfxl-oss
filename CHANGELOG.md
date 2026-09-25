@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `calculate()` and `recalculate()` no longer raise `TypeError` on loaded
+  workbooks that contain defined names. The evaluator now reads each name's
+  reference text, so formulas such as `=SUM(Sales)*Rate` calculate and
+  propagate changes through the name.
+
 ## 2.0.2
 
 ### Changed

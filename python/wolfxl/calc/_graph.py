@@ -47,10 +47,12 @@ class DependencyGraph:
         expanded = formula
         if named_ranges:
             for name, refers_to in named_ranges.items():
-                # Word-boundary replace to avoid partial matches
+                # Word-boundary replace to avoid partial matches. The
+                # replacement is a function so backslashes in the target
+                # are inserted literally, not read as regex escapes.
                 expanded = re.sub(
                     rf'\b{re.escape(name)}\b',
-                    refers_to,
+                    lambda _match, target=refers_to: target,
                     expanded,
                     flags=re.IGNORECASE,
                 )
