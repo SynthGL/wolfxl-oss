@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Prebuilt musllinux wheels for x86_64 and aarch64, so `pip install wolfxl`
+  on Alpine and other musl-based distributions no longer builds from source.
+
 ## 2.0.4
 
 ### Fixed
