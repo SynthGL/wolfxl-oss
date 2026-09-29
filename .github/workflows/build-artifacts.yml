@@ -8,13 +8,16 @@ permissions:
 
 jobs:
   linux:
-    name: Linux ${{ matrix.target }} wheels
+    name: Linux ${{ matrix.target }} ${{ matrix.libc.name }} wheels
     runs-on: blacksmith-4vcpu-ubuntu-2204
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         target: [x86_64, aarch64]
+        libc:
+          - { name: manylinux, compatibility: "2_28", image: "python:3.12-bookworm" }
+          - { name: musllinux, compatibility: "musllinux_1_2", image: "python:3.12-alpine" }
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -29,7 +32,7 @@ jobs:
           maturin-version: v1.14.1
           sccache: true
           target: ${{ matrix.target }}
-          manylinux: "2_28"
+          manylinux: ${{ matrix.libc.compatibility }}
           args: --release --locked --compatibility pypi --out dist --find-interpreter
       - name: Smoke CPython 3.12 wheel
         shell: bash
@@ -39,11 +42,11 @@ jobs:
             platform=linux/arm64
           fi
           docker run --rm --platform "$platform" \
-            -v "$PWD:/work:ro" -w /work python:3.12-bookworm \
-            sh -c 'python -m pip install dist/*cp312-cp312-manylinux*.whl && python tests/community_wheel_smoke.py'
+            -v "$PWD:/work:ro" -w /work ${{ matrix.libc.image }} \
+            sh -c 'python -m pip install dist/*cp312-cp312-${{ matrix.libc.name }}*.whl && python tests/community_wheel_smoke.py'
       - uses: actions/upload-artifact@v6
         with:
-          name: wheels-linux-${{ matrix.target }}
+          name: wheels-linux-${{ matrix.target }}-${{ matrix.libc.name }}
           path: dist/*.whl
           if-no-files-found: error
 
