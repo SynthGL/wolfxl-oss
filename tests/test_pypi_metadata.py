@@ -28,6 +28,13 @@ def test_package_uses_dedicated_pypi_description() -> None:
     assert PYPI_DESCRIPTION.is_file()
 
 
+def test_package_summary_fits_the_pypi_summary_field() -> None:
+    # PyPI rejects an upload whose Summary exceeds 512 characters.
+    summary = _project_field("description")
+    assert summary.strip() == summary
+    assert 0 < len(summary) <= 512
+
+
 def test_pypi_description_pins_the_current_release_and_uses_only_pypi_attribution() -> (
     None
 ):
