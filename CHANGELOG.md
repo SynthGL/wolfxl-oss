@@ -7,6 +7,12 @@
 - Prebuilt musllinux wheels for x86_64 and aarch64, so `pip install wolfxl`
   on Alpine and other musl-based distributions no longer builds from source.
 
+### Changed
+
+- The README, PyPI description, and package summary now lead with editing
+  existing Excel files without losing formatting, with an edit example and an
+  openpyxl comparison.
+
 ## 2.0.4
 
 ### Fixed
