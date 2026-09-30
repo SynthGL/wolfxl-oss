@@ -1,13 +1,12 @@
 # WolfXL
 
-**openpyxl-compatible Excel read/write for Python, backed by Rust. MIT licensed.**
+**Edit existing Excel files from Python without losing formatting, and evaluate their formulas, with an openpyxl-compatible API. MIT licensed.**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
-implemented in Rust. It is for Python developers whose openpyxl jobs are slow
-or run out of memory on large workbooks, and for teams that edit existing
-Excel templates and need the untouched parts of the file kept intact. Most
-openpyxl code runs after a one-line import change.
+implemented in Rust. Modify mode saves the cells you change and keeps the rest
+of the file, and `calculate()` evaluates common Excel functions in Python.
+Most openpyxl code runs after a one-line import change.
 
 ```bash
 python -m pip install wolfxl
@@ -17,13 +16,84 @@ python -m pip install wolfxl
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/wolfxl/)
 [![License: MIT](https://img.shields.io/github/license/SynthGL/wolfxl-oss)](LICENSE)
 
+[Edit a workbook](#edit-an-existing-workbook) ·
+[Compared with openpyxl](#compared-with-openpyxl) ·
 [Switch from openpyxl](#switch-from-openpyxl) ·
-[When to use WolfXL](#when-to-use-wolfxl) ·
 [Quick start](#quick-start) ·
 [Benchmarks](#performance) ·
 [Fidelity](#fidelity) ·
 [Community vs Commercial](#community-and-commercial) ·
 [wolfxl.com](https://wolfxl.com)
+
+## Edit an existing workbook
+
+```python
+from wolfxl import load_workbook
+
+wb = load_workbook("report.xlsx", modify=True)  # edit the existing file
+wb["Summary"]["B2"] = 1500
+print(wb.calculate()["Summary!B4"])  # 2450.0 from =SUM(B2:B3)
+wb.save("report-updated.xlsx")  # cells you did not touch keep their formatting
+wb.close()
+```
+
+Modify mode saves the cells you change and preserves unchanged styles, charts,
+and package parts within the documented boundaries; add `keep_vba=True` for
+`.xlsm` macros. `calculate()` returns the computed values and leaves the cached
+results in the saved file unchanged.
+[Edit Excel in Python without losing formatting](https://wolfxl.com/openpyxl-preservation?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09).
+
+## Compared with openpyxl
+
+- **Same API for the covered surface.** Change one import
+  ([Switch from openpyxl](#switch-from-openpyxl)). openpyxl implements more of its own
+  API, so check the
+  [compatibility matrix](https://wolfxl.com/docs/migration/compatibility-matrix/)
+  and the [known limitations](https://wolfxl.com/docs/trust/limitations/)
+  before switching a production path.
+- **Existing templates.** openpyxl warns that it will remove data
+  validations, conditional formats, and sparklines it does not support, and
+  its documentation says shapes are lost. On a sheet with an extension data
+  validation and a sparkline, one cell edit saved by openpyxl 3.1.5 lost both;
+  `load_workbook(path, modify=True)` in WolfXL 2.0.2 kept both.
+- **Formulas.** openpyxl stores formula text and never computes it; with
+  `data_only=True` it returns the value Excel last cached, or `None` for a
+  file Excel never opened. WolfXL `calculate()` evaluates supported functions
+  in process.
+- **Large files.** On a 200,000-row by 8-column workbook (1.6 million cells),
+  a full read with WolfXL took 0.60 s against 6.43 s for openpyxl 3.1.5 at
+  0.36x the peak memory, and the edit-two-cells-and-save phase took 0.25 s
+  against 18.43 s.
+  [Large-file receipts](https://wolfxl.com/openpyxl-large-files).
+- **Other alternatives.** A 13-library run on one machine covers
+  PyExcelerate, XlsxWriter, python-calamine, fastexcel, pandas, Polars,
+  DuckDB, and others. Writing 1.6 million cells took 0.73 s with WolfXL
+  (PyExcelerate 3.64 s, XlsxWriter 4.69 s), and reading them back took 0.39 s
+  (python-calamine 0.58 s). python-calamine and fastexcel only read files;
+  WolfXL reads, writes, and edits them.
+  [openpyxl alternatives, measured](https://wolfxl.com/openpyxl-alternatives).
+- **Where openpyxl fits.** openpyxl is pure Python and installs anywhere
+  Python runs. WolfXL needs a published wheel for your platform or a Rust
+  toolchain to build from source.
+
+Community does not include native formula recalculation, PDF or image
+rendering, format conversion, or VBA and Power Query operations. Those ship in
+[WolfXL Commercial](https://wolfxl.com/pricing?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09):
+
+- [Recalculate formulas openpyxl leaves stale](https://wolfxl.com/calculate-excel-formulas-python?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09)
+- [Render sheets and charts to PDF or PNG without LibreOffice](https://wolfxl.com/render-excel-python?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09)
+- [Coming from Aspose.Cells for Python](https://wolfxl.com/aspose-cells-python-alternative?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09)
+
+See [Community and Commercial](#community-and-commercial).
+
+![Median speedup over openpyxl 3.1.5 by benchmark case, from the committed results file](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/speedup-vs-openpyxl.svg)
+
+Median speedups over openpyxl 3.1.5 range from 2.6x on small in-place edits to
+27x on styled row writes through the bulk `write_styled_rows` API, with most
+reads and writes between 7x and 14x (wolfxl 2.0.1 PyPI wheel, Apple M4 Pro,
+Python 3.13.9, median of 5 rounds). Every chart in this README is generated
+from a [committed raw results file](benchmarks/results/2026-08-18-community-2.0.1-vs-openpyxl-3.1.5.md),
+never edited by hand.
 
 ## Switch from openpyxl
 
@@ -64,53 +134,6 @@ import openpyxl
 ```
 
 Step-by-step guide: [openpyxl migration](https://wolfxl.com/openpyxl-migration).
-
-## When to use WolfXL
-
-- **openpyxl is slow or runs out of memory on a large file.** On a
-  200,000-row by 8-column workbook (1.6 million cells), a full read with
-  WolfXL took 0.60 s against 6.43 s for openpyxl 3.1.5 at 0.36x the peak
-  memory, and the edit-two-cells-and-save phase took 0.25 s against 18.43 s.
-  [Large-file receipts](https://wolfxl.com/openpyxl-large-files).
-- **You are comparing openpyxl alternatives.** A 13-library run on one machine
-  covers PyExcelerate, XlsxWriter, python-calamine, fastexcel, pandas, Polars,
-  DuckDB, and others. Writing 1.6 million cells took 0.73 s with WolfXL
-  (PyExcelerate 3.64 s, XlsxWriter 4.69 s), and reading them back took 0.39 s
-  (python-calamine 0.58 s). python-calamine and fastexcel only read files;
-  WolfXL reads, writes, and edits them.
-  [openpyxl alternatives, measured](https://wolfxl.com/openpyxl-alternatives).
-- **openpyxl drops parts of your template when it saves.** openpyxl warns
-  that it will remove data validations, conditional formats, and sparklines
-  it does not support, and its documentation says shapes are lost. On a sheet
-  with an extension data validation and a sparkline, one cell edit saved by
-  openpyxl 3.1.5 lost both; `load_workbook(path, modify=True)` in WolfXL 2.0.2
-  kept both. Modify mode saves the cells you change and preserves unchanged
-  parts within the documented boundaries; add `keep_vba=True` for `.xlsm`
-  macros. [Why openpyxl loses template parts](https://wolfxl.com/openpyxl-preservation?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09).
-- **You are moving existing openpyxl code.** Check the
-  [compatibility matrix](https://wolfxl.com/docs/migration/compatibility-matrix/)
-  for the API you use and the
-  [known limitations](https://wolfxl.com/docs/trust/limitations/) before
-  switching a production path.
-
-Community does not include native formula recalculation, PDF or image
-rendering, format conversion, or VBA and Power Query operations. Those ship in
-[WolfXL Commercial](https://wolfxl.com/pricing?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09):
-
-- [Recalculate formulas openpyxl leaves stale](https://wolfxl.com/calculate-excel-formulas-python?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09)
-- [Render sheets and charts to PDF or PNG without LibreOffice](https://wolfxl.com/render-excel-python?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09)
-- [Coming from Aspose.Cells for Python](https://wolfxl.com/aspose-cells-python-alternative?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09)
-
-See [Community and Commercial](#community-and-commercial).
-
-![Median speedup over openpyxl 3.1.5 by benchmark case, from the committed results file](https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/assets/benchmarks/speedup-vs-openpyxl.svg)
-
-Median speedups over openpyxl 3.1.5 range from 2.6x on small in-place edits to
-27x on styled row writes through the bulk `write_styled_rows` API, with most
-reads and writes between 7x and 14x (wolfxl 2.0.1 PyPI wheel, Apple M4 Pro,
-Python 3.13.9, median of 5 rounds). Every chart in this README is generated
-from a [committed raw results file](benchmarks/results/2026-08-18-community-2.0.1-vs-openpyxl-3.1.5.md),
-never edited by hand.
 
 ## Quick start
 

@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "wolfxl"
 version = "2.0.4"
-description = "MIT-licensed Excel I/O for Python with openpyxl-shaped APIs and a Rust backend"
+description = "Edit existing Excel files from Python without losing formatting and evaluate formulas, with an openpyxl-compatible API and a Rust backend. MIT licensed."
 readme = "PYPI.md"
 requires-python = ">=3.9"
 dependencies = ["defusedxml>=0.7.1,<1.0"]
@@ -14,17 +14,16 @@ authors = [{ name = "Wolfgang Schoenberger" }]
 keywords = [
     "excel",
     "xlsx",
+    "xlsm",
     "openpyxl",
     "openpyxl-alternative",
-    "in-place-editing",
+    "edit-xlsx-in-place",
     "preserve-formatting",
-    "rust",
-    "performance",
-    "fast-excel",
+    "excel-formulas",
+    "formula-evaluation",
+    "large-excel-files",
     "spreadsheet",
-    "calamine",
-    "formula",
-    "calc",
+    "rust",
     "financial",
 ]
 classifiers = [

@@ -1,12 +1,11 @@
 # WolfXL Community
 
-**openpyxl-compatible Excel read/write for Python, backed by Rust. MIT licensed.**
+**Edit existing Excel files from Python without losing formatting, and evaluate their formulas, with an openpyxl-compatible API. MIT licensed.**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
-implemented in Rust. It is for Python developers whose openpyxl jobs are slow
-or run out of memory on large workbooks, and for teams that edit existing
-Excel templates and need the untouched parts of the file kept intact.
+implemented in Rust. Modify mode saves the cells you change and keeps the rest
+of the file, and `calculate()` evaluates common Excel functions in Python.
 
 WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported workbook creation, reading, writing, streaming exports, and existing-workbook edits. It is a free product, not a trial.
 
@@ -16,29 +15,52 @@ WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported 
 python -m pip install wolfxl==2.0.4
 ```
 
-Most supported openpyxl-shaped code starts with one import change:
+## Edit an existing workbook
 
-```diff
-- from openpyxl import Workbook, load_workbook
-+ from wolfxl import Workbook, load_workbook
+```python
+from wolfxl import load_workbook
+
+wb = load_workbook("report.xlsx", modify=True)  # edit the existing file
+wb["Summary"]["B2"] = 1500
+print(wb.calculate()["Summary!B4"])  # 2450.0 from =SUM(B2:B3)
+wb.save("report-updated.xlsx")  # cells you did not touch keep their formatting
+wb.close()
 ```
 
-Start with one representative workbook, define the output that must remain
-correct, and prove that bounded operation before replacing a production path.
-Review the [compatibility matrix](https://wolfxl.com/docs/migration/compatibility-matrix/?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09)
-and [known limitations](https://wolfxl.com/docs/trust/limitations/?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
+Modify mode saves the cells you change and preserves unchanged styles, charts,
+and package parts within the documented boundaries; add `keep_vba=True` for
+`.xlsm` macros. `calculate()` returns the computed values and leaves the cached
+results in the saved file unchanged.
+[Edit Excel in Python without losing formatting](https://wolfxl.com/openpyxl-preservation?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
 
-## When to use WolfXL
+## Compared with openpyxl
 
-- **openpyxl is slow or runs out of memory on a large file.** Read the
-  [large-file receipts](https://wolfxl.com/openpyxl-large-files?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09):
-  seconds and peak memory for 1.6-million-cell reads, writes, and edits.
-- **openpyxl drops parts of your template when it saves.** On a sheet with an
-  extension data validation and a sparkline, one cell edit saved by openpyxl
-  3.1.5 removed both; `load_workbook(path, modify=True)` in WolfXL 2.0.2 kept
-  both. [Why openpyxl loses template parts](https://wolfxl.com/openpyxl-preservation?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
-- **You are moving existing openpyxl code.** Follow the
-  [openpyxl migration guide](https://wolfxl.com/openpyxl-migration?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
+- **Same API for the covered surface.** Most supported openpyxl-shaped code
+  starts with one import change:
+
+  ```diff
+  - from openpyxl import Workbook, load_workbook
+  + from wolfxl import Workbook, load_workbook
+  ```
+
+  openpyxl implements more of its own API, so review the
+  [compatibility matrix](https://wolfxl.com/docs/migration/compatibility-matrix/?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09),
+  the [known limitations](https://wolfxl.com/docs/trust/limitations/?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09),
+  and the [openpyxl migration guide](https://wolfxl.com/openpyxl-migration?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09),
+  then prove one representative workbook before replacing a production path.
+- **Existing templates.** On a sheet with an extension data validation and a
+  sparkline, one cell edit saved by openpyxl 3.1.5 removed both;
+  `load_workbook(path, modify=True)` in WolfXL 2.0.2 kept both.
+- **Formulas.** openpyxl stores formula text and never computes it; with
+  `data_only=True` it returns the value Excel last cached, or `None` for a
+  file Excel never opened. WolfXL `calculate()` evaluates supported functions
+  in process.
+- **Large files.** The
+  [large-file receipts](https://wolfxl.com/openpyxl-large-files?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09)
+  record seconds and peak memory for 1.6-million-cell reads, writes, and edits.
+- **Where openpyxl fits.** openpyxl is pure Python and installs anywhere
+  Python runs. WolfXL needs a published wheel for your platform or a Rust
+  toolchain to build from source.
 
 ## Compare openpyxl alternatives, measured
 

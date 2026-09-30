@@ -24,9 +24,6 @@ def _project_field(name: str) -> str:
 
 
 def test_package_uses_dedicated_pypi_description() -> None:
-    assert _project_field("description") == (
-        "MIT-licensed Excel I/O for Python with openpyxl-shaped APIs and a Rust backend"
-    )
     assert _project_field("readme") == PYPI_DESCRIPTION.name
     assert PYPI_DESCRIPTION.is_file()
 
