@@ -1683,7 +1683,8 @@ def _builtin_date(args: list[Any]) -> int | ExcelError:
     elif 30 <= y <= 99:
         y += 1900
     result = _date_to_serial(y, m, d)
-    if result < 1:
+    # Serial 0 is a real date (Jan 1, 1904) only in the 1904 system.
+    if result < (0 if _DATE1904.get() else 1):
         return ExcelError.NUM
     return result
 

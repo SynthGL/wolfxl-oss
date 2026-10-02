@@ -429,6 +429,8 @@ class TestComplexExpressions:
             ("=YEAR(A1)", 2025),
             ("=DAY(EDATE(A1,1))", 28),
             ("=DAYS(DATE(2025,3,15),A1)", 43),
+            ("=DATE(1904,1,1)", 0),  # the 1904 epoch is serial 0
+            ("=DATE(1903,12,31)", ExcelError.NUM),
         ],
     )
     def test_date_functions_use_1904_date_system(self, formula: str, expected: object) -> None:
