@@ -1,6 +1,6 @@
 # WolfXL
 
-**Edit existing Excel files from Python without losing formatting, 7-14x faster than openpyxl, with an openpyxl-compatible API. MIT licensed.**
+**Edit existing Excel files from Python without losing formatting, 7-14x faster than openpyxl on most reads and writes, with an openpyxl-compatible API. MIT licensed.**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
