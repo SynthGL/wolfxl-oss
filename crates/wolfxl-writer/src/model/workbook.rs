@@ -139,6 +139,28 @@ impl Workbook {
         Ok(())
     }
 
+    /// Remove a sheet by name.
+    ///
+    /// Names scoped to the removed sheet go with it, and names scoped to
+    /// later sheets shift down so `localSheetId` keeps pointing at the same
+    /// logical sheet.
+    pub fn remove_sheet(&mut self, name: &str) -> Result<(), String> {
+        let idx = self
+            .sheet_index_by_name(name)
+            .ok_or_else(|| format!("no sheet named {name:?}"))?;
+        self.sheets.remove(idx);
+        self.defined_names
+            .retain(|defined_name| defined_name.scope_sheet_index != Some(idx));
+        for defined_name in &mut self.defined_names {
+            if let Some(scope_idx) = defined_name.scope_sheet_index {
+                if scope_idx > idx {
+                    defined_name.scope_sheet_index = Some(scope_idx - 1);
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Replace the workbook-level document properties block.
     pub fn set_doc_props(&mut self, props: DocProperties) {
         self.doc_props = props;
@@ -275,6 +297,46 @@ mod tests {
         assert!(err.contains("Nope"), "{err}");
         let names: Vec<_> = wb.sheets.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["A", "B"]);
+    }
+
+    #[test]
+    fn remove_sheet_drops_owned_names_and_shifts_later_scopes() {
+        let mut wb = wb_with(&["A", "B", "C"]);
+        for (name, scope) in [
+            ("OnA", Some(0)),
+            ("OnB", Some(1)),
+            ("OnC", Some(2)),
+            ("Global", None),
+        ] {
+            wb.defined_names.push(DefinedName {
+                name: name.to_string(),
+                formula: "$A$1".to_string(),
+                scope_sheet_index: scope,
+                ..Default::default()
+            });
+        }
+
+        wb.remove_sheet("B").unwrap();
+
+        let names: Vec<_> = wb.sheets.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["A", "C"]);
+        let scopes: Vec<_> = wb
+            .defined_names
+            .iter()
+            .map(|dn| (dn.name.as_str(), dn.scope_sheet_index))
+            .collect();
+        assert_eq!(
+            scopes,
+            [("OnA", Some(0)), ("OnC", Some(1)), ("Global", None)]
+        );
+    }
+
+    #[test]
+    fn remove_sheet_missing_name_errors_without_mutating() {
+        let mut wb = wb_with(&["A"]);
+        let err = wb.remove_sheet("Nope").unwrap_err();
+        assert!(err.contains("Nope"), "{err}");
+        assert_eq!(wb.sheets.len(), 1);
     }
 
     #[test]

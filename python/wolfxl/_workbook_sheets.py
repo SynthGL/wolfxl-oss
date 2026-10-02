@@ -32,11 +32,7 @@ def remove_sheet(wb: Any, worksheet: Worksheet) -> None:
         wb._rust_patcher.queue_sheet_delete(title)  # noqa: SLF001
         return
     wb._active_sheet_dirty = True  # noqa: SLF001
-    remove_fn = getattr(wb._rust_writer, "remove_sheet", None)  # noqa: SLF001
-    if remove_fn is not None:
-        remove_fn(title)
-    else:
-        wb._pending_writer_sheet_deletes.append(title)  # noqa: SLF001
+    wb._rust_writer.remove_sheet(title)  # noqa: SLF001
 
 
 def create_sheet(wb: Any, title: str | None, index: int | None = None) -> Worksheet:

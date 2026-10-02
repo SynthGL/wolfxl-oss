@@ -401,7 +401,7 @@ fn read_workbook(
             _ => {}
         }
     }
-    let named_ranges = resolve_xlsb_named_ranges(&sheets, raw_names);
+    let named_ranges = resolve_xlsb_named_ranges(raw_names);
     let print_areas = resolve_xlsb_print_areas(&sheets, raw_print_areas);
     let print_titles = resolve_xlsb_print_titles(&sheets, raw_print_titles);
     Ok((
@@ -542,38 +542,23 @@ fn parse_table_part_rids(data: &[u8]) -> Result<Vec<String>> {
     Ok(rids)
 }
 
-fn resolve_xlsb_named_ranges(
-    sheets: &[XlsbSheet],
-    raw_names: Vec<RawNamedRange>,
-) -> Vec<NamedRange> {
+fn resolve_xlsb_named_ranges(raw_names: Vec<RawNamedRange>) -> Vec<NamedRange> {
     raw_names
         .into_iter()
-        .map(|raw| {
-            let (scope, sheet_name) = match raw.local_id {
-                Some(index) => (
-                    "sheet".to_string(),
-                    sheets.get(index).map(|sheet| sheet.name.clone()),
-                ),
-                None => ("workbook".to_string(), None),
-            };
-            let refers_to = if scope == "sheet" && !raw.refers_to.contains('!') {
-                if let Some(sheet_name) = sheet_name {
-                    format!("{sheet_name}!{}", raw.refers_to)
-                } else {
-                    raw.refers_to
-                }
+        .map(|raw| NamedRange {
+            name: raw.name,
+            scope: if raw.local_id.is_some() {
+                "sheet"
             } else {
-                raw.refers_to
-            };
-            NamedRange {
-                name: raw.name,
-                scope,
-                refers_to,
-                // BIFF12 doesn't carry the ECMA-376 extra attrs; G22 fields
-                // default to None/false so the public NamedRange has a
-                // consistent shape across xlsx/xlsb readers.
-                ..Default::default()
+                "workbook"
             }
+            .to_string(),
+            local_sheet_id: raw.local_id,
+            refers_to: raw.refers_to,
+            // BIFF12 doesn't carry the ECMA-376 extra attrs; G22 fields
+            // default to None/false so the public NamedRange has a
+            // consistent shape across xlsx/xlsb readers.
+            ..Default::default()
         })
         .collect()
 }
@@ -2495,7 +2480,11 @@ mod tests {
             put_wide_string(&mut column, "");
             push_record(&mut data, 0x015b, &column);
         }
-        push_record(&mut data, 0x00a1, &[0; 16]);
+        let mut auto_filter = Vec::new();
+        for value in [0, 3, 0, 2] {
+            put_u32(&mut auto_filter, value);
+        }
+        push_record(&mut data, 0x00a1, &auto_filter);
 
         assert_eq!(
             worksheet_features::parse_table_bin(&data),
@@ -2517,7 +2506,11 @@ mod tests {
                     "Amount".to_string(),
                     "Status".to_string()
                 ],
-                autofilter: true,
+                auto_filter: Some(AutoFilterInfo {
+                    ref_range: "A1:C4".to_string(),
+                    filter_columns: Vec::new(),
+                    sort_state: None,
+                }),
             })
         );
     }
@@ -2736,7 +2729,7 @@ mod tests {
         put_u32(&mut payload, 0);
 
         let raw = parse_defined_name(&payload, &sheets, &extern_sheets).unwrap();
-        let ranges = resolve_xlsb_named_ranges(&sheets, vec![raw]);
+        let ranges = resolve_xlsb_named_ranges(vec![raw]);
 
         assert_eq!(
             ranges,
@@ -2750,7 +2743,7 @@ mod tests {
     }
 
     #[test]
-    fn resolves_xlsb_sheet_scoped_defined_name_without_sheet_prefix() {
+    fn resolves_xlsb_sheet_scoped_defined_name_with_owning_sheet_index() {
         let sheets = vec![XlsbSheet {
             name: "Other".to_string(),
             path: "xl/worksheets/sheet1.bin".to_string(),
@@ -2770,14 +2763,15 @@ mod tests {
         put_u32(&mut payload, 0);
 
         let raw = parse_defined_name(&payload, &sheets, &[]).unwrap();
-        let ranges = resolve_xlsb_named_ranges(&sheets, vec![raw]);
+        let ranges = resolve_xlsb_named_ranges(vec![raw]);
 
         assert_eq!(
             ranges[0],
             NamedRange {
                 name: "LocalConstant".to_string(),
                 scope: "sheet".to_string(),
-                refers_to: "Other!7".to_string(),
+                local_sheet_id: Some(0),
+                refers_to: "7".to_string(),
                 ..Default::default()
             }
         );

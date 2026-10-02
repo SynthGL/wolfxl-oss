@@ -13,6 +13,7 @@ fn named_range_to_dict<'py>(py: Python<'py>, nr: &NamedRange) -> PyResult<Bound<
     let d = PyDict::new(py);
     d.set_item("name", &nr.name)?;
     d.set_item("scope", &nr.scope)?;
+    d.set_item("local_sheet_id", nr.local_sheet_id)?;
     d.set_item("refers_to", &nr.refers_to)?;
     d.set_item("comment", nr.comment.as_deref())?;
     d.set_item("hidden", nr.hidden)?;
@@ -35,25 +36,7 @@ pub(crate) fn read_named_ranges_xlsx(
     py: Python<'_>,
     sheet: &str,
 ) -> PyResult<PyObject> {
-    if !book.sheet_names.iter().any(|name| name == sheet) {
-        return Err(PyErr::new::<PyValueError, _>(format!(
-            "Unknown sheet: {sheet}"
-        )));
-    }
-    let result = PyList::empty(py);
-    for named_range in book.book.named_ranges() {
-        if named_range.scope == "sheet" {
-            let refers_to = named_range.refers_to.trim_start_matches('=');
-            let Some((sheet_part, _addr)) = refers_to.split_once('!') else {
-                continue;
-            };
-            if sheet_part.trim_matches('\'') != sheet {
-                continue;
-            }
-        }
-        result.append(named_range_to_dict(py, named_range)?)?;
-    }
-    Ok(result.into())
+    named_ranges_for_sheet(py, &book.sheet_names, book.book.named_ranges(), sheet)
 }
 
 pub(crate) fn read_named_ranges_xlsb(
@@ -61,21 +44,25 @@ pub(crate) fn read_named_ranges_xlsb(
     py: Python<'_>,
     sheet: &str,
 ) -> PyResult<PyObject> {
-    if !book.sheet_names.iter().any(|name| name == sheet) {
+    named_ranges_for_sheet(py, &book.sheet_names, book.book.named_ranges(), sheet)
+}
+
+/// Workbook-scoped names plus the names whose `localSheetId` is `sheet`.
+fn named_ranges_for_sheet(
+    py: Python<'_>,
+    sheet_names: &[String],
+    named_ranges: &[NamedRange],
+    sheet: &str,
+) -> PyResult<PyObject> {
+    let Some(sheet_idx) = sheet_names.iter().position(|name| name == sheet) else {
         return Err(PyErr::new::<PyValueError, _>(format!(
             "Unknown sheet: {sheet}"
         )));
-    }
+    };
     let result = PyList::empty(py);
-    for named_range in book.book.named_ranges() {
-        if named_range.scope == "sheet" {
-            let refers_to = named_range.refers_to.trim_start_matches('=');
-            let Some((sheet_part, _addr)) = refers_to.split_once('!') else {
-                continue;
-            };
-            if sheet_part.trim_matches('\'') != sheet {
-                continue;
-            }
+    for named_range in named_ranges {
+        if named_range.scope == "sheet" && named_range.local_sheet_id != Some(sheet_idx) {
+            continue;
         }
         result.append(named_range_to_dict(py, named_range)?)?;
     }

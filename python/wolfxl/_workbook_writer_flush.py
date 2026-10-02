@@ -53,6 +53,9 @@ def _flush_workbook_properties(wb: Any, writer: Any) -> None:
 
 def _flush_defined_names(wb: Any, writer: Any) -> None:
     """Push pending defined names to the native writer."""
+    from wolfxl._workbook_metadata import queue_worksheet_defined_names
+
+    queue_worksheet_defined_names(wb)
     _flush_print_titles(wb, writer)
     if wb._pending_defined_names:  # noqa: SLF001
         primary_sheet = wb._sheet_names[0] if wb._sheet_names else "Sheet"  # noqa: SLF001

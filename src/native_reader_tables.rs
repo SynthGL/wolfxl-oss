@@ -6,6 +6,7 @@ use pyo3::types::{PyDict, PyList};
 use wolfxl_reader::Table;
 
 use crate::native_reader_backend::{NativeXlsbBook, NativeXlsxBook};
+use crate::native_reader_filter::serialize_auto_filter;
 
 type PyObject = Py<PyAny>;
 
@@ -47,7 +48,10 @@ fn serialize(py: Python<'_>, tables: &[Table]) -> PyResult<PyObject> {
         d.set_item("show_row_stripes", table.show_row_stripes)?;
         d.set_item("show_column_stripes", table.show_column_stripes)?;
         d.set_item("columns", table.columns.clone())?;
-        d.set_item("autofilter", table.autofilter)?;
+        d.set_item(
+            "auto_filter",
+            serialize_auto_filter(py, table.auto_filter.as_ref())?,
+        )?;
         result.append(d)?;
     }
     Ok(result.into())

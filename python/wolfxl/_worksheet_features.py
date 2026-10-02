@@ -10,17 +10,6 @@ if TYPE_CHECKING:
     from wolfxl._worksheet import Worksheet
 
 
-def _strip_sheet_prefix(refers_to: str, sheet_name: str) -> str:
-    if refers_to.startswith("="):
-        refers_to = refers_to[1:]
-    if "!" not in refers_to:
-        return refers_to
-    prefix, _, tail = refers_to.partition("!")
-    if prefix.strip("'").replace("''", "'") == sheet_name:
-        return tail
-    return refers_to
-
-
 def get_defined_names(ws: Worksheet) -> dict[str, Any]:
     """Return worksheet-scoped defined names for ``ws``."""
     if ws._defined_names_cache is not None:  # noqa: SLF001
@@ -29,6 +18,7 @@ def get_defined_names(ws: Worksheet) -> dict[str, Any]:
     from wolfxl.workbook.defined_name import DefinedName
 
     names = DefinedNameDict()
+    names._ws = ws  # noqa: SLF001
     wb = ws._workbook  # noqa: SLF001
     if wb._rust_reader is not None:  # noqa: SLF001
         try:
@@ -39,12 +29,19 @@ def get_defined_names(ws: Worksheet) -> dict[str, Any]:
             if entry.get("scope") != "sheet":
                 continue
             name = entry["name"]
-            refers_to = _strip_sheet_prefix(entry["refers_to"], ws._title)
+            refers_to = entry["refers_to"].removeprefix("=")
             dict.__setitem__(
                 names,
                 name,
-                DefinedName(name=name, value=refers_to, localSheetId=None),
+                DefinedName(
+                    name=name,
+                    value=refers_to,
+                    localSheetId=entry.get("local_sheet_id"),
+                ),
             )
+    # Names added before a cache reset (sheet rename) stay visible.
+    for name, pending in ws._pending_defined_names.items():  # noqa: SLF001
+        dict.__setitem__(names, name, pending)
     ws._defined_names_cache = names  # noqa: SLF001
     return names
 
@@ -206,6 +203,7 @@ def get_tables_map(ws: Worksheet) -> Any:
     """Return the openpyxl-shaped table mapping for ``ws``."""
     if ws._tables_cache is not None:  # noqa: SLF001
         return ws._tables_cache  # noqa: SLF001
+    from wolfxl._worksheet_setup import auto_filter_from_payload
     from wolfxl.worksheet.table import Table, TableColumn, TableList, TableStyleInfo
 
     wb = ws._workbook  # noqa: SLF001
@@ -249,6 +247,7 @@ def get_tables_map(ws: Worksheet) -> Any:
             totalsRowShown=entry.get("totals_row_shown"),
             tableStyleInfo=table_style_info,
             tableColumns=table_columns,
+            autoFilter=auto_filter_from_payload(entry.get("auto_filter")),
         )
         result[name] = table
         result.loaded[name] = (

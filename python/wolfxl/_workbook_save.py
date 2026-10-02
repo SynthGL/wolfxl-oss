@@ -77,7 +77,6 @@ def save_workbook(
     else:
         raise RuntimeError("save requires write or modify mode")
     if wb._rust_writer is not None:  # noqa: SLF001
-        apply_writer_sheet_deletes(wb, filename)
         apply_writer_unmerged_ranges(wb, filename)
         apply_sheet_state_authoring(wb, filename)
     apply_workbook_template_content_type(wb, filename)
@@ -259,6 +258,7 @@ def _read_mode_has_pending_changes(wb: Any) -> bool:
         "_pending_comments",
         "_pending_threaded_comments",
         "_pending_hyperlinks",
+        "_pending_defined_names",
         "_pending_tables",
         "_pending_data_validations",
         "_pending_conditional_formats",
@@ -853,102 +853,6 @@ def _clear_workbook_xml_dirty_flags(wb: Any) -> None:
     wb._active_sheet_dirty = False  # noqa: SLF001
 
 
-def apply_writer_sheet_deletes(wb: Any, filename: str) -> None:
-    """Prune sheets removed from a write-mode workbook before save."""
-    deleted = set(getattr(wb, "_pending_writer_sheet_deletes", []) or [])
-    if not deleted:
-        return
-
-    import posixpath
-    import tempfile
-    import zipfile
-    from xml.etree import ElementTree as ET
-
-    ns_main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-    ns_rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-    ET.register_namespace("", ns_main)
-    ET.register_namespace("r", ns_rel)
-
-    try:
-        with zipfile.ZipFile(filename, "r") as src:
-            infos = src.infolist()
-            parts = {info.filename: src.read(info.filename) for info in infos}
-    except (OSError, zipfile.BadZipFile):
-        return
-
-    workbook_xml = parts.get("xl/workbook.xml")
-    rels_xml = parts.get("xl/_rels/workbook.xml.rels")
-    if workbook_xml is None or rels_xml is None:
-        return
-    try:
-        workbook_root = ET.fromstring(workbook_xml)
-        rels_root = ET.fromstring(rels_xml)
-    except ET.ParseError:
-        return
-
-    rel_targets = _workbook_relationship_targets(parts, ns_rel)
-    removed_rel_ids: set[str] = set()
-    removed_paths: set[str] = set()
-    for sheets_node in workbook_root.iter():
-        if sheets_node.tag.rsplit("}", 1)[-1] != "sheets":
-            continue
-        for sheet in list(sheets_node):
-            if sheet.tag.rsplit("}", 1)[-1] != "sheet":
-                continue
-            if sheet.attrib.get("name") not in deleted:
-                continue
-            rel_id = sheet.attrib.get(f"{{{ns_rel}}}id")
-            if rel_id:
-                removed_rel_ids.add(rel_id)
-                target = rel_targets.get(rel_id)
-                if target:
-                    removed_paths.add(_workbook_relationship_target_to_part(target))
-            sheets_node.remove(sheet)
-
-    if not removed_rel_ids:
-        wb._pending_writer_sheet_deletes = []  # noqa: SLF001
-        return
-
-    for rel in list(rels_root):
-        if rel.attrib.get("Id") in removed_rel_ids:
-            rels_root.remove(rel)
-
-    for path in removed_paths:
-        parts.pop(path, None)
-        rels_path = posixpath.join(
-            posixpath.dirname(path),
-            "_rels",
-            posixpath.basename(path) + ".rels",
-        )
-        parts.pop(rels_path, None)
-    _remove_content_type_overrides(parts, removed_paths)
-
-    parts["xl/workbook.xml"] = ET.tostring(workbook_root, encoding="utf-8", xml_declaration=True)
-    parts["xl/_rels/workbook.xml.rels"] = ET.tostring(rels_root, encoding="utf-8", xml_declaration=True)
-
-    parent = os.path.dirname(os.path.abspath(filename)) or "."
-    tmp = tempfile.NamedTemporaryFile(
-        prefix=".wolfxl-sheet-delete-",
-        suffix=".xlsx",
-        dir=parent,
-        delete=False,
-    )
-    tmp_name = tmp.name
-    tmp.close()
-    try:
-        with zipfile.ZipFile(tmp_name, "w", zipfile.ZIP_DEFLATED) as dst:
-            for info in infos:
-                if info.filename in parts:
-                    dst.writestr(info, parts[info.filename])
-        os.replace(tmp_name, filename)
-    finally:
-        try:
-            os.unlink(tmp_name)
-        except OSError:
-            pass
-    wb._pending_writer_sheet_deletes = []  # noqa: SLF001
-
-
 def apply_writer_unmerged_ranges(wb: Any, filename: str) -> None:
     """Prune mergeCell entries removed from a write-mode workbook."""
     pending = {
@@ -1066,32 +970,6 @@ def _workbook_relationship_target_to_part(target: str) -> str:
     if normalized.startswith("xl/"):
         return normalized
     return posixpath.normpath(posixpath.join("xl", normalized))
-
-
-def _remove_content_type_overrides(
-    parts: dict[str, bytes],
-    removed_paths: set[str],
-) -> None:
-    from xml.etree import ElementTree as ET
-
-    content_types = parts.get("[Content_Types].xml")
-    if content_types is None:
-        return
-    try:
-        root = ET.fromstring(content_types)
-    except ET.ParseError:
-        return
-    removed_part_names = {"/" + path for path in removed_paths}
-    changed = False
-    for node in list(root):
-        if (
-            node.tag.rsplit("}", 1)[-1] == "Override"
-            and node.attrib.get("PartName") in removed_part_names
-        ):
-            root.remove(node)
-            changed = True
-    if changed:
-        parts["[Content_Types].xml"] = ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
 def _pending_sheet_tab_colors(wb: Any) -> dict[str, str]:

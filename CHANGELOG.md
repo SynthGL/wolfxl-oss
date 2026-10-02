@@ -11,6 +11,16 @@
   style. Cells that already exist keep their own style. Expanding an empty
   `<row/>` to hold a new cell also keeps the row's height, style, and other
   attributes.
+- Sheet-scoped defined names load with their `localSheetId` and their
+  formula text exactly as stored, and names added through
+  `ws.defined_names.add(...)` are saved with that worksheet's scope.
+- `Workbook.remove()` in write mode re-indexes sheet-scoped names, so print
+  titles, print areas, and local names set after removing a sheet point at
+  the right sheet.
+- Loaded tables expose their `autoFilter`, as openpyxl does.
+- `ws.add_chart()` accepts `OneCellAnchor`, `TwoCellAnchor`, and
+  `AbsoluteAnchor` objects (set on `chart.anchor` or passed as the anchor)
+  in write mode, and saves the ranged placement.
 
 ## 2.0.7
 

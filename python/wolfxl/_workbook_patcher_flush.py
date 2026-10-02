@@ -376,9 +376,12 @@ def queue_sheet_move_to_patcher(wb: Any, name: str, offset: int) -> None:
 
 def flush_defined_names_to_patcher(wb: Any) -> None:
     """Drain pending workbook defined-name writes into the Rust patcher."""
+    from wolfxl._workbook_metadata import queue_worksheet_defined_names
+
     patcher = wb._rust_patcher  # noqa: SLF001
     if patcher is None:
         return
+    queue_worksheet_defined_names(wb)
     _queue_print_titles_to_patcher(wb, patcher)
     if not wb._pending_defined_names:  # noqa: SLF001
         return

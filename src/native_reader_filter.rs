@@ -17,7 +17,7 @@ pub(crate) fn read_auto_filter_xlsx(
     py: Python<'_>,
     sheet: &str,
 ) -> PyResult<PyObject> {
-    let auto_filter = book.ensure_sheet(sheet)?.auto_filter.clone();
+    let auto_filter = book.ensure_sheet(sheet)?.auto_filter.as_ref();
     serialize_auto_filter(py, auto_filter)
 }
 
@@ -26,18 +26,18 @@ pub(crate) fn read_auto_filter_xlsb(
     py: Python<'_>,
     sheet: &str,
 ) -> PyResult<PyObject> {
-    let auto_filter = book.ensure_sheet(sheet)?.auto_filter.clone();
+    let auto_filter = book.ensure_sheet(sheet)?.auto_filter.as_ref();
     serialize_auto_filter(py, auto_filter)
 }
 
-fn serialize_auto_filter(
+pub(crate) fn serialize_auto_filter(
     py: Python<'_>,
-    auto_filter: Option<AutoFilterInfo>,
+    auto_filter: Option<&AutoFilterInfo>,
 ) -> PyResult<PyObject> {
     match auto_filter {
         Some(auto_filter) => {
             let d = PyDict::new(py);
-            d.set_item("ref", auto_filter.ref_range)?;
+            d.set_item("ref", &auto_filter.ref_range)?;
             let columns = PyList::empty(py);
             for column in &auto_filter.filter_columns {
                 columns.append(filter_column_to_py(py, column)?)?;

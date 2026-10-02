@@ -440,7 +440,6 @@ def initialize_pending_state(wb: Any) -> None:
     wb._pending_sheet_copies = []
     wb._pending_chart_adds = {}
     wb._pending_source_chart_ops = []
-    wb._pending_writer_sheet_deletes = []
     wb._active_sheet_index = None
     wb._active_sheet_dirty = False
     wb._pending_pivot_caches = []
