@@ -369,6 +369,7 @@ class TestComplexExpressions:
             ("=0^-1", ExcelError.DIV0),
             ("=(0-8)^0.5", ExcelError.NUM),
             ("=10^400", ExcelError.NUM),
+            ("=(0-2)^99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", ExcelError.NUM),
         ],
     )
     def test_exponent_operator(self, formula: str, expected: object) -> None:
@@ -383,6 +384,16 @@ class TestComplexExpressions:
         ev.load(wb)
         assert ev.calculate()["Sheet!B1"] == expected
 
+    @pytest.mark.parametrize("operator", ["^", "-", "*"])
+    def test_operator_inside_quoted_sheet_name(self, operator: str) -> None:
+        wb = wolfxl.Workbook()
+        wb.active["A1"] = "='A" + operator + "B'!A1+1"
+        other = wb.create_sheet("A" + operator + "B")
+        other["A1"] = 41
+        ev = WorkbookEvaluator()
+        ev.load(wb)
+        assert ev.calculate()["Sheet!A1"] == 42
+
     @pytest.mark.parametrize(
         ("formula", "expected"),
         [
@@ -394,6 +405,7 @@ class TestComplexExpressions:
             ("=DAYS(A2,A1)", 43),
             ("=HOUR(A2)", 18),
             ("=MINUTE(A2)", 30),
+            ("=SECOND(A2)", 45),
         ],
     )
     def test_date_functions_read_date_cells(self, formula: str, expected: object) -> None:
@@ -401,7 +413,7 @@ class TestComplexExpressions:
         wb = wolfxl.Workbook()
         ws = wb.active
         ws["A1"] = datetime.date(2025, 1, 31)
-        ws["A2"] = datetime.datetime(2025, 3, 15, 18, 30)
+        ws["A2"] = datetime.datetime(2025, 3, 15, 18, 30, 45)
         ws["B1"] = formula
         ev = WorkbookEvaluator()
         ev.load(wb)

@@ -106,6 +106,7 @@ def _find_top_level_split(expr: str) -> tuple[str, str, str] | None:
     for pass_type in ("cmp", "add", "mul", "pow"):
         depth = 0
         in_string = False
+        in_sheet_name = False
         i = length - 1
         while i > 0:
             ch = expr[i]
@@ -116,6 +117,15 @@ def _find_top_level_split(expr: str) -> tuple[str, str, str] | None:
                 i -= 1
                 continue
             if in_string:
+                i -= 1
+                continue
+
+            # Skip quoted sheet names such as 'A-B'!A1 ('' escapes toggle twice)
+            if ch == "'":
+                in_sheet_name = not in_sheet_name
+                i -= 1
+                continue
+            if in_sheet_name:
                 i -= 1
                 continue
 
@@ -217,9 +227,9 @@ def _binary_op(left: Any, op: str, right: Any) -> Any:
         # fractional exponent or an out-of-range result is #NUM!.
         if left == 0 and right < 0:
             return ExcelError.DIV0
-        if left < 0 and not float(right).is_integer():
-            return ExcelError.NUM
         try:
+            if left < 0 and isinstance(right, float) and not right.is_integer():
+                return ExcelError.NUM
             result = float(left) ** right
         except OverflowError:
             return ExcelError.NUM
