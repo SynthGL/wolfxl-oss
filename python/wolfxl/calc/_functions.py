@@ -1609,6 +1609,20 @@ def _serial_to_date(serial: int) -> tuple[int, int, int]:
     return (dt.year, dt.month, dt.day)
 
 
+def _date_serial(value: Any) -> float:
+    """Read a date argument as an Excel serial number.
+
+    Cells formatted as dates load as ``datetime.date`` or ``datetime.datetime``;
+    Excel stores them as serial numbers, so date and time functions accept both.
+    """
+    if isinstance(value, datetime.datetime):
+        seconds = value.hour * 3600 + value.minute * 60 + value.second + value.microsecond / 1e6
+        return _date_to_serial(value.year, value.month, value.day) + seconds / 86400
+    if isinstance(value, datetime.date):
+        return _date_to_serial(value.year, value.month, value.day)
+    return float(value)
+
+
 def _serial_to_time(serial: int | float) -> tuple[int, int, int]:
     """Extract (hour, minute, second) from the fractional portion of a serial number."""
     frac = abs(float(serial)) - int(abs(float(serial)))
@@ -1655,7 +1669,7 @@ def _builtin_year(args: list[Any]) -> int:
     """YEAR(serial). Extract year from a serial number."""
     if len(args) != 1:
         raise ValueError("YEAR requires exactly 1 argument")
-    serial = int(float(args[0]))
+    serial = int(_date_serial(args[0]))
     y, _m, _d = _serial_to_date(serial)
     return y
 
@@ -1664,7 +1678,7 @@ def _builtin_month(args: list[Any]) -> int:
     """MONTH(serial). Extract month (1-12) from a serial number."""
     if len(args) != 1:
         raise ValueError("MONTH requires exactly 1 argument")
-    serial = int(float(args[0]))
+    serial = int(_date_serial(args[0]))
     _y, m, _d = _serial_to_date(serial)
     return m
 
@@ -1673,7 +1687,7 @@ def _builtin_day(args: list[Any]) -> int:
     """DAY(serial). Extract day (1-31) from a serial number."""
     if len(args) != 1:
         raise ValueError("DAY requires exactly 1 argument")
-    serial = int(float(args[0]))
+    serial = int(_date_serial(args[0]))
     _y, _m, d = _serial_to_date(serial)
     return d
 
@@ -1682,7 +1696,7 @@ def _builtin_edate(args: list[Any]) -> int | ExcelError:
     """EDATE(start_date, months). Date N months from start."""
     if len(args) != 2:
         raise ValueError("EDATE requires exactly 2 arguments")
-    start_serial = int(float(args[0]))
+    start_serial = int(_date_serial(args[0]))
     months = int(float(args[1]))
     y, m, d = _serial_to_date(start_serial)
     return _date_to_serial(y, m + months, d)
@@ -1692,7 +1706,7 @@ def _builtin_eomonth(args: list[Any]) -> int | ExcelError:
     """EOMONTH(start_date, months). End of month N months from start."""
     if len(args) != 2:
         raise ValueError("EOMONTH requires exactly 2 arguments")
-    start_serial = int(float(args[0]))
+    start_serial = int(_date_serial(args[0]))
     months = int(float(args[1]))
     y, m, _d = _serial_to_date(start_serial)
     # Move to target month
@@ -1709,8 +1723,8 @@ def _builtin_days(args: list[Any]) -> int:
     """DAYS(end_date, start_date). Simple subtraction."""
     if len(args) != 2:
         raise ValueError("DAYS requires exactly 2 arguments")
-    end = int(float(args[0]))
-    start = int(float(args[1]))
+    end = int(_date_serial(args[0]))
+    start = int(_date_serial(args[1]))
     return end - start
 
 
@@ -1731,7 +1745,7 @@ def _builtin_hour(args: list[Any]) -> int:
     """HOUR(serial). Extract hour (0-23) from a serial number."""
     if len(args) != 1:
         raise ValueError("HOUR requires exactly 1 argument")
-    serial = float(args[0])
+    serial = _date_serial(args[0])
     h, _m, _s = _serial_to_time(serial)
     return h
 
@@ -1740,7 +1754,7 @@ def _builtin_minute(args: list[Any]) -> int:
     """MINUTE(serial). Extract minute (0-59) from a serial number."""
     if len(args) != 1:
         raise ValueError("MINUTE requires exactly 1 argument")
-    serial = float(args[0])
+    serial = _date_serial(args[0])
     _h, m, _s = _serial_to_time(serial)
     return m
 
@@ -1749,7 +1763,7 @@ def _builtin_second(args: list[Any]) -> int:
     """SECOND(serial). Extract second (0-59) from a serial number."""
     if len(args) != 1:
         raise ValueError("SECOND requires exactly 1 argument")
-    serial = float(args[0])
+    serial = _date_serial(args[0])
     _h, _m, s = _serial_to_time(serial)
     return s
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import math
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -95,13 +96,14 @@ def _find_top_level_split(expr: str) -> tuple[str, str, str] | None:
         1. comparison   (>=, <=, <>, >, <, =)
         2. additive     (+, -)
         3. multiplicative (*, /)
+        4. exponent       (^)
 
     Right-to-left scan produces correct left-to-right associativity.
     Returns ``(left, op, right)`` or ``None``.
     """
     length = len(expr)
 
-    for pass_type in ("cmp", "add", "mul"):
+    for pass_type in ("cmp", "add", "mul", "pow"):
         depth = 0
         in_string = False
         i = length - 1
@@ -147,6 +149,8 @@ def _find_top_level_split(expr: str) -> tuple[str, str, str] | None:
                 matched_op = ch
             elif pass_type == "mul" and ch in ('*', '/'):
                 matched_op = ch
+            elif pass_type == "pow" and ch == '^':
+                matched_op = ch
 
             if matched_op is not None:
                 # Verify it's a binary operator (not unary prefix)
@@ -157,7 +161,7 @@ def _find_top_level_split(expr: str) -> tuple[str, str, str] | None:
                 j = op_start - 1
                 while j >= 0 and expr[j] == ' ':
                     j -= 1
-                if j < 0 or expr[j] in ('(', ',', '+', '-', '*', '/', '>', '<', '='):
+                if j < 0 or expr[j] in ('(', ',', '+', '-', '*', '/', '^', '>', '<', '='):
                     i -= 1
                     continue
                 # Skip +/- that are part of scientific notation (e.g. 2.5e-1)
@@ -208,6 +212,18 @@ def _binary_op(left: Any, op: str, right: Any) -> Any:
         return left * right
     if op == '/':
         return ExcelError.DIV0 if right == 0 else left / right
+    if op == '^':
+        # Excel: 0 to a negative power is #DIV/0!; a negative base with a
+        # fractional exponent or an out-of-range result is #NUM!.
+        if left == 0 and right < 0:
+            return ExcelError.DIV0
+        if left < 0 and not float(right).is_integer():
+            return ExcelError.NUM
+        try:
+            result = float(left) ** right
+        except OverflowError:
+            return ExcelError.NUM
+        return result if math.isfinite(result) else ExcelError.NUM
     return None
 
 
@@ -446,13 +462,13 @@ class WorkbookEvaluator:
         if not expr:
             return None
 
-        # 1. Binary split (comparison → additive → multiplicative)
+        # 1. Binary split (comparison → additive → multiplicative → exponent)
         split = _find_top_level_split(expr)
         if split:
             left_str, op, right_str = split
             left_val = self._eval_expr(left_str, sheet)
             right_val = self._eval_expr(right_str, sheet)
-            if op in ('+', '-', '*', '/', '&'):
+            if op in ('+', '-', '*', '/', '^', '&'):
                 return _binary_op(left_val, op, right_val)
             return _compare(left_val, right_val, op)
 
