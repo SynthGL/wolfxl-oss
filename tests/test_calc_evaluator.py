@@ -419,6 +419,31 @@ class TestComplexExpressions:
         ev.load(wb)
         assert ev.calculate()["Sheet!B1"] == expected
 
+    @pytest.mark.parametrize(
+        ("formula", "expected"),
+        [
+            ("=EDATE(A1,3)", 44315),  # Apr 30, 2025 in the 1904 system
+            ("=EOMONTH(A1,3)", 44315),
+            ("=DATE(2025,1,31)", 44226),
+            ("=EDATE(A1,0)=DATE(2025,1,31)", True),
+            ("=YEAR(A1)", 2025),
+            ("=DAY(EDATE(A1,1))", 28),
+            ("=DAYS(DATE(2025,3,15),A1)", 43),
+        ],
+    )
+    def test_date_functions_use_1904_date_system(self, formula: str, expected: object) -> None:
+        """Serials follow the workbook's 1904 date system, as Excel's do."""
+        from wolfxl.utils.datetime import CALENDAR_MAC_1904
+
+        wb = wolfxl.Workbook()
+        wb.epoch = CALENDAR_MAC_1904
+        ws = wb.active
+        ws["A1"] = datetime.date(2025, 1, 31)
+        ws["B1"] = formula
+        ev = WorkbookEvaluator()
+        ev.load(wb)
+        assert ev.calculate()["Sheet!B1"] == expected
+
     def test_parenthesized_expression(self) -> None:
         """=(A1+A2)*A3 — parens override default precedence."""
         wb = wolfxl.Workbook()
