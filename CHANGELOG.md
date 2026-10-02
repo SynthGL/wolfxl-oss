@@ -12,6 +12,9 @@
 - `YEAR`, `MONTH`, `DAY`, `EDATE`, `EOMONTH`, `DAYS`, `HOUR`, `MINUTE`, and
   `SECOND` accept cells that hold dates. They previously returned no value
   for date-formatted inputs.
+- Date serials follow the workbook's date system. In workbooks that use the
+  1904 date system, `DATE`, `TODAY`, `NOW`, and functions that read date
+  cells return the serials Excel returns instead of 1900-system serials.
 
 ## 2.0.6
 

@@ -16,7 +16,13 @@ import math
 import re
 from typing import TYPE_CHECKING, Any
 
-from wolfxl.calc._functions import ExcelError, FunctionRegistry, RangeValue, first_error
+from wolfxl.calc._functions import (
+    ExcelError,
+    FunctionRegistry,
+    RangeValue,
+    date_system,
+    first_error,
+)
 from wolfxl.calc._graph import DependencyGraph
 from wolfxl.calc._parser import expand_range, range_shape
 from wolfxl.calc._protocol import CellDelta, RecalcResult
@@ -321,6 +327,7 @@ class WorkbookEvaluator:
         self._functions = FunctionRegistry()
         self._named_ranges: dict[str, str] = {}  # NAME -> refers_to
         self._loaded = False
+        self._date1904 = False
         self._use_formulas = _check_formulas()
         self._compiled_cache: dict[str, Any] = {}  # formula -> compiled callable
 
@@ -329,6 +336,7 @@ class WorkbookEvaluator:
         self._cell_values.clear()
         self._graph = DependencyGraph()
         self._named_ranges.clear()
+        self._date1904 = bool(getattr(workbook.workbook_properties, "date1904", False))
 
         # Load named ranges first (needed for dependency graph). Loaded
         # workbooks map each name to a DefinedName; its ``value`` holds the
@@ -369,11 +377,12 @@ class WorkbookEvaluator:
         order = self._graph.topological_order()
         results: dict[str, Any] = {}
 
-        for cell_ref in order:
-            formula = self._graph.formulas[cell_ref]
-            value = self._evaluate_formula(cell_ref, formula)
-            self._cell_values[cell_ref] = value
-            results[cell_ref] = value
+        with date_system(self._date1904):
+            for cell_ref in order:
+                formula = self._graph.formulas[cell_ref]
+                value = self._evaluate_formula(cell_ref, formula)
+                self._cell_values[cell_ref] = value
+                results[cell_ref] = value
 
         return results
 
@@ -397,10 +406,11 @@ class WorkbookEvaluator:
 
         # Find and evaluate affected cells
         affected = self._graph.affected_cells(set(perturbations.keys()))
-        for cell_ref in affected:
-            formula = self._graph.formulas[cell_ref]
-            value = self._evaluate_formula(cell_ref, formula)
-            self._cell_values[cell_ref] = value
+        with date_system(self._date1904):
+            for cell_ref in affected:
+                formula = self._graph.formulas[cell_ref]
+                value = self._evaluate_formula(cell_ref, formula)
+                self._cell_values[cell_ref] = value
 
         # Build deltas
         deltas: list[CellDelta] = []

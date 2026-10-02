@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import calendar
+import contextlib
 import datetime
 import fnmatch
 import math
 import re
+from collections.abc import Iterator
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -1564,6 +1567,22 @@ def _builtin_db(args: list[Any]) -> float | ExcelError:
 _LOTUS_BUG_SERIAL = 60
 
 
+# Workbooks on the 1904 date system number days from Jan 1, 1904, which is
+# serial 1462 in the 1900 system. The evaluator sets this for each calculation.
+_DATE1904: ContextVar[bool] = ContextVar("wolfxl_calc_date1904", default=False)
+_DATE1904_OFFSET = 1462
+
+
+@contextlib.contextmanager
+def date_system(date1904: bool) -> Iterator[None]:
+    """Evaluate date serials in the 1904 date system while the context is active."""
+    token = _DATE1904.set(date1904)
+    try:
+        yield
+    finally:
+        _DATE1904.reset(token)
+
+
 def _date_to_serial(y: int, m: int, d: int) -> int:
     """Convert (year, month, day) to an Excel serial number.
 
@@ -1590,6 +1609,8 @@ def _date_to_serial(y: int, m: int, d: int) -> int:
     if serial >= _LOTUS_BUG_SERIAL:
         serial += 1
 
+    if _DATE1904.get():
+        serial -= _DATE1904_OFFSET
     return serial
 
 
@@ -1598,6 +1619,8 @@ def _serial_to_date(serial: int) -> tuple[int, int, int]:
 
     Handles the Lotus 1-2-3 bug: serial 60 = Feb 29, 1900.
     """
+    if _DATE1904.get():
+        serial += _DATE1904_OFFSET
     if serial == _LOTUS_BUG_SERIAL:
         return (1900, 2, 29)  # The phantom date
 
@@ -1660,7 +1683,8 @@ def _builtin_date(args: list[Any]) -> int | ExcelError:
     elif 30 <= y <= 99:
         y += 1900
     result = _date_to_serial(y, m, d)
-    if result < 1:
+    # Serial 0 is a real date (Jan 1, 1904) only in the 1904 system.
+    if result < (0 if _DATE1904.get() else 1):
         return ExcelError.NUM
     return result
 
