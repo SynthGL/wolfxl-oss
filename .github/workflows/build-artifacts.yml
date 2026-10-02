@@ -9,7 +9,7 @@ permissions:
 jobs:
   linux:
     name: Linux ${{ matrix.target }} ${{ matrix.libc.name }} wheels
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-22.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -92,7 +92,7 @@ jobs:
 
   windows:
     name: Windows x86_64 wheels
-    runs-on: blacksmith-4vcpu-windows-2025
+    runs-on: windows-2025
     timeout-minutes: 45
     steps:
       - name: Enable long paths
@@ -131,7 +131,7 @@ jobs:
 
   sdist:
     name: Source distribution
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
