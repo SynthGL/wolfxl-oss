@@ -112,7 +112,11 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
 
     // State tracking
     let mut in_sheet_data = false;
+    let mut in_cols = false;
+    // `<col style>` ranges as (min, max, style); `<cols>` precedes `<sheetData>`.
+    let mut col_styles: Vec<(u32, u32, u32)> = Vec::new();
     let mut current_row: Option<u32> = None;
+    let mut current_row_style: Option<u32> = None;
     let mut current_row_cols_seen: BTreeSet<u32> = BTreeSet::new();
     let mut rows_seen: BTreeSet<u32> = BTreeSet::new();
     let mut skip_until_cell_end = false; // skip children of a cell being replaced
@@ -130,6 +134,12 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                 } else if tag == b"sheetData" {
                     in_sheet_data = true;
                     write_event(&mut writer, Event::Start(e.to_owned()))?;
+                } else if tag == b"cols" && !in_sheet_data {
+                    in_cols = true;
+                    write_event(&mut writer, Event::Start(e.to_owned()))?;
+                } else if tag == b"col" && in_cols {
+                    push_col_style(&mut col_styles, e);
+                    write_event(&mut writer, Event::Start(e.to_owned()))?;
                 } else if tag == b"row" && in_sheet_data {
                     let row_num = attr_value(e, b"r")
                         .and_then(|s| s.parse::<u32>().ok())
@@ -142,6 +152,8 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                                 &mut writer,
                                 pr,
                                 row_patches.get(&pr).unwrap(),
+                                None,
+                                &col_styles,
                                 worksheet_prefix.as_deref(),
                             )?;
                             rows_seen.insert(pr);
@@ -149,6 +161,7 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                     }
 
                     current_row = Some(row_num);
+                    current_row_style = row_style(e);
                     current_row_cols_seen.clear();
                     rows_seen.insert(row_num);
                     let row_start = rewrite_row_spans(
@@ -208,6 +221,9 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                 if tag == b"dimension" {
                     let dim = rewrite_dimension(e, patch_bounds, worksheet_prefix.as_deref())?;
                     write_event(&mut writer, Event::Empty(dim))?;
+                } else if tag == b"col" && in_cols {
+                    push_col_style(&mut col_styles, e);
+                    write_event(&mut writer, Event::Empty(e.to_owned()))?;
                 } else if tag == b"row" && in_sheet_data {
                     // Self-closing empty row — handle insertions
                     let row_num = attr_value(e, b"r")
@@ -220,6 +236,8 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                                 &mut writer,
                                 pr,
                                 row_patches.get(&pr).unwrap(),
+                                None,
+                                &col_styles,
                                 worksheet_prefix.as_deref(),
                             )?;
                             rows_seen.insert(pr);
@@ -227,9 +245,16 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                     }
                     rows_seen.insert(row_num);
 
-                    // If this empty row has patches, expand it
+                    // If this empty row has patches, expand it, keeping its attributes.
                     if let Some(row_map) = row_patches.get(&row_num) {
-                        write_new_row(&mut writer, row_num, row_map, worksheet_prefix.as_deref())?;
+                        write_new_row(
+                            &mut writer,
+                            row_num,
+                            row_map,
+                            Some(e),
+                            &col_styles,
+                            worksheet_prefix.as_deref(),
+                        )?;
                     } else {
                         write_event(&mut writer, Event::Empty(e.to_owned()))?;
                     }
@@ -261,7 +286,14 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                     let start = BytesStart::new(sheet_data_name.as_str());
                     write_event(&mut writer, Event::Start(start))?;
                     for (&row_num, row_map) in &row_patches {
-                        write_new_row(&mut writer, row_num, row_map, worksheet_prefix.as_deref())?;
+                        write_new_row(
+                            &mut writer,
+                            row_num,
+                            row_map,
+                            None,
+                            &col_styles,
+                            worksheet_prefix.as_deref(),
+                        )?;
                         rows_seen.insert(row_num);
                     }
                     write_event(
@@ -280,6 +312,9 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                 if tag == b"c" && skip_until_cell_end {
                     skip_until_cell_end = false;
                     // Already wrote the replacement cell — don't write end tag
+                } else if tag == b"cols" && in_cols {
+                    in_cols = false;
+                    write_event(&mut writer, Event::End(e.to_owned()))?;
                 } else if tag == b"row" && in_sheet_data {
                     // Before closing row, insert any new cells for this row
                     if let Some(r) = current_row {
@@ -291,6 +326,7 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                                         &mut writer,
                                         &cell_ref,
                                         patch,
+                                        current_row_style.or_else(|| col_style(&col_styles, col)),
                                         worksheet_prefix.as_deref(),
                                     )?;
                                 }
@@ -298,6 +334,7 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                         }
                     }
                     current_row = None;
+                    current_row_style = None;
                     write_event(&mut writer, Event::End(e.to_owned()))?;
                 } else if tag == b"sheetData" {
                     // Before closing sheetData, insert any remaining rows
@@ -307,6 +344,8 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                                 &mut writer,
                                 row_num,
                                 row_map,
+                                None,
+                                &col_styles,
                                 worksheet_prefix.as_deref(),
                             )?;
                         }
@@ -917,39 +956,92 @@ fn write_patched_cell<W: Write>(
     Ok(())
 }
 
+/// Style index an absent cell takes from its row or column.
+///
+/// ECMA-376 Part 1, 18.3.1.73 (`row`): `s` is the row's style and is applied
+/// only when `customFormat` is true. 18.3.1.13 (`col`): `style` is the default
+/// style for cells not yet allocated in the column. A formatted row wins over a
+/// formatted column, which is the style Excel gives a cell typed into such a row.
+fn row_style(row: &BytesStart<'_>) -> Option<u32> {
+    let custom = attr_value(row, b"customFormat")?;
+    if custom != "1" && custom != "true" {
+        return None;
+    }
+    Some(
+        attr_value(row, b"s")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
+    )
+}
+
+/// Record a `<col min max style>` range that carries a style.
+fn push_col_style(col_styles: &mut Vec<(u32, u32, u32)>, col: &BytesStart<'_>) {
+    let parse = |key: &[u8]| attr_value(col, key).and_then(|v| v.parse::<u32>().ok());
+    if let (Some(min), Some(max), Some(style)) = (parse(b"min"), parse(b"max"), parse(b"style")) {
+        col_styles.push((min, max, style));
+    }
+}
+
+fn col_style(col_styles: &[(u32, u32, u32)], col: u32) -> Option<u32> {
+    col_styles
+        .iter()
+        .find(|&&(min, max, _)| min <= col && col <= max)
+        .map(|&(_, _, style)| style)
+}
+
 /// Write a brand-new cell element (insertion, not replacement).
+///
+/// `inherited_style` is the row or column style the absent cell had; it is
+/// used when the patch carries no style of its own.
 fn write_new_cell<W: Write>(
     writer: &mut XmlWriter<W>,
     cell_ref: &str,
     patch: &CellPatch,
+    inherited_style: Option<u32>,
     prefix: Option<&str>,
 ) -> Result<(), String> {
-    let dummy = BytesStart::new("c");
-    write_patched_cell(writer, cell_ref, &dummy, patch, prefix)
+    let mut absent = BytesStart::new("c");
+    if let Some(s) = inherited_style {
+        absent.push_attribute(("s", s.to_string().as_str()));
+    }
+    write_patched_cell(writer, cell_ref, &absent, patch, prefix)
 }
 
-/// Write a brand-new `<row>` element containing patched cells.
+/// Write a `<row>` element containing only patched cells.
+///
+/// `original` is the self-closing `<row/>` being expanded, if any; its
+/// attributes are kept and its style is inherited by the new cells.
 fn write_new_row<W: Write>(
     writer: &mut XmlWriter<W>,
     row_num: u32,
     cells: &BTreeMap<u32, &CellPatch>,
+    original: Option<&BytesStart<'_>>,
+    col_styles: &[(u32, u32, u32)],
     prefix: Option<&str>,
 ) -> Result<(), String> {
-    let row_name = qname(prefix, "row");
-    let mut row_elem = BytesStart::new(row_name.as_str());
-    row_elem.push_attribute(("r", row_num.to_string().as_str()));
-
+    let (row_elem, inherited_row_style) = match original {
+        Some(original) => (
+            rewrite_row_spans(original, Some(cells), prefix)?,
+            row_style(original),
+        ),
+        None => {
+            let mut row_elem = BytesStart::new(qname(prefix, "row"));
+            row_elem.push_attribute(("r", row_num.to_string().as_str()));
+            (row_elem, None)
+        }
+    };
     writer
-        .write_event(Event::Start(row_elem))
+        .write_event(Event::Start(row_elem.borrow()))
         .map_err(|e| format!("XML write error: {e}"))?;
 
     for (&col, patch) in cells {
         let cell_ref = col_row_to_a1(col, row_num);
-        write_new_cell(writer, &cell_ref, patch, prefix)?;
+        let inherited = inherited_row_style.or_else(|| col_style(col_styles, col));
+        write_new_cell(writer, &cell_ref, patch, inherited, prefix)?;
     }
 
     writer
-        .write_event(Event::End(BytesEnd::new(row_name.as_str())))
+        .write_event(Event::End(row_elem.to_end()))
         .map_err(|e| format!("XML write error: {e}"))?;
 
     Ok(())
@@ -1290,5 +1382,103 @@ mod tests {
 
         let result = patch_worksheet(xml, &[]).unwrap();
         assert_eq!(result, xml);
+    }
+
+    fn string_patch(row: u32, col: u32) -> CellPatch {
+        CellPatch {
+            row,
+            col,
+            value: Some(CellValue::String("new".to_string())),
+            style_index: None,
+        }
+    }
+
+    const STYLED_SHEET: &str = r#"<worksheet><cols><col min="1" max="2" width="9" style="7" customWidth="1"/><col min="4" max="4" style="8"/></cols><sheetData><row r="1" s="5" customFormat="1"><c r="C1" s="2"><v>1</v></c><c r="D1"><v>4</v></c></row><row r="2" s="6"><c r="C2"><v>2</v></c></row><row r="3"><c r="C3"><v>3</v></c></row><row r="4" s="9" customFormat="1" ht="20" customHeight="1"/></sheetData></worksheet>"#;
+
+    #[test]
+    fn new_cell_in_custom_format_row_takes_row_style_over_column_style() {
+        let result = patch_worksheet(STYLED_SHEET, &[string_patch(1, 1)]).unwrap();
+        assert!(
+            result.contains(r#"<c r="A1" s="5" t="str"><v>new</v></c>"#),
+            "{result}"
+        );
+    }
+
+    #[test]
+    fn new_cell_takes_column_style_when_row_style_is_not_custom() {
+        // Row 2 has `s` but no customFormat, so the row style does not apply.
+        let result =
+            patch_worksheet(STYLED_SHEET, &[string_patch(2, 2), string_patch(3, 4)]).unwrap();
+        assert!(
+            result.contains(r#"<c r="B2" s="7" t="str"><v>new</v></c>"#),
+            "{result}"
+        );
+        assert!(
+            result.contains(r#"<c r="D3" s="8" t="str"><v>new</v></c>"#),
+            "{result}"
+        );
+    }
+
+    #[test]
+    fn new_cell_without_row_or_column_style_takes_default_style() {
+        let result = patch_worksheet(STYLED_SHEET, &[string_patch(3, 5)]).unwrap();
+        assert!(
+            result.contains(r#"<c r="E3" t="str"><v>new</v></c>"#),
+            "{result}"
+        );
+    }
+
+    #[test]
+    fn new_cell_in_new_row_takes_column_style() {
+        let result = patch_worksheet(STYLED_SHEET, &[string_patch(10, 1)]).unwrap();
+        assert!(
+            result.contains(r#"<row r="10"><c r="A10" s="7" t="str"><v>new</v></c></row>"#),
+            "{result}"
+        );
+    }
+
+    #[test]
+    fn expanded_empty_row_keeps_attributes_and_gives_new_cell_row_style() {
+        let result = patch_worksheet(STYLED_SHEET, &[string_patch(4, 1)]).unwrap();
+        assert!(
+            result.contains(
+                r#"<row r="4" s="9" customFormat="1" ht="20" customHeight="1" spans="1:1"><c r="A4" s="9" t="str"><v>new</v></c></row>"#
+            ),
+            "{result}"
+        );
+    }
+
+    #[test]
+    fn new_cell_with_explicit_style_keeps_it() {
+        let mut patch = string_patch(1, 1);
+        patch.style_index = Some(3);
+        let result = patch_worksheet(STYLED_SHEET, &[patch]).unwrap();
+        assert!(
+            result.contains(r#"<c r="A1" s="3" t="str"><v>new</v></c>"#),
+            "{result}"
+        );
+    }
+
+    #[test]
+    fn existing_cells_keep_their_own_style_in_styled_rows_and_columns() {
+        // C1 (s=2) and D1 (no s) sit in a custom-format row; D1 also sits in
+        // a styled column. Rewriting them must not pick up either style.
+        let result = patch_worksheet(
+            STYLED_SHEET,
+            &[string_patch(1, 3), string_patch(1, 4), string_patch(1, 1)],
+        )
+        .unwrap();
+        assert!(
+            result.contains(r#"<c r="C1" s="2" t="str"><v>new</v></c>"#),
+            "{result}"
+        );
+        assert!(
+            result.contains(r#"<c r="D1" t="str"><v>new</v></c>"#),
+            "{result}"
+        );
+        assert!(
+            result.contains(r#"<c r="A1" s="5" t="str"><v>new</v></c>"#),
+            "{result}"
+        );
     }
 }
