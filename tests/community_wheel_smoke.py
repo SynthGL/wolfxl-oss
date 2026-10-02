@@ -9,8 +9,8 @@ import wolfxl
 from wolfxl import Workbook, load_workbook
 
 
-assert version("wolfxl") == "2.0.7"
-assert wolfxl.__version__ == "2.0.7"
+assert version("wolfxl") == "2.0.8"
+assert wolfxl.__version__ == "2.0.8"
 
 for module_name in (
     "wolfxl.operations",
