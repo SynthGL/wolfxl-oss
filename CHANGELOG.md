@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- In modify mode, a value written to a cell that does not exist yet takes
+  the style Excel gives a cell typed there: the row's style when the row is
+  formatted (`customFormat="1"`), else the column's `<col style>`, else the
+  workbook default. New cells previously always got the workbook default
+  style. Cells that already exist keep their own style. Expanding an empty
+  `<row/>` to hold a new cell also keeps the row's height, style, and other
+  attributes.
+
 ## 2.0.7
 
 ### Fixed
