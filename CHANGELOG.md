@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.0.7
+
+### Fixed
+
+- `calculate()` evaluates the `^` operator. Formulas using it, and every
+  formula that depended on them, previously returned no value. `^` binds
+  tighter than `*` and `/`, associates left to right, and returns `#DIV/0!`
+  for zero to a negative power and `#NUM!` for a negative base with a
+  fractional exponent or an overflowing result, as Excel does.
+- `YEAR`, `MONTH`, `DAY`, `EDATE`, `EOMONTH`, `DAYS`, `HOUR`, `MINUTE`, and
+  `SECOND` accept cells that hold dates. They previously returned no value
+  for date-formatted inputs.
+
 ## 2.0.6
 
 ### Changed
