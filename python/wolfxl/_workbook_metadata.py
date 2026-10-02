@@ -136,6 +136,23 @@ def get_defined_names(wb: Any) -> Any:
     return dnd
 
 
+def queue_worksheet_defined_names(wb: Any) -> None:
+    """Move names added via ``ws.defined_names`` into the workbook save queue.
+
+    Like openpyxl, each name's ``localSheetId`` is the worksheet's position
+    at save time, so sheet moves and removals before save are honoured.
+    """
+    for sheet_idx, sheet_name in enumerate(wb._sheet_names):  # noqa: SLF001
+        ws = wb._sheets.get(sheet_name)  # noqa: SLF001
+        pending = getattr(ws, "_pending_defined_names", None)
+        if not pending:
+            continue
+        for defined_name in pending.values():
+            defined_name.localSheetId = sheet_idx
+            wb._pending_defined_names[(defined_name.name, sheet_idx)] = defined_name  # noqa: SLF001
+        pending.clear()
+
+
 def get_workbook_properties(wb: Any) -> Any:
     """Return workbook-level properties, lazily loaded from the reader."""
     if wb._workbook_properties_cache is not None:  # noqa: SLF001

@@ -63,6 +63,20 @@ _TAGNAME_TO_KIND = {
 }
 
 
+def _anchor_payload(anchor: Any) -> Any:
+    """Return the emitter shape for a chart anchor.
+
+    A1 strings and ``None`` pass through; ``OneCellAnchor`` /
+    ``TwoCellAnchor`` / ``AbsoluteAnchor`` objects become the flat anchor
+    dict shared with images, so ranged placement survives the save.
+    """
+    if anchor is None or isinstance(anchor, str):
+        return anchor
+    from wolfxl._images import _resolve_anchor_dict
+
+    return _resolve_anchor_dict(anchor, 0, 0)
+
+
 class _ChartMeta(type):
     def __instancecheck__(cls, instance: Any) -> bool:
         if type.__instancecheck__(cls, instance):
@@ -584,7 +598,7 @@ class ChartBase(metaclass=_ChartMeta):
             "z_axis": z_axis.to_dict() if z_axis is not None else None,
 
             # Anchor + dimensions
-            "anchor": self._anchor,
+            "anchor": _anchor_payload(self._anchor),
             "width_emu": int(self.width * 360_000) if self.width is not None else None,
             "height_emu": int(self.height * 360_000) if self.height is not None else None,
 

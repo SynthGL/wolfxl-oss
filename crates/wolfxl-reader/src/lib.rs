@@ -971,7 +971,7 @@ pub struct AnchorExtentInfo {
 }
 
 /// Parsed worksheet table metadata.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Table {
     pub name: String,
     pub ref_range: String,
@@ -986,7 +986,8 @@ pub struct Table {
     pub show_row_stripes: bool,
     pub show_column_stripes: bool,
     pub columns: Vec<String>,
-    pub autofilter: bool,
+    /// The table's own `<autoFilter>` element, when present.
+    pub auto_filter: Option<AutoFilterInfo>,
 }
 
 /// Parsed workbook defined name.
@@ -999,6 +1000,9 @@ pub struct Table {
 pub struct NamedRange {
     pub name: String,
     pub scope: String,
+    /// Position of the owning sheet (`localSheetId`) for sheet-scoped names.
+    pub local_sheet_id: Option<usize>,
+    /// Formula text as stored in the workbook (no sheet prefix is added).
     pub refers_to: String,
     pub comment: Option<String>,
     pub hidden: bool,
@@ -1874,7 +1878,7 @@ fn parse_workbook(
         buf.clear();
     }
 
-    let named_ranges = resolve_named_ranges(&sheets, raw_names);
+    let named_ranges = resolve_named_ranges(raw_names);
     let print_areas = resolve_print_areas(&sheets, raw_print_areas);
     let print_titles = resolve_print_titles(&sheets, raw_print_titles);
     Ok((
@@ -2048,44 +2052,32 @@ struct SharedStrings {
     rich_text: Vec<Option<Vec<RichTextRun>>>,
 }
 
-fn resolve_named_ranges(sheet_refs: &[SheetRef], raw_names: Vec<RawNamedRange>) -> Vec<NamedRange> {
+fn resolve_named_ranges(raw_names: Vec<RawNamedRange>) -> Vec<NamedRange> {
     raw_names
         .into_iter()
-        .map(|raw| {
-            let (scope, sheet_name) = match raw.local_id {
-                Some(index) => (
-                    "sheet".to_string(),
-                    sheet_refs.get(index).map(|sheet| sheet.name.clone()),
-                ),
-                None => ("workbook".to_string(), None),
-            };
-            let refers_to = if scope == "sheet" && !raw.refers_to.contains('!') {
-                if let Some(sheet_name) = sheet_name {
-                    format!("{sheet_name}!{}", raw.refers_to)
-                } else {
-                    raw.refers_to
-                }
+        .map(|raw| NamedRange {
+            name: raw.name,
+            scope: if raw.local_id.is_some() {
+                "sheet"
             } else {
-                raw.refers_to
-            };
-            NamedRange {
-                name: raw.name,
-                scope,
-                refers_to,
-                comment: raw.attrs.comment,
-                hidden: raw.attrs.hidden,
-                custom_menu: raw.attrs.custom_menu,
-                description: raw.attrs.description,
-                help: raw.attrs.help,
-                status_bar: raw.attrs.status_bar,
-                shortcut_key: raw.attrs.shortcut_key,
-                function: raw.attrs.function,
-                function_group_id: raw.attrs.function_group_id,
-                vb_procedure: raw.attrs.vb_procedure,
-                xlm: raw.attrs.xlm,
-                publish_to_server: raw.attrs.publish_to_server,
-                workbook_parameter: raw.attrs.workbook_parameter,
+                "workbook"
             }
+            .to_string(),
+            local_sheet_id: raw.local_id,
+            refers_to: raw.refers_to,
+            comment: raw.attrs.comment,
+            hidden: raw.attrs.hidden,
+            custom_menu: raw.attrs.custom_menu,
+            description: raw.attrs.description,
+            help: raw.attrs.help,
+            status_bar: raw.attrs.status_bar,
+            shortcut_key: raw.attrs.shortcut_key,
+            function: raw.attrs.function,
+            function_group_id: raw.attrs.function_group_id,
+            vb_procedure: raw.attrs.vb_procedure,
+            xlm: raw.attrs.xlm,
+            publish_to_server: raw.attrs.publish_to_server,
+            workbook_parameter: raw.attrs.workbook_parameter,
         })
         .collect()
 }
@@ -6115,7 +6107,7 @@ fn parse_table_xml(xml: &str) -> Result<Table> {
     let mut show_row_stripes = false;
     let mut show_column_stripes = false;
     let mut columns = Vec::new();
-    let mut autofilter = false;
+    let auto_filter = parse_auto_filter(xml)?;
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -6148,9 +6140,6 @@ fn parse_table_xml(xml: &str) -> Result<Table> {
                         columns.push(column);
                     }
                 }
-                b"autoFilter" => {
-                    autofilter = true;
-                }
                 _ => {}
             },
             Ok(Event::Eof) => break,
@@ -6174,7 +6163,7 @@ fn parse_table_xml(xml: &str) -> Result<Table> {
         show_row_stripes,
         show_column_stripes,
         columns,
-        autofilter,
+        auto_filter,
     })
 }
 
@@ -7252,7 +7241,8 @@ mod tests {
                 NamedRange {
                     name: "LocalName".to_string(),
                     scope: "sheet".to_string(),
-                    refers_to: "Hidden!$B$2".to_string(),
+                    local_sheet_id: Some(1),
+                    refers_to: "$B$2".to_string(),
                     ..Default::default()
                 },
             ]
@@ -7796,7 +7786,11 @@ mod tests {
                 show_row_stripes: true,
                 show_column_stripes: true,
                 columns: vec!["Name".to_string(), "Sales".to_string()],
-                autofilter: true,
+                auto_filter: Some(AutoFilterInfo {
+                    ref_range: "A1:B3".to_string(),
+                    filter_columns: Vec::new(),
+                    sort_state: None,
+                }),
             }
         );
     }

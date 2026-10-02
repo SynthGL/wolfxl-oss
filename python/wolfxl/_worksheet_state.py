@@ -78,6 +78,9 @@ def initialize_worksheet_state(
     ws._charts_cache: list[Any] | None = None  # noqa: SLF001
 
     ws._pending_comments: dict[str, Any] = {}  # noqa: SLF001
+    # Sheet-scoped names added through ``ws.defined_names``; their
+    # ``localSheetId`` is assigned from the sheet position at save time.
+    ws._pending_defined_names: dict[str, Any] = {}  # noqa: SLF001
     # Threaded comments (G08) live in their own pending bag so the
     # legacy comment slot can carry an unmodified ``Comment`` while
     # the threaded payload is queued for a separate part. ``None``

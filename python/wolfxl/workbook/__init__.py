@@ -17,6 +17,7 @@ from wolfxl.workbook.views import BookView
 
 if TYPE_CHECKING:
     from wolfxl._workbook import Workbook
+    from wolfxl._worksheet import Worksheet
 
 
 # A1-style cell reference: at least one letter (col) followed by digits (row).
@@ -76,6 +77,9 @@ class DefinedNameDict(dict):
         # superclass init can stay plain. ``_wb`` is used by the PR6
         # write path; PR3 reads only need the container behavior.
         self._wb: Workbook | None = None
+        # Set on ``ws.defined_names``. Sheet-scoped names get their
+        # ``localSheetId`` from the worksheet position at save time.
+        self._ws: Worksheet | None = None
 
     def __setitem__(self, key: str, value: DefinedName) -> None:
         if not isinstance(value, DefinedName):
@@ -94,6 +98,10 @@ class DefinedNameDict(dict):
         # via ``_rust_writer.add_named_range`` during ``Workbook.save()``;
         # modify mode raises in ``save()`` with a T1.5 pointer — but we
         # still need to know a write was attempted, hence the queue.
+        ws = self._ws
+        if ws is not None:
+            ws._pending_defined_names[key] = value  # noqa: SLF001
+            return
         wb = self._wb
         if wb is not None:
             wb._pending_defined_names[key] = value  # noqa: SLF001
@@ -120,9 +128,17 @@ class DefinedNameDict(dict):
         self[value.name] = value
 
     def _queue_delete(self, key: str, value: DefinedName) -> None:
-        wb = self._wb
-        if wb is None:
-            return
+        ws = self._ws
+        if ws is not None:
+            ws._pending_defined_names.pop(key, None)  # noqa: SLF001
+            if value.localSheetId is None:
+                # Added since load and never saved: nothing to delete.
+                return
+            wb = ws._workbook  # noqa: SLF001
+        else:
+            wb = self._wb
+            if wb is None:
+                return
         local_sheet_id = value.localSheetId
         _drop_pending_defined_name(wb, key, local_sheet_id)
         if wb._rust_patcher is not None:  # noqa: SLF001

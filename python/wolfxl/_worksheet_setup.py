@@ -85,16 +85,31 @@ def get_auto_filter(ws: Worksheet) -> Any:
         and workbook._rust_reader is not None  # noqa: SLF001
         and hasattr(workbook._rust_reader, "read_auto_filter")  # noqa: SLF001
     ):
-        payload = workbook._rust_reader.read_auto_filter(ws._title)  # noqa: SLF001
-        if isinstance(payload, dict):
-            auto_filter.ref = payload.get("ref")
-            auto_filter.filter_columns = [
-                _filter_column_from_payload(column)
-                for column in payload.get("filter_columns", [])
-                if isinstance(column, dict)
-            ]
-            auto_filter.sort_state = _sort_state_from_payload(payload.get("sort_state"))
+        loaded = auto_filter_from_payload(
+            workbook._rust_reader.read_auto_filter(ws._title)  # noqa: SLF001
+        )
+        if loaded is not None:
+            auto_filter.ref = loaded.ref
+            auto_filter.filter_columns = loaded.filter_columns
+            auto_filter.sort_state = loaded.sort_state
     return auto_filter
+
+
+def auto_filter_from_payload(payload: Any) -> Any:
+    """Build an ``AutoFilter`` from a reader payload, or ``None`` when absent."""
+    if not isinstance(payload, dict):
+        return None
+    from wolfxl.worksheet.filters import AutoFilter
+
+    return AutoFilter(
+        ref=payload.get("ref"),
+        filter_columns=[
+            _filter_column_from_payload(column)
+            for column in payload.get("filter_columns", [])
+            if isinstance(column, dict)
+        ],
+        sort_state=_sort_state_from_payload(payload.get("sort_state")),
+    )
 
 
 def _filter_column_from_payload(payload: dict[str, Any]) -> Any:

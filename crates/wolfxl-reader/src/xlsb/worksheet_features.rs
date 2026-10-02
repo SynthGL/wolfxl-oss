@@ -165,7 +165,7 @@ struct TableBuilderBin {
     show_row_stripes: bool,
     show_column_stripes: bool,
     columns: Vec<String>,
-    autofilter: bool,
+    auto_filter: Option<AutoFilterInfo>,
 }
 
 impl TableBuilderBin {
@@ -187,7 +187,7 @@ impl TableBuilderBin {
             show_row_stripes: self.show_row_stripes,
             show_column_stripes: self.show_column_stripes,
             columns: self.columns,
-            autofilter: self.autofilter,
+            auto_filter: self.auto_filter,
         })
     }
 }
@@ -205,7 +205,7 @@ pub(super) fn parse_table_bin(data: &[u8]) -> Option<Table> {
                 }
             }
             0x00a1 => {
-                table.autofilter = true;
+                table.auto_filter = parse_auto_filter_begin(record.payload);
             }
             0x0201 => {
                 apply_table_style(record.payload, &mut table);

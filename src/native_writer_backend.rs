@@ -56,7 +56,7 @@ use crate::native_writer_sheet_state::{
 use crate::native_writer_streaming::{
     append_streaming_row, enable_streaming, finalize_all_streaming,
 };
-use crate::native_writer_workbook::{add_sheet_if_missing, move_sheet, rename_sheet};
+use crate::native_writer_workbook::{add_sheet_if_missing, move_sheet, remove_sheet, rename_sheet};
 use crate::native_writer_workbook_metadata::{
     dict_to_defined_name, dict_to_doc_properties, dict_to_workbook_security,
 };
@@ -100,6 +100,10 @@ impl NativeWorkbook {
 
     pub fn move_sheet(&mut self, name: &str, offset: isize) -> PyResult<()> {
         move_sheet(&mut self.inner, name, offset)
+    }
+
+    pub fn remove_sheet(&mut self, name: &str) -> PyResult<()> {
+        remove_sheet(&mut self.inner, name)
     }
 
     pub fn write_cell_value(

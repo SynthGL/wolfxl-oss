@@ -23,6 +23,10 @@ pub(crate) fn move_sheet(wb: &mut Workbook, name: &str, offset: isize) -> PyResu
     wb.move_sheet(name, offset).map_err(PyValueError::new_err)
 }
 
+pub(crate) fn remove_sheet(wb: &mut Workbook, name: &str) -> PyResult<()> {
+    wb.remove_sheet(name).map_err(PyValueError::new_err)
+}
+
 pub(crate) fn save(wb: &mut Workbook, path: &str) -> PyResult<()> {
     // G20: flush per-sheet streaming BufWriters so the splice phase
     // inside `emit_xlsx → sheet_xml::emit` reads consistent bytes.

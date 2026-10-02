@@ -651,7 +651,11 @@ def _flush_pending_charts(ws: Worksheet, writer: Any, sheet: str) -> None:
     if hasattr(writer, "add_chart_native"):
         for chart in ws._pending_charts:  # noqa: SLF001
             primary_dict = chart.to_rust_dict()
+            # The dict's ``anchor`` carries ranged anchors in full; the
+            # positional A1 cell is only the fallback for a missing one.
             anchor = chart._anchor  # noqa: SLF001
+            if not isinstance(anchor, str):
+                anchor = "E15"
             writer.add_chart_native(sheet, primary_dict, anchor)
             for secondary in chart._charts[1:]:  # noqa: SLF001
                 secondary_dict = secondary.to_rust_dict()
