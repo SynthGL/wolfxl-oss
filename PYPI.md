@@ -1,18 +1,18 @@
 # WolfXL Community
 
-**Edit existing Excel files from Python without losing formatting, and evaluate their formulas, with an openpyxl-compatible API. MIT licensed.**
+**Edit existing Excel files from Python without losing formatting, 7-14x faster than openpyxl on most reads and writes, with an openpyxl-compatible API. MIT licensed.**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
 implemented in Rust. Modify mode saves the cells you change and keeps the rest
-of the file, and `calculate()` evaluates common Excel functions in Python.
+of the file, and `calculate()` covers common Excel functions in Python.
 
 WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported workbook creation, reading, writing, streaming exports, and existing-workbook edits. It is a free product, not a trial.
 
 ## Install
 
 ```bash
-python -m pip install wolfxl==2.0.5
+python -m pip install wolfxl==2.0.6
 ```
 
 ## Edit an existing workbook
@@ -53,8 +53,10 @@ results in the saved file unchanged.
   `load_workbook(path, modify=True)` in WolfXL 2.0.2 kept both.
 - **Formulas.** openpyxl stores formula text and never computes it; with
   `data_only=True` it returns the value Excel last cached, or `None` for a
-  file Excel never opened. WolfXL `calculate()` evaluates supported functions
-  in process.
+  file Excel never opened. WolfXL Community `calculate()` covers common
+  functions only, in Python. Need results that match Excel? Commercial
+  includes a native engine verified on 704 Excel-calculated cases
+  ([pricing](https://wolfxl.com/pricing?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09)).
 - **Large files.** The
   [large-file receipts](https://wolfxl.com/openpyxl-large-files?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09)
   record seconds and peak memory for 1.6-million-cell reads, writes, and edits.

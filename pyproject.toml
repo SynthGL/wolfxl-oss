@@ -4,8 +4,8 @@ build-backend = "maturin"
 
 [project]
 name = "wolfxl"
-version = "2.0.5"
-description = "Edit existing Excel files from Python without losing formatting and evaluate formulas, with an openpyxl-compatible API and a Rust backend. MIT licensed."
+version = "2.0.6"
+description = "Edit existing Excel files from Python without losing formatting, 7-14x faster than openpyxl on most reads and writes, with an openpyxl-compatible API and a Rust backend. MIT licensed."
 readme = "PYPI.md"
 requires-python = ">=3.9"
 dependencies = ["defusedxml>=0.7.1,<1.0"]

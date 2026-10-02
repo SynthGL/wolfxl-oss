@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.6
+
+### Changed
+
+- The README, PyPI description, and package summary lead with preservation
+  and speed (7-14x faster than openpyxl on most reads and writes) and describe
+  `calculate()` as covering common functions only. Metadata only; the
+  package code is unchanged from 2.0.5.
+
 ## 2.0.5
 
 ### Added
