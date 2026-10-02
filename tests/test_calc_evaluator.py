@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import datetime
 import os
 import tempfile
 
 import pytest
+from wolfxl.calc import _functions as calc_functions
 from wolfxl.calc._evaluator import WorkbookEvaluator
 from wolfxl.calc._functions import ExcelError
+from wolfxl.utils.datetime import CALENDAR_MAC_1904, to_excel
 
 import wolfxl
 
@@ -107,6 +110,64 @@ class TestLoadAndCalculate:
         ev.load(wb)
         results = ev.calculate()
         assert results["Sheet!B1"] == 100
+
+    def test_1904_epoch_applies_to_date_functions_and_date_cells(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        class FixedDate(datetime.date):
+            @classmethod
+            def today(cls) -> FixedDate:
+                return cls(2024, 6, 15)
+
+        class FixedDateTime(datetime.datetime):
+            @classmethod
+            def now(cls) -> FixedDateTime:
+                return cls(2024, 6, 15, 12, 30)
+
+        class FixedClock:
+            date = FixedDate
+            datetime = FixedDateTime
+            timedelta = datetime.timedelta
+
+        monkeypatch.setattr(calc_functions, "datetime", FixedClock)
+
+        wb = wolfxl.Workbook()
+        wb.epoch = CALENDAR_MAC_1904
+        ws = wb.active
+        ws["A1"] = datetime.date(2024, 1, 1)
+        ws["B1"] = "=DATE(2024,1,1)"
+        ws["B2"] = "=YEAR(A1)"
+        ws["B3"] = "=EDATE(A1,1)"
+        ws["B4"] = "=EOMONTH(A1,0)"
+        ws["B5"] = "=A1=B1"
+        ws["B6"] = "=TODAY()"
+        ws["B7"] = "=NOW()"
+        ws["B8"] = "=MONTH(A1)"
+        ws["B9"] = "=DAY(A1)"
+        ws["B10"] = "=DAYS(A1,B1)"
+
+        ev = WorkbookEvaluator()
+        ev.load(wb)
+        results = ev.calculate()
+
+        jan_1 = to_excel(datetime.date(2024, 1, 1), CALENDAR_MAC_1904)
+        assert jan_1 == 43830
+        assert results["Sheet!B1"] == jan_1
+        assert results["Sheet!B2"] == 2024
+        assert results["Sheet!B3"] == to_excel(
+            datetime.date(2024, 2, 1), CALENDAR_MAC_1904,
+        )
+        assert results["Sheet!B4"] == to_excel(
+            datetime.date(2024, 1, 31), CALENDAR_MAC_1904,
+        )
+        assert results["Sheet!B5"] is True
+        today = to_excel(datetime.date(2024, 6, 15), CALENDAR_MAC_1904)
+        assert results["Sheet!B6"] == today
+        assert results["Sheet!B7"] == pytest.approx(today + (12.5 / 24))
+        assert results["Sheet!B8"] == 1
+        assert results["Sheet!B9"] == 1
+        assert results["Sheet!B10"] == 0
 
     def test_binary_operations(self) -> None:
         wb = wolfxl.Workbook()

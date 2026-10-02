@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `calculate()` now honors the workbook's 1904 date system for date and time
+  functions and date-valued cells, keeping formula serials and comparisons
+  consistent with the workbook epoch.
+
 ## 2.0.6
 
 ### Changed

@@ -10,6 +10,7 @@ functions fall back to the library's Excel function implementations.
 
 from __future__ import annotations
 
+import datetime
 import inspect
 import logging
 import re
@@ -19,6 +20,7 @@ from wolfxl.calc._functions import ExcelError, FunctionRegistry, RangeValue, fir
 from wolfxl.calc._graph import DependencyGraph
 from wolfxl.calc._parser import expand_range, range_shape
 from wolfxl.calc._protocol import CellDelta, RecalcResult
+from wolfxl.utils.datetime import to_excel
 
 if TYPE_CHECKING:
     from wolfxl._workbook import Workbook
@@ -303,6 +305,8 @@ class WorkbookEvaluator:
         self._cell_values.clear()
         self._graph = DependencyGraph()
         self._named_ranges.clear()
+        epoch = workbook.epoch
+        self._functions = FunctionRegistry(epoch)
 
         # Load named ranges first (needed for dependency graph). Loaded
         # workbooks map each name to a DefinedName; its ``value`` holds the
@@ -326,6 +330,13 @@ class WorkbookEvaluator:
                         self._graph.add_formula(
                             cell_ref, val, sheet_name, named_ranges=nr,
                         )
+                    elif isinstance(
+                        val,
+                        (datetime.datetime, datetime.date, datetime.time, datetime.timedelta),
+                    ):
+                        # Formula evaluation operates on Excel serials. Convert
+                        # date-like cells with the workbook's own date system.
+                        self._cell_values[cell_ref] = to_excel(val, epoch)
                     elif val is not None:
                         # Value cell: store the value
                         self._cell_values[cell_ref] = val

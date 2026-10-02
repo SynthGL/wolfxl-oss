@@ -8,7 +8,10 @@ import fnmatch
 import math
 import re
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Callable
+
+from wolfxl.utils.datetime import CALENDAR_WINDOWS_1900
 
 # ---------------------------------------------------------------------------
 # ExcelError: typed error values that propagate through formula chains
@@ -1556,7 +1559,7 @@ def _builtin_db(args: list[Any]) -> float | ExcelError:
 
 
 # ---------------------------------------------------------------------------
-# Date serial number helpers (Excel epoch: serial 1 = Jan 1, 1900)
+# Date serial number helpers
 # ---------------------------------------------------------------------------
 
 # The Lotus 1-2-3 bug: serial 60 = Feb 29, 1900 (doesn't exist).
@@ -1564,48 +1567,53 @@ def _builtin_db(args: list[Any]) -> float | ExcelError:
 _LOTUS_BUG_SERIAL = 60
 
 
-def _date_to_serial(y: int, m: int, d: int) -> int:
-    """Convert (year, month, day) to an Excel serial number.
+def _date_to_serial(
+    y: int,
+    m: int,
+    d: int,
+    *,
+    epoch: datetime.datetime = CALENDAR_WINDOWS_1900,
+) -> int:
+    """Convert (year, month, day) to a serial number for *epoch*.
 
     Handles month overflow/underflow (e.g., month 14 wraps to Feb next year).
-    Reproduces the Lotus 1-2-3 bug for dates before March 1, 1900.
+    The Windows epoch reproduces Excel's Lotus 1-2-3 leap-year bug.
     """
     # Normalize month overflow/underflow
     m -= 1  # 0-based
     y += m // 12
     m = m % 12 + 1
 
-    # Build a Python date
-    # Clamp day to max for the month
+    # Build a Python date, clamping the day to the target month's maximum.
     max_day = calendar.monthrange(y, m)[1]
-    d = min(d, max_day)
-    dt = datetime.date(y, m, d)
+    dt = datetime.date(y, m, min(d, max_day))
 
-    # Days from Jan 1, 1900
-    epoch = datetime.date(1899, 12, 31)  # serial 0 is Dec 31, 1899
-    serial = (dt - epoch).days
+    if epoch != CALENDAR_WINDOWS_1900:
+        return (dt - epoch.date()).days
 
-    # Lotus bug: for dates >= Mar 1, 1900, add 1 to account for
-    # the phantom Feb 29, 1900
+    serial = (dt - datetime.date(1899, 12, 31)).days
+    # Dates from Mar 1, 1900 include Excel's nonexistent Feb 29.
     if serial >= _LOTUS_BUG_SERIAL:
         serial += 1
-
     return serial
 
 
-def _serial_to_date(serial: int) -> tuple[int, int, int]:
-    """Convert an Excel serial number to (year, month, day).
+def _serial_to_date(
+    serial: int,
+    *,
+    epoch: datetime.datetime = CALENDAR_WINDOWS_1900,
+) -> tuple[int, int, int]:
+    """Convert an epoch-relative serial number to (year, month, day)."""
+    if epoch != CALENDAR_WINDOWS_1900:
+        dt = epoch.date() + datetime.timedelta(days=serial)
+        return (dt.year, dt.month, dt.day)
 
-    Handles the Lotus 1-2-3 bug: serial 60 = Feb 29, 1900.
-    """
     if serial == _LOTUS_BUG_SERIAL:
         return (1900, 2, 29)  # The phantom date
 
     # For serials > 60, subtract 1 to undo the Lotus bug offset
     adjusted = serial - 1 if serial > _LOTUS_BUG_SERIAL else serial
-
-    epoch = datetime.date(1899, 12, 31)
-    dt = epoch + datetime.timedelta(days=adjusted)
+    dt = datetime.date(1899, 12, 31) + datetime.timedelta(days=adjusted)
     return (dt.year, dt.month, dt.day)
 
 
@@ -1624,14 +1632,22 @@ def _serial_to_time(serial: int | float) -> tuple[int, int, int]:
 # ---------------------------------------------------------------------------
 
 
-def _builtin_today(args: list[Any]) -> int:
-    """TODAY(). Returns the current date as an Excel serial number."""
+def _builtin_today(
+    args: list[Any],
+    *,
+    epoch: datetime.datetime = CALENDAR_WINDOWS_1900,
+) -> int:
+    """TODAY(). Returns the current date as an epoch-relative serial number."""
     today = datetime.date.today()
-    return _date_to_serial(today.year, today.month, today.day)
+    return _date_to_serial(today.year, today.month, today.day, epoch=epoch)
 
 
-def _builtin_date(args: list[Any]) -> int | ExcelError:
-    """DATE(year, month, day). Returns an Excel serial number.
+def _builtin_date(
+    args: list[Any],
+    *,
+    epoch: datetime.datetime = CALENDAR_WINDOWS_1900,
+) -> int | ExcelError:
+    """DATE(year, month, day). Returns an epoch-relative serial number.
 
     Handles month overflow: DATE(2020,14,1) = DATE(2021,2,1).
     """
@@ -1645,56 +1661,77 @@ def _builtin_date(args: list[Any]) -> int | ExcelError:
         y += 1900
     elif 30 <= y <= 99:
         y += 1900
-    result = _date_to_serial(y, m, d)
-    if result < 1:
+    result = _date_to_serial(y, m, d, epoch=epoch)
+    minimum_serial = 1 if epoch == CALENDAR_WINDOWS_1900 else 0
+    if result < minimum_serial:
         return ExcelError.NUM
     return result
 
 
-def _builtin_year(args: list[Any]) -> int:
-    """YEAR(serial). Extract year from a serial number."""
+def _builtin_year(
+    args: list[Any],
+    *,
+    epoch: datetime.datetime = CALENDAR_WINDOWS_1900,
+) -> int:
+    """YEAR(serial). Extract year from an epoch-relative serial number."""
     if len(args) != 1:
         raise ValueError("YEAR requires exactly 1 argument")
     serial = int(float(args[0]))
-    y, _m, _d = _serial_to_date(serial)
+    y, _m, _d = _serial_to_date(serial, epoch=epoch)
     return y
 
 
-def _builtin_month(args: list[Any]) -> int:
-    """MONTH(serial). Extract month (1-12) from a serial number."""
+def _builtin_month(
+    args: list[Any],
+    *,
+    epoch: datetime.datetime = CALENDAR_WINDOWS_1900,
+) -> int:
+    """MONTH(serial). Extract month (1-12) from an epoch-relative serial."""
     if len(args) != 1:
         raise ValueError("MONTH requires exactly 1 argument")
     serial = int(float(args[0]))
-    _y, m, _d = _serial_to_date(serial)
+    _y, m, _d = _serial_to_date(serial, epoch=epoch)
     return m
 
 
-def _builtin_day(args: list[Any]) -> int:
-    """DAY(serial). Extract day (1-31) from a serial number."""
+def _builtin_day(
+    args: list[Any],
+    *,
+    epoch: datetime.datetime = CALENDAR_WINDOWS_1900,
+) -> int:
+    """DAY(serial). Extract day (1-31) from an epoch-relative serial."""
     if len(args) != 1:
         raise ValueError("DAY requires exactly 1 argument")
     serial = int(float(args[0]))
-    _y, _m, d = _serial_to_date(serial)
+    _y, _m, d = _serial_to_date(serial, epoch=epoch)
     return d
 
 
-def _builtin_edate(args: list[Any]) -> int | ExcelError:
+def _builtin_edate(
+    args: list[Any],
+    *,
+    epoch: datetime.datetime = CALENDAR_WINDOWS_1900,
+) -> int | ExcelError:
     """EDATE(start_date, months). Date N months from start."""
     if len(args) != 2:
         raise ValueError("EDATE requires exactly 2 arguments")
     start_serial = int(float(args[0]))
     months = int(float(args[1]))
-    y, m, d = _serial_to_date(start_serial)
-    return _date_to_serial(y, m + months, d)
+    y, m, d = _serial_to_date(start_serial, epoch=epoch)
+    return _date_to_serial(y, m + months, d, epoch=epoch)
 
 
-def _builtin_eomonth(args: list[Any]) -> int | ExcelError:
+def _builtin_eomonth(
+    args: list[Any],
+    *,
+    epoch: datetime.datetime = CALENDAR_WINDOWS_1900,
+) -> int | ExcelError:
     """EOMONTH(start_date, months). End of month N months from start."""
     if len(args) != 2:
         raise ValueError("EOMONTH requires exactly 2 arguments")
     start_serial = int(float(args[0]))
     months = int(float(args[1]))
-    y, m, _d = _serial_to_date(start_serial)
+    y, m, _d = _serial_to_date(start_serial, epoch=epoch)
     # Move to target month
     m += months
     # Normalize
@@ -1702,7 +1739,7 @@ def _builtin_eomonth(args: list[Any]) -> int | ExcelError:
     y += m // 12
     m = m % 12 + 1
     last_day = calendar.monthrange(y, m)[1]
-    return _date_to_serial(y, m, last_day)
+    return _date_to_serial(y, m, last_day, epoch=epoch)
 
 
 def _builtin_days(args: list[Any]) -> int:
@@ -1719,10 +1756,14 @@ def _builtin_days(args: list[Any]) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _builtin_now(args: list[Any]) -> float:
-    """NOW(). Returns the current date and time as an Excel serial number."""
+def _builtin_now(
+    args: list[Any],
+    *,
+    epoch: datetime.datetime = CALENDAR_WINDOWS_1900,
+) -> float:
+    """NOW(). Returns the current date and time as an epoch-relative serial."""
     now = datetime.datetime.now()
-    date_serial = _date_to_serial(now.year, now.month, now.day)
+    date_serial = _date_to_serial(now.year, now.month, now.day, epoch=epoch)
     time_frac = (now.hour * 3600 + now.minute * 60 + now.second) / 86400
     return date_serial + time_frac
 
@@ -1906,6 +1947,17 @@ _BUILTINS: dict[str, Callable[..., Any]] = {
     "OFFSET": _builtin_offset,
 }
 
+_EPOCH_BUILTIN_NAMES = (
+    "TODAY",
+    "DATE",
+    "YEAR",
+    "MONTH",
+    "DAY",
+    "EDATE",
+    "EOMONTH",
+    "NOW",
+)
+
 
 class FunctionRegistry:
     """Registry of callable function implementations.
@@ -1913,8 +1965,13 @@ class FunctionRegistry:
     Starts with builtins and can be extended with custom functions.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        epoch: datetime.datetime = CALENDAR_WINDOWS_1900,
+    ) -> None:
         self._functions: dict[str, Callable[..., Any]] = dict(_BUILTINS)
+        for name in _EPOCH_BUILTIN_NAMES:
+            self._functions[name] = partial(self._functions[name], epoch=epoch)
 
     def register(self, name: str, func: Callable[..., Any]) -> None:
         self._functions[name.upper()] = func
