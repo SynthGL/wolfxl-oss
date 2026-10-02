@@ -1,11 +1,11 @@
 # WolfXL
 
-**Edit existing Excel files from Python without losing formatting, and evaluate their formulas, with an openpyxl-compatible API. MIT licensed.**
+**Edit existing Excel files from Python without losing formatting, 7-14x faster than openpyxl, with an openpyxl-compatible API. MIT licensed.**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
 implemented in Rust. Modify mode saves the cells you change and keeps the rest
-of the file, and `calculate()` evaluates common Excel functions in Python.
+of the file, and `calculate()` covers common Excel functions in Python.
 Most openpyxl code runs after a one-line import change.
 
 ```bash
@@ -58,8 +58,10 @@ results in the saved file unchanged.
   `load_workbook(path, modify=True)` in WolfXL 2.0.2 kept both.
 - **Formulas.** openpyxl stores formula text and never computes it; with
   `data_only=True` it returns the value Excel last cached, or `None` for a
-  file Excel never opened. WolfXL `calculate()` evaluates supported functions
-  in process.
+  file Excel never opened. WolfXL Community `calculate()` covers common
+  functions only, in Python. Need results that match Excel? Commercial
+  includes a native engine verified on 704 Excel-calculated cases
+  ([pricing](https://wolfxl.com/pricing?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09)).
 - **Large files.** On a 200,000-row by 8-column workbook (1.6 million cells),
   a full read with WolfXL took 0.60 s against 6.43 s for openpyxl 3.1.5 at
   0.36x the peak memory, and the edit-two-cells-and-save phase took 0.25 s
@@ -140,7 +142,7 @@ Step-by-step guide: [openpyxl migration](https://wolfxl.com/openpyxl-migration).
 Install the current Community release:
 
 ```bash
-python -m pip install wolfxl==2.0.5
+python -m pip install wolfxl==2.0.6
 ```
 
 WolfXL Community supports Python 3.9 and newer CPython versions for which a
