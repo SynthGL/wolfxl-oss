@@ -446,6 +446,22 @@ class TestComplexExpressions:
         ev.load(wb)
         assert ev.calculate()["Sheet!B1"] == expected
 
+    def test_recalculate_uses_1904_date_system(self) -> None:
+        """Perturbed date inputs recalculate in the workbook's 1904 date system."""
+        from wolfxl.utils.datetime import CALENDAR_MAC_1904
+
+        wb = wolfxl.Workbook()
+        wb.epoch = CALENDAR_MAC_1904
+        ws = wb.active
+        ws["A1"] = 1
+        ws["B1"] = "=EDATE(DATE(2025,1,31),A1)"
+        ev = WorkbookEvaluator()
+        ev.load(wb)
+        assert ev.calculate()["Sheet!B1"] == 44254  # Feb 28, 2025
+        result = ev.recalculate({"Sheet!A1": 3})
+        deltas = {d.cell_ref: d.new_value for d in result.deltas}
+        assert deltas["Sheet!B1"] == 44315  # Apr 30, 2025
+
     def test_parenthesized_expression(self) -> None:
         """=(A1+A2)*A3 — parens override default precedence."""
         wb = wolfxl.Workbook()
