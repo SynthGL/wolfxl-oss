@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import os
 import tempfile
 
@@ -355,6 +356,68 @@ class TestComplexExpressions:
         ev.load(wb)
         results = ev.calculate()
         assert results["Sheet!B1"] == 14.0  # 2+(3*4), not (2+3)*4
+
+    @pytest.mark.parametrize(
+        ("formula", "expected"),
+        [
+            ("=A1^3", 8.0),
+            ("=A1*A2^2", 18.0),  # ^ binds tighter than *
+            ("=2^3^2", 64.0),  # left-associative, like Excel
+            ("=-2^2", 4.0),  # unary minus binds tighter than ^
+            ("=100000*(1+A3)^(A4-1)", 100000.0),  # zero exponent from a cell
+            ("=2^(A4-1)", 1.0),
+            ("=0^-1", ExcelError.DIV0),
+            ("=(0-8)^0.5", ExcelError.NUM),
+            ("=10^400", ExcelError.NUM),
+            ("=(0-2)^99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", ExcelError.NUM),
+        ],
+    )
+    def test_exponent_operator(self, formula: str, expected: object) -> None:
+        wb = wolfxl.Workbook()
+        ws = wb.active
+        ws["A1"] = 2
+        ws["A2"] = 3
+        ws["A3"] = 0.045
+        ws["A4"] = 1
+        ws["B1"] = formula
+        ev = WorkbookEvaluator()
+        ev.load(wb)
+        assert ev.calculate()["Sheet!B1"] == expected
+
+    @pytest.mark.parametrize("operator", ["^", "-", "*"])
+    def test_operator_inside_quoted_sheet_name(self, operator: str) -> None:
+        wb = wolfxl.Workbook()
+        wb.active["A1"] = "='A" + operator + "B'!A1+1"
+        other = wb.create_sheet("A" + operator + "B")
+        other["A1"] = 41
+        ev = WorkbookEvaluator()
+        ev.load(wb)
+        assert ev.calculate()["Sheet!A1"] == 42
+
+    @pytest.mark.parametrize(
+        ("formula", "expected"),
+        [
+            ("=EDATE(A1,3)", 45777),  # Jan 31 + 3 months clamps to Apr 30
+            ("=EOMONTH(A1,3)", 45777),
+            ("=YEAR(A1)", 2025),
+            ("=MONTH(A2)", 3),
+            ("=DAY(A2)", 15),
+            ("=DAYS(A2,A1)", 43),
+            ("=HOUR(A2)", 18),
+            ("=MINUTE(A2)", 30),
+            ("=SECOND(A2)", 45),
+        ],
+    )
+    def test_date_functions_read_date_cells(self, formula: str, expected: object) -> None:
+        """Date-formatted cells hold dates, which Excel treats as serial numbers."""
+        wb = wolfxl.Workbook()
+        ws = wb.active
+        ws["A1"] = datetime.date(2025, 1, 31)
+        ws["A2"] = datetime.datetime(2025, 3, 15, 18, 30, 45)
+        ws["B1"] = formula
+        ev = WorkbookEvaluator()
+        ev.load(wb)
+        assert ev.calculate()["Sheet!B1"] == expected
 
     def test_parenthesized_expression(self) -> None:
         """=(A1+A2)*A3 — parens override default precedence."""
