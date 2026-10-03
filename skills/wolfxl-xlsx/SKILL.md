@@ -66,9 +66,8 @@ JSON.
    If `save` raises, the copy may be partly written. Copy the original again
    before retrying.
 
-   The recipe below requires the modify-mode calculation-property fix listed
-   under Unreleased in the repository changelog. Published Community 2.0.8
-   does not persist flag changes. With the fixed version and `wb` loaded using
+   The recipe below requires Community 2.0.9 or newer; 2.0.8 and earlier do
+   not persist calculation-flag changes. With `wb` loaded using
    `modify=True`, request free recalculation when Excel next opens the file:
 
    ```python
