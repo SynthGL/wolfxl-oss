@@ -1,6 +1,7 @@
 """Fetch upstream study inputs into a local, ignored cache; never rehost them."""
 
 import hashlib
+import http.client
 import io
 import sys
 import urllib.error
@@ -58,7 +59,7 @@ def fetch_contoso():
         return CONTOSO
     try:
         data = download(CONTOSO_URL)
-    except (urllib.error.URLError, TimeoutError) as exc:
+    except (urllib.error.URLError, OSError, http.client.IncompleteRead) as exc:
         print(
             f"NOTE: Microsoft Contoso download unavailable ({exc}); running on 7 files.",
             file=sys.stderr,

@@ -13,11 +13,15 @@ are involved.
 | --- | --- | --- | --- |
 | `run.py skill` | openpyxl, preserving VBA for `.xlsm` | Pinned reference `recalc.py` using LibreOffice | Community is sufficient |
 | `lo_path.py` | WolfXL modify mode | The same reference script and LibreOffice | Community is sufficient |
-| `run.py wolfxl` | WolfXL modify mode | Native `Workbook.calculate()` before save | Commercial wheel |
+| `run.py wolfxl` | WolfXL modify mode | Native `Workbook.calculate()` before save | Commercial 2.2.0+ wheel |
 
 With no arguments, `run.py` runs both `skill` and `wolfxl`. Do not use that
 combined command with a Community wheel: the native calculation workflow needs
-Commercial. The `skill` name is retained as a stable command-line label for the
+Commercial 2.2.0 or later, where `calculate()` persists formula caches on save.
+Community evaluates formulas without persisting those caches, so the end-to-end
+workflow rejects Community with an explicit error; use `lo_path.py` instead.
+Commercial 2.1.1 also lacks the required cache persistence. The `skill` name is
+retained as a stable command-line label for the
 reference recipe, not a claim that the harness runs an interactive system.
 
 ## Reproduce
@@ -46,8 +50,10 @@ may need `gcc` if a Linux sandbox blocks Unix sockets. Internet access is requir
 on the first run; cached files are verified again on subsequent runs.
 
 For Commercial, use a separate environment containing a released Commercial
-wheel, installed through your existing authorized package mechanism, together
-with `openpyxl==3.1.5` and `defusedxml`. Then run:
+2.2.0+ wheel whose `calculate()` persists formula caches on save, installed through
+your existing authorized package mechanism, together with `openpyxl==3.1.5` and
+`defusedxml`. The workflow deliberately keeps calculation before saving; it does
+not replace formulas with their calculated values. Then run:
 
 ```sh
 .venv/bin/python run.py wolfxl
@@ -146,9 +152,11 @@ features independently of the edit library.
 
 ## Focused checks
 
-Repository CI currently lints `python/` and `tests/` and runs the product suites
-under `tests/`; it does not exercise this standalone directory. To check the
-fetch failure boundaries and apply the repository's lint rules here:
+Repository CI lints `python/`, `tests/`, and this study directory. Its Python job
+also runs the offline study tests, covering fetch failure boundaries, worksheet
+relationship resolution, feature and cache scanning, preservation verdicts, and
+workflow failure decisions. Network downloads and LibreOffice are not needed for
+these tests. To run the same focused checks locally:
 
 ```sh
 .venv/bin/python -m unittest discover -s . -p 'test_*.py' -v

@@ -2,6 +2,7 @@
 
 import contextlib
 import hashlib
+import http.client
 import io
 import tempfile
 import unittest
@@ -73,6 +74,29 @@ class FetchTests(unittest.TestCase):
                 self.assertIsNone(fetch.fetch_contoso())
             self.assertIn("running on 7 files", stderr.getvalue())
             self.assertFalse(path.exists())
+
+    def test_interrupted_response_read_reports_seven_file_fallback(self):
+        errors = (
+            ConnectionResetError("connection reset"),
+            http.client.IncompleteRead(b"partial archive", 100),
+            TimeoutError("read timed out"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sample.xlsx"
+            for error in errors:
+                with self.subTest(error=type(error).__name__):
+                    stderr = io.StringIO()
+                    with (
+                        patch.object(fetch, "CONTOSO", path),
+                        patch.object(fetch.urllib.request, "urlopen") as urlopen,
+                        contextlib.redirect_stderr(stderr),
+                    ):
+                        urlopen.return_value.__enter__.return_value.read.side_effect = (
+                            error
+                        )
+                        self.assertIsNone(fetch.fetch_contoso())
+                    self.assertIn("running on 7 files", stderr.getvalue())
+                    self.assertFalse(path.exists())
 
 
 if __name__ == "__main__":

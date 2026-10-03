@@ -259,10 +259,19 @@ def skill_workflow(src, out):
 def wolfxl_workflow(src, out):
     import wolfxl
 
+    version = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:\+.*)?", wolfxl.__version__)
+    if version is None or tuple(map(int, version.groups())) < (2, 2, 0):
+        raise RuntimeError(
+            "The end-to-end workflow requires WolfXL Commercial 2.2.0+ whose "
+            "calculate() persists formula caches. Community does not persist "
+            "these caches; use lo_path.py for Community."
+        )
+
     shutil.copy(src, out)
     wb = wolfxl.load_workbook(out, modify=True, keep_vba=out.suffix == ".xlsm")
     sheet = wb.sheetnames[0]
     wb[sheet][CELL] = FORMULA
+    # Commercial 2.2.0+ persists calculated formula caches when the workbook is saved.
     report = wb.calculate()
     wb.save(out)
     wb.close()

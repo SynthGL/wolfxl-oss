@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- A reproducible one-cell workbook editing study in `study/agent-edit/`, with
+  public fixtures, verified runtime downloads, offline regression tests, and
+  separate Community plus LibreOffice and Commercial native calculation workflows.
+
 ## 2.0.8
 
 ### Fixed
