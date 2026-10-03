@@ -56,7 +56,9 @@ def xlsb_xls_via_tempfile(
     """
     import tempfile
 
-    with tempfile.NamedTemporaryFile(prefix="wolfxl-", suffix=suffix, delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(
+        prefix="wolfxl-", suffix=suffix, delete=False
+    ) as tmp:
         tmp.write(bytes(data))
         tmp_path = tmp.name
 
@@ -99,7 +101,9 @@ def build_xlsx_wb(
     wb._rust_reader = rust_reader
     wb._data_only = data_only
     wb._iso_dates = False
-    wb.template = _source_is_template(source_path=source_path, source_bytes=source_bytes)
+    wb.template = _source_is_template(
+        source_path=source_path, source_bytes=source_bytes
+    )
     wb._is_template = False
     wb.encoding = "utf-8"
     wb._rich_text = False
@@ -237,9 +241,13 @@ def _hydrate_merged_cell_borders(archive: Any, wb: Any) -> None:
                 continue
             merged_border = Border(
                 left=start_border.left,
-                right=end_border.right if not is_empty(end_border.right) else start_border.right,
+                right=end_border.right
+                if not is_empty(end_border.right)
+                else start_border.right,
                 top=start_border.top,
-                bottom=end_border.bottom if not is_empty(end_border.bottom) else start_border.bottom,
+                bottom=end_border.bottom
+                if not is_empty(end_border.bottom)
+                else start_border.bottom,
                 diagonal=start_border.diagonal,
                 diagonalUp=start_border.diagonalUp,
                 diagonalDown=start_border.diagonalDown,
@@ -360,7 +368,9 @@ def _initialize_sheet_proxies(wb: Any, rust_book: Any) -> None:
     names = [str(n) for n in rust_book.sheet_names()]
     chartsheet_names = set(_read_chartsheet_names(rust_book))
     wb._sheet_names = names
-    wb._sheets = {name: Worksheet(wb, name) for name in names if name not in chartsheet_names}
+    wb._sheets = {
+        name: Worksheet(wb, name) for name in names if name not in chartsheet_names
+    }
     wb._chartsheets = {}
     for name in names:
         if name in chartsheet_names:
@@ -434,6 +444,7 @@ def initialize_pending_state(wb: Any) -> None:
     wb._pending_security_update = False
     wb._workbook_properties_cache = None
     wb._calc_properties_cache = None
+    wb._calc_properties_original = None
     wb._views_cache = None
     wb._pending_axis_shifts = []
     wb._pending_range_moves = []

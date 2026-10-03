@@ -78,6 +78,123 @@ pub fn merge_workbook_security(
     Ok(out)
 }
 
+/// Replace only calcPr, retaining the surrounding workbook XML verbatim.
+pub fn merge_calc_properties(
+    workbook_xml: &[u8],
+    attributes: &[(String, Option<String>)],
+) -> Result<Vec<u8>, String> {
+    use quick_xml::events::BytesStart;
+    use quick_xml::Writer;
+
+    let mut reader = XmlReader::from_reader(workbook_xml);
+    let mut buffer = Vec::new();
+    let mut depth = 0;
+    let mut range = None;
+    let mut insertion = None;
+    let mut tag_name = String::from("calcPr");
+    let mut old_attributes = Vec::new();
+    loop {
+        let before = reader.buffer_position() as usize;
+        match reader
+            .read_event_into(&mut buffer)
+            .map_err(|e| e.to_string())?
+        {
+            Event::Start(element) | Event::Empty(element)
+                if depth == 1 && element.local_name().as_ref() == b"calcPr" =>
+            {
+                tag_name = String::from_utf8(element.name().as_ref().to_vec())
+                    .map_err(|e| e.to_string())?;
+                for attribute in element.attributes() {
+                    let attribute = attribute.map_err(|e| e.to_string())?;
+                    old_attributes.push((
+                        String::from_utf8(attribute.key.as_ref().to_vec())
+                            .map_err(|e| e.to_string())?,
+                        Some(
+                            attribute
+                                .unescape_value()
+                                .map_err(|e| e.to_string())?
+                                .into_owned(),
+                        ),
+                    ));
+                }
+                // A non-empty calcPr ends in '>', not '/>'.
+                let after = reader.buffer_position() as usize;
+                if !workbook_xml[before..after].ends_with(b"/>") {
+                    reader
+                        .read_to_end_into(element.name(), &mut Vec::new())
+                        .map_err(|e| e.to_string())?;
+                }
+                range = Some((before, reader.buffer_position() as usize));
+            }
+            Event::Start(element) => {
+                if depth == 0 {
+                    let name = element.name();
+                    if let Some(colon) = name.as_ref().iter().position(|byte| *byte == b':') {
+                        tag_name = format!(
+                            "{}:calcPr",
+                            std::str::from_utf8(&name.as_ref()[..colon])
+                                .map_err(|e| e.to_string())?
+                        );
+                    }
+                }
+                if depth == 1 && is_after_calc_pr(element.local_name().as_ref()) {
+                    insertion.get_or_insert(before);
+                }
+                depth += 1;
+            }
+            Event::Empty(element) if depth == 1 => {
+                if is_after_calc_pr(element.local_name().as_ref()) {
+                    insertion.get_or_insert(before);
+                }
+            }
+            Event::End(_) => {
+                depth -= 1;
+                if depth == 0 {
+                    insertion.get_or_insert(before);
+                }
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+        buffer.clear();
+    }
+    let (start, end) = range
+        .or_else(|| insertion.map(|position| (position, position)))
+        .ok_or_else(|| "workbook root missing".to_string())?;
+    old_attributes.retain(|(name, _)| !attributes.iter().any(|(key, _)| key == name));
+    let mut element = BytesStart::new(tag_name);
+    for (name, value) in old_attributes.iter().chain(attributes) {
+        if let Some(value) = value {
+            element.push_attribute((name.as_str(), value.as_str()));
+        }
+    }
+    let mut writer = Writer::new(Vec::new());
+    writer
+        .write_event(Event::Empty(element))
+        .map_err(|e| e.to_string())?;
+    let replacement = writer.into_inner();
+    let mut output = Vec::with_capacity(workbook_xml.len() - (end - start) + replacement.len());
+    output.extend_from_slice(&workbook_xml[..start]);
+    output.extend_from_slice(&replacement);
+    output.extend_from_slice(&workbook_xml[end..]);
+    Ok(output)
+}
+
+fn is_after_calc_pr(name: &[u8]) -> bool {
+    matches!(
+        name,
+        b"oleSize"
+            | b"customWorkbookViews"
+            | b"pivotCaches"
+            | b"smartTagPr"
+            | b"smartTagTypes"
+            | b"webPublishing"
+            | b"fileRecoveryPr"
+            | b"webPublishObjects"
+            | b"extLst"
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Layout discovery
 // ---------------------------------------------------------------------------

@@ -1100,6 +1100,20 @@ pub(super) fn apply_workbook_xml_phases(
         }
     }
 
+    if let Some(attributes) = &patcher.queued_calc_properties {
+        let wb_bytes = match workbook_xml_in_progress.take() {
+            Some(bytes) => bytes,
+            None => match file_patches.get("xl/workbook.xml") {
+                Some(bytes) => bytes.clone(),
+                None => ooxml_util::zip_read_to_string(zip, "xl/workbook.xml")?.into_bytes(),
+            },
+        };
+        workbook_xml_in_progress = Some(
+            security::merge_calc_properties(&wb_bytes, attributes)
+                .map_err(|e| PyIOError::new_err(format!("calculation properties merge: {e}")))?,
+        );
+    }
+
     if !patcher.queued_sheet_renames.is_empty() {
         let wb_bytes: Vec<u8> = match workbook_xml_in_progress.take() {
             Some(b) => b,
@@ -1827,6 +1841,7 @@ pub(super) fn has_pending_save_work(patcher: &XlsxPatcher) -> bool {
         || !patcher.queued_page_breaks.is_empty()
         || !patcher.queued_autofilters.is_empty()
         || patcher.queued_workbook_security.is_some()
+        || patcher.queued_calc_properties.is_some()
         || !patcher.queued_slicers.is_empty()
         || !patcher.queued_threaded_comments.is_empty()
         || !patcher.queued_persons.is_empty()
@@ -1894,7 +1909,25 @@ pub(super) fn rebuild_calc_chain_phase(
     patcher: &mut XlsxPatcher,
     file_patches: &mut HashMap<String, Vec<u8>>,
     zip: &mut ZipArchive<File>,
+    structural_calculation_edit: bool,
 ) -> PyResult<()> {
+    if !structural_calculation_edit {
+        let mut formulas_changed = false;
+        for path in patcher.sheet_paths.values() {
+            if let Some(updated) = file_patches.get(path) {
+                let original = ooxml_util::zip_read_to_string(zip, path)?;
+                if calcchain::scan_sheet_for_formulas(original.as_bytes(), 0)
+                    != calcchain::scan_sheet_for_formulas(updated, 0)
+                {
+                    formulas_changed = true;
+                    break;
+                }
+            }
+        }
+        if !formulas_changed {
+            return Ok(());
+        }
+    }
     fn get_bytes(
         file_patches: &HashMap<String, Vec<u8>>,
         file_adds: &HashMap<String, Vec<u8>>,

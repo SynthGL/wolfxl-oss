@@ -1,6 +1,6 @@
 # WolfXL Community
 
-**Edit existing Excel files from Python without losing formatting, 7-14x faster than openpyxl on most reads and writes, with an openpyxl-compatible API. MIT licensed.**
+**Edit existing Excel files from Python without losing formatting, 3.0-17.3x faster than openpyxl on the committed read/write benchmark (small-file gains vary), with an openpyxl-compatible API. MIT licensed.**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
@@ -57,26 +57,27 @@ results in the saved file unchanged.
   functions only, in Python. Need results that match Excel? Commercial
   includes a native engine verified on 704 Excel-calculated cases
   ([pricing](https://wolfxl.com/pricing?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09)).
-- **Large files.** The
-  [large-file receipts](https://wolfxl.com/openpyxl-large-files?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09)
-  record seconds and peak memory for 1.6-million-cell reads, writes, and edits.
+- **Large files.** The [current receipts](https://github.com/SynthGL/wolfxl-oss/blob/main/benchmarks/results/2026-10-02-community-2.0.8-vs-openpyxl-3.1.5.md)
+  record seconds and peak memory for large-workbook reads, writes, and edits.
 - **Where openpyxl fits.** openpyxl is pure Python and installs anywhere
   Python runs. WolfXL needs a published wheel for your platform or a Rust
   toolchain to build from source.
 
-## Compare openpyxl alternatives, measured
+## Performance, measured
 
-WolfXL Community is benchmarked against the maintained open-source Python Excel
-libraries on a committed run. On 2026-08-18 (AMD EPYC 9655, Python 3.13.15,
-median of 5 rounds, 200,000-row x 8-column workbook), Community 2.0.1 wrote 1.6
-million cells in 0.73 s (11.10x openpyxl 3.1.5, 6.46x XlsxWriter 3.2.9, 5.01x
-PyExcelerate 0.13.0) and read them back in 0.39 s (11.85x openpyxl, 1.49x
-python-calamine 0.8.2) at a 153 MiB read peak, below openpyxl (169 MiB) and
-python-calamine (286 MiB). Raw results and the harness are published
-under [`benchmarks/`](https://github.com/SynthGL/wolfxl-oss/tree/main/benchmarks).
+WolfXL 2.0.8 versus openpyxl 3.1.5 on Apple M5 Pro, macOS 26.5.1,
+Python 3.13.9, median of five rounds: read and write speedups range from
+3.0x on styled reads to 17.3x on multi-sheet bulk writes. The bulk paths
+use a different API shape from openpyxl's per-row or per-cell calls.
+End-to-end edit ratios are 2.4-2.7x and include verification with openpyxl;
+they are not included in the read/write headline.
 
-Full tables, capability scope, and reproduction commands:
-[openpyxl alternatives, measured](https://wolfxl.com/openpyxl-alternatives?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
+All samples, workload boundaries, and reproduction commands are in the
+[current results](https://github.com/SynthGL/wolfxl-oss/blob/main/benchmarks/results/2026-10-02-community-2.0.8-vs-openpyxl-3.1.5.md).
+These measurements are not a guarantee for every workbook and do not compare
+read speed with python-calamine or other read-only libraries.
+Small-file gains vary: the separate [officelibs small-feature benchmark](https://officelibs.com/excel/)
+reports about 1.7x for reads and 2.4x for writes, outside this range.
 
 ## Choose the right edition
 

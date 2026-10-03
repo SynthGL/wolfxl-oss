@@ -1,18 +1,16 @@
 """Sprint Θ Pod-C3 — calcChain.xml rebuild on save.
 
-Modify-mode and write-mode coverage for the new behaviour: on every
-save that performs at least one operation (modify mode) or any save
-at all (write mode), wolfxl writes a fresh ``xl/calcChain.xml`` whose
-``<c>`` entries cover every formula cell in the workbook.
+Modify-mode saves rebuild ``xl/calcChain.xml`` when formula membership or
+sheet structure changes. Scalar and style edits preserve the original chain
+and its package metadata. Write-mode saves emit entries for every formula.
 
 Edge cases:
-- A workbook with NO formulas → ``xl/calcChain.xml`` is omitted (write
-  mode) or removed if it was present in the source (modify mode with
-  any op).
+- Removing all formulas removes an existing chain in modify mode.
 - Structural composition: ``insert_rows`` then save → calcChain
   references the SHIFTED cell coords, not the original.
 - ``i`` correctly tracks the workbook sheetId, including non-contiguous IDs.
 """
+
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
@@ -69,9 +67,10 @@ def _replace_zip_part(path: Path, part_name: str, payload: bytes | str) -> None:
     if isinstance(payload, str):
         payload = payload.encode("utf-8")
     rewritten = path.with_suffix(".rewritten.xlsx")
-    with zipfile.ZipFile(path, "r") as src, zipfile.ZipFile(
-        rewritten, "w", compression=zipfile.ZIP_DEFLATED
-    ) as dst:
+    with (
+        zipfile.ZipFile(path, "r") as src,
+        zipfile.ZipFile(rewritten, "w", compression=zipfile.ZIP_DEFLATED) as dst,
+    ):
         for info in src.infolist():
             if info.filename == part_name:
                 continue
@@ -122,10 +121,7 @@ def test_modify_mode_rebuilds_calc_chain(tmp_path: Path) -> None:
     _make_formula_fixture(src)
 
     wb = load_workbook(src, modify=True)
-    # We need at least one op to bypass the no-op short-circuit.
-    # Setting a value to its current value still queues a write —
-    # use a proper edit.
-    wb["First"]["C1"] = "edit"
+    wb["First"]["C1"] = "=A1+1"
     wb.save(dst)
 
     entries = _read_calc_chain(dst)
@@ -133,6 +129,7 @@ def test_modify_mode_rebuilds_calc_chain(tmp_path: Path) -> None:
     refs_first = {ref for ref, i in entries if i == 1}
     refs_second = {ref for ref, i in entries if i == 2}
     assert "B1" in refs_first, f"missing B1 on First; entries={entries}"
+    assert "C1" in refs_first
     assert "B2" in refs_first, f"missing B2 on First; entries={entries}"
     assert "B5" in refs_second, f"missing B5 on Second; entries={entries}"
 
@@ -269,7 +266,7 @@ def test_modify_mode_calc_chain_uses_workbook_sheet_id_not_tab_position(
     _replace_zip_part(src, "xl/workbook.xml", workbook_xml)
 
     wb = load_workbook(src, modify=True)
-    wb["First"]["C1"] = "edit"
+    wb["First"]["C1"] = "=A1+1"
     wb.save(dst)
 
     entries = _read_calc_chain(dst)
@@ -307,15 +304,13 @@ def test_insert_rows_then_save_shifts_calc_chain_refs(tmp_path: Path) -> None:
     refs = {ref for ref, _ in entries}
     # Original B5 → after inserting 3 rows above, the shifted position
     # is B8.
-    assert "B8" in refs, (
-        f"insert_rows must shift calcChain refs; expected B8 in {refs}"
-    )
-    assert "B5" not in refs, (
-        f"insert_rows must NOT leave the unshifted ref; got {refs}"
-    )
+    assert "B8" in refs, f"insert_rows must shift calcChain refs; expected B8 in {refs}"
+    assert "B5" not in refs, f"insert_rows must NOT leave the unshifted ref; got {refs}"
 
 
-def test_modify_mode_prunes_stale_calc_chain_and_preserves_ext_lst(tmp_path: Path) -> None:
+def test_modify_mode_prunes_stale_calc_chain_and_preserves_ext_lst(
+    tmp_path: Path,
+) -> None:
     src = tmp_path / "src.xlsx"
     dst = tmp_path / "dst.xlsx"
 
