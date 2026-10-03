@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-10-02",
+  "app": "Microsoft Excel for Mac 16.113 (build 16.113.26091433)",
+  "host": "macOS 26.6.2 arm64, headless Mac reached over SSH",
+  "inputs": "the 8 outputs of usual-path.json (out/*.skill.*), copied unchanged; sha256 per file below",
+  "method": "scripts/run_ooxml_app_smoke.py _smoke_excel per file (Finder open, poll the frontmost Excel window through System Events, close without saving, quit), 180 s timeout. Every distinct window/button/text poll is logged in dialog_log. Two changes from the stock runner for this check: (1) its static PowerView gate is bypassed, because the only match in the Power Pivot output is a shared string ('Power View can only print one sheet at a time.') and the gate would otherwise skip opening the file; (2) the dialog poll is wrapped to log every observation.",
+  "positive_control": {
+    "file": "control-broken-sheet.xlsx (real-excel-chart-cf-basic.xlsx with a duplicate row 1 and an invalid cell type in sheet1)",
+    "status": "failed",
+    "repair_prompt": true,
+    "dialog_log": [
+      {
+        "utc": "2026-10-03T06:29:43Z",
+        "file": "control-broken-sheet.xlsx",
+        "dialog": "windows=\nbuttons=YesNo\ntext=We found a problem with some content in 'control-broken-sheet.xlsx'. Do you want us to try to recover as much as we can? If you trust the source of this workbook, click Yes."
+      }
+    ],
+    "note": "proves the poll sees Excel's repair prompt on this host. The stock runner's keyword list does not match this prompt text, so it reports a timeout rather than a repair dialog; the log shows the prompt"
+  },
+  "summary": {
+    "files": 8,
+    "opened": 8,
+    "repair_prompts": 0,
+    "other_prompts": [
+      "real-excel-macro-basic.skill.xlsm: macro security prompt ('This workbook contains macros. Do you want to disable macros before opening the file?'), answered Disable Macros by the runner"
+    ]
+  },
+  "results": [
+    {
+      "file": "real-excel-chart-cf-basic.skill.xlsx",
+      "status": "passed",
+      "message": "opened and closed in Microsoft Excel: real-excel-chart-cf-basic.skill.xlsx",
+      "seconds": 3.6,
+      "sha256": "b23d34c58032e7a1373048a22310a4250bb299dd53a8308769cdd356f77882a7",
+      "repair_prompt": false
+    },
+    {
+      "file": "real-excel-macro-basic.skill.xlsm",
+      "status": "passed",
+      "message": "opened and closed in Microsoft Excel: real-excel-macro-basic.skill.xlsm",
+      "seconds": 5.2,
+      "sha256": "2c8186233bb40f66e024f808d5250ec7b3790dc229f113ada3dfb2196ffc6403",
+      "repair_prompt": false
+    },
+    {
+      "file": "real-excel-normalized-pivot-cf-table.skill.xlsx",
+      "status": "passed",
+      "message": "opened and closed in Microsoft Excel: real-excel-normalized-pivot-cf-table.skill.xlsx",
+      "seconds": 4.6,
+      "sha256": "e56a39a5dca3187f3abb9db75d7347255d6012d6ab60d20e57274e8d6a27db4c",
+      "repair_prompt": false
+    },
+    {
+      "file": "real-excel-p1-comments-validation-protection.skill.xlsx",
+      "status": "passed",
+      "message": "opened and closed in Microsoft Excel: real-excel-p1-comments-validation-protection.skill.xlsx",
+      "seconds": 4.9,
+      "sha256": "f60339a5b7d0fcdf1e4e7eaf73bbd36111438cfd20a9f3830c22a32e0aca525d",
+      "repair_prompt": false
+    },
+    {
+      "file": "real-excel-pivot-chart-slicers.skill.xlsx",
+      "status": "passed",
+      "message": "opened and closed in Microsoft Excel: real-excel-pivot-chart-slicers.skill.xlsx",
+      "seconds": 5.5,
+      "sha256": "bc062975df72158bc67240c01d38b8aa9c3ca234520420680caf04e1ec565174",
+      "repair_prompt": false
+    },
+    {
+      "file": "real-excel-powerpivot-contoso-pnl.skill.xlsx",
+      "status": "passed",
+      "message": "opened and closed in Microsoft Excel: real-excel-powerpivot-contoso-pnl.skill.xlsx",
+      "seconds": 3.3,
+      "sha256": "96be3568791c20ce4890325ea13c336bf371843dd9082e0b4dffc1c7ad8499e2",
+      "repair_prompt": false
+    },
+    {
+      "file": "real-excel-timeline-slicer.skill.xlsx",
+      "status": "passed",
+      "message": "opened and closed in Microsoft Excel: real-excel-timeline-slicer.skill.xlsx",
+      "seconds": 3.3,
+      "sha256": "aa6fb4e3789e6d01240b21f98347472a0e0e8c0e0774c37cad992def254ef996",
+      "repair_prompt": false
+    },
+    {
+      "file": "x14-validation-sparkline.skill.xlsx",
+      "status": "passed",
+      "message": "opened and closed in Microsoft Excel: x14-validation-sparkline.skill.xlsx",
+      "seconds": 3.3,
+      "sha256": "970e924128ef973933c62b5dea95b6d8ba9e326afc4cc81f68a8f11f608df349",
+      "repair_prompt": false
+    }
+  ],
+  "dialog_log": [
+    {
+      "utc": "2026-10-03T06:32:56Z",
+      "file": "real-excel-chart-cf-basic.skill.xlsx",
+      "dialog": "windows=real-excel-chart-cf-basic.skill\nbuttons=missing valuemissing valuemissing valuemissing valuemissing valuemissing valuemissing value\ntext="
+    },
+    {
+      "utc": "2026-10-03T06:33:01Z",
+      "file": "real-excel-macro-basic.skill.xlsm",
+      "dialog": "windows=real-excel-macro-basic.skill\nbuttons=Disable MacrosEnable Macros\ntext=This workbook contains macros. Do you want to disable macros before opening the file?"
+    },
+    {
+      "utc": "2026-10-03T06:33:02Z",
+      "file": "real-excel-macro-basic.skill.xlsm",
+      "dialog": "windows=real-excel-macro-basic.skill\nbuttons=missing valuemissing valuemissing valuemissing valuemissing valuemissing valuemissing value\ntext="
+    },
+    {
+      "utc": "2026-10-03T06:33:09Z",
+      "file": "real-excel-normalized-pivot-cf-table.skill.xlsx",
+      "dialog": "windows=real-excel-normalized-pivot-cf-table.skill\nbuttons=missing valuemissing valuemissing valuemissing valuemissing valuemissing valuemissing value\ntext="
+    },
+    {
+      "utc": "2026-10-03T06:33:15Z",
+      "file": "real-excel-p1-comments-validation-protection.skill.xlsx",
+      "dialog": "windows=real-excel-p1-comments-validation-protection.skill\nbuttons=missing valuemissing valuemissing valuemissing valuemissing valuemissing valuemissing value\ntext="
+    },
+    {
+      "utc": "2026-10-03T06:33:22Z",
+      "file": "real-excel-pivot-chart-slicers.skill.xlsx",
+      "dialog": "windows=real-excel-pivot-chart-slicers.skill\nbuttons=missing valuemissing valuemissing valuemissing valuemissing valuemissing valuemissing value\ntext="
+    },
+    {
+      "utc": "2026-10-03T06:33:30Z",
+      "file": "real-excel-powerpivot-contoso-pnl.skill.xlsx",
+      "dialog": "windows=real-excel-powerpivot-contoso-pnl.skill\nbuttons=missing valuemissing valuemissing valuemissing valuemissing valuemissing valuemissing value\ntext="
+    },
+    {
+      "utc": "2026-10-03T06:33:35Z",
+      "file": "real-excel-timeline-slicer.skill.xlsx",
+      "dialog": "windows=real-excel-timeline-slicer.skill\nbuttons=missing valuemissing valuemissing valuemissing valuemissing valuemissing valuemissing value\ntext="
+    },
+    {
+      "utc": "2026-10-03T06:33:40Z",
+      "file": "x14-validation-sparkline.skill.xlsx",
+      "dialog": "windows=x14-validation-sparkline.skill\nbuttons=missing valuemissing valuemissing valuemissing valuemissing valuemissing valuemissing value\ntext="
+    }
+  ]
+}

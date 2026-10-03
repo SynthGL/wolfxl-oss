@@ -30,10 +30,19 @@ Prerequisites: `uv`, Python 3.12 or later, and LibreOffice with `soffice` on `PA
 The commands below are for POSIX shells (macOS or Linux), from a fresh clone.
 The source workbooks are copied; originals are never edited.
 
+The published [2026-10-02 receipts](receipts/20261002/) were produced with
+Community `wolfxl==2.0.8`, `openpyxl==3.1.5`, Python 3.13.9, and LibreOffice
+26.8.0.3. The installation below pins those Python package versions; install
+LibreOffice 26.8.0.3 separately and check its identity with `soffice --version`
+to match the recorded recalc environment. Newer Community releases are expected
+to give the same package-part results, but these receipts were produced on
+2.0.8, not on a newer release. Record the installed versions and compare results
+when using a newer release rather than treating that expectation as a guarantee.
+
 ```sh
 git clone https://github.com/SynthGL/wolfxl-oss.git
 cd wolfxl-oss/study/agent-edit
-uv venv --python 3.13 .venv
+uv venv --python 3.13.9 .venv
 uv pip install --python .venv/bin/python 'wolfxl==2.0.8' 'openpyxl==3.1.5' defusedxml
 soffice --version
 .venv/bin/python fetch.py
@@ -53,7 +62,9 @@ For Commercial, use a separate environment containing a released Commercial
 2.2.0+ wheel whose `calculate()` persists formula caches on save, installed through
 your existing authorized package mechanism, together with `openpyxl==3.1.5` and
 `defusedxml`. The workflow deliberately keeps calculation before saving; it does
-not replace formulas with their calculated values. Then run:
+not replace formulas with their calculated values.
+To reproduce the bundled Commercial receipt specifically, use Commercial 2.3.0
+with the same openpyxl, Python, and LibreOffice versions noted above. Then run:
 
 ```sh
 .venv/bin/python run.py wolfxl
@@ -104,10 +115,33 @@ compare a seven-file run to an eight-file total without noting the omission.
 writes `results_lo.json` and workbooks in `out_lo/`. These local outputs and the
 cache are ignored. Each invocation overwrites its matching output files and
 receipt; save copies outside those locations before another run if needed.
-No historical receipts are bundled here.
+The published 2026-10-02 receipts are preserved separately under
+[`receipts/20261002/`](receipts/20261002/):
 
-Every receipt records Python, openpyxl, LibreOffice, the reference commit, source
-SHA-256 values, and (where used) WolfXL's version. Per-file results include:
+- [`usual-path.json`](receipts/20261002/usual-path.json): openpyxl edit plus
+  reference LibreOffice recalculation.
+- [`wolfxl-edit-lo-recalc.json`](receipts/20261002/wolfxl-edit-lo-recalc.json):
+  Community 2.0.8 modify-mode edit plus the same LibreOffice recalculation.
+- [`wolfxl-2.3.0-release.json`](receipts/20261002/wolfxl-2.3.0-release.json):
+  Commercial 2.3.0 native calculation and the reference workflow.
+- [`excel-open.json`](receipts/20261002/excel-open.json): a separate Excel for Mac
+  opening check of the eight reference-workflow outputs, including observed
+  dialog logs and a broken-workbook positive control. Opening without a repair
+  prompt does not establish feature preservation.
+
+All four JSON files retain their original bytes. The package-installation
+receipt is not included, and `SHA256SUMS` was regenerated for this four-file
+subset. Verify it from the receipt directory:
+
+```sh
+cd receipts/20261002
+shasum -a 256 -c SHA256SUMS
+# On Linux, sha256sum -c SHA256SUMS is equivalent.
+```
+
+New harness runs record Python, openpyxl, LibreOffice, the reference commit, source
+SHA-256 values, and (where used) WolfXL's version. The preserved receipt files use
+the metadata fields from the original runner. Per-file workflow results include:
 
 - `parts_missing`: source ZIP entries absent from the output, excluding
   `xl/calcChain.xml`, which Excel can rebuild. A renamed part can appear missing;
@@ -144,9 +178,11 @@ This study has **eight files, one edit per file, and one run per workflow**. The
 corpus is intentionally feature-rich and not a representative random sample of
 all spreadsheets. Results apply to the recorded tool versions and this exact
 edit; they do not establish universal preservation, speed, formula coverage,
-visual fidelity, or compatibility with Excel's complete behavior. No elapsed-time
-benchmark or Excel UI validation is performed. A retained ZIP part is not proof
-that it still functions. Conversely, a missing part can be renamed or rebuilt.
+visual fidelity, or compatibility with Excel's complete behavior. The harness
+performs no elapsed-time benchmark or Excel UI validation; the separately bundled
+Excel opening receipt is limited to its documented checks. A retained ZIP part
+is not proof that it still functions.
+Conversely, a missing part can be renamed or rebuilt.
 The x14 probe is synthetic, and recalculation itself can rewrite unsupported
 features independently of the edit library.
 
