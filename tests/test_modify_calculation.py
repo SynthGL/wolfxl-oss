@@ -47,6 +47,9 @@ def test_full_calc_on_load_preserves_untouched_parts(
     calc = fromstring(after["xl/workbook.xml"]).find("s:calcPr", namespace)
     assert calc is not None
     assert calc.get("fullCalcOnLoad") == "1"
+    source_calc = fromstring(before["xl/workbook.xml"]).find("s:calcPr", namespace)
+    source_attributes = dict(source_calc.attrib) if source_calc is not None else {}
+    assert calc.attrib == {**source_attributes, "fullCalcOnLoad": "1"}
     if existing_calc_pr:
         assert calc.get("calcMode") == "manual"
         assert calc.get("calcId") == "191029"

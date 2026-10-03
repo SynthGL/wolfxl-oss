@@ -326,8 +326,13 @@ def save_modify_mode(wb: Any, filename: str) -> None:
         attributes = tuple(calculation)
         if attributes != wb._calc_properties_original:  # noqa: SLF001
             values = dict(attributes)
+            original = dict(wb._calc_properties_original)  # noqa: SLF001
             wb._rust_patcher.queue_calc_properties(  # noqa: SLF001
-                [(name, values.get(name)) for name in calculation.__attrs__]
+                [
+                    (name, values.get(name))
+                    for name in calculation.__attrs__
+                    if values.get(name) != original.get(name)
+                ]
             )
     if not _modify_mode_has_pending_changes(wb):
         if same_existing_path(filename, wb._source_path):  # noqa: SLF001
