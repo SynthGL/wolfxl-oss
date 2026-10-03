@@ -1,0 +1,923 @@
+{
+  "openpyxl": "3.1.5",
+  "libreoffice": "LibreOffice 26.8.0.3 bce0998afefdbc355585ca324285661a2170ba77",
+  "anthropics_skills": "3337550 2026-09-24",
+  "python": "3.13.9",
+  "edit": "Z1 =1+1",
+  "workflows": [
+    "skill"
+  ],
+  "files": {
+    "real-excel-pivot-chart-slicers.xlsx": {
+      "skill": {
+        "openpyxl_warnings": [
+          "Slicer List extension is not supported and will be removed"
+        ],
+        "edit_step": {
+          "parts_missing": [
+            "xl/media/image1.png",
+            "xl/printerSettings/printerSettings1.bin",
+            "xl/sharedStrings.xml",
+            "xl/slicerCaches/slicerCache1.xml",
+            "xl/slicerCaches/slicerCache2.xml",
+            "xl/slicers/slicer1.xml"
+          ],
+          "sheet_features": {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        },
+        "recalc": {
+          "status": "success",
+          "total_errors": 0,
+          "error_summary": {},
+          "total_formulas": 37
+        },
+        "parts_missing": [
+          "xl/media/image1.png",
+          "xl/printerSettings/printerSettings1.bin",
+          "xl/slicerCaches/slicerCache1.xml",
+          "xl/slicerCaches/slicerCache2.xml",
+          "xl/slicers/slicer1.xml"
+        ],
+        "parts_unchanged": 0,
+        "families_lost": {
+          "slicer": [
+            1,
+            0
+          ],
+          "slicer_cache": [
+            2,
+            0
+          ]
+        },
+        "sheet_features": [
+          {
+            "x14_ext": 2,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "c83408c605a4ba0d"
+          },
+          {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        ],
+        "sheet_features_changed": [
+          "x14_digest",
+          "x14_ext"
+        ],
+        "formula_cells_checked": 36,
+        "cached_value_regressions": 0,
+        "cached_value_regression_samples": [],
+        "cached_value": 2
+      }
+    },
+    "real-excel-timeline-slicer.xlsx": {
+      "skill": {
+        "openpyxl_warnings": [
+          "Unknown extension is not supported and will be removed"
+        ],
+        "edit_step": {
+          "parts_missing": [
+            "xl/drawings/_rels/drawing1.xml.rels",
+            "xl/drawings/drawing1.xml",
+            "xl/media/image1.png",
+            "xl/printerSettings/printerSettings1.bin",
+            "xl/sharedStrings.xml",
+            "xl/timelineCaches/timelineCache1.xml",
+            "xl/timelines/timeline1.xml"
+          ],
+          "sheet_features": {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        },
+        "recalc": {
+          "status": "success",
+          "total_errors": 0,
+          "error_summary": {},
+          "total_formulas": 3
+        },
+        "parts_missing": [
+          "xl/drawings/_rels/drawing1.xml.rels",
+          "xl/drawings/drawing1.xml",
+          "xl/media/image1.png",
+          "xl/printerSettings/printerSettings1.bin",
+          "xl/timelineCaches/timelineCache1.xml",
+          "xl/timelines/timeline1.xml"
+        ],
+        "parts_unchanged": 0,
+        "families_lost": {
+          "timeline": [
+            1,
+            0
+          ],
+          "timeline_cache": [
+            1,
+            0
+          ],
+          "drawing": [
+            1,
+            0
+          ]
+        },
+        "sheet_features": [
+          {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          },
+          {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        ],
+        "sheet_features_changed": [],
+        "formula_cells_checked": 2,
+        "cached_value_regressions": 0,
+        "cached_value_regression_samples": [],
+        "cached_value": 2
+      }
+    },
+    "real-excel-normalized-pivot-cf-table.xlsx": {
+      "skill": {
+        "openpyxl_warnings": [
+          "Conditional Formatting extension is not supported and will be removed",
+          "Unknown extension is not supported and will be removed"
+        ],
+        "edit_step": {
+          "parts_missing": [
+            "xl/sharedStrings.xml"
+          ],
+          "sheet_features": {
+            "x14_ext": 0,
+            "cf": 1,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        },
+        "recalc": {
+          "status": "success",
+          "total_errors": 0,
+          "error_summary": {},
+          "total_formulas": 1
+        },
+        "parts_missing": [],
+        "parts_unchanged": 0,
+        "families_lost": {},
+        "sheet_features": [
+          {
+            "x14_ext": 9,
+            "cf": 1,
+            "dv": 0,
+            "x14_digest": "87869e22096daf65"
+          },
+          {
+            "x14_ext": 9,
+            "cf": 1,
+            "dv": 0,
+            "x14_digest": "0b5d551fe3b6c99b"
+          }
+        ],
+        "sheet_features_changed": [
+          "x14_digest"
+        ],
+        "formula_cells_checked": 0,
+        "cached_value_regressions": 0,
+        "cached_value_regression_samples": [],
+        "cached_value": 2
+      }
+    },
+    "real-excel-p1-comments-validation-protection.xlsx": {
+      "skill": {
+        "openpyxl_warnings": [],
+        "edit_step": {
+          "parts_missing": [
+            "xl/comments1.xml",
+            "xl/drawings/vmlDrawing1.vml",
+            "xl/sharedStrings.xml"
+          ],
+          "sheet_features": {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 1,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        },
+        "recalc": {
+          "status": "success",
+          "total_errors": 0,
+          "error_summary": {},
+          "total_formulas": 2
+        },
+        "parts_missing": [],
+        "parts_unchanged": 0,
+        "families_lost": {},
+        "sheet_features": [
+          {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 1,
+            "x14_digest": "e3b0c44298fc1c14"
+          },
+          {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 1,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        ],
+        "sheet_features_changed": [],
+        "formula_cells_checked": 1,
+        "cached_value_regressions": 0,
+        "cached_value_regression_samples": [],
+        "cached_value": 2
+      }
+    },
+    "real-excel-chart-cf-basic.xlsx": {
+      "skill": {
+        "openpyxl_warnings": [],
+        "edit_step": {
+          "parts_missing": [
+            "xl/sharedStrings.xml"
+          ],
+          "sheet_features": {
+            "x14_ext": 0,
+            "cf": 3,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        },
+        "recalc": {
+          "status": "success",
+          "total_errors": 0,
+          "error_summary": {},
+          "total_formulas": 1
+        },
+        "parts_missing": [],
+        "parts_unchanged": 0,
+        "families_lost": {},
+        "sheet_features": [
+          {
+            "x14_ext": 0,
+            "cf": 3,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          },
+          {
+            "x14_ext": 9,
+            "cf": 3,
+            "dv": 0,
+            "x14_digest": "874d938a47cf3c78"
+          }
+        ],
+        "sheet_features_changed": [
+          "x14_digest",
+          "x14_ext"
+        ],
+        "formula_cells_checked": 0,
+        "cached_value_regressions": 0,
+        "cached_value_regression_samples": [],
+        "cached_value": 2
+      }
+    },
+    "real-excel-powerpivot-contoso-pnl.xlsx": {
+      "skill": {
+        "openpyxl_warnings": [
+          "Slicer List extension is not supported and will be removed"
+        ],
+        "edit_step": {
+          "parts_missing": [
+            "customXml/_rels/item1.xml.rels",
+            "customXml/_rels/item10.xml.rels",
+            "customXml/_rels/item11.xml.rels",
+            "customXml/_rels/item12.xml.rels",
+            "customXml/_rels/item13.xml.rels",
+            "customXml/_rels/item14.xml.rels",
+            "customXml/_rels/item15.xml.rels",
+            "customXml/_rels/item16.xml.rels",
+            "customXml/_rels/item17.xml.rels",
+            "customXml/_rels/item18.xml.rels",
+            "customXml/_rels/item19.xml.rels",
+            "customXml/_rels/item2.xml.rels",
+            "customXml/_rels/item20.xml.rels",
+            "customXml/_rels/item21.xml.rels",
+            "customXml/_rels/item22.xml.rels",
+            "customXml/_rels/item23.xml.rels",
+            "customXml/_rels/item24.xml.rels",
+            "customXml/_rels/item25.xml.rels",
+            "customXml/_rels/item26.xml.rels",
+            "customXml/_rels/item27.xml.rels",
+            "customXml/_rels/item28.xml.rels",
+            "customXml/_rels/item29.xml.rels",
+            "customXml/_rels/item3.xml.rels",
+            "customXml/_rels/item30.xml.rels",
+            "customXml/_rels/item31.xml.rels",
+            "customXml/_rels/item32.xml.rels",
+            "customXml/_rels/item33.xml.rels",
+            "customXml/_rels/item34.xml.rels",
+            "customXml/_rels/item35.xml.rels",
+            "customXml/_rels/item36.xml.rels",
+            "customXml/_rels/item37.xml.rels",
+            "customXml/_rels/item38.xml.rels",
+            "customXml/_rels/item39.xml.rels",
+            "customXml/_rels/item4.xml.rels",
+            "customXml/_rels/item40.xml.rels",
+            "customXml/_rels/item41.xml.rels",
+            "customXml/_rels/item42.xml.rels",
+            "customXml/_rels/item43.xml.rels",
+            "customXml/_rels/item44.xml.rels",
+            "customXml/_rels/item45.xml.rels",
+            "customXml/_rels/item46.xml.rels",
+            "customXml/_rels/item5.xml.rels",
+            "customXml/_rels/item6.xml.rels",
+            "customXml/_rels/item7.xml.rels",
+            "customXml/_rels/item8.xml.rels",
+            "customXml/_rels/item9.xml.rels",
+            "customXml/item1.xml",
+            "customXml/item10.xml",
+            "customXml/item11.xml",
+            "customXml/item12.xml",
+            "customXml/item13.xml",
+            "customXml/item14.xml",
+            "customXml/item15.xml",
+            "customXml/item16.xml",
+            "customXml/item17.xml",
+            "customXml/item18.xml",
+            "customXml/item19.xml",
+            "customXml/item2.xml",
+            "customXml/item20.xml",
+            "customXml/item21.xml",
+            "customXml/item22.xml",
+            "customXml/item23.xml",
+            "customXml/item24.xml",
+            "customXml/item25.xml",
+            "customXml/item26.xml",
+            "customXml/item27.xml",
+            "customXml/item28.xml",
+            "customXml/item29.xml",
+            "customXml/item3.xml",
+            "customXml/item30.xml",
+            "customXml/item31.xml",
+            "customXml/item32.xml",
+            "customXml/item33.xml",
+            "customXml/item34.xml",
+            "customXml/item35.xml",
+            "customXml/item36.xml",
+            "customXml/item37.xml",
+            "customXml/item38.xml",
+            "customXml/item39.xml",
+            "customXml/item4.xml",
+            "customXml/item40.xml",
+            "customXml/item41.xml",
+            "customXml/item42.xml",
+            "customXml/item43.xml",
+            "customXml/item44.xml",
+            "customXml/item45.xml",
+            "customXml/item46.xml",
+            "customXml/item5.xml",
+            "customXml/item6.xml",
+            "customXml/item7.xml",
+            "customXml/item8.xml",
+            "customXml/item9.xml",
+            "customXml/itemProps1.xml",
+            "customXml/itemProps10.xml",
+            "customXml/itemProps11.xml",
+            "customXml/itemProps12.xml",
+            "customXml/itemProps13.xml",
+            "customXml/itemProps14.xml",
+            "customXml/itemProps15.xml",
+            "customXml/itemProps16.xml",
+            "customXml/itemProps17.xml",
+            "customXml/itemProps18.xml",
+            "customXml/itemProps19.xml",
+            "customXml/itemProps2.xml",
+            "customXml/itemProps20.xml",
+            "customXml/itemProps21.xml",
+            "customXml/itemProps22.xml",
+            "customXml/itemProps23.xml",
+            "customXml/itemProps24.xml",
+            "customXml/itemProps25.xml",
+            "customXml/itemProps26.xml",
+            "customXml/itemProps27.xml",
+            "customXml/itemProps28.xml",
+            "customXml/itemProps29.xml",
+            "customXml/itemProps3.xml",
+            "customXml/itemProps30.xml",
+            "customXml/itemProps31.xml",
+            "customXml/itemProps32.xml",
+            "customXml/itemProps33.xml",
+            "customXml/itemProps34.xml",
+            "customXml/itemProps35.xml",
+            "customXml/itemProps36.xml",
+            "customXml/itemProps37.xml",
+            "customXml/itemProps38.xml",
+            "customXml/itemProps39.xml",
+            "customXml/itemProps4.xml",
+            "customXml/itemProps40.xml",
+            "customXml/itemProps41.xml",
+            "customXml/itemProps42.xml",
+            "customXml/itemProps43.xml",
+            "customXml/itemProps44.xml",
+            "customXml/itemProps45.xml",
+            "customXml/itemProps46.xml",
+            "customXml/itemProps5.xml",
+            "customXml/itemProps6.xml",
+            "customXml/itemProps7.xml",
+            "customXml/itemProps8.xml",
+            "customXml/itemProps9.xml",
+            "xl/activeX/activeX1.xml",
+            "xl/activeX/activeX2.xml",
+            "xl/activeX/activeX3.xml",
+            "xl/activeX/activeX4.xml",
+            "xl/activeX/activeX5.xml",
+            "xl/activeX/activeX6.xml",
+            "xl/charts/_rels/chart1.xml.rels",
+            "xl/charts/colors1.xml",
+            "xl/charts/style1.xml",
+            "xl/connections.xml",
+            "xl/customProperty1.bin",
+            "xl/customProperty10.bin",
+            "xl/customProperty11.bin",
+            "xl/customProperty12.bin",
+            "xl/customProperty13.bin",
+            "xl/customProperty14.bin",
+            "xl/customProperty15.bin",
+            "xl/customProperty16.bin",
+            "xl/customProperty17.bin",
+            "xl/customProperty18.bin",
+            "xl/customProperty19.bin",
+            "xl/customProperty2.bin",
+            "xl/customProperty20.bin",
+            "xl/customProperty21.bin",
+            "xl/customProperty22.bin",
+            "xl/customProperty23.bin",
+            "xl/customProperty24.bin",
+            "xl/customProperty25.bin",
+            "xl/customProperty26.bin",
+            "xl/customProperty27.bin",
+            "xl/customProperty28.bin",
+            "xl/customProperty29.bin",
+            "xl/customProperty3.bin",
+            "xl/customProperty30.bin",
+            "xl/customProperty4.bin",
+            "xl/customProperty5.bin",
+            "xl/customProperty6.bin",
+            "xl/customProperty7.bin",
+            "xl/customProperty8.bin",
+            "xl/customProperty9.bin",
+            "xl/drawings/_rels/drawing2.xml.rels",
+            "xl/drawings/_rels/drawing3.xml.rels",
+            "xl/drawings/_rels/drawing4.xml.rels",
+            "xl/drawings/_rels/drawing5.xml.rels",
+            "xl/drawings/_rels/drawing6.xml.rels",
+            "xl/drawings/_rels/drawing7.xml.rels",
+            "xl/drawings/_rels/vmlDrawing1.vml.rels",
+            "xl/drawings/_rels/vmlDrawing2.vml.rels",
+            "xl/drawings/_rels/vmlDrawing3.vml.rels",
+            "xl/drawings/_rels/vmlDrawing4.vml.rels",
+            "xl/drawings/_rels/vmlDrawing5.vml.rels",
+            "xl/drawings/_rels/vmlDrawing6.vml.rels",
+            "xl/drawings/drawing2.xml",
+            "xl/drawings/drawing3.xml",
+            "xl/drawings/drawing4.xml",
+            "xl/drawings/drawing5.xml",
+            "xl/drawings/drawing6.xml",
+            "xl/drawings/drawing7.xml",
+            "xl/drawings/vmlDrawing1.vml",
+            "xl/drawings/vmlDrawing2.vml",
+            "xl/drawings/vmlDrawing3.vml",
+            "xl/drawings/vmlDrawing4.vml",
+            "xl/drawings/vmlDrawing5.vml",
+            "xl/drawings/vmlDrawing6.vml",
+            "xl/media/image1.jpeg",
+            "xl/media/image2.emf",
+            "xl/media/image3.png",
+            "xl/metadata.xml",
+            "xl/model/item.data",
+            "xl/pivotCache/pivotCacheDefinition3.xml",
+            "xl/pivotCache/pivotCacheDefinition4.xml",
+            "xl/pivotTables/_rels/pivotTable3.xml.rels",
+            "xl/pivotTables/pivotTable3.xml",
+            "xl/printerSettings/printerSettings1.bin",
+            "xl/printerSettings/printerSettings2.bin",
+            "xl/printerSettings/printerSettings3.bin",
+            "xl/printerSettings/printerSettings4.bin",
+            "xl/printerSettings/printerSettings5.bin",
+            "xl/printerSettings/printerSettings6.bin",
+            "xl/printerSettings/printerSettings7.bin",
+            "xl/sharedStrings.xml",
+            "xl/slicerCaches/slicerCache1.xml",
+            "xl/slicerCaches/slicerCache2.xml",
+            "xl/slicerCaches/slicerCache3.xml",
+            "xl/slicers/slicer1.xml",
+            "xl/theme/_rels/theme1.xml.rels",
+            "xl/worksheets/_rels/sheet3.xml.rels",
+            "xl/worksheets/_rels/sheet4.xml.rels",
+            "xl/worksheets/_rels/sheet5.xml.rels",
+            "xl/worksheets/_rels/sheet7.xml.rels",
+            "xl/worksheets/_rels/sheet8.xml.rels",
+            "xl/worksheets/_rels/sheet9.xml.rels"
+          ],
+          "sheet_features": {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        },
+        "recalc": {
+          "status": "success",
+          "total_errors": 0,
+          "error_summary": {},
+          "total_formulas": 1
+        },
+        "parts_missing": [
+          "customXml/_rels/item1.xml.rels",
+          "customXml/_rels/item10.xml.rels",
+          "customXml/_rels/item11.xml.rels",
+          "customXml/_rels/item12.xml.rels",
+          "customXml/_rels/item13.xml.rels",
+          "customXml/_rels/item14.xml.rels",
+          "customXml/_rels/item15.xml.rels",
+          "customXml/_rels/item16.xml.rels",
+          "customXml/_rels/item17.xml.rels",
+          "customXml/_rels/item18.xml.rels",
+          "customXml/_rels/item19.xml.rels",
+          "customXml/_rels/item2.xml.rels",
+          "customXml/_rels/item20.xml.rels",
+          "customXml/_rels/item21.xml.rels",
+          "customXml/_rels/item22.xml.rels",
+          "customXml/_rels/item23.xml.rels",
+          "customXml/_rels/item24.xml.rels",
+          "customXml/_rels/item25.xml.rels",
+          "customXml/_rels/item26.xml.rels",
+          "customXml/_rels/item27.xml.rels",
+          "customXml/_rels/item28.xml.rels",
+          "customXml/_rels/item29.xml.rels",
+          "customXml/_rels/item3.xml.rels",
+          "customXml/_rels/item30.xml.rels",
+          "customXml/_rels/item31.xml.rels",
+          "customXml/_rels/item32.xml.rels",
+          "customXml/_rels/item33.xml.rels",
+          "customXml/_rels/item34.xml.rels",
+          "customXml/_rels/item35.xml.rels",
+          "customXml/_rels/item36.xml.rels",
+          "customXml/_rels/item37.xml.rels",
+          "customXml/_rels/item38.xml.rels",
+          "customXml/_rels/item39.xml.rels",
+          "customXml/_rels/item4.xml.rels",
+          "customXml/_rels/item40.xml.rels",
+          "customXml/_rels/item41.xml.rels",
+          "customXml/_rels/item42.xml.rels",
+          "customXml/_rels/item43.xml.rels",
+          "customXml/_rels/item44.xml.rels",
+          "customXml/_rels/item45.xml.rels",
+          "customXml/_rels/item46.xml.rels",
+          "customXml/_rels/item5.xml.rels",
+          "customXml/_rels/item6.xml.rels",
+          "customXml/_rels/item7.xml.rels",
+          "customXml/_rels/item8.xml.rels",
+          "customXml/_rels/item9.xml.rels",
+          "customXml/item1.xml",
+          "customXml/item10.xml",
+          "customXml/item11.xml",
+          "customXml/item12.xml",
+          "customXml/item13.xml",
+          "customXml/item14.xml",
+          "customXml/item15.xml",
+          "customXml/item16.xml",
+          "customXml/item17.xml",
+          "customXml/item18.xml",
+          "customXml/item19.xml",
+          "customXml/item2.xml",
+          "customXml/item20.xml",
+          "customXml/item21.xml",
+          "customXml/item22.xml",
+          "customXml/item23.xml",
+          "customXml/item24.xml",
+          "customXml/item25.xml",
+          "customXml/item26.xml",
+          "customXml/item27.xml",
+          "customXml/item28.xml",
+          "customXml/item29.xml",
+          "customXml/item3.xml",
+          "customXml/item30.xml",
+          "customXml/item31.xml",
+          "customXml/item32.xml",
+          "customXml/item33.xml",
+          "customXml/item34.xml",
+          "customXml/item35.xml",
+          "customXml/item36.xml",
+          "customXml/item37.xml",
+          "customXml/item38.xml",
+          "customXml/item39.xml",
+          "customXml/item4.xml",
+          "customXml/item40.xml",
+          "customXml/item41.xml",
+          "customXml/item42.xml",
+          "customXml/item43.xml",
+          "customXml/item44.xml",
+          "customXml/item45.xml",
+          "customXml/item46.xml",
+          "customXml/item5.xml",
+          "customXml/item6.xml",
+          "customXml/item7.xml",
+          "customXml/item8.xml",
+          "customXml/item9.xml",
+          "customXml/itemProps1.xml",
+          "customXml/itemProps10.xml",
+          "customXml/itemProps11.xml",
+          "customXml/itemProps12.xml",
+          "customXml/itemProps13.xml",
+          "customXml/itemProps14.xml",
+          "customXml/itemProps15.xml",
+          "customXml/itemProps16.xml",
+          "customXml/itemProps17.xml",
+          "customXml/itemProps18.xml",
+          "customXml/itemProps19.xml",
+          "customXml/itemProps2.xml",
+          "customXml/itemProps20.xml",
+          "customXml/itemProps21.xml",
+          "customXml/itemProps22.xml",
+          "customXml/itemProps23.xml",
+          "customXml/itemProps24.xml",
+          "customXml/itemProps25.xml",
+          "customXml/itemProps26.xml",
+          "customXml/itemProps27.xml",
+          "customXml/itemProps28.xml",
+          "customXml/itemProps29.xml",
+          "customXml/itemProps3.xml",
+          "customXml/itemProps30.xml",
+          "customXml/itemProps31.xml",
+          "customXml/itemProps32.xml",
+          "customXml/itemProps33.xml",
+          "customXml/itemProps34.xml",
+          "customXml/itemProps35.xml",
+          "customXml/itemProps36.xml",
+          "customXml/itemProps37.xml",
+          "customXml/itemProps38.xml",
+          "customXml/itemProps39.xml",
+          "customXml/itemProps4.xml",
+          "customXml/itemProps40.xml",
+          "customXml/itemProps41.xml",
+          "customXml/itemProps42.xml",
+          "customXml/itemProps43.xml",
+          "customXml/itemProps44.xml",
+          "customXml/itemProps45.xml",
+          "customXml/itemProps46.xml",
+          "customXml/itemProps5.xml",
+          "customXml/itemProps6.xml",
+          "customXml/itemProps7.xml",
+          "customXml/itemProps8.xml",
+          "customXml/itemProps9.xml",
+          "xl/activeX/activeX1.xml",
+          "xl/activeX/activeX2.xml",
+          "xl/activeX/activeX3.xml",
+          "xl/activeX/activeX4.xml",
+          "xl/activeX/activeX5.xml",
+          "xl/activeX/activeX6.xml",
+          "xl/connections.xml",
+          "xl/customProperty1.bin",
+          "xl/customProperty10.bin",
+          "xl/customProperty11.bin",
+          "xl/customProperty12.bin",
+          "xl/customProperty13.bin",
+          "xl/customProperty14.bin",
+          "xl/customProperty15.bin",
+          "xl/customProperty16.bin",
+          "xl/customProperty17.bin",
+          "xl/customProperty18.bin",
+          "xl/customProperty19.bin",
+          "xl/customProperty2.bin",
+          "xl/customProperty20.bin",
+          "xl/customProperty21.bin",
+          "xl/customProperty22.bin",
+          "xl/customProperty23.bin",
+          "xl/customProperty24.bin",
+          "xl/customProperty25.bin",
+          "xl/customProperty26.bin",
+          "xl/customProperty27.bin",
+          "xl/customProperty28.bin",
+          "xl/customProperty29.bin",
+          "xl/customProperty3.bin",
+          "xl/customProperty30.bin",
+          "xl/customProperty4.bin",
+          "xl/customProperty5.bin",
+          "xl/customProperty6.bin",
+          "xl/customProperty7.bin",
+          "xl/customProperty8.bin",
+          "xl/customProperty9.bin",
+          "xl/drawings/_rels/drawing2.xml.rels",
+          "xl/drawings/_rels/drawing3.xml.rels",
+          "xl/drawings/_rels/drawing4.xml.rels",
+          "xl/drawings/_rels/drawing5.xml.rels",
+          "xl/drawings/_rels/drawing6.xml.rels",
+          "xl/drawings/_rels/drawing7.xml.rels",
+          "xl/drawings/_rels/vmlDrawing1.vml.rels",
+          "xl/drawings/_rels/vmlDrawing2.vml.rels",
+          "xl/drawings/_rels/vmlDrawing3.vml.rels",
+          "xl/drawings/_rels/vmlDrawing4.vml.rels",
+          "xl/drawings/_rels/vmlDrawing5.vml.rels",
+          "xl/drawings/_rels/vmlDrawing6.vml.rels",
+          "xl/drawings/drawing2.xml",
+          "xl/drawings/drawing3.xml",
+          "xl/drawings/drawing4.xml",
+          "xl/drawings/drawing5.xml",
+          "xl/drawings/drawing6.xml",
+          "xl/drawings/drawing7.xml",
+          "xl/drawings/vmlDrawing1.vml",
+          "xl/drawings/vmlDrawing2.vml",
+          "xl/drawings/vmlDrawing3.vml",
+          "xl/drawings/vmlDrawing4.vml",
+          "xl/drawings/vmlDrawing5.vml",
+          "xl/drawings/vmlDrawing6.vml",
+          "xl/media/image1.jpeg",
+          "xl/media/image2.emf",
+          "xl/media/image3.png",
+          "xl/metadata.xml",
+          "xl/model/item.data",
+          "xl/pivotCache/pivotCacheDefinition1.xml",
+          "xl/pivotCache/pivotCacheDefinition2.xml",
+          "xl/pivotCache/pivotCacheDefinition3.xml",
+          "xl/pivotCache/pivotCacheDefinition4.xml",
+          "xl/pivotTables/_rels/pivotTable1.xml.rels",
+          "xl/pivotTables/_rels/pivotTable2.xml.rels",
+          "xl/pivotTables/_rels/pivotTable3.xml.rels",
+          "xl/pivotTables/pivotTable1.xml",
+          "xl/pivotTables/pivotTable2.xml",
+          "xl/pivotTables/pivotTable3.xml",
+          "xl/printerSettings/printerSettings1.bin",
+          "xl/printerSettings/printerSettings2.bin",
+          "xl/printerSettings/printerSettings3.bin",
+          "xl/printerSettings/printerSettings4.bin",
+          "xl/printerSettings/printerSettings5.bin",
+          "xl/printerSettings/printerSettings6.bin",
+          "xl/printerSettings/printerSettings7.bin",
+          "xl/slicerCaches/slicerCache1.xml",
+          "xl/slicerCaches/slicerCache2.xml",
+          "xl/slicerCaches/slicerCache3.xml",
+          "xl/slicers/slicer1.xml",
+          "xl/theme/_rels/theme1.xml.rels",
+          "xl/worksheets/_rels/sheet1.xml.rels",
+          "xl/worksheets/_rels/sheet3.xml.rels",
+          "xl/worksheets/_rels/sheet4.xml.rels",
+          "xl/worksheets/_rels/sheet5.xml.rels",
+          "xl/worksheets/_rels/sheet6.xml.rels",
+          "xl/worksheets/_rels/sheet7.xml.rels",
+          "xl/worksheets/_rels/sheet8.xml.rels",
+          "xl/worksheets/_rels/sheet9.xml.rels"
+        ],
+        "parts_unchanged": 0,
+        "families_lost": {
+          "pivot": [
+            3,
+            0
+          ],
+          "pivot_cache": [
+            4,
+            0
+          ],
+          "slicer": [
+            1,
+            0
+          ],
+          "slicer_cache": [
+            3,
+            0
+          ],
+          "drawing": [
+            7,
+            1
+          ],
+          "power_pivot": [
+            1,
+            0
+          ]
+        },
+        "sheet_features": [
+          {
+            "x14_ext": 2,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "650d3b7ae258d76d"
+          },
+          {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        ],
+        "sheet_features_changed": [
+          "x14_digest",
+          "x14_ext"
+        ],
+        "formula_cells_checked": 0,
+        "cached_value_regressions": 0,
+        "cached_value_regression_samples": [],
+        "cached_value": 2
+      }
+    },
+    "real-excel-macro-basic.xlsm": {
+      "skill": {
+        "openpyxl_warnings": [],
+        "edit_step": {
+          "parts_missing": [],
+          "sheet_features": {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        },
+        "recalc": {
+          "status": "success",
+          "total_errors": 0,
+          "error_summary": {},
+          "total_formulas": 1
+        },
+        "parts_missing": [],
+        "parts_unchanged": 0,
+        "families_lost": {},
+        "sheet_features": [
+          {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          },
+          {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        ],
+        "sheet_features_changed": [],
+        "formula_cells_checked": 0,
+        "cached_value_regressions": 0,
+        "cached_value_regression_samples": [],
+        "cached_value": 2
+      }
+    },
+    "x14-validation-sparkline.xlsx": {
+      "skill": {
+        "openpyxl_warnings": [
+          "Data Validation extension is not supported and will be removed",
+          "Sparkline Group extension is not supported and will be removed"
+        ],
+        "edit_step": {
+          "parts_missing": [],
+          "sheet_features": {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        },
+        "recalc": {
+          "status": "success",
+          "total_errors": 0,
+          "error_summary": {},
+          "total_formulas": 1
+        },
+        "parts_missing": [],
+        "parts_unchanged": 0,
+        "families_lost": {},
+        "sheet_features": [
+          {
+            "x14_ext": 8,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "22e3419727bac11f"
+          },
+          {
+            "x14_ext": 0,
+            "cf": 0,
+            "dv": 0,
+            "x14_digest": "e3b0c44298fc1c14"
+          }
+        ],
+        "sheet_features_changed": [
+          "x14_digest",
+          "x14_ext"
+        ],
+        "formula_cells_checked": 0,
+        "cached_value_regressions": 0,
+        "cached_value_regression_samples": [],
+        "cached_value": 2
+      }
+    }
+  }
+}

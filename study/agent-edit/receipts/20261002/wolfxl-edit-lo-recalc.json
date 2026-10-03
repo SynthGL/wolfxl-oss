@@ -1,0 +1,397 @@
+{
+  "openpyxl": "3.1.5",
+  "libreoffice": "LibreOffice 26.8.0.3 bce0998afefdbc355585ca324285661a2170ba77",
+  "anthropics_skills": "3337550 2026-09-24",
+  "python": "3.13.9",
+  "wolfxl": "2.0.8",
+  "edit": "Z1 =1+1",
+  "files": {
+    "real-excel-pivot-chart-slicers.xlsx": {
+      "edit_step_parts_missing": [],
+      "recalc": {
+        "status": "success",
+        "total_errors": 0,
+        "error_summary": {},
+        "total_formulas": 37
+      },
+      "parts_missing": [
+        "xl/printerSettings/printerSettings1.bin",
+        "xl/slicerCaches/slicerCache1.xml",
+        "xl/slicerCaches/slicerCache2.xml",
+        "xl/slicers/slicer1.xml"
+      ],
+      "parts_unchanged": 1,
+      "families_lost": {
+        "slicer": [
+          1,
+          0
+        ],
+        "slicer_cache": [
+          2,
+          0
+        ]
+      },
+      "sheet_features": [
+        {
+          "x14_ext": 2,
+          "cf": 0,
+          "dv": 0,
+          "x14_digest": "c83408c605a4ba0d"
+        },
+        {
+          "x14_ext": 0,
+          "cf": 0,
+          "dv": 0,
+          "x14_digest": "e3b0c44298fc1c14"
+        }
+      ],
+      "sheet_features_changed": [
+        "x14_digest",
+        "x14_ext"
+      ],
+      "formula_cells_checked": 36,
+      "cached_value_regressions": 0,
+      "cached_value_regression_samples": [],
+      "cached_value": 2
+    },
+    "real-excel-timeline-slicer.xlsx": {
+      "edit_step_parts_missing": [],
+      "recalc": {
+        "status": "success",
+        "total_errors": 0,
+        "error_summary": {},
+        "total_formulas": 3
+      },
+      "parts_missing": [
+        "xl/printerSettings/printerSettings1.bin",
+        "xl/timelineCaches/timelineCache1.xml",
+        "xl/timelines/timeline1.xml"
+      ],
+      "parts_unchanged": 1,
+      "families_lost": {
+        "timeline": [
+          1,
+          0
+        ],
+        "timeline_cache": [
+          1,
+          0
+        ]
+      },
+      "sheet_features": [
+        {
+          "x14_ext": 0,
+          "cf": 0,
+          "dv": 0,
+          "x14_digest": "e3b0c44298fc1c14"
+        },
+        {
+          "x14_ext": 0,
+          "cf": 0,
+          "dv": 0,
+          "x14_digest": "e3b0c44298fc1c14"
+        }
+      ],
+      "sheet_features_changed": [],
+      "formula_cells_checked": 2,
+      "cached_value_regressions": 0,
+      "cached_value_regression_samples": [],
+      "cached_value": 2
+    },
+    "real-excel-normalized-pivot-cf-table.xlsx": {
+      "edit_step_parts_missing": [],
+      "recalc": {
+        "status": "success",
+        "total_errors": 0,
+        "error_summary": {},
+        "total_formulas": 1
+      },
+      "parts_missing": [],
+      "parts_unchanged": 0,
+      "families_lost": {},
+      "sheet_features": [
+        {
+          "x14_ext": 9,
+          "cf": 1,
+          "dv": 0,
+          "x14_digest": "87869e22096daf65"
+        },
+        {
+          "x14_ext": 9,
+          "cf": 1,
+          "dv": 0,
+          "x14_digest": "284f2667d39a8449"
+        }
+      ],
+      "sheet_features_changed": [
+        "x14_digest"
+      ],
+      "formula_cells_checked": 0,
+      "cached_value_regressions": 0,
+      "cached_value_regression_samples": [],
+      "cached_value": 2
+    },
+    "real-excel-p1-comments-validation-protection.xlsx": {
+      "edit_step_parts_missing": [],
+      "recalc": {
+        "status": "success",
+        "total_errors": 0,
+        "error_summary": {},
+        "total_formulas": 2
+      },
+      "parts_missing": [],
+      "parts_unchanged": 0,
+      "families_lost": {},
+      "sheet_features": [
+        {
+          "x14_ext": 0,
+          "cf": 0,
+          "dv": 1,
+          "x14_digest": "e3b0c44298fc1c14"
+        },
+        {
+          "x14_ext": 0,
+          "cf": 0,
+          "dv": 1,
+          "x14_digest": "e3b0c44298fc1c14"
+        }
+      ],
+      "sheet_features_changed": [],
+      "formula_cells_checked": 1,
+      "cached_value_regressions": 0,
+      "cached_value_regression_samples": [],
+      "cached_value": 2
+    },
+    "real-excel-chart-cf-basic.xlsx": {
+      "edit_step_parts_missing": [],
+      "recalc": {
+        "status": "success",
+        "total_errors": 0,
+        "error_summary": {},
+        "total_formulas": 1
+      },
+      "parts_missing": [],
+      "parts_unchanged": 0,
+      "families_lost": {},
+      "sheet_features": [
+        {
+          "x14_ext": 0,
+          "cf": 3,
+          "dv": 0,
+          "x14_digest": "e3b0c44298fc1c14"
+        },
+        {
+          "x14_ext": 9,
+          "cf": 3,
+          "dv": 0,
+          "x14_digest": "874d938a47cf3c78"
+        }
+      ],
+      "sheet_features_changed": [
+        "x14_digest",
+        "x14_ext"
+      ],
+      "formula_cells_checked": 0,
+      "cached_value_regressions": 0,
+      "cached_value_regression_samples": [],
+      "cached_value": 2
+    },
+    "real-excel-powerpivot-contoso-pnl.xlsx": {
+      "edit_step_parts_missing": [],
+      "recalc": {
+        "status": "success",
+        "total_errors": 0,
+        "error_summary": {},
+        "total_formulas": 1
+      },
+      "parts_missing": [
+        "xl/activeX/activeX1.xml",
+        "xl/activeX/activeX2.xml",
+        "xl/activeX/activeX3.xml",
+        "xl/activeX/activeX4.xml",
+        "xl/activeX/activeX5.xml",
+        "xl/activeX/activeX6.xml",
+        "xl/customProperty1.bin",
+        "xl/customProperty10.bin",
+        "xl/customProperty11.bin",
+        "xl/customProperty12.bin",
+        "xl/customProperty13.bin",
+        "xl/customProperty14.bin",
+        "xl/customProperty15.bin",
+        "xl/customProperty16.bin",
+        "xl/customProperty17.bin",
+        "xl/customProperty18.bin",
+        "xl/customProperty19.bin",
+        "xl/customProperty2.bin",
+        "xl/customProperty20.bin",
+        "xl/customProperty21.bin",
+        "xl/customProperty22.bin",
+        "xl/customProperty23.bin",
+        "xl/customProperty24.bin",
+        "xl/customProperty25.bin",
+        "xl/customProperty26.bin",
+        "xl/customProperty27.bin",
+        "xl/customProperty28.bin",
+        "xl/customProperty29.bin",
+        "xl/customProperty3.bin",
+        "xl/customProperty30.bin",
+        "xl/customProperty4.bin",
+        "xl/customProperty5.bin",
+        "xl/customProperty6.bin",
+        "xl/customProperty7.bin",
+        "xl/customProperty8.bin",
+        "xl/customProperty9.bin",
+        "xl/drawings/_rels/vmlDrawing1.vml.rels",
+        "xl/drawings/_rels/vmlDrawing2.vml.rels",
+        "xl/drawings/_rels/vmlDrawing3.vml.rels",
+        "xl/drawings/_rels/vmlDrawing4.vml.rels",
+        "xl/drawings/_rels/vmlDrawing5.vml.rels",
+        "xl/drawings/_rels/vmlDrawing6.vml.rels",
+        "xl/drawings/vmlDrawing1.vml",
+        "xl/drawings/vmlDrawing2.vml",
+        "xl/drawings/vmlDrawing3.vml",
+        "xl/drawings/vmlDrawing4.vml",
+        "xl/drawings/vmlDrawing5.vml",
+        "xl/drawings/vmlDrawing6.vml",
+        "xl/media/image2.emf",
+        "xl/media/image3.png",
+        "xl/metadata.xml",
+        "xl/model/item.data",
+        "xl/pivotCache/pivotCacheDefinition1.xml",
+        "xl/pivotCache/pivotCacheDefinition2.xml",
+        "xl/pivotCache/pivotCacheDefinition3.xml",
+        "xl/pivotCache/pivotCacheDefinition4.xml",
+        "xl/pivotTables/_rels/pivotTable1.xml.rels",
+        "xl/pivotTables/_rels/pivotTable2.xml.rels",
+        "xl/pivotTables/_rels/pivotTable3.xml.rels",
+        "xl/pivotTables/pivotTable1.xml",
+        "xl/pivotTables/pivotTable2.xml",
+        "xl/pivotTables/pivotTable3.xml",
+        "xl/printerSettings/printerSettings1.bin",
+        "xl/printerSettings/printerSettings2.bin",
+        "xl/printerSettings/printerSettings3.bin",
+        "xl/printerSettings/printerSettings4.bin",
+        "xl/printerSettings/printerSettings5.bin",
+        "xl/printerSettings/printerSettings6.bin",
+        "xl/printerSettings/printerSettings7.bin",
+        "xl/slicerCaches/slicerCache1.xml",
+        "xl/slicerCaches/slicerCache2.xml",
+        "xl/slicerCaches/slicerCache3.xml",
+        "xl/slicers/slicer1.xml",
+        "xl/worksheets/_rels/sheet1.xml.rels",
+        "xl/worksheets/_rels/sheet6.xml.rels"
+      ],
+      "parts_unchanged": 1,
+      "families_lost": {
+        "pivot": [
+          3,
+          0
+        ],
+        "pivot_cache": [
+          4,
+          0
+        ],
+        "slicer": [
+          1,
+          0
+        ],
+        "slicer_cache": [
+          3,
+          0
+        ],
+        "power_pivot": [
+          1,
+          0
+        ]
+      },
+      "sheet_features": [
+        {
+          "x14_ext": 2,
+          "cf": 0,
+          "dv": 0,
+          "x14_digest": "650d3b7ae258d76d"
+        },
+        {
+          "x14_ext": 0,
+          "cf": 0,
+          "dv": 0,
+          "x14_digest": "e3b0c44298fc1c14"
+        }
+      ],
+      "sheet_features_changed": [
+        "x14_digest",
+        "x14_ext"
+      ],
+      "formula_cells_checked": 0,
+      "cached_value_regressions": 0,
+      "cached_value_regression_samples": [],
+      "cached_value": 2
+    },
+    "real-excel-macro-basic.xlsm": {
+      "edit_step_parts_missing": [],
+      "recalc": {
+        "status": "success",
+        "total_errors": 0,
+        "error_summary": {},
+        "total_formulas": 1
+      },
+      "parts_missing": [],
+      "parts_unchanged": 0,
+      "families_lost": {},
+      "sheet_features": [
+        {
+          "x14_ext": 0,
+          "cf": 0,
+          "dv": 0,
+          "x14_digest": "e3b0c44298fc1c14"
+        },
+        {
+          "x14_ext": 0,
+          "cf": 0,
+          "dv": 0,
+          "x14_digest": "e3b0c44298fc1c14"
+        }
+      ],
+      "sheet_features_changed": [],
+      "formula_cells_checked": 0,
+      "cached_value_regressions": 0,
+      "cached_value_regression_samples": [],
+      "cached_value": 2
+    },
+    "x14-validation-sparkline.xlsx": {
+      "edit_step_parts_missing": [],
+      "recalc": {
+        "status": "success",
+        "total_errors": 0,
+        "error_summary": {},
+        "total_formulas": 1
+      },
+      "parts_missing": [],
+      "parts_unchanged": 0,
+      "families_lost": {},
+      "sheet_features": [
+        {
+          "x14_ext": 8,
+          "cf": 0,
+          "dv": 0,
+          "x14_digest": "22e3419727bac11f"
+        },
+        {
+          "x14_ext": 5,
+          "cf": 0,
+          "dv": 1,
+          "x14_digest": "4f67c02b3dbec20b"
+        }
+      ],
+      "sheet_features_changed": [
+        "dv",
+        "x14_digest",
+        "x14_ext"
+      ],
+      "formula_cells_checked": 0,
+      "cached_value_regressions": 0,
+      "cached_value_regression_samples": [],
+      "cached_value": 2
+    }
+  }
+}

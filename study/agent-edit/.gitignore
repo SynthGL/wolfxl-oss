@@ -1,0 +1,7 @@
+.cache/
+.venv/
+__pycache__/
+out/
+out_lo/
+results.json
+results_lo.json

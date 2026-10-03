@@ -30,7 +30,7 @@ jobs:
         with:
           version: "0.12.3"
       - name: Check Python sources
-        run: uvx --from ruff==0.16.5 ruff check python tests
+        run: uvx --from ruff==0.16.5 ruff check python tests study/agent-edit
 
   test-python:
     name: test-python
@@ -55,6 +55,8 @@ jobs:
         run: |
           maturin build --release --locked --out dist
           uv pip install --system --no-index --find-links dist wolfxl
+      - name: Run offline workbook editing study tests
+        run: python -m unittest discover -s study/agent-edit -p 'test_*.py' -v
       - name: Run Python tests
         # The Community mirror intentionally omits private audit scripts and
         # evidence docs while retaining their source-level regression tests.
