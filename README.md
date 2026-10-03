@@ -43,10 +43,9 @@ and package parts within the documented boundaries; add `keep_vba=True` for
 results in the saved file unchanged.
 [Edit Excel in Python without losing formatting](https://wolfxl.com/openpyxl-preservation?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09).
 
-The following free recalculation-on-open recipe requires the fix listed
-under [Unreleased](CHANGELOG.md#unreleased); published Community 2.0.8 does
-not persist changes to this flag. In that fixed version, keep the workbook
-open in modify mode as above, then:
+The following free recalculation-on-open recipe requires Community 2.0.9
+or newer; earlier versions do not persist changes to this flag.
+Keep the workbook open in modify mode as above, then:
 
 ```python
 wb["Summary"]["B2"] = 1500
@@ -154,7 +153,7 @@ Step-by-step guide: [openpyxl migration](https://wolfxl.com/openpyxl-migration).
 Install the current Community release:
 
 ```bash
-python -m pip install wolfxl==2.0.8
+python -m pip install wolfxl==2.0.9
 ```
 
 WolfXL Community supports Python 3.9 and newer CPython versions for which a
