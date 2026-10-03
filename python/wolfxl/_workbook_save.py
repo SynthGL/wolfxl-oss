@@ -27,7 +27,9 @@ from wolfxl.xml.constants import (
 
 def normalize_openpyxl_package_shape(wb: Any, filename: str) -> None:
     """Apply source-backed openpyxl package-shape cleanup when relevant."""
-    from wolfxl._openpyxl_package_shape import normalize_openpyxl_package_shape as _normalize
+    from wolfxl._openpyxl_package_shape import (
+        normalize_openpyxl_package_shape as _normalize,
+    )
 
     keep_vba = bool(getattr(wb, "_keep_vba", False))
     if keep_vba or getattr(wb, "_rust_patcher", None) is None:
@@ -41,7 +43,9 @@ def save_workbook(
     password: str | bytes | None = None,
 ) -> None:
     """Flush workbook state and save it through the active backend."""
-    if hasattr(filename, "write") and not isinstance(filename, (str, bytes, os.PathLike)):
+    if hasattr(filename, "write") and not isinstance(
+        filename, (str, bytes, os.PathLike)
+    ):
         save_workbook_to_fileobj(wb, filename, password=password)
         return
     filename = str(filename)
@@ -72,7 +76,9 @@ def save_workbook(
             save_write_only_mode(wb, filename)
         else:
             save_write_mode(wb, filename)
-    elif getattr(wb, "_rust_reader", None) is not None and getattr(wb, "_source_path", None):
+    elif getattr(wb, "_rust_reader", None) is not None and getattr(
+        wb, "_source_path", None
+    ):
         save_read_mode(wb, filename)
     else:
         raise RuntimeError("save requires write or modify mode")
@@ -103,7 +109,9 @@ def save_workbook_to_fileobj(
     """Save to a binary file-like object using the path-oriented backends."""
     import tempfile
 
-    tmp = tempfile.NamedTemporaryFile(prefix="wolfxl-save-", suffix=".xlsx", delete=False)
+    tmp = tempfile.NamedTemporaryFile(
+        prefix="wolfxl-save-", suffix=".xlsx", delete=False
+    )
     tmp_path = tmp.name
     tmp.close()
     try:
@@ -178,7 +186,10 @@ def apply_workbook_template_content_type(wb: Any, filename: str) -> None:
         ):
             workbook_override = child
             break
-    if workbook_override is not None and workbook_override.get("ContentType") in {XLSM, XLTM}:
+    if workbook_override is not None and workbook_override.get("ContentType") in {
+        XLSM,
+        XLTM,
+    }:
         content_type = XLTM if template else XLSM
 
     changed = False
@@ -282,7 +293,9 @@ def _read_mode_has_pending_changes(wb: Any) -> bool:
         if has_pending_image_deletions(ws):
             return True
         for handle in getattr(ws, "_pivot_handles_cache", None) or []:
-            if getattr(handle, "_dirty", False) or getattr(handle, "_layout_dirty", False):
+            if getattr(handle, "_dirty", False) or getattr(
+                handle, "_layout_dirty", False
+            ):
                 return True
     return False
 
@@ -308,6 +321,19 @@ def save_write_only_mode(wb: Any, filename: str) -> None:
 
 def save_modify_mode(wb: Any, filename: str) -> None:
     """Flush pending modify-mode queues and write through ``XlsxPatcher``."""
+    calculation = wb._calc_properties_cache  # noqa: SLF001
+    if calculation is not None:
+        attributes = tuple(calculation)
+        if attributes != wb._calc_properties_original:  # noqa: SLF001
+            values = dict(attributes)
+            original = dict(wb._calc_properties_original)  # noqa: SLF001
+            wb._rust_patcher.queue_calc_properties(  # noqa: SLF001
+                [
+                    (name, values.get(name))
+                    for name in calculation.__attrs__
+                    if values.get(name) != original.get(name)
+                ]
+            )
     if not _modify_mode_has_pending_changes(wb):
         if same_existing_path(filename, wb._source_path):  # noqa: SLF001
             wb._rust_patcher.save_in_place()  # noqa: SLF001
@@ -664,23 +690,31 @@ def apply_sheet_state_authoring(wb: Any, filename: str) -> None:
         active_index = getattr(wb, "_active_index_for_save", wb._active_index)()
         changed = _apply_active_tab(root, ns_main, active_index) or changed
     if tab_colors:
-        changed = _apply_sheet_tab_colors(parts, root, tab_colors, ns_main, ns_rel) or changed
+        changed = (
+            _apply_sheet_tab_colors(parts, root, tab_colors, ns_main, ns_rel) or changed
+        )
     if outline_props:
-        changed = _apply_sheet_outline_properties(
-            parts,
-            root,
-            outline_props,
-            ns_main,
-            ns_rel,
-        ) or changed
+        changed = (
+            _apply_sheet_outline_properties(
+                parts,
+                root,
+                outline_props,
+                ns_main,
+                ns_rel,
+            )
+            or changed
+        )
     if page_setup_props:
-        changed = _apply_sheet_page_setup_properties(
-            parts,
-            root,
-            page_setup_props,
-            ns_main,
-            ns_rel,
-        ) or changed
+        changed = (
+            _apply_sheet_page_setup_properties(
+                parts,
+                root,
+                page_setup_props,
+                ns_main,
+                ns_rel,
+            )
+            or changed
+        )
     if not changed:
         _clear_workbook_xml_dirty_flags(wb)
         return
@@ -908,7 +942,9 @@ def apply_writer_unmerged_ranges(wb: Any, filename: str) -> None:
         except ET.ParseError:
             continue
         if _remove_merge_cells(sheet_root, refs):
-            parts[path] = ET.tostring(sheet_root, encoding="utf-8", xml_declaration=True)
+            parts[path] = ET.tostring(
+                sheet_root, encoding="utf-8", xml_declaration=True
+            )
             changed = True
 
     if not changed:
@@ -949,7 +985,11 @@ def _remove_merge_cells(sheet_root: Any, refs: set[str]) -> bool:
             ):
                 parent.remove(child)
                 changed = True
-        remaining = [child for child in list(parent) if child.tag.rsplit("}", 1)[-1] == "mergeCell"]
+        remaining = [
+            child
+            for child in list(parent)
+            if child.tag.rsplit("}", 1)[-1] == "mergeCell"
+        ]
         if remaining:
             parent.set("count", str(len(remaining)))
         else:
@@ -1144,7 +1184,9 @@ def _apply_sheet_page_setup_properties(
     return changed
 
 
-def _workbook_relationship_targets(parts: dict[str, bytes], ns_rel: str) -> dict[str, str]:
+def _workbook_relationship_targets(
+    parts: dict[str, bytes], ns_rel: str
+) -> dict[str, str]:
     from xml.etree import ElementTree as ET
 
     rels_xml = parts.get("xl/_rels/workbook.xml.rels")
@@ -1172,7 +1214,9 @@ def _apply_sheet_tab_color(sheet_root: Any, color: str, ns_main: str) -> bool:
         return node.tag.rsplit("}", 1)[-1]
 
     children = list(sheet_root)
-    sheet_pr = next((child for child in children if local_name(child) == "sheetPr"), None)
+    sheet_pr = next(
+        (child for child in children if local_name(child) == "sheetPr"), None
+    )
     if sheet_pr is None:
         sheet_pr = ET.Element(f"{{{ns_main}}}sheetPr")
         sheet_root.insert(0, sheet_pr)
@@ -1200,7 +1244,9 @@ def _apply_sheet_outline_property(
         return node.tag.rsplit("}", 1)[-1]
 
     children = list(sheet_root)
-    sheet_pr = next((child for child in children if local_name(child) == "sheetPr"), None)
+    sheet_pr = next(
+        (child for child in children if local_name(child) == "sheetPr"), None
+    )
     if sheet_pr is None:
         sheet_pr = ET.Element(f"{{{ns_main}}}sheetPr")
         sheet_root.insert(0, sheet_pr)
@@ -1237,7 +1283,9 @@ def _apply_sheet_page_setup_property(
         return node.tag.rsplit("}", 1)[-1]
 
     children = list(sheet_root)
-    sheet_pr = next((child for child in children if local_name(child) == "sheetPr"), None)
+    sheet_pr = next(
+        (child for child in children if local_name(child) == "sheetPr"), None
+    )
     if sheet_pr is None:
         sheet_pr = ET.Element(f"{{{ns_main}}}sheetPr")
         sheet_root.insert(0, sheet_pr)
@@ -1274,7 +1322,8 @@ def save_write_mode(wb: Any, filename: str) -> None:
     parts. Final bytes copy onto ``filename``.
     """
     has_pending_pivots = bool(getattr(wb, "_pending_pivot_caches", None)) or any(
-        getattr(ws, "_pending_pivot_tables", None) for ws in wb._sheets.values()  # noqa: SLF001
+        getattr(ws, "_pending_pivot_tables", None)
+        for ws in wb._sheets.values()  # noqa: SLF001
     )
     if not has_pending_pivots:
         wb._flush_workbook_writes()  # noqa: SLF001
@@ -1405,9 +1454,7 @@ def _save_write_mode_with_pivots(wb: Any, filename: str) -> None:
     pending_tables_by_sheet: dict[str, list[Any]] = {}
     for ws in wb._sheets.values():  # noqa: SLF001
         title = ws.title
-        pending_tables_by_sheet[title] = list(
-            getattr(ws, "_pending_pivot_tables", [])
-        )
+        pending_tables_by_sheet[title] = list(getattr(ws, "_pending_pivot_tables", []))
         ws._pending_pivot_tables = []  # noqa: SLF001
     wb._pending_pivot_caches = []  # noqa: SLF001
     # Reset cache id allocator and clear cache._cache_id stamps so the

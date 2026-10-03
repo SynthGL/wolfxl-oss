@@ -336,6 +336,8 @@ pub struct XlsxPatcher {
     /// `Some(_)` = the queue was populated and Phase 2.5q must
     /// splice into `xl/workbook.xml`.
     queued_workbook_security: Option<wolfxl_writer::parse::workbook_security::WorkbookSecurity>,
+    /// Calculation attributes explicitly changed through Workbook.calculation.
+    queued_calc_properties: Option<Vec<(String, Option<String>)>>,
 
     /// Sprint Ο Pod 1B (RFC-056) — pending autoFilter adds, keyed
     /// by sheet title. Drained by Phase 2.5o (sequenced AFTER pivot
@@ -565,6 +567,7 @@ impl XlsxPatcher {
             drop_external_links: false,
             next_pivot_cache_id: 0,
             queued_workbook_security: None,
+            queued_calc_properties: None,
             queued_autofilters: HashMap::new(),
             queued_sheet_setup: HashMap::new(),
             queued_page_breaks: HashMap::new(),
@@ -1073,6 +1076,10 @@ impl XlsxPatcher {
         let security = parse_workbook_security_payload(payload)?;
         self.queued_workbook_security = Some(security);
         Ok(())
+    }
+
+    fn queue_calc_properties(&mut self, attributes: Vec<(String, Option<String>)>) {
+        self.queued_calc_properties = Some(attributes);
     }
 
     /// Queue a sheet-setup update for `sheet` (RFC-055 Phase 2.5n).
@@ -2206,6 +2213,11 @@ impl XlsxPatcher {
             patcher_workbook::copy_source_file_phase(self, output_path)?;
             return Ok(());
         }
+        let structural_calculation_edit = !self.queued_sheet_deletes.is_empty()
+            || !self.queued_sheet_creates.is_empty()
+            || !self.queued_sheet_copies.is_empty()
+            || !self.queued_axis_shifts.is_empty()
+            || !self.queued_range_moves.is_empty();
 
         let mut zip = open_source_zip(&self.file_path)?;
 
@@ -2800,20 +2812,14 @@ impl XlsxPatcher {
 
         // --- Phase 2.8: calcChain.xml rebuild (Sprint Θ Pod-C3) ---
         //
-        // Walk every sheet in `sheet_order`, scan each sheet's
-        // post-mutation XML for formula cells, and emit a fresh
-        // `xl/calcChain.xml`. Excel transparently rebuilds this file
-        // on next open if it's stale, so the rebuild is a perf-only
-        // hint — it never changes correctness. We still do it because
-        // (a) it makes Excel's first-open faster, (b) external tools
-        // that read calcChain directly see the right cells, and (c)
-        // it keeps WolfXL output closer to a freshly-saved Excel
-        // file.
-        //
-        // The no-op short-circuit at the top of `do_save` already
-        // bypasses this whole flush, so byte-identical no-op saves
-        // are unaffected.
-        patcher_workbook::rebuild_calc_chain_phase(self, &mut save.file_patches, &mut zip)?;
+        // Rebuild calculation metadata only when formula membership or sheet
+        // structure changes. Scalar/style edits preserve unrelated parts.
+        patcher_workbook::rebuild_calc_chain_phase(
+            self,
+            &mut save.file_patches,
+            &mut zip,
+            structural_calculation_edit,
+        )?;
 
         drop(zip);
 

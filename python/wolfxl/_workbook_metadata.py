@@ -70,8 +70,7 @@ def set_custom_doc_props(wb: Any, value: Any) -> None:
 
     if not isinstance(value, CustomPropertyList):
         raise TypeError(
-            "custom_doc_props must be a CustomPropertyList, "
-            f"got {type(value).__name__}"
+            f"custom_doc_props must be a CustomPropertyList, got {type(value).__name__}"
         )
     value._attach_workbook(wb)  # noqa: SLF001
     wb._custom_doc_props_cache = value  # noqa: SLF001
@@ -180,6 +179,10 @@ def get_calc_properties(wb: Any) -> Any:
         return wb._calc_properties_cache  # noqa: SLF001
     payload = _reader_workbook_payload(wb, "read_calc_properties")
     wb._calc_properties_cache = _calc_properties_from_payload(payload)  # noqa: SLF001
+    if payload is None and wb._source_path is not None:  # noqa: SLF001
+        # An absent source calcPr has no explicit recalculate-on-open flag.
+        wb._calc_properties_cache.fullCalcOnLoad = None  # noqa: SLF001
+    wb._calc_properties_original = tuple(wb._calc_properties_cache)  # noqa: SLF001
     return wb._calc_properties_cache  # noqa: SLF001
 
 
@@ -191,6 +194,7 @@ def set_calc_properties(wb: Any, value: Any) -> None:
         raise TypeError(
             f"calculation must be a CalcProperties, got {type(value).__name__}"
         )
+    get_calc_properties(wb)
     wb._calc_properties_cache = value  # noqa: SLF001
 
 
@@ -250,8 +254,7 @@ def set_file_sharing(wb: Any, value: Any) -> None:
 
     if value is not None and not isinstance(value, FileSharing):
         raise TypeError(
-            "wb.fileSharing must be a FileSharing or None, "
-            f"got {type(value).__name__}"
+            f"wb.fileSharing must be a FileSharing or None, got {type(value).__name__}"
         )
     wb._file_sharing = value  # noqa: SLF001
     wb._security_loaded = True  # noqa: SLF001
@@ -341,7 +344,9 @@ def _workbook_properties_from_payload(payload: Any) -> Any:
         promptedSolutions=_payload_value(payload, "prompted_solutions", False),
         showInkAnnotation=_payload_value(payload, "show_ink_annotation", True),
         backupFile=_payload_value(payload, "backup_file", False),
-        saveExternalLinkValues=_payload_value(payload, "save_external_link_values", True),
+        saveExternalLinkValues=_payload_value(
+            payload, "save_external_link_values", True
+        ),
         updateLinks=_payload_value(payload, "update_links", "userSet"),
         codeName=payload.get("code_name"),
         hidePivotFieldList=_payload_value(payload, "hide_pivot_field_list", False),
@@ -383,9 +388,7 @@ def _book_views_from_payload(payload: Any) -> list[Any]:
     if not isinstance(payload, list):
         return [BookView()]
     views = [
-        _book_view_from_payload(item)
-        for item in payload
-        if isinstance(item, dict)
+        _book_view_from_payload(item) for item in payload if isinstance(item, dict)
     ]
     return views or [BookView()]
 
@@ -406,9 +409,7 @@ def _book_view_from_payload(payload: dict[str, Any]) -> Any:
         tabRatio=int(payload.get("tab_ratio", 600)),
         firstSheet=int(payload.get("first_sheet", 0)),
         activeTab=int(payload.get("active_tab", 0)),
-        autoFilterDateGrouping=bool(
-            payload.get("auto_filter_date_grouping", True)
-        ),
+        autoFilterDateGrouping=bool(payload.get("auto_filter_date_grouping", True)),
     )
 
 
@@ -447,13 +448,17 @@ def _workbook_protection_from_payload(payload: Any) -> Any:
         lock_revision=bool(payload.get("lock_revision", False)),
     )
     protection.workbook_password = payload.get("workbook_password")
-    protection.workbook_password_character_set = payload.get("workbook_password_character_set")
+    protection.workbook_password_character_set = payload.get(
+        "workbook_password_character_set"
+    )
     protection.workbook_algorithm_name = payload.get("workbook_algorithm_name")
     protection.workbook_hash_value = payload.get("workbook_hash_value")
     protection.workbook_salt_value = payload.get("workbook_salt_value")
     protection.workbook_spin_count = payload.get("workbook_spin_count")
     protection.revisions_password = payload.get("revisions_password")
-    protection.revisions_password_character_set = payload.get("revisions_password_character_set")
+    protection.revisions_password_character_set = payload.get(
+        "revisions_password_character_set"
+    )
     protection.revisions_algorithm_name = payload.get("revisions_algorithm_name")
     protection.revisions_hash_value = payload.get("revisions_hash_value")
     protection.revisions_salt_value = payload.get("revisions_salt_value")

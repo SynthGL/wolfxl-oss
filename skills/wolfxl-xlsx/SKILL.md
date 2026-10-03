@@ -66,6 +66,22 @@ JSON.
    If `save` raises, the copy may be partly written. Copy the original again
    before retrying.
 
+   The recipe below requires the modify-mode calculation-property fix listed
+   under Unreleased in the repository changelog. Published Community 2.0.8
+   does not persist flag changes. With the fixed version and `wb` loaded using
+   `modify=True`, request free recalculation when Excel next opens the file:
+
+   ```python
+   wb["Inputs"]["B4"] = 42
+   wb.calculation.fullCalcOnLoad = True
+   wb.save("report-edited.xlsx")
+   ```
+
+   Excel recalculates on open. This is a request, not fresh cached output:
+   cached values remain stale until Excel or another engine recalculates.
+   Close the workbook after saving. Use the step below if values are also
+   needed in memory before opening Excel.
+
 3. **Recalculate** with WolfXL, never with LibreOffice:
 
    ```bash

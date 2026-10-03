@@ -1,0 +1,1381 @@
+{
+  "metadata": {
+    "timestamp_utc": "2026-10-03T06:24:50.454771+00:00",
+    "git_commit": "396be5a9f5bb82c2892c9236e3571515315c4bfb",
+    "git_branch": "community-evidence-recalc",
+    "git_dirty": true,
+    "python": "3.13.9",
+    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "processor": "arm",
+    "machine": "arm64",
+    "cpu_brand": "Apple M5 Pro",
+    "wolfxl_version": "2.0.8",
+    "openpyxl_version": "3.1.5",
+    "rounds": 5,
+    "pid": 73350
+  },
+  "parameters": {
+    "cases": null,
+    "rows": 10000,
+    "cols": 5,
+    "small_rows": 2000,
+    "wide_rows": 1000,
+    "wide_cols": 50,
+    "style_rows": 2000,
+    "formula_rows": 2000,
+    "sheet_rows": 1000,
+    "sheet_count": 5,
+    "large_rows": 200000,
+    "large_cols": 8,
+    "large_rounds": 5
+  },
+  "results": [
+    {
+      "case": "write_append_plain",
+      "engine": "openpyxl",
+      "rows": 10000,
+      "cols": 5,
+      "units": 50000,
+      "samples_seconds": [
+        0.16303762499592267,
+        0.16394191700965166,
+        0.16528754099272192,
+        0.16529429200454615,
+        0.16541033300745767
+      ],
+      "median_seconds": 0.16528754099272192,
+      "units_per_second": 302503.139073269
+    },
+    {
+      "case": "write_append_plain",
+      "engine": "wolfxl_append",
+      "rows": 10000,
+      "cols": 5,
+      "units": 50000,
+      "samples_seconds": [
+        0.013521625005523674,
+        0.013407750011538155,
+        0.01359858299838379,
+        0.01359579199925065,
+        0.01322887500282377
+      ],
+      "median_seconds": 0.013521625005523674,
+      "units_per_second": 3697780.405799944
+    },
+    {
+      "case": "write_append_plain",
+      "engine": "wolfxl_write_rows",
+      "rows": 10000,
+      "cols": 5,
+      "units": 50000,
+      "samples_seconds": [
+        0.012017333006951958,
+        0.012243500008480623,
+        0.012119709004764445,
+        0.012021916001685895,
+        0.012141041996073909
+      ],
+      "median_seconds": 0.012119709004764445,
+      "units_per_second": 4125511.5927572376
+    },
+    {
+      "case": "write_append_mixed",
+      "engine": "openpyxl",
+      "rows": 10000,
+      "cols": 5,
+      "units": 50000,
+      "samples_seconds": [
+        0.17122608399949968,
+        0.16876820800825953,
+        0.1661273329955293,
+        0.17125058299279772,
+        0.17828204200486653
+      ],
+      "median_seconds": 0.17122608399949968,
+      "units_per_second": 292011.5839368615
+    },
+    {
+      "case": "write_append_mixed",
+      "engine": "wolfxl_append",
+      "rows": 10000,
+      "cols": 5,
+      "units": 50000,
+      "samples_seconds": [
+        0.0147204579989193,
+        0.014478832992608659,
+        0.014830959000391886,
+        0.014738708006916568,
+        0.014527874998748302
+      ],
+      "median_seconds": 0.0147204579989193,
+      "units_per_second": 3396633.4473880325
+    },
+    {
+      "case": "write_append_wide",
+      "engine": "openpyxl",
+      "rows": 1000,
+      "cols": 50,
+      "units": 50000,
+      "samples_seconds": [
+        0.14346274999843445,
+        0.14395133400103077,
+        0.14309749999665655,
+        0.144031374991755,
+        0.14315466699190438
+      ],
+      "median_seconds": 0.14346274999843445,
+      "units_per_second": 348522.52588595735
+    },
+    {
+      "case": "write_append_wide",
+      "engine": "wolfxl_append",
+      "rows": 1000,
+      "cols": 50,
+      "units": 50000,
+      "samples_seconds": [
+        0.010780666008940898,
+        0.01067237499228213,
+        0.01086958400264848,
+        0.010819624993018806,
+        0.010632125005940907
+      ],
+      "median_seconds": 0.010780666008940898,
+      "units_per_second": 4637932.383633138
+    },
+    {
+      "case": "write_append_formulas",
+      "engine": "openpyxl",
+      "rows": 2000,
+      "cols": 5,
+      "units": 10000,
+      "samples_seconds": [
+        0.035132499993778765,
+        0.03521370798989665,
+        0.035400792010477744,
+        0.03550924999581184,
+        0.035432125005172566
+      ],
+      "median_seconds": 0.035400792010477744,
+      "units_per_second": 282479.5557410199
+    },
+    {
+      "case": "write_append_formulas",
+      "engine": "wolfxl_append",
+      "rows": 2000,
+      "cols": 5,
+      "units": 10000,
+      "samples_seconds": [
+        0.003954499989049509,
+        0.0038769999955547974,
+        0.003771582996705547,
+        0.0037250409950502217,
+        0.00395766700967215
+      ],
+      "median_seconds": 0.0038769999955547974,
+      "units_per_second": 2579313.9054592657
+    },
+    {
+      "case": "write_append_formulas",
+      "engine": "wolfxl_write_rows_fast_formula",
+      "rows": 2000,
+      "cols": 5,
+      "units": 10000,
+      "samples_seconds": [
+        0.003233374998671934,
+        0.0035984169953735545,
+        0.003202166990377009,
+        0.0033635839936323464,
+        0.003468791997875087
+      ],
+      "median_seconds": 0.0033635839936323464,
+      "units_per_second": 2973019.2612793846
+    },
+    {
+      "case": "write_styled_cells",
+      "engine": "openpyxl",
+      "rows": 2000,
+      "cols": 5,
+      "units": 10000,
+      "samples_seconds": [
+        0.06179833300120663,
+        0.0612465419981163,
+        0.06153258398990147,
+        0.060786875008489005,
+        0.06305325000721496
+      ],
+      "median_seconds": 0.06153258398990147,
+      "units_per_second": 162515.52188416413,
+      "phase_samples_seconds": {
+        "populate_cells": [
+          0.028120499991928227,
+          0.02808641700539738,
+          0.0282252910110401,
+          0.02799345900712069,
+          0.02881679098936729
+        ],
+        "save": [
+          0.03337312499934342,
+          0.03284804099530447,
+          0.03298529100720771,
+          0.032447250006953254,
+          0.03391933398961555
+        ]
+      },
+      "phase_medians_seconds": {
+        "populate_cells": 0.028120499991928227,
+        "save": 0.03298529100720771
+      }
+    },
+    {
+      "case": "write_styled_cells",
+      "engine": "wolfxl_cell",
+      "rows": 2000,
+      "cols": 5,
+      "units": 10000,
+      "samples_seconds": [
+        0.016815124996355735,
+        0.0449881669919705,
+        0.01678104199527297,
+        0.019173583001247607,
+        0.017432542008464225
+      ],
+      "median_seconds": 0.017432542008464225,
+      "units_per_second": 573639.8050923718,
+      "phase_samples_seconds": {
+        "populate_cells": [
+          0.009570458991220221,
+          0.010119416998350061,
+          0.009494291996816173,
+          0.00961700000334531,
+          0.00939737498993054
+        ],
+        "save": [
+          0.006930332994670607,
+          0.03456662500684615,
+          0.007014791990513913,
+          0.00927662500180304,
+          0.007721166999544948
+        ]
+      },
+      "phase_medians_seconds": {
+        "populate_cells": 0.009570458991220221,
+        "save": 0.007721166999544948
+      }
+    },
+    {
+      "case": "write_styled_cells",
+      "engine": "wolfxl_write_styled_rows",
+      "rows": 2000,
+      "cols": 5,
+      "units": 10000,
+      "samples_seconds": [
+        0.009976542001822963,
+        0.009927833001711406,
+        0.009870458001387306,
+        0.00958862500556279,
+        0.009497333987383172
+      ],
+      "median_seconds": 0.009870458001387306,
+      "units_per_second": 1013124.2135465738,
+      "phase_samples_seconds": {
+        "populate_cells": [
+          0.006723166996380314,
+          0.006289375000051223,
+          0.006390249996911734,
+          0.0063877920038066804,
+          0.006394332987838425
+        ],
+        "save": [
+          0.0029233329987619072,
+          0.0032631670037517324,
+          0.0030885000014677644,
+          0.0028443329938454553,
+          0.002798207991872914
+        ]
+      },
+      "phase_medians_seconds": {
+        "populate_cells": 0.006390249996911734,
+        "save": 0.0029233329987619072
+      }
+    },
+    {
+      "case": "write_multi_sheet_plain",
+      "engine": "openpyxl",
+      "rows": 1000,
+      "cols": 5,
+      "units": 25000,
+      "samples_seconds": [
+        0.08360162499593571,
+        0.08453420799924061,
+        0.08362312499957625,
+        0.08309445799386594,
+        0.08396070801245514
+      ],
+      "median_seconds": 0.08362312499957625,
+      "units_per_second": 298960.3653310814
+    },
+    {
+      "case": "write_multi_sheet_plain",
+      "engine": "wolfxl_append",
+      "rows": 1000,
+      "cols": 5,
+      "units": 25000,
+      "samples_seconds": [
+        0.006990125009906478,
+        0.006948249996639788,
+        0.007127082993974909,
+        0.006926916990778409,
+        0.007058957999106497
+      ],
+      "median_seconds": 0.006990125009906478,
+      "units_per_second": 3576473.9492598115
+    },
+    {
+      "case": "write_multi_sheet_plain",
+      "engine": "wolfxl_write_rows_fast_multi_sheet",
+      "rows": 1000,
+      "cols": 5,
+      "units": 25000,
+      "samples_seconds": [
+        0.004623084008926526,
+        0.004842167007154785,
+        0.004475291993003339,
+        0.005109749996336177,
+        0.004940541010000743
+      ],
+      "median_seconds": 0.004842167007154785,
+      "units_per_second": 5162977.642667013
+    },
+    {
+      "case": "write_cell_by_cell_plain",
+      "engine": "openpyxl",
+      "rows": 2000,
+      "cols": 5,
+      "units": 10000,
+      "samples_seconds": [
+        0.03642441600095481,
+        0.04749033399275504,
+        0.036721291005960666,
+        0.03636079200077802,
+        0.037186792003922164
+      ],
+      "median_seconds": 0.036721291005960666,
+      "units_per_second": 272321.58037082036,
+      "phase_samples_seconds": {
+        "construct_loop": [
+          0.006165500002680346,
+          0.011214417012524791,
+          0.006659000006038696,
+          0.006516207999084145,
+          0.006830915997852571
+        ],
+        "save_flush": [
+          0.029931375000160187,
+          0.03586079098749906,
+          0.029769333996227942,
+          0.029510791995562613,
+          0.029948583993245848
+        ]
+      },
+      "phase_medians_seconds": {
+        "construct_loop": 0.006659000006038696,
+        "save_flush": 0.029931375000160187
+      }
+    },
+    {
+      "case": "write_cell_by_cell_plain",
+      "engine": "wolfxl_cell",
+      "rows": 2000,
+      "cols": 5,
+      "units": 10000,
+      "samples_seconds": [
+        0.007694667001487687,
+        0.00780241699249018,
+        0.006741208009771071,
+        0.01127854200603906,
+        0.008974249998573214
+      ],
+      "median_seconds": 0.00780241699249018,
+      "units_per_second": 1281654.1348180945,
+      "phase_samples_seconds": {
+        "construct_loop": [
+          0.004797458997927606,
+          0.004945666994899511,
+          0.0038962499966146424,
+          0.008325458999024704,
+          0.005898250004975125
+        ],
+        "save_flush": [
+          0.002696791008929722,
+          0.0026585830055410042,
+          0.0026483750116312876,
+          0.002766541001619771,
+          0.0028615000046556816
+        ]
+      },
+      "phase_medians_seconds": {
+        "construct_loop": 0.004945666994899511,
+        "save_flush": 0.002696791008929722
+      }
+    },
+    {
+      "case": "read_values_plain",
+      "engine": "openpyxl",
+      "rows": 10000,
+      "cols": 5,
+      "units": 50000,
+      "samples_seconds": [
+        0.19776604199432768,
+        0.19612983299884945,
+        0.19779379200190306,
+        0.19500350000453182,
+        0.1969212090043584
+      ],
+      "median_seconds": 0.1969212090043584,
+      "units_per_second": 253908.65845686215
+    },
+    {
+      "case": "read_values_plain",
+      "engine": "wolfxl",
+      "rows": 10000,
+      "cols": 5,
+      "units": 50000,
+      "samples_seconds": [
+        0.026099167007487267,
+        0.02688674999808427,
+        0.02653983299387619,
+        0.026209582996671088,
+        0.026303125006961636
+      ],
+      "median_seconds": 0.026303125006961636,
+      "units_per_second": 1900914.814751727
+    },
+    {
+      "case": "read_only_values_plain",
+      "engine": "openpyxl",
+      "rows": 10000,
+      "cols": 5,
+      "units": 50000,
+      "samples_seconds": [
+        0.16486083299969323,
+        0.16310141699796077,
+        0.1694487500062678,
+        0.16458004199375864,
+        0.1635390840092441
+      ],
+      "median_seconds": 0.16458004199375864,
+      "units_per_second": 303803.54382152937
+    },
+    {
+      "case": "read_only_values_plain",
+      "engine": "wolfxl",
+      "rows": 10000,
+      "cols": 5,
+      "units": 50000,
+      "samples_seconds": [
+        0.014534417001414113,
+        0.013880208003683947,
+        0.013975167006719857,
+        0.013961333010229282,
+        0.01418833299248945
+      ],
+      "median_seconds": 0.013975167006719857,
+      "units_per_second": 3577774.7754969844
+    },
+    {
+      "case": "read_values_wide",
+      "engine": "openpyxl",
+      "rows": 1000,
+      "cols": 50,
+      "units": 50000,
+      "samples_seconds": [
+        0.15514691699354444,
+        0.15743883399409242,
+        0.15959216700866818,
+        0.15691724998760037,
+        0.15818329200556036
+      ],
+      "median_seconds": 0.15743883399409242,
+      "units_per_second": 317583.65284816676
+    },
+    {
+      "case": "read_values_wide",
+      "engine": "wolfxl",
+      "rows": 1000,
+      "cols": 50,
+      "units": 50000,
+      "samples_seconds": [
+        0.024984916992252693,
+        0.024132000005920418,
+        0.025224583005183376,
+        0.025048292009159923,
+        0.024941625000792556
+      ],
+      "median_seconds": 0.024984916992252693,
+      "units_per_second": 2001207.369050054
+    },
+    {
+      "case": "read_formula_text",
+      "engine": "openpyxl",
+      "rows": 2000,
+      "cols": 5,
+      "units": 10000,
+      "samples_seconds": [
+        0.036934583011316136,
+        0.03758716699667275,
+        0.03738795800018124,
+        0.037775584001792595,
+        0.03678416598995682
+      ],
+      "median_seconds": 0.03738795800018124,
+      "units_per_second": 267465.79740866093
+    },
+    {
+      "case": "read_formula_text",
+      "engine": "wolfxl",
+      "rows": 2000,
+      "cols": 5,
+      "units": 10000,
+      "samples_seconds": [
+        0.006309707998298109,
+        0.0059629169991239905,
+        0.006241666997084394,
+        0.005981249996693805,
+        0.005914082998060621
+      ],
+      "median_seconds": 0.005981249996693805,
+      "units_per_second": 1671891.3279878953
+    },
+    {
+      "case": "read_styled_cells",
+      "engine": "openpyxl",
+      "rows": 2000,
+      "cols": 5,
+      "units": 10000,
+      "samples_seconds": [
+        0.05183091700018849,
+        0.051674000002094544,
+        0.051479041008860804,
+        0.05182762500771787,
+        0.05180674999428447
+      ],
+      "median_seconds": 0.05180674999428447,
+      "units_per_second": 193025.0401946318
+    },
+    {
+      "case": "read_styled_cells",
+      "engine": "wolfxl",
+      "rows": 2000,
+      "cols": 5,
+      "units": 10000,
+      "samples_seconds": [
+        0.01724604199989699,
+        0.016938250002567656,
+        0.017706166006973945,
+        0.017617499994230457,
+        0.017131291009718552
+      ],
+      "median_seconds": 0.01724604199989699,
+      "units_per_second": 579843.1895306605
+    },
+    {
+      "case": "read_multi_sheet_values",
+      "engine": "openpyxl",
+      "rows": 5000,
+      "cols": 5,
+      "units": 25000,
+      "samples_seconds": [
+        0.09880633400462102,
+        0.09817904100054875,
+        0.09758441700250842,
+        0.09780979200149886,
+        0.09836041599919554
+      ],
+      "median_seconds": 0.09817904100054875,
+      "units_per_second": 254636.83231393824
+    },
+    {
+      "case": "read_multi_sheet_values",
+      "engine": "wolfxl",
+      "rows": 5000,
+      "cols": 5,
+      "units": 25000,
+      "samples_seconds": [
+        0.013650749999214895,
+        0.013689415995031595,
+        0.013512790988897905,
+        0.01365766600065399,
+        0.013452166007482447
+      ],
+      "median_seconds": 0.013650749999214895,
+      "units_per_second": 1831401.2051673236
+    },
+    {
+      "case": "modify_two_cells_plain",
+      "engine": "openpyxl",
+      "rows": 10000,
+      "cols": 5,
+      "units": 2,
+      "samples_seconds": [
+        0.5823032080079429,
+        0.6293837499979418,
+        0.5914614999928745,
+        0.5839439160045004,
+        0.6051753330102656
+      ],
+      "median_seconds": 0.5914614999928745,
+      "units_per_second": 3.3814542451606653,
+      "phase_samples_seconds": {
+        "setup_copy": [
+          0.0004031670105177909,
+          0.000364125007763505,
+          0.00040612499287817627,
+          0.0004343329928815365,
+          0.0004105830012122169
+        ],
+        "modify_save": [
+          0.3805270830052905,
+          0.4002267909963848,
+          0.35207258400623687,
+          0.39089987501211,
+          0.4019775409979047
+        ],
+        "verify_load": [
+          0.20136070800072048,
+          0.22878075001062825,
+          0.23897108298842795,
+          0.19259708300523926,
+          0.20277558300585952
+        ]
+      },
+      "phase_medians_seconds": {
+        "modify_save": 0.39089987501211,
+        "setup_copy": 0.00040612499287817627,
+        "verify_load": 0.20277558300585952
+      }
+    },
+    {
+      "case": "modify_two_cells_plain",
+      "engine": "wolfxl_modify",
+      "rows": 10000,
+      "cols": 5,
+      "units": 2,
+      "samples_seconds": [
+        0.2547307089989772,
+        0.20909025000582915,
+        0.25423170799331274,
+        0.2500392079964513,
+        0.21127174999855924
+      ],
+      "median_seconds": 0.2500392079964513,
+      "units_per_second": 7.998745540852878,
+      "phase_samples_seconds": {
+        "setup_copy": [
+          0.00039687499520368874,
+          0.0004253750084899366,
+          0.0005370409926399589,
+          0.0003995000006398186,
+          0.0004003750073025003
+        ],
+        "modify_save": [
+          0.01005349999468308,
+          0.00997237500268966,
+          0.009856292002950795,
+          0.009832958996412344,
+          0.009610584005713463
+        ],
+        "verify_load": [
+          0.24426845800189767,
+          0.19867850000446197,
+          0.24382587500440422,
+          0.2397945830016397,
+          0.20124933301121928
+        ]
+      },
+      "phase_medians_seconds": {
+        "modify_save": 0.009856292002950795,
+        "setup_copy": 0.0004003750073025003,
+        "verify_load": 0.2397945830016397
+      }
+    },
+    {
+      "case": "large_write_append_plain",
+      "engine": "openpyxl",
+      "rows": 200000,
+      "cols": 8,
+      "units": 1600000,
+      "samples_seconds": [
+        3.421874874999048,
+        3.3342425000009825,
+        3.2941823750006733,
+        3.3996827910013963,
+        3.493891582998913
+      ],
+      "median_seconds": 3.3996827910013963,
+      "units_per_second": 470632.1437503029
+    },
+    {
+      "case": "large_write_append_plain",
+      "engine": "wolfxl_append",
+      "rows": 200000,
+      "cols": 8,
+      "units": 1600000,
+      "samples_seconds": [
+        0.2683319999923697,
+        0.27004229099838994,
+        0.2615093330095988,
+        0.25170020799851045,
+        0.25198833300964907
+      ],
+      "median_seconds": 0.2615093330095988,
+      "units_per_second": 6118328.480235432
+    },
+    {
+      "case": "large_write_append_plain",
+      "engine": "wolfxl_write_rows",
+      "rows": 200000,
+      "cols": 8,
+      "units": 1600000,
+      "samples_seconds": [
+        0.23425645800307393,
+        0.22588899999391288,
+        0.22700616699876264,
+        0.22825783300504554,
+        0.24429699999745935
+      ],
+      "median_seconds": 0.22825783300504554,
+      "units_per_second": 7009617.058638389
+    },
+    {
+      "case": "large_read_values_plain",
+      "engine": "openpyxl",
+      "rows": 200000,
+      "cols": 8,
+      "units": 1600000,
+      "samples_seconds": [
+        4.57799991700449,
+        4.380109708989039,
+        4.330973749994882,
+        4.274073749998934,
+        4.402735417010263
+      ],
+      "median_seconds": 4.380109708989039,
+      "units_per_second": 365287.65403213876
+    },
+    {
+      "case": "large_read_values_plain",
+      "engine": "wolfxl",
+      "rows": 200000,
+      "cols": 8,
+      "units": 1600000,
+      "samples_seconds": [
+        0.301591625000583,
+        0.30485858299653046,
+        0.32705658400664106,
+        0.34651025000493973,
+        0.3048409999901196
+      ],
+      "median_seconds": 0.30485858299653046,
+      "units_per_second": 5248335.09449924
+    },
+    {
+      "case": "large_read_only_values_plain",
+      "engine": "openpyxl",
+      "rows": 200000,
+      "cols": 8,
+      "units": 1600000,
+      "samples_seconds": [
+        3.3676060420111753,
+        3.8989057919970946,
+        3.5299303330102703,
+        3.3965265000006184,
+        3.2625975830014795
+      ],
+      "median_seconds": 3.3965265000006184,
+      "units_per_second": 471069.48819616414
+    },
+    {
+      "case": "large_read_only_values_plain",
+      "engine": "wolfxl",
+      "rows": 200000,
+      "cols": 8,
+      "units": 1600000,
+      "samples_seconds": [
+        0.25752354100404773,
+        0.2560751249984605,
+        0.25920662500720937,
+        0.25590516699594446,
+        0.25588245899416506
+      ],
+      "median_seconds": 0.2560751249984605,
+      "units_per_second": 6248166.431665781
+    },
+    {
+      "case": "large_modify_two_cells_plain",
+      "engine": "openpyxl",
+      "rows": 200000,
+      "cols": 8,
+      "units": 2,
+      "samples_seconds": [
+        13.87685524999688,
+        16.097053958001197,
+        14.509415666994755,
+        21.50986245799868,
+        14.387157750010374
+      ],
+      "median_seconds": 14.509415666994755,
+      "units_per_second": 0.13784152621318124,
+      "phase_samples_seconds": {
+        "setup_copy": [
+          0.0020166250033071265,
+          0.0020634579996112734,
+          0.001728207993437536,
+          0.002290666991029866,
+          0.0023756250011501834
+        ],
+        "modify_save": [
+          8.030611041991506,
+          10.48434720801015,
+          8.872554333007429,
+          15.202671042003203,
+          9.201636291996692
+        ],
+        "verify_load": [
+          5.844219916994916,
+          5.61062237501028,
+          5.635118917009095,
+          6.304883749995497,
+          5.183131749989116
+        ]
+      },
+      "phase_medians_seconds": {
+        "modify_save": 9.201636291996692,
+        "setup_copy": 0.0020634579996112734,
+        "verify_load": 5.635118917009095
+      }
+    },
+    {
+      "case": "large_modify_two_cells_plain",
+      "engine": "wolfxl_modify",
+      "rows": 200000,
+      "cols": 8,
+      "units": 2,
+      "samples_seconds": [
+        6.725729041994782,
+        5.302389666001545,
+        5.269344750005985,
+        5.458441958006006,
+        5.656626165990019
+      ],
+      "median_seconds": 5.458441958006006,
+      "units_per_second": 0.36640492202478403,
+      "phase_samples_seconds": {
+        "setup_copy": [
+          0.0010327080090064555,
+          0.0013267500034999102,
+          0.0013146249984856695,
+          0.0016809169901534915,
+          0.001367292003124021
+        ],
+        "modify_save": [
+          0.17221487499773502,
+          0.1593512079998618,
+          0.16131987499829847,
+          0.15711541600467172,
+          0.15872941599809565
+        ],
+        "verify_load": [
+          6.552474791998975,
+          5.141699374988093,
+          5.106694500005688,
+          5.299631040994427,
+          5.496513334001065
+        ]
+      },
+      "phase_medians_seconds": {
+        "modify_save": 0.1593512079998618,
+        "setup_copy": 0.0013267500034999102,
+        "verify_load": 5.299631040994427
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "case": "large_modify_two_cells_plain",
+      "engine": "wolfxl_modify",
+      "speedup_vs_openpyxl": 2.6581606580451966
+    },
+    {
+      "case": "large_read_only_values_plain",
+      "engine": "wolfxl",
+      "speedup_vs_openpyxl": 13.263789288479456
+    },
+    {
+      "case": "large_read_values_plain",
+      "engine": "wolfxl",
+      "speedup_vs_openpyxl": 14.367677189652516
+    },
+    {
+      "case": "large_write_append_plain",
+      "engine": "wolfxl_append",
+      "speedup_vs_openpyxl": 13.000235027468827
+    },
+    {
+      "case": "large_write_append_plain",
+      "engine": "wolfxl_write_rows",
+      "speedup_vs_openpyxl": 14.894046553601724
+    },
+    {
+      "case": "modify_two_cells_plain",
+      "engine": "wolfxl_modify",
+      "speedup_vs_openpyxl": 2.3654750178270794
+    },
+    {
+      "case": "read_formula_text",
+      "engine": "wolfxl",
+      "speedup_vs_openpyxl": 6.2508602751678675
+    },
+    {
+      "case": "read_multi_sheet_values",
+      "engine": "wolfxl",
+      "speedup_vs_openpyxl": 7.192208560423082
+    },
+    {
+      "case": "read_only_values_plain",
+      "engine": "wolfxl",
+      "speedup_vs_openpyxl": 11.776606455910082
+    },
+    {
+      "case": "read_styled_cells",
+      "engine": "wolfxl",
+      "speedup_vs_openpyxl": 3.0039791155903437
+    },
+    {
+      "case": "read_values_plain",
+      "engine": "wolfxl",
+      "speedup_vs_openpyxl": 7.486608870704122
+    },
+    {
+      "case": "read_values_wide",
+      "engine": "wolfxl",
+      "speedup_vs_openpyxl": 6.301355095272518
+    },
+    {
+      "case": "write_append_formulas",
+      "engine": "wolfxl_append",
+      "speedup_vs_openpyxl": 9.130975509689652
+    },
+    {
+      "case": "write_append_formulas",
+      "engine": "wolfxl_write_rows_fast_formula",
+      "speedup_vs_openpyxl": 10.524723651169568
+    },
+    {
+      "case": "write_append_mixed",
+      "engine": "wolfxl_append",
+      "speedup_vs_openpyxl": 11.631844879559468
+    },
+    {
+      "case": "write_append_plain",
+      "engine": "wolfxl_append",
+      "speedup_vs_openpyxl": 12.223940608114843
+    },
+    {
+      "case": "write_append_plain",
+      "engine": "wolfxl_write_rows",
+      "speedup_vs_openpyxl": 13.637913330076227
+    },
+    {
+      "case": "write_append_wide",
+      "engine": "wolfxl_append",
+      "speedup_vs_openpyxl": 13.307410681256078
+    },
+    {
+      "case": "write_cell_by_cell_plain",
+      "engine": "wolfxl_cell",
+      "speedup_vs_openpyxl": 4.706399445364799
+    },
+    {
+      "case": "write_multi_sheet_plain",
+      "engine": "wolfxl_append",
+      "speedup_vs_openpyxl": 11.963037124667252
+    },
+    {
+      "case": "write_multi_sheet_plain",
+      "engine": "wolfxl_write_rows_fast_multi_sheet",
+      "speedup_vs_openpyxl": 17.269772991310447
+    },
+    {
+      "case": "write_styled_cells",
+      "engine": "wolfxl_cell",
+      "speedup_vs_openpyxl": 3.529753948679707
+    },
+    {
+      "case": "write_styled_cells",
+      "engine": "wolfxl_write_styled_rows",
+      "speedup_vs_openpyxl": 6.234015076225742
+    }
+  ],
+  "phase_comparisons": [
+    {
+      "case": "large_modify_two_cells_plain",
+      "engine": "wolfxl_modify",
+      "phase": "modify_save",
+      "openpyxl_seconds": 9.201636291996692,
+      "wolfxl_seconds": 0.1593512079998618,
+      "speedup_vs_openpyxl": 57.744377388119155
+    },
+    {
+      "case": "large_modify_two_cells_plain",
+      "engine": "wolfxl_modify",
+      "phase": "setup_copy",
+      "openpyxl_seconds": 0.0020634579996112734,
+      "wolfxl_seconds": 0.0013267500034999102,
+      "speedup_vs_openpyxl": 1.555272654356856
+    },
+    {
+      "case": "large_modify_two_cells_plain",
+      "engine": "wolfxl_modify",
+      "phase": "verify_load",
+      "openpyxl_seconds": 5.635118917009095,
+      "wolfxl_seconds": 5.299631040994427,
+      "speedup_vs_openpyxl": 1.0633040061505332
+    },
+    {
+      "case": "modify_two_cells_plain",
+      "engine": "wolfxl_modify",
+      "phase": "modify_save",
+      "openpyxl_seconds": 0.39089987501211,
+      "wolfxl_seconds": 0.009856292002950795,
+      "speedup_vs_openpyxl": 39.65993244671339
+    },
+    {
+      "case": "modify_two_cells_plain",
+      "engine": "wolfxl_modify",
+      "phase": "setup_copy",
+      "openpyxl_seconds": 0.00040612499287817627,
+      "wolfxl_seconds": 0.0004003750073025003,
+      "speedup_vs_openpyxl": 1.0143614997709676
+    },
+    {
+      "case": "modify_two_cells_plain",
+      "engine": "wolfxl_modify",
+      "phase": "verify_load",
+      "openpyxl_seconds": 0.20277558300585952,
+      "wolfxl_seconds": 0.2397945830016397,
+      "speedup_vs_openpyxl": 0.8456220339409125
+    },
+    {
+      "case": "write_cell_by_cell_plain",
+      "engine": "wolfxl_cell",
+      "phase": "construct_loop",
+      "openpyxl_seconds": 0.006659000006038696,
+      "wolfxl_seconds": 0.004945666994899511,
+      "speedup_vs_openpyxl": 1.3464311311105563
+    },
+    {
+      "case": "write_cell_by_cell_plain",
+      "engine": "wolfxl_cell",
+      "phase": "save_flush",
+      "openpyxl_seconds": 0.029931375000160187,
+      "wolfxl_seconds": 0.002696791008929722,
+      "speedup_vs_openpyxl": 11.098885638913147
+    },
+    {
+      "case": "write_styled_cells",
+      "engine": "wolfxl_cell",
+      "phase": "populate_cells",
+      "openpyxl_seconds": 0.028120499991928227,
+      "wolfxl_seconds": 0.009570458991220221,
+      "speedup_vs_openpyxl": 2.9382603298050287
+    },
+    {
+      "case": "write_styled_cells",
+      "engine": "wolfxl_cell",
+      "phase": "save",
+      "openpyxl_seconds": 0.03298529100720771,
+      "wolfxl_seconds": 0.007721166999544948,
+      "speedup_vs_openpyxl": 4.2720602998422015
+    },
+    {
+      "case": "write_styled_cells",
+      "engine": "wolfxl_write_styled_rows",
+      "phase": "populate_cells",
+      "openpyxl_seconds": 0.028120499991928227,
+      "wolfxl_seconds": 0.006390249996911734,
+      "speedup_vs_openpyxl": 4.400532061424552
+    },
+    {
+      "case": "write_styled_cells",
+      "engine": "wolfxl_write_styled_rows",
+      "phase": "save",
+      "openpyxl_seconds": 0.03298529100720771,
+      "wolfxl_seconds": 0.0029233329987619072,
+      "speedup_vs_openpyxl": 11.28345317525498
+    }
+  ],
+  "operation_comparisons": [
+    {
+      "case": "large_modify_two_cells_plain",
+      "engine": "wolfxl_modify",
+      "phase": "modify_save",
+      "openpyxl_seconds": 9.201636291996692,
+      "wolfxl_seconds": 0.1593512079998618,
+      "speedup_vs_openpyxl": 57.744377388119155,
+      "speedup_basis": "operation_phase"
+    },
+    {
+      "case": "modify_two_cells_plain",
+      "engine": "wolfxl_modify",
+      "phase": "modify_save",
+      "openpyxl_seconds": 0.39089987501211,
+      "wolfxl_seconds": 0.009856292002950795,
+      "speedup_vs_openpyxl": 39.65993244671339,
+      "speedup_basis": "operation_phase"
+    }
+  ],
+  "memory": [
+    {
+      "case": "write_append_plain",
+      "engine": "openpyxl",
+      "rows": 10000,
+      "cols": 5,
+      "peak_rss_bytes": 67289088,
+      "baseline_rss_bytes": 46940160,
+      "delta_rss_bytes": 20348928
+    },
+    {
+      "case": "write_append_plain",
+      "engine": "wolfxl",
+      "rows": 10000,
+      "cols": 5,
+      "peak_rss_bytes": 59637760,
+      "baseline_rss_bytes": 46989312,
+      "delta_rss_bytes": 12648448
+    },
+    {
+      "case": "read_values_plain",
+      "engine": "openpyxl",
+      "rows": 10000,
+      "cols": 5,
+      "peak_rss_bytes": 71614464,
+      "baseline_rss_bytes": 46776320,
+      "delta_rss_bytes": 24838144
+    },
+    {
+      "case": "read_values_plain",
+      "engine": "wolfxl",
+      "rows": 10000,
+      "cols": 5,
+      "peak_rss_bytes": 73351168,
+      "baseline_rss_bytes": 46792704,
+      "delta_rss_bytes": 26558464
+    },
+    {
+      "case": "read_only_values_plain",
+      "engine": "openpyxl",
+      "rows": 10000,
+      "cols": 5,
+      "peak_rss_bytes": 48791552,
+      "baseline_rss_bytes": 47022080,
+      "delta_rss_bytes": 1769472
+    },
+    {
+      "case": "read_only_values_plain",
+      "engine": "wolfxl",
+      "rows": 10000,
+      "cols": 5,
+      "peak_rss_bytes": 49168384,
+      "baseline_rss_bytes": 46923776,
+      "delta_rss_bytes": 2244608
+    },
+    {
+      "case": "modify_two_cells_plain",
+      "engine": "openpyxl",
+      "rows": 10000,
+      "cols": 5,
+      "peak_rss_bytes": 76169216,
+      "baseline_rss_bytes": 46972928,
+      "delta_rss_bytes": 29196288
+    },
+    {
+      "case": "modify_two_cells_plain",
+      "engine": "wolfxl",
+      "rows": 10000,
+      "cols": 5,
+      "peak_rss_bytes": 57884672,
+      "baseline_rss_bytes": 46874624,
+      "delta_rss_bytes": 11010048
+    },
+    {
+      "case": "large_write_append_plain",
+      "engine": "openpyxl",
+      "rows": 200000,
+      "cols": 8,
+      "peak_rss_bytes": 443465728,
+      "baseline_rss_bytes": 47005696,
+      "delta_rss_bytes": 396460032
+    },
+    {
+      "case": "large_write_append_plain",
+      "engine": "wolfxl",
+      "rows": 200000,
+      "cols": 8,
+      "peak_rss_bytes": 242941952,
+      "baseline_rss_bytes": 47104000,
+      "delta_rss_bytes": 195837952
+    },
+    {
+      "case": "large_read_values_plain",
+      "engine": "openpyxl",
+      "rows": 200000,
+      "cols": 8,
+      "peak_rss_bytes": 524533760,
+      "baseline_rss_bytes": 46841856,
+      "delta_rss_bytes": 477691904
+    },
+    {
+      "case": "large_read_values_plain",
+      "engine": "wolfxl",
+      "rows": 200000,
+      "cols": 8,
+      "peak_rss_bytes": 153419776,
+      "baseline_rss_bytes": 47005696,
+      "delta_rss_bytes": 106414080
+    },
+    {
+      "case": "large_read_only_values_plain",
+      "engine": "openpyxl",
+      "rows": 200000,
+      "cols": 8,
+      "peak_rss_bytes": 66961408,
+      "baseline_rss_bytes": 46956544,
+      "delta_rss_bytes": 20004864
+    },
+    {
+      "case": "large_read_only_values_plain",
+      "engine": "wolfxl",
+      "rows": 200000,
+      "cols": 8,
+      "peak_rss_bytes": 49332224,
+      "baseline_rss_bytes": 47054848,
+      "delta_rss_bytes": 2277376
+    },
+    {
+      "case": "large_modify_two_cells_plain",
+      "engine": "openpyxl",
+      "rows": 200000,
+      "cols": 8,
+      "peak_rss_bytes": 615022592,
+      "baseline_rss_bytes": 47022080,
+      "delta_rss_bytes": 568000512
+    },
+    {
+      "case": "large_modify_two_cells_plain",
+      "engine": "wolfxl",
+      "rows": 200000,
+      "cols": 8,
+      "peak_rss_bytes": 226607104,
+      "baseline_rss_bytes": 46972928,
+      "delta_rss_bytes": 179634176
+    }
+  ],
+  "memory_comparisons": [
+    {
+      "case": "large_modify_two_cells_plain",
+      "engine": "wolfxl",
+      "openpyxl_peak_rss_bytes": 615022592,
+      "wolfxl_peak_rss_bytes": 226607104,
+      "peak_rss_excess_bytes": -388415488,
+      "peak_rss_ratio_vs_openpyxl": 0.36845330065533594,
+      "openpyxl_delta_rss_bytes": 568000512,
+      "wolfxl_delta_rss_bytes": 179634176,
+      "delta_rss_excess_bytes": -388366336,
+      "delta_rss_ratio_vs_openpyxl": 0.31625706703588324
+    },
+    {
+      "case": "large_read_only_values_plain",
+      "engine": "wolfxl",
+      "openpyxl_peak_rss_bytes": 66961408,
+      "wolfxl_peak_rss_bytes": 49332224,
+      "peak_rss_excess_bytes": -17629184,
+      "peak_rss_ratio_vs_openpyxl": 0.7367262050403719,
+      "openpyxl_delta_rss_bytes": 20004864,
+      "wolfxl_delta_rss_bytes": 2277376,
+      "delta_rss_excess_bytes": -17727488,
+      "delta_rss_ratio_vs_openpyxl": 0.11384111384111384
+    },
+    {
+      "case": "large_read_values_plain",
+      "engine": "wolfxl",
+      "openpyxl_peak_rss_bytes": 524533760,
+      "wolfxl_peak_rss_bytes": 153419776,
+      "peak_rss_excess_bytes": -371113984,
+      "peak_rss_ratio_vs_openpyxl": 0.29248789629861005,
+      "openpyxl_delta_rss_bytes": 477691904,
+      "wolfxl_delta_rss_bytes": 106414080,
+      "delta_rss_excess_bytes": -371277824,
+      "delta_rss_ratio_vs_openpyxl": 0.2227671834270819
+    },
+    {
+      "case": "large_write_append_plain",
+      "engine": "wolfxl",
+      "openpyxl_peak_rss_bytes": 443465728,
+      "wolfxl_peak_rss_bytes": 242941952,
+      "peak_rss_excess_bytes": -200523776,
+      "peak_rss_ratio_vs_openpyxl": 0.5478257656925407,
+      "openpyxl_delta_rss_bytes": 396460032,
+      "wolfxl_delta_rss_bytes": 195837952,
+      "delta_rss_excess_bytes": -200622080,
+      "delta_rss_ratio_vs_openpyxl": 0.4939664435077279
+    },
+    {
+      "case": "modify_two_cells_plain",
+      "engine": "wolfxl",
+      "openpyxl_peak_rss_bytes": 76169216,
+      "wolfxl_peak_rss_bytes": 57884672,
+      "peak_rss_excess_bytes": -18284544,
+      "peak_rss_ratio_vs_openpyxl": 0.7599483759948376,
+      "openpyxl_delta_rss_bytes": 29196288,
+      "wolfxl_delta_rss_bytes": 11010048,
+      "delta_rss_excess_bytes": -18186240,
+      "delta_rss_ratio_vs_openpyxl": 0.3771043771043771
+    },
+    {
+      "case": "read_only_values_plain",
+      "engine": "wolfxl",
+      "openpyxl_peak_rss_bytes": 48791552,
+      "wolfxl_peak_rss_bytes": 49168384,
+      "peak_rss_excess_bytes": 376832,
+      "peak_rss_ratio_vs_openpyxl": 1.0077233042310276,
+      "openpyxl_delta_rss_bytes": 1769472,
+      "wolfxl_delta_rss_bytes": 2244608,
+      "delta_rss_excess_bytes": 475136,
+      "delta_rss_ratio_vs_openpyxl": 1.2685185185185186
+    },
+    {
+      "case": "read_values_plain",
+      "engine": "wolfxl",
+      "openpyxl_peak_rss_bytes": 71614464,
+      "wolfxl_peak_rss_bytes": 73351168,
+      "peak_rss_excess_bytes": 1736704,
+      "peak_rss_ratio_vs_openpyxl": 1.0242507435369481,
+      "openpyxl_delta_rss_bytes": 24838144,
+      "wolfxl_delta_rss_bytes": 26558464,
+      "delta_rss_excess_bytes": 1720320,
+      "delta_rss_ratio_vs_openpyxl": 1.0692612137203166
+    },
+    {
+      "case": "write_append_plain",
+      "engine": "wolfxl",
+      "openpyxl_peak_rss_bytes": 67289088,
+      "wolfxl_peak_rss_bytes": 59637760,
+      "peak_rss_excess_bytes": -7651328,
+      "peak_rss_ratio_vs_openpyxl": 0.8862916971025079,
+      "openpyxl_delta_rss_bytes": 20348928,
+      "wolfxl_delta_rss_bytes": 12648448,
+      "delta_rss_excess_bytes": -7700480,
+      "delta_rss_ratio_vs_openpyxl": 0.6215780998389694
+    }
+  ]
+}

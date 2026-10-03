@@ -8,6 +8,24 @@
   public fixtures, verified runtime downloads, offline regression tests, and
   separate Community plus LibreOffice and Commercial native calculation workflows.
 
+### Fixed
+
+- Changes to `Workbook.calculation` are saved in modify mode. Setting
+  `fullCalcOnLoad = True` writes the recalculation-on-open flag while
+  preserving untouched package parts.
+- Scalar and style edits preserve the existing calculation chain and its
+  relationships and content types. Calculation metadata is rebuilt only
+  when formula membership or sheet structure changes.
+
+### Changed
+
+- README, PyPI copy, and the package summary now cite the Community 2.0.8
+  versus openpyxl 3.1.5 benchmark: 3.0-17.3x faster in measured reads and
+  writes on Apple M5 Pro, median of five rounds. Old cross-library read
+  speed claims are removed.
+- Documented the free recalculation-on-open recipe and the stale-cache
+  boundary in the README and workbook-editing skill.
+
 ## 2.0.8
 
 ### Fixed
