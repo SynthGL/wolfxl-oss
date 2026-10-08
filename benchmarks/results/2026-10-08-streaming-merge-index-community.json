@@ -1,0 +1,282 @@
+{
+  "scope": "Isolated cached merge_at point membership, excluding workbook open, XML traversal, style conversion and index preparation; not an end-to-end read or openpyxl speedup.",
+  "edition": "Community",
+  "source_before": "de3732a4d0db933e9761f5ad671e51063d1126cc",
+  "source_after": "ff5770d88d81d334953a8198d08f92c90953863e",
+  "merged_ranges": 1024,
+  "queries": 8192,
+  "sampling": "One discarded fresh-process warmup per engine/case, then three alternating fresh-process samples; same source-matched native overlay within edition.",
+  "bounds": "O(merges) retained storage without row/cell expansion; disjoint column buckets bisect one candidate per row-tree node. Overlapping buckets preserve first-match order with a conservative scan.",
+  "cases": {
+    "vertical": {
+      "samples": {
+        "before": [
+          {
+            "seconds": 0.1606321149993164,
+            "preparation_seconds": 0.001290445999984513,
+            "signature": {
+              "queries": 8192,
+              "hits": 5462,
+              "checksum": 22383276
+            },
+            "fixture_sha256": "6e261d38abca14b694ce073634f626953d18366a5f0c17cd98d3655ddda1b76c",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "2771c5c4a033f717d8d9bfd61f494e87718c644b0fe1636ae6ed6b0844a38a32"
+          },
+          {
+            "seconds": 0.14794388100017386,
+            "preparation_seconds": 0.0011685170011332957,
+            "signature": {
+              "queries": 8192,
+              "hits": 5462,
+              "checksum": 22383276
+            },
+            "fixture_sha256": "6e261d38abca14b694ce073634f626953d18366a5f0c17cd98d3655ddda1b76c",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "2771c5c4a033f717d8d9bfd61f494e87718c644b0fe1636ae6ed6b0844a38a32"
+          },
+          {
+            "seconds": 0.14698356999906537,
+            "preparation_seconds": 0.0012090460004401393,
+            "signature": {
+              "queries": 8192,
+              "hits": 5462,
+              "checksum": 22383276
+            },
+            "fixture_sha256": "6e261d38abca14b694ce073634f626953d18366a5f0c17cd98d3655ddda1b76c",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "2771c5c4a033f717d8d9bfd61f494e87718c644b0fe1636ae6ed6b0844a38a32"
+          }
+        ],
+        "after": [
+          {
+            "seconds": 0.026294687999325106,
+            "preparation_seconds": 0.008710699999937788,
+            "signature": {
+              "queries": 8192,
+              "hits": 5462,
+              "checksum": 22383276
+            },
+            "fixture_sha256": "6e261d38abca14b694ce073634f626953d18366a5f0c17cd98d3655ddda1b76c",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "4044dce7bf871029f3244e6b960fb018320c46cb9b8b26a4161f464061459809"
+          },
+          {
+            "seconds": 0.030353992000527796,
+            "preparation_seconds": 0.009790194999368396,
+            "signature": {
+              "queries": 8192,
+              "hits": 5462,
+              "checksum": 22383276
+            },
+            "fixture_sha256": "6e261d38abca14b694ce073634f626953d18366a5f0c17cd98d3655ddda1b76c",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "4044dce7bf871029f3244e6b960fb018320c46cb9b8b26a4161f464061459809"
+          },
+          {
+            "seconds": 0.0271824130013556,
+            "preparation_seconds": 0.009266765999200288,
+            "signature": {
+              "queries": 8192,
+              "hits": 5462,
+              "checksum": 22383276
+            },
+            "fixture_sha256": "6e261d38abca14b694ce073634f626953d18366a5f0c17cd98d3655ddda1b76c",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "4044dce7bf871029f3244e6b960fb018320c46cb9b8b26a4161f464061459809"
+          }
+        ]
+      },
+      "median_seconds": {
+        "before": 0.14794388100017386,
+        "after": 0.0271824130013556
+      },
+      "isolated_lookup_speedup": 5.442632373836562,
+      "median_preparation_seconds": {
+        "before": 0.0012090460004401393,
+        "after": 0.009266765999200288
+      }
+    },
+    "horizontal": {
+      "samples": {
+        "before": [
+          {
+            "seconds": 0.26491046199953416,
+            "preparation_seconds": 0.0034671390003495617,
+            "signature": {
+              "queries": 8192,
+              "hits": 2731,
+              "checksum": 8371524
+            },
+            "fixture_sha256": "e7e78e838aca3ed0a36624f160124f759651177f771c09f3583f0425cf8e9e88",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "2771c5c4a033f717d8d9bfd61f494e87718c644b0fe1636ae6ed6b0844a38a32"
+          },
+          {
+            "seconds": 0.22294320100081677,
+            "preparation_seconds": 0.002323479999176925,
+            "signature": {
+              "queries": 8192,
+              "hits": 2731,
+              "checksum": 8371524
+            },
+            "fixture_sha256": "e7e78e838aca3ed0a36624f160124f759651177f771c09f3583f0425cf8e9e88",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "2771c5c4a033f717d8d9bfd61f494e87718c644b0fe1636ae6ed6b0844a38a32"
+          },
+          {
+            "seconds": 0.2257876169987867,
+            "preparation_seconds": 0.002224564999778522,
+            "signature": {
+              "queries": 8192,
+              "hits": 2731,
+              "checksum": 8371524
+            },
+            "fixture_sha256": "e7e78e838aca3ed0a36624f160124f759651177f771c09f3583f0425cf8e9e88",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "2771c5c4a033f717d8d9bfd61f494e87718c644b0fe1636ae6ed6b0844a38a32"
+          }
+        ],
+        "after": [
+          {
+            "seconds": 0.0069506319996435195,
+            "preparation_seconds": 0.005150069000592339,
+            "signature": {
+              "queries": 8192,
+              "hits": 2731,
+              "checksum": 8371524
+            },
+            "fixture_sha256": "e7e78e838aca3ed0a36624f160124f759651177f771c09f3583f0425cf8e9e88",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "4044dce7bf871029f3244e6b960fb018320c46cb9b8b26a4161f464061459809"
+          },
+          {
+            "seconds": 0.0068493229991872795,
+            "preparation_seconds": 0.005431763000160572,
+            "signature": {
+              "queries": 8192,
+              "hits": 2731,
+              "checksum": 8371524
+            },
+            "fixture_sha256": "e7e78e838aca3ed0a36624f160124f759651177f771c09f3583f0425cf8e9e88",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "4044dce7bf871029f3244e6b960fb018320c46cb9b8b26a4161f464061459809"
+          },
+          {
+            "seconds": 0.006848061000710004,
+            "preparation_seconds": 0.005607949999102857,
+            "signature": {
+              "queries": 8192,
+              "hits": 2731,
+              "checksum": 8371524
+            },
+            "fixture_sha256": "e7e78e838aca3ed0a36624f160124f759651177f771c09f3583f0425cf8e9e88",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "4044dce7bf871029f3244e6b960fb018320c46cb9b8b26a4161f464061459809"
+          }
+        ]
+      },
+      "median_seconds": {
+        "before": 0.2257876169987867,
+        "after": 0.0068493229991872795
+      },
+      "isolated_lookup_speedup": 32.96495391231775,
+      "median_preparation_seconds": {
+        "before": 0.002323479999176925,
+        "after": 0.005431763000160572
+      }
+    },
+    "empty": {
+      "samples": {
+        "before": [
+          {
+            "seconds": 0.0009223039996868465,
+            "preparation_seconds": 3.154000296490267e-06,
+            "signature": {
+              "queries": 8192,
+              "hits": 0,
+              "checksum": 0
+            },
+            "fixture_sha256": "655643ba89218e0522fcafddf3f46e97a9b49674d0ff6edc8db68128e51c73fb",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "2771c5c4a033f717d8d9bfd61f494e87718c644b0fe1636ae6ed6b0844a38a32"
+          },
+          {
+            "seconds": 0.0016887589990801644,
+            "preparation_seconds": 2.8840004233643413e-06,
+            "signature": {
+              "queries": 8192,
+              "hits": 0,
+              "checksum": 0
+            },
+            "fixture_sha256": "655643ba89218e0522fcafddf3f46e97a9b49674d0ff6edc8db68128e51c73fb",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "2771c5c4a033f717d8d9bfd61f494e87718c644b0fe1636ae6ed6b0844a38a32"
+          },
+          {
+            "seconds": 0.0009221939999406459,
+            "preparation_seconds": 3.0139999580569565e-06,
+            "signature": {
+              "queries": 8192,
+              "hits": 0,
+              "checksum": 0
+            },
+            "fixture_sha256": "655643ba89218e0522fcafddf3f46e97a9b49674d0ff6edc8db68128e51c73fb",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "2771c5c4a033f717d8d9bfd61f494e87718c644b0fe1636ae6ed6b0844a38a32"
+          }
+        ],
+        "after": [
+          {
+            "seconds": 0.000944555999012664,
+            "preparation_seconds": 2.824001057888381e-06,
+            "signature": {
+              "queries": 8192,
+              "hits": 0,
+              "checksum": 0
+            },
+            "fixture_sha256": "655643ba89218e0522fcafddf3f46e97a9b49674d0ff6edc8db68128e51c73fb",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "4044dce7bf871029f3244e6b960fb018320c46cb9b8b26a4161f464061459809"
+          },
+          {
+            "seconds": 0.0008538230013073189,
+            "preparation_seconds": 2.9049988370388746e-06,
+            "signature": {
+              "queries": 8192,
+              "hits": 0,
+              "checksum": 0
+            },
+            "fixture_sha256": "655643ba89218e0522fcafddf3f46e97a9b49674d0ff6edc8db68128e51c73fb",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "4044dce7bf871029f3244e6b960fb018320c46cb9b8b26a4161f464061459809"
+          },
+          {
+            "seconds": 0.0009351019998575794,
+            "preparation_seconds": 3.6750006984220818e-06,
+            "signature": {
+              "queries": 8192,
+              "hits": 0,
+              "checksum": 0
+            },
+            "fixture_sha256": "655643ba89218e0522fcafddf3f46e97a9b49674d0ff6edc8db68128e51c73fb",
+            "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+            "source_module_sha256": "4044dce7bf871029f3244e6b960fb018320c46cb9b8b26a4161f464061459809"
+          }
+        ]
+      },
+      "median_seconds": {
+        "before": 0.0009223039996868465,
+        "after": 0.0009351019998575794
+      },
+      "isolated_lookup_speedup": 0.9863137923213916,
+      "median_preparation_seconds": {
+        "before": 3.0139999580569565e-06,
+        "after": 2.9049988370388746e-06
+      }
+    }
+  },
+  "producer_sha256": "24ab00244d53a348453ea238d5c9dc017f74f2e2156375ca0bbee6b19c58b24d",
+  "validation": "19 new/existing cache tests passed",
+  "review": "Source-only review approved row/column containment, cross-node overlap precedence, bounded storage, cache lifecycle and complexity guards."
+}

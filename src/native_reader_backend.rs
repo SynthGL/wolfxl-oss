@@ -272,6 +272,11 @@ impl NativeXlsxBook {
         crate::native_reader_merges::read_endpoint_style_ids(self, sheet)
     }
 
+    /// Lazy Python hydration uses this conservative source-negative shortcut.
+    pub fn read_merged_ranges_if_present(&mut self, sheet: &str) -> PyResult<Vec<String>> {
+        crate::native_reader_merges::read_ranges_if_present(self, sheet)
+    }
+
     pub fn read_merged_ranges(&mut self, sheet: &str) -> PyResult<Vec<String>> {
         crate::native_reader_dimensions::read_merged_ranges_xlsx(self, sheet)
     }

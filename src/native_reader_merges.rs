@@ -61,6 +61,32 @@ pub(crate) fn read_ranges(book: &mut NativeXlsxBook, sheet: &str) -> PyResult<Ve
     Ok(book.sheet_merge_metadata[sheet].ranges.clone())
 }
 
+/// Preserve the prior Python negative-source shortcut without tokenizing cells.
+/// The exact read_ranges API still validates XML even on negative-probe sources.
+pub(crate) fn read_ranges_if_present(
+    book: &mut NativeXlsxBook,
+    sheet: &str,
+) -> PyResult<Vec<String>> {
+    if !book.sheet_names.iter().any(|name| name == sheet) {
+        return Err(PyErr::new::<PyValueError, _>(format!(
+            "Unknown sheet: {sheet}"
+        )));
+    }
+    if book.sheet_merge_metadata.contains_key(sheet) {
+        return read_ranges(book, sheet);
+    }
+    if !book
+        .book
+        .worksheet_may_have_merged_cells(sheet)
+        .map_err(|e| {
+            PyErr::new::<PyIOError, _>(format!("native merge presence probe failed: {e}"))
+        })?
+    {
+        return Ok(Vec::new());
+    }
+    read_ranges(book, sheet)
+}
+
 pub(crate) fn read_endpoint_style_ids(
     book: &mut NativeXlsxBook,
     sheet: &str,
