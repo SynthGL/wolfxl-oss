@@ -19,7 +19,10 @@ def _loaded_merged_range_refs(ws: Worksheet) -> set[str]:
         reader = getattr(ws._workbook, "_rust_reader", None)  # noqa: SLF001
         if reader is not None:
             try:
-                ws._merged_ranges.update(str(ref) for ref in reader.read_merged_ranges(ws._title))  # noqa: SLF001
+                read_ranges = getattr(
+                    reader, "read_merged_ranges_if_present", reader.read_merged_ranges
+                )
+                ws._merged_ranges.update(str(ref) for ref in read_ranges(ws._title))  # noqa: SLF001
             except Exception:
                 pass
         ws._merged_ranges_loaded = True  # noqa: SLF001

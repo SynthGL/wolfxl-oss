@@ -1488,6 +1488,11 @@ impl NativeXlsxBook {
         merge_metadata::read_ranges(self, sheet_name)
     }
 
+    /// Byte-only negative probe; positive results require exact XML parsing.
+    pub fn worksheet_may_have_merged_cells(&self, sheet_name: &str) -> Result<bool> {
+        merge_metadata::may_have_ranges(self, sheet_name)
+    }
+
     /// Read only the styles of merged anchors and bottom-right endpoints.
     pub fn worksheet_merge_endpoint_styles(
         &self,

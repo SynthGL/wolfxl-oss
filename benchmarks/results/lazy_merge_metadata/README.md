@@ -1,6 +1,6 @@
 # Lazy merge metadata evidence
 
-The native merge reader now scans refs and endpoint style IDs without constructing a worksheet cell model. Workbook open performs no Python worksheet XML scan. This receipt measures the standalone P0 slice, not full styled-read or edit/save throughput.
+The native merge reader now scans refs and endpoint style IDs without constructing a worksheet cell model. Workbook open performs no Python worksheet XML scan. This initial standalone P0 receipt predates the byte-negative probe follow-up and measures open/first-access diagnostics; final full styled-read and edit/save throughput come from separate end-to-end receipts.
 
 Both fixtures contain 20,000 rows × 5 styled columns (100,000 stored cells). The paired variant adds exactly one merge, D19999:E20000. They have a default border table; dedicated semantic tests cover non-default endpoint borders, live edits, colors and repeated saves. Fixture generation is outside timing.
 
