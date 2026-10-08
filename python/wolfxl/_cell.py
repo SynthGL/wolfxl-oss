@@ -54,6 +54,11 @@ if TYPE_CHECKING:
 ILLEGAL_CHARACTERS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _STYLE_PAYLOAD_CACHE_DISABLED = object()
 _STYLE_PAYLOAD_CACHE_CELL_LIMIT = 100_000
+_EMPTY_STYLE_PAYLOAD: dict[str, Any] = {}
+_EMPTY_STYLE_ENTRY = (
+    _EMPTY_STYLE_PAYLOAD, _format_to_font(_EMPTY_STYLE_PAYLOAD),
+    _format_to_fill(_EMPTY_STYLE_PAYLOAD), "General",
+)
 _PLAIN_VALUE_RETURN_TYPES = frozenset((type(None), bool, int, float, str))
 _STYLE_PAYLOAD_KEYS = frozenset(
     {
@@ -1417,8 +1422,11 @@ class Cell:
             return None
         cache = _style_payload_cache_for(self._ws)
         if cache is not _STYLE_PAYLOAD_CACHE_DISABLED:
-            self._format_payload = cache.get((self._row, self._col), {})
-            return self._format_payload
+            entry = cache.get((self._row, self._col), _EMPTY_STYLE_ENTRY)
+            if entry is not _STYLE_PAYLOAD_CACHE_DISABLED:
+                self._format_payload = entry[0]
+                return self._format_payload
+            _disable_style_payload_cache(self._ws)
         read_cell_format_rc = getattr(reader, "read_cell_format_rc", None)
         if read_cell_format_rc is not None:
             self._format_payload = read_cell_format_rc(
@@ -1452,18 +1460,25 @@ class Cell:
 
     def _hydrate_basic_style_components(self) -> bool:
         """Cache common style fields together from one native payload."""
-        wb = self._rust_workbook()
-        if wb is None or getattr(wb, "_format", "xlsx") != "xlsx":
-            return False
-        reader = getattr(wb, "_rust_reader", None)
-        if reader is None:
-            return False
-
-        payload = self._read_format_payload()
-        font, fill, number_format = _basic_style_components_for_payload(
-            self._ws,
-            payload,
-        )
+        ws = self._ws
+        cache = getattr(ws, "_style_payload_cache", None)
+        if cache is None or cache is _STYLE_PAYLOAD_CACHE_DISABLED:
+            wb = self._rust_workbook()
+            if wb is None or getattr(wb, "_format", "xlsx") != "xlsx":
+                return False
+            if getattr(wb, "_rust_reader", None) is None:
+                return False
+            if cache is None:
+                cache = _style_payload_cache_for(ws)
+        entry = (cache.get((self._row, self._col), _EMPTY_STYLE_ENTRY)
+                 if cache is not _STYLE_PAYLOAD_CACHE_DISABLED
+                 else _STYLE_PAYLOAD_CACHE_DISABLED)
+        if entry is _STYLE_PAYLOAD_CACHE_DISABLED:
+            _disable_style_payload_cache(ws)
+            payload = self._read_format_payload()
+            font, fill, number_format = _basic_style_components_for_payload(ws, payload)
+        else:
+            self._format_payload, font, fill, number_format = entry
         if self._font is _UNSET:
             self._font = font
         if self._fill is _UNSET:
@@ -1582,10 +1597,10 @@ def _style_payload_cache_for(ws: Worksheet) -> Any:
     """Return a worksheet-level cache of native style payloads when safe.
 
     Styled reads normally cross from Python into Rust once per cell. For clean
-    native-reader worksheets, we can first read all non-default style ids in the
-    used range, build each distinct style payload once, and reuse those Python
-    dicts for later ``cell.font`` / ``cell.fill`` / ``cell.number_format``
-    access.
+    native-reader worksheets, we can build each distinct style payload and its
+    common components once, then reuse that tuple for ``cell.font`` /
+    ``cell.fill`` / ``cell.number_format`` access. Larger coordinate rectangles
+    use bounded windows rather than disabling sharing for the whole sheet.
     """
     cache = getattr(ws, "_style_payload_cache", None)
     if cache is not None:
@@ -1601,25 +1616,30 @@ def _style_payload_cache_for(ws: Worksheet) -> Any:
     if max_row <= 0 or max_col <= 0:
         ws._style_payload_cache = {}  # noqa: SLF001
         return ws._style_payload_cache  # noqa: SLF001
-    if max_row * max_col > _STYLE_PAYLOAD_CACHE_CELL_LIMIT:
-        return _disable_style_payload_cache(ws)
-
     wb = ws._workbook  # noqa: SLF001
     reader = wb._rust_reader  # noqa: SLF001
+    if max_row * max_col > _STYLE_PAYLOAD_CACHE_CELL_LIMIT:
+        from wolfxl._cell_style_window import StylePayloadWindow
+
+        ws._style_payload_cache = StylePayloadWindow(  # noqa: SLF001
+            reader, ws.title, max_row, max_col, _STYLE_PAYLOAD_CACHE_CELL_LIMIT,
+            lambda record: _style_entry_from_record(ws, record), _STYLE_PAYLOAD_CACHE_DISABLED,
+        )
+        return ws._style_payload_cache  # noqa: SLF001
+
     try:
         range_str = f"A1:{rowcol_to_a1(max_row, max_col)}"
         style_ids = reader.read_sheet_style_ids(ws.title, range_str)
         read_style = reader.read_format_for_style_id
-        payloads_by_id: dict[int, dict[str, Any]] = {}
-        payloads: dict[tuple[int, int], dict[str, Any]] = {}
+        entries_by_id: dict[int, tuple[Any, ...]] = {}
+        payloads: dict[tuple[int, int], tuple[Any, ...]] = {}
         for row, col, style_id in style_ids:
             style_id = int(style_id)
-            payload = payloads_by_id.get(style_id)
-            if payload is None:
-                payload = _style_payload_from_record(read_style(style_id))
-                payloads_by_id[style_id] = payload
-            if payload:
-                payloads[(int(row), int(col))] = payload
+            entry = entries_by_id.get(style_id)
+            if entry is None:
+                entry = _style_entry_from_record(ws, read_style(style_id))
+                entries_by_id[style_id] = entry
+            payloads[(int(row), int(col))] = entry
     except Exception:
         return _disable_style_payload_cache(ws)
 
@@ -1656,6 +1676,15 @@ def _disable_style_payload_cache(ws: Worksheet) -> object:
 def _style_payload_from_record(record: dict[str, Any]) -> dict[str, Any]:
     """Keep only fields consumed by the Python style conversion helpers."""
     return {key: record[key] for key in _STYLE_PAYLOAD_KEYS if key in record}
+
+
+def _style_entry_from_record(ws: Worksheet, record: dict[str, Any]) -> tuple[Any, ...]:
+    """Build one payload/font/fill/number-format tuple per distinct style ID."""
+    payload = _style_payload_from_record(record)
+    if not payload:
+        return _EMPTY_STYLE_ENTRY
+    font, fill, number_format = _basic_style_components_for_payload(ws, payload)
+    return payload, font, fill, number_format
 
 
 def _basic_style_components_for_payload(

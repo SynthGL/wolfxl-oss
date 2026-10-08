@@ -348,14 +348,21 @@ def _plain_cell_getter(ws: Worksheet):
     ):
         return ws._get_or_create_cell  # noqa: SLF001
 
-    from wolfxl._cell import Cell
+    from wolfxl._cell import Cell, _merged_range_refs
+
+    # Loading merge refs once also protects the fresh-cell fast path after
+    # workbook-open metadata hydration becomes lazy.
+    if _merged_range_refs(ws):
+        return ws._get_or_create_cell  # noqa: SLF001
 
     cells = ws._cells  # noqa: SLF001
     if not cells:
-
         def create_plain_cell(row: int, col: int) -> Cell:
-            cell = Cell(ws, row, col)
-            cells[(row, col)] = cell
+            key = (row, col)
+            cell = cells.get(key)
+            if cell is None:
+                cell = Cell(ws, row, col)
+                cells[key] = cell
             return cell
 
         return create_plain_cell

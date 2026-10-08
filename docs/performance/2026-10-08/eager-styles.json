@@ -1,0 +1,303 @@
+{
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+  "fixture_sha256": "a81da5958cace70e519543c40be608c7f3d112249d8d25c09be4175f3a6a8542",
+  "measurement": {
+    "warmups": 1,
+    "samples": 7,
+    "alternating_order": true,
+    "fresh_process_per_sample": true,
+    "gc_disabled_during_timing": true,
+    "expected_result_from_openpyxl": true
+  },
+  "samples": {
+    "baseline": [
+      {
+        "styled_cells": {
+          "seconds": 0.04951568700016651,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.024052038000263565,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      },
+      {
+        "styled_cells": {
+          "seconds": 0.051566559999628225,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.02495469099994807,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      },
+      {
+        "styled_cells": {
+          "seconds": 0.047586494999450224,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.02324827800021012,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      },
+      {
+        "styled_cells": {
+          "seconds": 0.05134359400017274,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.02324550499997713,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      },
+      {
+        "styled_cells": {
+          "seconds": 0.052260659000239684,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.02644296300059068,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      },
+      {
+        "styled_cells": {
+          "seconds": 0.050252123000063875,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.025334627999654913,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      },
+      {
+        "styled_cells": {
+          "seconds": 0.0474552939995192,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.023402163999890035,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      }
+    ],
+    "optimized": [
+      {
+        "styled_cells": {
+          "seconds": 0.04657976199996483,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.024752995999733685,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      },
+      {
+        "styled_cells": {
+          "seconds": 0.03969287000018085,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.024185813999793027,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      },
+      {
+        "styled_cells": {
+          "seconds": 0.04184316400005628,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.023931990999699337,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      },
+      {
+        "styled_cells": {
+          "seconds": 0.03946882200034452,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.023027584999908868,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      },
+      {
+        "styled_cells": {
+          "seconds": 0.04272336399935739,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.025332555000204593,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      },
+      {
+        "styled_cells": {
+          "seconds": 0.039817102000597515,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.023155382000368263,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      },
+      {
+        "styled_cells": {
+          "seconds": 0.04137213300055009,
+          "result": [
+            2000,
+            2001000.0,
+            5000
+          ]
+        },
+        "value_cells": {
+          "seconds": 0.023647263999919232,
+          "result": [
+            2000,
+            2001000.0,
+            0
+          ]
+        }
+      }
+    ]
+  },
+  "medians": {
+    "baseline": {
+      "styled_cells": 0.050252123000063875,
+      "value_cells": 0.024052038000263565
+    },
+    "optimized": {
+      "styled_cells": 0.04137213300055009,
+      "value_cells": 0.023931990999699337
+    }
+  },
+  "speedup": {
+    "styled_cells": 1.2146369876408285,
+    "value_cells": 1.0050161727273645
+  },
+  "baseline_commit": "93e48b23605c798fcb98b2e4a86445a0b9c6679e",
+  "native_sha256": "0af60f1ed0becebb0b7f3033a2ecaf219026284c132d518e0f36bd09dc989baa",
+  "fixture": {
+    "rows": 2000,
+    "columns": 5
+  },
+  "optimization": "Lazy hydration from shared (payload,font,fill,number_format) tuples keyed by style ID; a shared default tuple and bounded coordinate windows replace eager whole-sheet cutoff.",
+  "source_sha256": {
+    "python/wolfxl/_cell.py": "f57277638f6f0007b1a89f52eb8329e7228a0fa27d5cc674a78695b406ffd08a",
+    "python/wolfxl/_worksheet_iteration.py": "6b4c652bf97b212c40011239766551173d6990ba5dbe4bff6ca20262c5855b25",
+    "python/wolfxl/_cell_style_window.py": "dc0d51b66bbb5bed44e08dd7fa27e731b9f5b5af364f3d94e8cd1b4a34afb645"
+  },
+  "notes": [
+    "Ordinary Cell value walks remain neutral within timing variance.",
+    "No Cell API change; same styled loop and openpyxl semantic digest.",
+    "All-Cell style prehydration rejected separately because it regressed non-style walks.",
+    "Sparse/medium windows validated by native-call counts and coordinate bounds; speedup of these cases is not claimed in this small-fixture receipt."
+  ]
+}
