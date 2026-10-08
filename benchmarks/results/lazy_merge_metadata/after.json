@@ -1,0 +1,154 @@
+{
+  "source_ref": "9ca6e2c2d799c1f448b3ca15ff93339f5eb3e832",
+  "native_source_ref": "089ba52765860c60f8b3dac592978587a89a9034",
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+  "wolfxl": "2.0.9",
+  "native_path": "/workspace/scratch/e6acfd2bd33d/repos/wolfxl-oss-merges/python/wolfxl/_rust.cpython-312-x86_64-linux-gnu.so",
+  "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+  "python_source_sha256": {
+    "_workbook_state.py": "cca92c1e65b9726a38a02030b034a0feda79973d41fe917b22b00819c1f13e0a",
+    "_worksheet_collections.py": "efffcbc82a8f201b82ccc012beb9f98789062e69f90241fc991ac02805bcac22",
+    "_cell.py": "8fed14db1e21840b184f83d64571b993d42d6e318edc6dd34686c6ecfc49dfc3"
+  },
+  "iterations": 7,
+  "workloads": {
+    "unmerged_100000_cells/load_only": {
+      "samples_seconds": [
+        0.0012214809994475218,
+        0.0014280640007200418,
+        0.00199222099945473,
+        0.0011248589999013348,
+        0.001087173999621882,
+        0.001195542999994359,
+        0.0011786879986175336
+      ],
+      "median_seconds": 0.001195542999994359,
+      "min_seconds": 0.001087173999621882,
+      "max_seconds": 0.00199222099945473
+    },
+    "unmerged_100000_cells/load_and_merge_ranges": {
+      "samples_seconds": [
+        0.032912050000959425,
+        0.031134414000916877,
+        0.031149786000241875,
+        0.03135408600064693,
+        0.031036849999509286,
+        0.03269578300023568,
+        0.03118739100136736
+      ],
+      "median_seconds": 0.03118739100136736,
+      "min_seconds": 0.031036849999509286,
+      "max_seconds": 0.032912050000959425
+    },
+    "unmerged_100000_cells/load_and_first_border": {
+      "samples_seconds": [
+        0.1580961310010025,
+        0.16331941799944616,
+        0.16644113999973342,
+        0.1673306100001355,
+        0.17058602100041753,
+        0.2016998160015646,
+        0.19779854499938665
+      ],
+      "median_seconds": 0.1673306100001355,
+      "min_seconds": 0.1580961310010025,
+      "max_seconds": 0.2016998160015646
+    },
+    "one_merge_100000_cells/load_only": {
+      "samples_seconds": [
+        0.0012031240003125276,
+        0.0013975990004837513,
+        0.00112906499998644,
+        0.001101455000025453,
+        0.0012504030000854982,
+        0.0014809709991823183,
+        0.0011920080014533596
+      ],
+      "median_seconds": 0.0012031240003125276,
+      "min_seconds": 0.001101455000025453,
+      "max_seconds": 0.0014809709991823183
+    },
+    "one_merge_100000_cells/load_and_merge_ranges": {
+      "samples_seconds": [
+        0.03237270899990108,
+        0.03326361499966879,
+        0.03299915699972189,
+        0.03309766100028355,
+        0.036810995001360425,
+        0.035180905999368406,
+        0.03558250500100257
+      ],
+      "median_seconds": 0.03326361499966879,
+      "min_seconds": 0.03237270899990108,
+      "max_seconds": 0.036810995001360425
+    },
+    "one_merge_100000_cells/load_and_first_border": {
+      "samples_seconds": [
+        0.08277558000008867,
+        0.1231502949995047,
+        0.08779948499977763,
+        0.08711989899893524,
+        0.08170989799873496,
+        0.08932191699932446,
+        0.0818704630000866
+      ],
+      "median_seconds": 0.08711989899893524,
+      "min_seconds": 0.08170989799873496,
+      "max_seconds": 0.1231502949995047
+    }
+  },
+  "untimed_diagnostics": {
+    "unmerged_100000_cells/load_only": {
+      "python_worksheet_xml_opens": [],
+      "native_public_calls_after_load": {},
+      "python_cells_materialized": 0,
+      "python_border_table_entries": 1
+    },
+    "unmerged_100000_cells/load_and_merge_ranges": {
+      "python_worksheet_xml_opens": [],
+      "native_public_calls_after_load": {
+        "read_merged_ranges": 1
+      },
+      "python_cells_materialized": 0,
+      "python_border_table_entries": 1
+    },
+    "unmerged_100000_cells/load_and_first_border": {
+      "python_worksheet_xml_opens": [],
+      "native_public_calls_after_load": {
+        "read_merged_ranges": 1,
+        "read_cell_border": 1
+      },
+      "python_cells_materialized": 1,
+      "python_border_table_entries": 1
+    },
+    "one_merge_100000_cells/load_only": {
+      "python_worksheet_xml_opens": [],
+      "native_public_calls_after_load": {},
+      "python_cells_materialized": 0,
+      "python_border_table_entries": 1
+    },
+    "one_merge_100000_cells/load_and_merge_ranges": {
+      "python_worksheet_xml_opens": [],
+      "native_public_calls_after_load": {
+        "read_merged_ranges": 1
+      },
+      "python_cells_materialized": 0,
+      "python_border_table_entries": 1
+    },
+    "one_merge_100000_cells/load_and_first_border": {
+      "python_worksheet_xml_opens": [],
+      "native_public_calls_after_load": {
+        "read_merged_ranges": 1,
+        "read_merged_endpoint_style_ids": 1
+      },
+      "python_cells_materialized": 1,
+      "python_border_table_entries": 1
+    }
+  },
+  "fixture_sha256": {
+    "unmerged_100000_cells": "4539d28348251c1c5ba12b51660f2db55d343ed8d59482a51f331047e9149761",
+    "one_merge_100000_cells": "ded37ca75642fd65ffc89dd8f79b222cb4fb218c2b55a91239f902d118c5acdf"
+  },
+  "maxrss_kib": 78420
+}

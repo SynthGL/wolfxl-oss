@@ -13,6 +13,7 @@ mod native_reader_dimensions;
 mod native_reader_drawings;
 mod native_reader_filter;
 mod native_reader_hyperlinks;
+mod native_reader_merges;
 mod native_reader_metadata;
 mod native_reader_named_ranges;
 mod native_reader_page_setup;

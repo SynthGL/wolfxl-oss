@@ -6,6 +6,7 @@
 //! this API while preserving the same value-only public contract they have
 //! today.
 
+mod merge_metadata;
 mod xlsb;
 
 pub mod external_links;
@@ -1480,6 +1481,20 @@ impl NativeXlsxBook {
     /// What openpyxl exposes as `cell.style`.
     pub fn named_style_for_style_id(&self, style_id: u32) -> Option<&str> {
         self.styles.named_style_for_style_id(style_id)
+    }
+
+    /// Read merged ranges without decoding worksheet cells or related parts.
+    pub fn worksheet_merged_ranges(&self, sheet_name: &str) -> Result<Vec<String>> {
+        merge_metadata::read_ranges(self, sheet_name)
+    }
+
+    /// Read only the styles of merged anchors and bottom-right endpoints.
+    pub fn worksheet_merge_endpoint_styles(
+        &self,
+        sheet_name: &str,
+        ranges: &[String],
+    ) -> Result<HashMap<(u32, u32), u32>> {
+        merge_metadata::read_endpoint_styles(self, sheet_name, ranges)
     }
 
     /// Parse a worksheet into sparse decoded cells.

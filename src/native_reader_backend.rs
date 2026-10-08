@@ -24,6 +24,7 @@ pub struct NativeXlsxBook {
     pub(crate) sheet_cache: HashMap<String, WorksheetData>,
     pub(crate) sheet_cell_indexes: HashMap<String, HashMap<(u32, u32), usize>>,
     pub(crate) sheet_merged_bounds: HashMap<String, Vec<(u32, u32, u32, u32)>>,
+    pub(crate) sheet_merge_metadata: HashMap<String, crate::native_reader_merges::MergeMetadata>,
     pub(crate) opened_from_bytes: bool,
     pub(crate) source_path: Option<String>,
 }
@@ -242,6 +243,33 @@ impl NativeXlsxBook {
         sheet: &str,
     ) -> PyResult<PyObject> {
         crate::native_reader_sheet_data::read_cached_formula_values_xlsx(self, py, sheet)
+    }
+
+    /// Read styles of arbitrary endpoints without decoding a cell model.
+    pub fn read_endpoint_style_ids(
+        &mut self,
+        sheet: &str,
+        positions: Vec<(u32, u32)>,
+    ) -> PyResult<Vec<u32>> {
+        crate::native_reader_merges::read_sparse_endpoint_style_ids(self, sheet, positions)
+    }
+
+    /// Merge-aware border overlay without constructing worksheet cells.
+    pub fn read_merged_cell_border(
+        &mut self,
+        py: Python<'_>,
+        sheet: &str,
+        row: u32,
+        col: u32,
+    ) -> PyResult<PyObject> {
+        crate::native_reader_merges::read_merged_cell_border(self, py, sheet, row, col)
+    }
+
+    pub fn read_merged_endpoint_style_ids(
+        &mut self,
+        sheet: &str,
+    ) -> PyResult<Vec<(String, u32, u32)>> {
+        crate::native_reader_merges::read_endpoint_style_ids(self, sheet)
     }
 
     pub fn read_merged_ranges(&mut self, sheet: &str) -> PyResult<Vec<String>> {

@@ -6,10 +6,46 @@ import inspect as _inspect
 from typing import TYPE_CHECKING, Any
 from xml.etree import ElementTree as ET
 
+from wolfxl._worksheet_merge_metadata import _merged_border_for_cell as _merged_border_for_cell
 from wolfxl.worksheet.cell_range import CellRange, MultiCellRange as _BaseMultiCellRange
 
 if TYPE_CHECKING:
     from wolfxl._worksheet import Worksheet
+
+
+def _loaded_merged_range_refs(ws: Worksheet) -> set[str]:
+    """Load native merge metadata once, retaining pending additions/removals."""
+    if not ws._merged_ranges_loaded:  # noqa: SLF001
+        reader = getattr(ws._workbook, "_rust_reader", None)  # noqa: SLF001
+        if reader is not None:
+            try:
+                ws._merged_ranges.update(str(ref) for ref in reader.read_merged_ranges(ws._title))  # noqa: SLF001
+            except Exception:
+                pass
+        ws._merged_ranges_loaded = True  # noqa: SLF001
+    return (ws._merged_ranges | ws._collection_merged_ranges) - ws._pending_unmerged_ranges  # noqa: SLF001
+
+
+def _invalidate_streaming_merge_cache(ws: Worksheet) -> None:
+    wb = ws._workbook  # noqa: SLF001
+    mutated = getattr(wb, "_merge_mutated_sheets", None)
+    if mutated is None:
+        mutated = set()
+        wb._merge_mutated_sheets = mutated  # noqa: SLF001
+    mutated.add(ws.title)
+    if hasattr(ws._workbook, "_streaming_style_cache"):  # noqa: SLF001
+        ws._workbook._streaming_style_cache = None  # noqa: SLF001
+
+
+def _invalidate_clean_merge_anchor_border(ws: Worksheet, range_string: str) -> None:
+    """Recompose a source border that was cached before this merge existed."""
+    from wolfxl._cell import _UNSET
+    from wolfxl.utils.cell import range_boundaries
+
+    col, row, _, _ = range_boundaries(range_string)
+    anchor = ws._cells.get((row, col))  # noqa: SLF001
+    if anchor is not None and not getattr(anchor, "_border_authored", False):
+        anchor._border = _UNSET  # noqa: SLF001
 
 
 class AutoFilter:
@@ -150,15 +186,7 @@ class MultiCellRange(_BaseMultiCellRange):
     @property
     def ranges(self) -> set[Any]:
         ws = self._ws
-        wb = ws._workbook  # noqa: SLF001
-        if getattr(wb, "_rust_reader", None) is None:
-            refs = ws._merged_ranges | ws._collection_merged_ranges  # noqa: SLF001
-        else:
-            try:
-                refs = set(wb._rust_reader.read_merged_ranges(ws._title))  # noqa: SLF001
-            except Exception:
-                refs = ws._merged_ranges  # noqa: SLF001
-            refs |= ws._collection_merged_ranges  # noqa: SLF001
+        refs = _loaded_merged_range_refs(ws)
         from wolfxl.worksheet.merge import MergedCellRange
 
         return {MergedCellRange(ws, str(ref)) for ref in refs}
@@ -183,8 +211,12 @@ class MultiCellRange(_BaseMultiCellRange):
 
     def add(self, coord: Any) -> None:
         range_string = _coerce_range_string(coord)
+        _loaded_merged_range_refs(self._ws)
+        _invalidate_streaming_merge_cache(self._ws)
+        self._ws._pending_unmerged_ranges.discard(range_string)  # noqa: SLF001
         self._ws._plain_cell_fast_path = False  # noqa: SLF001
         self._ws._collection_merged_ranges.add(range_string)  # noqa: SLF001
+        _invalidate_clean_merge_anchor_border(self._ws, range_string)
         self._ws._merged_ranges_loaded = True  # noqa: SLF001
         self._ws._pending_collection_merged_ranges.add(range_string)  # noqa: SLF001
 
@@ -192,6 +224,8 @@ class MultiCellRange(_BaseMultiCellRange):
         range_string = _coerce_range_string(coord)
         if range_string not in {str(rng) for rng in self.ranges}:
             raise KeyError(CellRange(range_string))
+        _invalidate_streaming_merge_cache(self._ws)
+        self._ws._pending_unmerged_ranges.add(range_string)  # noqa: SLF001
         self._ws._merged_ranges.discard(range_string)  # noqa: SLF001
         self._ws._collection_merged_ranges.discard(range_string)  # noqa: SLF001
         self._ws._merged_ranges_loaded = True  # noqa: SLF001
@@ -245,6 +279,9 @@ AutoFilter.add_sort_condition.__signature__ = _inspect.Signature(
 
 def merge_cells(ws: Worksheet, range_string: str) -> None:
     """Merge a cell range through the write-mode Rust backend."""
+    _loaded_merged_range_refs(ws)
+    _invalidate_streaming_merge_cache(ws)
+    ws._pending_unmerged_ranges.discard(range_string)  # noqa: SLF001
     ws._plain_cell_fast_path = False  # noqa: SLF001
     wb = ws._workbook  # noqa: SLF001
     rust_writer = getattr(wb, "_rust_writer", None)
@@ -255,13 +292,18 @@ def merge_cells(ws: Worksheet, range_string: str) -> None:
             if "Unknown sheet" not in str(exc):
                 raise
     ws._merged_ranges.add(range_string)  # noqa: SLF001
+    _invalidate_clean_merge_anchor_border(ws, range_string)
     ws._merged_ranges_loaded = True  # noqa: SLF001
     _discard_merged_subordinate_cells(ws, range_string)
 
 
 def unmerge_cells(ws: Worksheet, range_string: str) -> None:
     """Forget a merged range from the worksheet's pending merge set."""
+    _loaded_merged_range_refs(ws)
+    _invalidate_streaming_merge_cache(ws)
     ws._merged_ranges.discard(range_string)  # noqa: SLF001
+    ws._collection_merged_ranges.discard(range_string)  # noqa: SLF001
+    ws._pending_collection_merged_ranges.discard(range_string)  # noqa: SLF001
     ws._merged_ranges_loaded = True  # noqa: SLF001
     ws._pending_unmerged_ranges.add(range_string)  # noqa: SLF001
 

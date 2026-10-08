@@ -1226,21 +1226,9 @@ class Worksheet:
         return cell
 
     def _is_merged_subordinate(self, row: int, col: int) -> bool:
-        wb = self._workbook
-        rust_reader = getattr(wb, "_rust_reader", None)
-        if rust_reader is None:
-            refs = self._merged_ranges
-        else:
-            if not self._merged_ranges_loaded:
-                try:
-                    self._merged_ranges = {
-                        str(ref)
-                        for ref in rust_reader.read_merged_ranges(self._title)
-                    }
-                except Exception:
-                    pass
-                self._merged_ranges_loaded = True
-            refs = self._merged_ranges
+        from wolfxl._worksheet_collections import _loaded_merged_range_refs
+
+        refs = _loaded_merged_range_refs(self)
         for ref in refs:
             try:
                 min_col, min_row, max_col, max_row = range_boundaries(str(ref))

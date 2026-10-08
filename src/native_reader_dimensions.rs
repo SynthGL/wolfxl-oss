@@ -13,7 +13,7 @@ pub(crate) fn read_merged_ranges_xlsx(
     book: &mut NativeXlsxBook,
     sheet: &str,
 ) -> PyResult<Vec<String>> {
-    Ok(book.ensure_sheet(sheet)?.merged_ranges.clone())
+    crate::native_reader_merges::read_ranges(book, sheet)
 }
 
 pub(crate) fn read_merged_ranges_xlsb(
