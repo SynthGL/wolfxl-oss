@@ -1,0 +1,572 @@
+{
+  "edition": "Community",
+  "functional_validation": {
+    "command": "PYTHONPATH=python build-env/bin/python -m pytest tests/test_streaming_style_cache.py tests/test_streaming_reads.py tests/parity/test_streaming_parity.py tests/test_lazy_merge_metadata.py tests/test_openpyxl_cell_readonly_api_parity.py -m 'not slow' -q",
+    "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+    "result": "74 passed, 1 deselected"
+  },
+  "limitations": [
+    "This fixture has 100,000 cells with three non-default style IDs. Runtime varies with style cardinality, merge density, and environment.",
+    "Resource loop counters are instrumented; only the separate canonical styled_signature samples support time ratios.",
+    "Shared-style source SHA identifies the tested code commit before attaching this evidence file. Later Python-only P0 border mutation fixes require regression validation but do not change this fixture or read loop."
+  ],
+  "measurement_driver_source": "\"\"\"Sequential fresh-process canonical styled_signature samples for the style layer.\"\"\"\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport statistics\nimport subprocess\n\nroot = Path('/workspace/scratch/e6acfd2bd33d')\nharness = root / 'worktrees/benchmark-contract-oss/benchmarks'\nfixture = root / 'audit-diagnostics/styled-20000.xlsx'\nworker = '''import gc,hashlib,json,resource,sys\nfrom pathlib import Path\nsys.path.insert(0,sys.argv[1])\nfrom performance_contract import styled_signature,package_fingerprint,source_state\nimport wolfxl\nfrom wolfxl import _rust\ngc.disable()\ntry:\n phases,signature=styled_signature(wolfxl,Path(sys.argv[2]),read_only=True)\nfinally:\n gc.enable()\nprint(json.dumps(dict(phase_seconds=phases,signature=signature,package=package_fingerprint(wolfxl),source=source_state(Path(sys.argv[3])),native_sha256=hashlib.sha256(Path(_rust.__file__).read_bytes()).hexdigest(),peak_rss_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024)))\n'''\nconfigs = [\n ('original',root/'baseline-envs/oss/bin/python',None,root/'repos/wolfxl-oss'),\n ('before_shared_styles',root/'build-env/bin/python',root/'worktrees/stream-styles-before-oss/python',root/'worktrees/stream-styles-before-oss'),\n ('shared_styles',root/'build-env/bin/python',root/'worktrees/stream-styles-oss/python',root/'worktrees/stream-styles-oss'),\n]\nsamples = {label: [] for label, *_ in configs}\nfor round_index in range(6):\n for label,executable,source,checkout in (configs if round_index % 2 == 0 else configs[::-1]):\n  env = dict(os.environ)\n  if source is None:\n   env.pop('PYTHONPATH',None)\n  else:\n   env['PYTHONPATH'] = str(source)\n  measured = json.loads(subprocess.check_output([str(executable),'-c',worker,str(harness),str(fixture),str(checkout)],env=env,text=True))\n  if round_index:\n   samples[label].append(measured)\nsignatures = [sample['signature'] for values in samples.values() for sample in values]\nif any(signature != signatures[0] for signature in signatures):\n raise AssertionError('Styled signatures differ')\ndigest = hashlib.sha256()\nfor name in ('performance_contract.py','performance_fixtures.py','performance_validation.py'):\n digest.update(name.encode())\n digest.update((harness/name).read_bytes())\nmedians = {label: statistics.median(sample['phase_seconds']['operation'] for sample in values) for label,values in samples.items()}\nreceipt = dict(contract='wolfxl-styled-edit-v2-shared-style-layer',fixture_sha256=hashlib.sha256(fixture.read_bytes()).hexdigest(),fixture_path=str(fixture),producer_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),harness_sha256=digest.hexdigest(),warmups=1,repetitions=5,engine_order='alternates each round; fresh subprocess per sample',gc_during_operation='disabled',samples=samples,medians_operation_seconds=medians,style_layer_speedup=medians['before_shared_styles']/medians['shared_styles'],cumulative_speedup_original_to_styles=medians['original']/medians['shared_styles'],note='Canonical public styled_signature loop. Absolute fresh-process RSS includes imports. Do not multiply medians from different fixtures or environments.')\n(root/'stream-styles-final-read-loop.json').write_text(json.dumps(receipt,indent=2,sort_keys=True)+'\\n')\nprint(json.dumps({key:receipt[key] for key in ('medians_operation_seconds','style_layer_speedup','cumulative_speedup_original_to_styles')},indent=2))\n",
+  "optimization": "Workbook-scoped source style components for read_only styled scans",
+  "read_loop": {
+    "contract": "wolfxl-styled-edit-v2-shared-style-layer",
+    "cumulative_speedup_original_to_styles": 2.2040565050341043,
+    "engine_order": "alternates each round; fresh subprocess per sample",
+    "fixture_path": "/workspace/scratch/e6acfd2bd33d/audit-diagnostics/styled-20000.xlsx",
+    "fixture_sha256": "4539d28348251c1c5ba12b51660f2db55d343ed8d59482a51f331047e9149761",
+    "gc_during_operation": "disabled",
+    "harness_sha256": "fadd85865a17424cc5642e2177fdffbcd1679f37715435dafb00e23006a72922",
+    "medians_operation_seconds": {
+      "before_shared_styles": 0.8991650470015884,
+      "original": 0.8656044229992403,
+      "shared_styles": 0.39273241000046255
+    },
+    "note": "Canonical public styled_signature loop. Absolute fresh-process RSS includes imports. Do not multiply medians from different fixtures or environments.",
+    "producer_sha256": "8c708f226763ac033b97607c84b75cfea31812824b5a9c6a38493c187d8beafd",
+    "repetitions": 5,
+    "samples": {
+      "before_shared_styles": [
+        {
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-before-oss/python/wolfxl/__init__.py",
+            "python_source_files": 263,
+            "python_source_sha256": "1dea35b40392382a991d6bec1f64038bdf1e10590bda022458aeb32987a612ea",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 69865472,
+          "phase_seconds": {
+            "close": 0.006373735999659402,
+            "iterate_styled_cells": 0.9495867639998323,
+            "load": 0.007724285000222153,
+            "operation": 0.9637011390004773,
+            "total": 0.9637011390004773
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "089ba52765860c60f8b3dac592978587a89a9034",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-before-oss"
+          }
+        },
+        {
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-before-oss/python/wolfxl/__init__.py",
+            "python_source_files": 263,
+            "python_source_sha256": "1dea35b40392382a991d6bec1f64038bdf1e10590bda022458aeb32987a612ea",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 68739072,
+          "phase_seconds": {
+            "close": 0.004764565999721526,
+            "iterate_styled_cells": 0.833105751000403,
+            "load": 0.00604882900006487,
+            "operation": 0.8439331770005083,
+            "total": 0.8439331770005083
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "089ba52765860c60f8b3dac592978587a89a9034",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-before-oss"
+          }
+        },
+        {
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-before-oss/python/wolfxl/__init__.py",
+            "python_source_files": 263,
+            "python_source_sha256": "1dea35b40392382a991d6bec1f64038bdf1e10590bda022458aeb32987a612ea",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 68767744,
+          "phase_seconds": {
+            "close": 0.00505417099884653,
+            "iterate_styled_cells": 0.8299321129998134,
+            "load": 0.006479941999714356,
+            "operation": 0.8414807059998566,
+            "total": 0.8414807059998566
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "089ba52765860c60f8b3dac592978587a89a9034",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-before-oss"
+          }
+        },
+        {
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-before-oss/python/wolfxl/__init__.py",
+            "python_source_files": 263,
+            "python_source_sha256": "1dea35b40392382a991d6bec1f64038bdf1e10590bda022458aeb32987a612ea",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 68739072,
+          "phase_seconds": {
+            "close": 0.00474374599980365,
+            "iterate_styled_cells": 0.8854414950001228,
+            "load": 0.008965596000052756,
+            "operation": 0.8991650470015884,
+            "total": 0.8991650470015884
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "089ba52765860c60f8b3dac592978587a89a9034",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-before-oss"
+          }
+        },
+        {
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-before-oss/python/wolfxl/__init__.py",
+            "python_source_files": 263,
+            "python_source_sha256": "1dea35b40392382a991d6bec1f64038bdf1e10590bda022458aeb32987a612ea",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 70012928,
+          "phase_seconds": {
+            "close": 0.005606741999145015,
+            "iterate_styled_cells": 0.903345327000352,
+            "load": 0.009441995000088355,
+            "operation": 0.918410557000243,
+            "total": 0.918410557000243
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "089ba52765860c60f8b3dac592978587a89a9034",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-before-oss"
+          }
+        }
+      ],
+      "original": [
+        {
+          "native_sha256": "0af60f1ed0becebb0b7f3033a2ecaf219026284c132d518e0f36bd09dc989baa",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/__init__.py",
+            "python_source_files": 261,
+            "python_source_sha256": "fa13b727a30551bfab994f48325b287a4c206215f277a9807dfc3fac02dbfa9d",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 68526080,
+          "phase_seconds": {
+            "close": 0.004806537999684224,
+            "iterate_styled_cells": 0.7940996529996482,
+            "load": 0.006154533999506384,
+            "operation": 0.8050733929994749,
+            "total": 0.8050733929994749
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "93e48b23605c798fcb98b2e4a86445a0b9c6679e",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/repos/wolfxl-oss"
+          }
+        },
+        {
+          "native_sha256": "0af60f1ed0becebb0b7f3033a2ecaf219026284c132d518e0f36bd09dc989baa",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/__init__.py",
+            "python_source_files": 261,
+            "python_source_sha256": "fa13b727a30551bfab994f48325b287a4c206215f277a9807dfc3fac02dbfa9d",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 68526080,
+          "phase_seconds": {
+            "close": 0.0050471699996705865,
+            "iterate_styled_cells": 0.9032330319987523,
+            "load": 0.008926387999963481,
+            "operation": 0.9172203109992552,
+            "total": 0.9172203109992552
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "93e48b23605c798fcb98b2e4a86445a0b9c6679e",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/repos/wolfxl-oss"
+          }
+        },
+        {
+          "native_sha256": "0af60f1ed0becebb0b7f3033a2ecaf219026284c132d518e0f36bd09dc989baa",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/__init__.py",
+            "python_source_files": 261,
+            "python_source_sha256": "fa13b727a30551bfab994f48325b287a4c206215f277a9807dfc3fac02dbfa9d",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 68550656,
+          "phase_seconds": {
+            "close": 0.004821730000912794,
+            "iterate_styled_cells": 0.8304967700005363,
+            "load": 0.006167302999529056,
+            "operation": 0.8414983209986531,
+            "total": 0.8414983209986531
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "93e48b23605c798fcb98b2e4a86445a0b9c6679e",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/repos/wolfxl-oss"
+          }
+        },
+        {
+          "native_sha256": "0af60f1ed0becebb0b7f3033a2ecaf219026284c132d518e0f36bd09dc989baa",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/__init__.py",
+            "python_source_files": 261,
+            "python_source_sha256": "fa13b727a30551bfab994f48325b287a4c206215f277a9807dfc3fac02dbfa9d",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 68464640,
+          "phase_seconds": {
+            "close": 0.006357280999509385,
+            "iterate_styled_cells": 0.8511777189996792,
+            "load": 0.008055260999753955,
+            "operation": 0.8656044229992403,
+            "total": 0.8656044229992403
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "93e48b23605c798fcb98b2e4a86445a0b9c6679e",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/repos/wolfxl-oss"
+          }
+        },
+        {
+          "native_sha256": "0af60f1ed0becebb0b7f3033a2ecaf219026284c132d518e0f36bd09dc989baa",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/__init__.py",
+            "python_source_files": 261,
+            "python_source_sha256": "fa13b727a30551bfab994f48325b287a4c206215f277a9807dfc3fac02dbfa9d",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 68468736,
+          "phase_seconds": {
+            "close": 0.005187415999898803,
+            "iterate_styled_cells": 0.889895919999617,
+            "load": 0.007029116999547114,
+            "operation": 0.9021257129988953,
+            "total": 0.9021257129988953
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "93e48b23605c798fcb98b2e4a86445a0b9c6679e",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/repos/wolfxl-oss"
+          }
+        }
+      ],
+      "shared_styles": [
+        {
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss/python/wolfxl/__init__.py",
+            "python_source_files": 264,
+            "python_source_sha256": "a6cbfac415b0e9dd87096b56bce2b8d6aafaf74127afbdf2819102ea0408a560",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 41967616,
+          "phase_seconds": {
+            "close": 2.953300099761691e-05,
+            "iterate_styled_cells": 0.3861858720010787,
+            "load": 0.006506830999569502,
+            "operation": 0.39273241000046255,
+            "total": 0.39273241000046255
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "51aa3653cfb36d4e52d88e51c0084ce1a5f94520",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss"
+          }
+        },
+        {
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss/python/wolfxl/__init__.py",
+            "python_source_files": 264,
+            "python_source_sha256": "a6cbfac415b0e9dd87096b56bce2b8d6aafaf74127afbdf2819102ea0408a560",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 40665088,
+          "phase_seconds": {
+            "close": 3.149599979224149e-05,
+            "iterate_styled_cells": 0.3513434269989375,
+            "load": 0.006675096999970265,
+            "operation": 0.3580596349984262,
+            "total": 0.3580596349984262
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "51aa3653cfb36d4e52d88e51c0084ce1a5f94520",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss"
+          }
+        },
+        {
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss/python/wolfxl/__init__.py",
+            "python_source_files": 264,
+            "python_source_sha256": "a6cbfac415b0e9dd87096b56bce2b8d6aafaf74127afbdf2819102ea0408a560",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 41738240,
+          "phase_seconds": {
+            "close": 3.409999953873921e-05,
+            "iterate_styled_cells": 0.34939696400033426,
+            "load": 0.006226429000889766,
+            "operation": 0.35566665700025624,
+            "total": 0.35566665700025624
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "51aa3653cfb36d4e52d88e51c0084ce1a5f94520",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss"
+          }
+        },
+        {
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss/python/wolfxl/__init__.py",
+            "python_source_files": 264,
+            "python_source_sha256": "a6cbfac415b0e9dd87096b56bce2b8d6aafaf74127afbdf2819102ea0408a560",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 41811968,
+          "phase_seconds": {
+            "close": 3.286900027887896e-05,
+            "iterate_styled_cells": 0.455678000998887,
+            "load": 0.00832738000099198,
+            "operation": 0.46404946700022265,
+            "total": 0.46404946700022265
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "51aa3653cfb36d4e52d88e51c0084ce1a5f94520",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss"
+          }
+        },
+        {
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package": {
+            "import_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss/python/wolfxl/__init__.py",
+            "python_source_files": 264,
+            "python_source_sha256": "a6cbfac415b0e9dd87096b56bce2b8d6aafaf74127afbdf2819102ea0408a560",
+            "version": "2.0.9"
+          },
+          "peak_rss_bytes": 41791488,
+          "phase_seconds": {
+            "close": 9.989600039261859e-05,
+            "iterate_styled_cells": 0.44839846300055797,
+            "load": 0.006624493998970138,
+            "operation": 0.4551391370005149,
+            "total": 0.4551391370005149
+          },
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          },
+          "source": {
+            "commit": "51aa3653cfb36d4e52d88e51c0084ce1a5f94520",
+            "dirty": false,
+            "root": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss"
+          }
+        }
+      ]
+    },
+    "style_layer_speedup": 2.2895106798049323,
+    "warmups": 1
+  },
+  "resources": {
+    "original": {
+      "contract": "wolfxl-styled-edit-v2-resource-diagnostic",
+      "fixture_sha256": "4539d28348251c1c5ba12b51660f2db55d343ed8d59482a51f331047e9149761",
+      "memory_note": "Absolute peak RSS measured independently in fresh subprocesses; includes interpreter/imports.",
+      "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+      "producer_sha256": "7c870340ad18a03efb1cb15ccad02a373439e9e5feb056c8d11714eb8823c3a2",
+      "python": "3.12.14",
+      "samples": [
+        {
+          "cached_style_entries": null,
+          "instrumented_operation_seconds": 1.2089144860001397,
+          "native_lookup_counts": {
+            "read_cell_format": 380000
+          },
+          "native_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/_rust.cpython-312-x86_64-linux-gnu.so",
+          "native_sha256": "0af60f1ed0becebb0b7f3033a2ecaf219026284c132d518e0f36bd09dc989baa",
+          "package_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/__init__.py",
+          "peak_rss_bytes": 68472832,
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          }
+        },
+        {
+          "cached_style_entries": null,
+          "instrumented_operation_seconds": 1.2895711790006317,
+          "native_lookup_counts": {
+            "read_cell_format": 380000
+          },
+          "native_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/_rust.cpython-312-x86_64-linux-gnu.so",
+          "native_sha256": "0af60f1ed0becebb0b7f3033a2ecaf219026284c132d518e0f36bd09dc989baa",
+          "package_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/__init__.py",
+          "peak_rss_bytes": 68587520,
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          }
+        },
+        {
+          "cached_style_entries": null,
+          "instrumented_operation_seconds": 1.243990307999411,
+          "native_lookup_counts": {
+            "read_cell_format": 380000
+          },
+          "native_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/_rust.cpython-312-x86_64-linux-gnu.so",
+          "native_sha256": "0af60f1ed0becebb0b7f3033a2ecaf219026284c132d518e0f36bd09dc989baa",
+          "package_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/__init__.py",
+          "peak_rss_bytes": 68534272,
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          }
+        }
+      ],
+      "source_sha": "93e48b23605c798fcb98b2e4a86445a0b9c6679e",
+      "timing_note": "Instrumented resource diagnostic; use performance_contract.py for speedup claims."
+    },
+    "shared_styles": {
+      "contract": "wolfxl-styled-edit-v2-resource-diagnostic",
+      "fixture_sha256": "4539d28348251c1c5ba12b51660f2db55d343ed8d59482a51f331047e9149761",
+      "memory_note": "Absolute peak RSS measured independently in fresh subprocesses; includes interpreter/imports.",
+      "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+      "producer_sha256": "7c870340ad18a03efb1cb15ccad02a373439e9e5feb056c8d11714eb8823c3a2",
+      "python": "3.12.14",
+      "samples": [
+        {
+          "cached_style_entries": 4,
+          "instrumented_operation_seconds": 0.37367964800068876,
+          "native_lookup_counts": {
+            "read_format_for_style_id": 3,
+            "read_merged_ranges": 1
+          },
+          "native_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss/python/wolfxl/_rust.cpython-312-x86_64-linux-gnu.so",
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss/python/wolfxl/__init__.py",
+          "peak_rss_bytes": 33439744,
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          }
+        },
+        {
+          "cached_style_entries": 4,
+          "instrumented_operation_seconds": 0.43599770800028637,
+          "native_lookup_counts": {
+            "read_format_for_style_id": 3,
+            "read_merged_ranges": 1
+          },
+          "native_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss/python/wolfxl/_rust.cpython-312-x86_64-linux-gnu.so",
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss/python/wolfxl/__init__.py",
+          "peak_rss_bytes": 34803712,
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          }
+        },
+        {
+          "cached_style_entries": 4,
+          "instrumented_operation_seconds": 0.3520744229990669,
+          "native_lookup_counts": {
+            "read_format_for_style_id": 3,
+            "read_merged_ranges": 1
+          },
+          "native_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss/python/wolfxl/_rust.cpython-312-x86_64-linux-gnu.so",
+          "native_sha256": "c4f24001355b98ebc5a4ade34181b4c976c8ad9029e17bb98ef549aed00a1b42",
+          "package_path": "/workspace/scratch/e6acfd2bd33d/worktrees/stream-styles-oss/python/wolfxl/__init__.py",
+          "peak_rss_bytes": 34664448,
+          "signature": {
+            "first_column_checksum": 200010000.0,
+            "rows": 20000,
+            "styled_cells": 50000
+          }
+        }
+      ],
+      "source_sha": "51aa3653cfb36d4e52d88e51c0084ce1a5f94520",
+      "timing_note": "Instrumented resource diagnostic; use performance_contract.py for speedup claims."
+    }
+  }
+}

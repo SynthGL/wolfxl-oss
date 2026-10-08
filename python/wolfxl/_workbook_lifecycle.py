@@ -17,6 +17,7 @@ def close_workbook(workbook: Any) -> None:
             pass
     workbook._merged_border_metadata_cache = None
     workbook._rust_reader = None
+    workbook._streaming_style_cache = None
     workbook._rust_writer = None
     workbook._rust_patcher = None
     tmp_path = getattr(workbook, "_tempfile_path", None)

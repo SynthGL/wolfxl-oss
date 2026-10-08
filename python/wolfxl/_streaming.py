@@ -5,8 +5,8 @@ Public entry-point: :func:`stream_iter_rows`. Activated by
 more than ``AUTO_STREAM_ROW_THRESHOLD`` rows. Wraps the Rust
 ``StreamingSheetReader`` and converts its row tuples into either:
 
-- ``StreamingCell`` instances (mutation-rejected proxies that lazily look
-  up styles via the eager workbook reader), or
+- ``StreamingCell`` instances (mutation-rejected proxies sharing converted
+  workbook style-ID entries), or
 - plain value tuples (when ``values_only=True``), padded by the configured
   column bounds.
 
@@ -33,10 +33,17 @@ from wolfxl._zip_safety import read_entry, validate_zipfile
 from wolfxl.utils.datetime import from_excel
 from wolfxl.styles.numbers import is_timedelta_format
 from wolfxl.utils.numbers import is_date_format
+from wolfxl._streaming_styles import (
+    cell_border,
+    cell_fill,
+    cell_style_components,
+    streaming_date_style_ids,
+)
 
 if TYPE_CHECKING:
     from wolfxl._styles import Alignment, Border, Font, PatternFill
     from wolfxl._worksheet import Worksheet
+    from wolfxl._streaming_styles import StyleComponents
 
 
 #: Row count above which ``iter_rows`` transparently uses the streaming
@@ -279,7 +286,7 @@ class StreamingCell:
 
     Holds a snapshot of the value (parsed by the Rust SAX scanner) plus
     the originating row/column and a reference back to the Worksheet so
-    style lookups can defer to the workbook reader's ``read_cell_format`` path.
+    style lookups can reuse the workbook stylesheet by source style ID.
     Style attributes are
     fully featured (font, fill, border, alignment, number_format) and
     behave identically to the eager ``Cell`` properties — the difference
@@ -289,7 +296,10 @@ class StreamingCell:
     Python heap with per-cell ``__dict__`` storage.
     """
 
-    __slots__ = ("_ws", "_row", "_col", "_value", "_style_id", "_cell_type")
+    __slots__ = (
+        "_ws", "_row", "_col", "_value", "_style_id", "_cell_type",
+        "_style_cache", "_style_components",
+    )
 
     def __init__(
         self,
@@ -300,13 +310,15 @@ class StreamingCell:
         style_id: int | None,
         cell_type: str,
     ) -> None:
-        self._ws = ws
-        self._row = row
-        self._col = col
+        object.__setattr__(self, "_ws", ws)
+        object.__setattr__(self, "_row", row)
+        object.__setattr__(self, "_col", col)
         data_only = bool(getattr(ws._workbook, "_data_only", False))  # noqa: SLF001
-        self._value = _streaming_value(value, data_only=data_only)
-        self._style_id = style_id
-        self._cell_type = cell_type
+        object.__setattr__(self, "_value", _streaming_value(value, data_only=data_only))
+        object.__setattr__(self, "_style_id", style_id)
+        object.__setattr__(self, "_cell_type", cell_type)
+        object.__setattr__(self, "_style_cache", None)
+        object.__setattr__(self, "_style_components", None)
 
     # ------------------------------------------------------------------
     # Coordinate accessors — match openpyxl's read_only Cell API.
@@ -319,7 +331,16 @@ class StreamingCell:
         # surface as Python datetime, mirroring openpyxl's read_only path
         # (and the eager Cell.value path, which converts via calamine).
         if isinstance(self._value, (int, float)) and not isinstance(self._value, bool):
-            return _maybe_datetime_from_serial(self._value, self.number_format)
+            style = self._resolved_style()
+            if style.is_date:
+                try:
+                    return from_excel(
+                        self._value,
+                        epoch=self._ws._workbook.epoch,
+                        timedelta=style.is_timedelta,
+                    )
+                except Exception:
+                    return self._value
         return self._value
 
     @property
@@ -365,79 +386,51 @@ class StreamingCell:
         }.get(self._cell_type, "n")
 
     # ------------------------------------------------------------------
-    # Style lookups — defer to the eager workbook reader.
+    # Style lookups — share converted stylesheet entries by native style ID.
     # The streaming path does NOT re-implement xl/styles.xml parsing;
     # the styles table is small (~KB) regardless of sheet size and the
     # eager reader caches it after first access.
     # ------------------------------------------------------------------
 
+    def _resolved_style(self) -> StyleComponents:
+        workbook = self._ws._workbook
+        cache = getattr(workbook, "_streaming_style_cache", None)
+        if (
+            self._style_components is None
+            or cache is not self._style_cache
+            or (cache is not None and cache.reader_identity != id(workbook._rust_reader))
+        ):
+            style = cell_style_components(self)
+            object.__setattr__(self, "_style_components", style)
+            object.__setattr__(self, "_style_cache", getattr(workbook, "_streaming_style_cache", None))
+        return self._style_components
+
     @property
     def font(self) -> Font:
         """Return the resolved cell font."""
-        from wolfxl._cell import _format_to_font
-
-        wb = self._ws._workbook  # noqa: SLF001
-        reader = wb._rust_reader  # noqa: SLF001
-        if reader is None:
-            from wolfxl._styles import Font as _Font
-
-            return _Font()
-        payload = reader.read_cell_format(self._ws.title, self.coordinate)
-        return _format_to_font(payload)
+        return self._resolved_style().font
 
     @property
     def fill(self) -> PatternFill:
         """Return the resolved cell fill."""
-        from wolfxl._cell import _format_to_fill
-
-        wb = self._ws._workbook  # noqa: SLF001
-        reader = wb._rust_reader  # noqa: SLF001
-        if reader is None:
-            from wolfxl._styles import PatternFill as _PF
-
-            return _PF()
-        payload = reader.read_cell_format(self._ws.title, self.coordinate)
-        return _format_to_fill(payload)
+        return cell_fill(self)
 
     @property
     def border(self) -> Border:
         """Return the resolved cell border."""
-        from wolfxl._cell import _border_payload_to_border
-
-        wb = self._ws._workbook  # noqa: SLF001
-        reader = wb._rust_reader  # noqa: SLF001
-        if reader is None:
-            from wolfxl._styles import Border as _B
-
-            return _B()
-        payload = reader.read_cell_border(self._ws.title, self.coordinate)
-        return _border_payload_to_border(payload)
+        return cell_border(self)
 
     @property
     def alignment(self) -> Alignment:
         """Return the resolved cell alignment."""
-        from wolfxl._cell import _format_to_alignment
-
-        wb = self._ws._workbook  # noqa: SLF001
-        reader = wb._rust_reader  # noqa: SLF001
-        if reader is None:
-            from wolfxl._styles import Alignment as _A
-
-            return _A()
-        payload = reader.read_cell_format(self._ws.title, self.coordinate)
-        return _format_to_alignment(payload)
+        return self._resolved_style().alignment
 
     @property
     def number_format(self) -> str | None:
         """Return the resolved number format string."""
-        wb = self._ws._workbook  # noqa: SLF001
-        reader = wb._rust_reader  # noqa: SLF001
-        if reader is None:
+        if self._ws._workbook._rust_reader is None:  # noqa: SLF001
             return None
-        payload = reader.read_cell_format(self._ws.title, self.coordinate)
-        if isinstance(payload, dict):
-            return payload.get("number_format") or "General"
-        return "General"
+        return self._resolved_style().number_format
 
     # ------------------------------------------------------------------
     # Mutation — strictly rejected. Sprint Ι Pod-β contract.
@@ -539,35 +532,8 @@ def stream_iter_rows(
         path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c
     )
 
-    # Sprint Λ Pod-γ: cache style_id → (number_format, is_date) so we
-    # resolve a date format once per distinct style rather than once per
-    # cell. Sentinel `_NO_STYLE` covers the (style_id is None) case.
-    style_date_cache: dict[int | None, tuple[str | None, bool]] = {}
-    rust_reader = wb._rust_reader  # noqa: SLF001
-
-    def _is_date_style(style_id: int | None, row_idx: int, col: int) -> bool:
-        cached = style_date_cache.get(style_id)
-        if cached is not None:
-            return cached[1]
-        if style_id is None or rust_reader is None:
-            style_date_cache[style_id] = (None, False)
-            return False
-        # The Rust reader exposes number_format only via cell coordinate.
-        # The lookup is keyed off the cell's style_id internally, so any
-        # cell that shares this style_id will resolve to the same format
-        # — caching by style_id keeps this O(unique-styles) rather than
-        # O(cells).
-        try:
-            payload = rust_reader.read_cell_format(
-                ws.title, rowcol_to_a1(row_idx, col)
-            )
-        except Exception:
-            style_date_cache[style_id] = (None, False)
-            return False
-        num_fmt = payload.get("number_format") if isinstance(payload, dict) else None
-        is_date = is_date_format(num_fmt)
-        style_date_cache[style_id] = (num_fmt, is_date)
-        return is_date
+    # The hydrated stylesheet has already classified source style IDs.
+    date_styles, timedelta_styles = streaming_date_style_ids(wb)
 
     def _fixed_cmax() -> int | None:
         if mx_c is not None:
@@ -726,11 +692,14 @@ def stream_iter_rows(
                     if (
                         isinstance(py_val, (int, float))
                         and not isinstance(py_val, bool)
-                        and _is_date_style(style_id, row_idx, col)
+                        and style_id in date_styles
                     ):
-                        py_val = _maybe_datetime_from_serial(
-                            py_val, style_date_cache[style_id][0]
-                        )
+                        try:
+                            py_val = from_excel(
+                                py_val, epoch=wb.epoch, timedelta=style_id in timedelta_styles
+                            )
+                        except Exception:
+                            pass
                     row_out.append(py_val)
                 yield tuple(row_out)
                 counter = row_idx + 1
