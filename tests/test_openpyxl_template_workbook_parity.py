@@ -138,3 +138,30 @@ def test_load_openpyxl_xltx_template_flags_match_openpyxl(tmp_path: Path) -> Non
         wolfxl_wb.close()
 
     assert _workbook_content_type(copied) == WORKBOOK_TEMPLATE_CT
+
+
+def test_modify_template_two_saves_preserve_values_and_type(tmp_path: Path) -> None:
+    source = tmp_path / "source.xlsx"
+    initial = openpyxl.Workbook()
+    initial.active["A1"] = "original"
+    initial.save(source)
+    initial.close()
+    wb = wolfxl.load_workbook(source, modify=True)
+    try:
+        wb.active["A1"] = "changed"
+        wb.template = True
+        template = tmp_path / "first.xltx"
+        wb.save(template)
+        assert _workbook_content_type(template) == WORKBOOK_TEMPLATE_CT
+        wb.template = False
+        normal = tmp_path / "second.xlsx"
+        wb.save(normal)
+        assert _workbook_content_type(normal) == WORKBOOK_SHEET_CT
+        for path in (template, normal):
+            check = openpyxl.load_workbook(path)
+            try:
+                assert check.active["A1"].value == "changed"
+            finally:
+                check.close()
+    finally:
+        wb.close()
