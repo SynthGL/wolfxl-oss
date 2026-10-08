@@ -1,0 +1,805 @@
+{
+  "contract": "wolfxl-styled-edit-v2",
+  "created_utc": "2026-10-08T15:19:27.328623+00:00",
+  "environment": {
+    "cpu_count": 9,
+    "engine_order": "alternates each round and warmup",
+    "executable": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/bin/python",
+    "gc_during_operation": "disabled",
+    "machine": "x86_64",
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]"
+  },
+  "fixtures": {
+    "edit_bottom": {
+      "bytes": 5490814,
+      "config": {
+        "builder_openpyxl": "3.1.5",
+        "fixture_version": 2,
+        "kind": "plain",
+        "rows": 200000,
+        "style_cardinality": 0
+      },
+      "max_column": 5,
+      "populated_plain_columns": 5,
+      "populated_value_cells": 1000000,
+      "requested_plain_columns": 8,
+      "rows_per_sheet": 200000,
+      "sha256": "0e41152df64d917eedda420f6ccb51f98323d5e3a49a88aa385e26aa73930341",
+      "sheet_count": 1
+    },
+    "edit_middle": {
+      "bytes": 5490814,
+      "config": {
+        "builder_openpyxl": "3.1.5",
+        "fixture_version": 2,
+        "kind": "plain",
+        "rows": 200000,
+        "style_cardinality": 0
+      },
+      "max_column": 5,
+      "populated_plain_columns": 5,
+      "populated_value_cells": 1000000,
+      "requested_plain_columns": 8,
+      "rows_per_sheet": 200000,
+      "sha256": "0e41152df64d917eedda420f6ccb51f98323d5e3a49a88aa385e26aa73930341",
+      "sheet_count": 1
+    },
+    "edit_top": {
+      "bytes": 5490814,
+      "config": {
+        "builder_openpyxl": "3.1.5",
+        "fixture_version": 2,
+        "kind": "plain",
+        "rows": 200000,
+        "style_cardinality": 0
+      },
+      "max_column": 5,
+      "populated_plain_columns": 5,
+      "populated_value_cells": 1000000,
+      "requested_plain_columns": 8,
+      "rows_per_sheet": 200000,
+      "sha256": "0e41152df64d917eedda420f6ccb51f98323d5e3a49a88aa385e26aa73930341",
+      "sheet_count": 1
+    }
+  },
+  "harness_sha256": "fadd85865a17424cc5642e2177fdffbcd1679f37715435dafb00e23006a72922",
+  "label": "xml-before",
+  "native": {
+    "path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/_rust.cpython-312-x86_64-linux-gnu.so",
+    "sha256": "0af60f1ed0becebb0b7f3033a2ecaf219026284c132d518e0f36bd09dc989baa"
+  },
+  "packages": {
+    "openpyxl": {
+      "import_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/openpyxl/__init__.py",
+      "python_source_files": 190,
+      "python_source_sha256": "fd9dcd8b157ca860b9076903c8038d7fbb83d38ff6a6e9b615f542b6e535ab56",
+      "version": "3.1.5"
+    },
+    "wolfxl": {
+      "import_path": "/workspace/scratch/e6acfd2bd33d/baseline-envs/oss/lib/python3.12/site-packages/wolfxl/__init__.py",
+      "python_source_files": 261,
+      "python_source_sha256": "fa13b727a30551bfab994f48325b287a4c206215f277a9807dfc3fac02dbfa9d",
+      "version": "2.0.9"
+    }
+  },
+  "results": [
+    {
+      "case": "edit_top",
+      "deep_validation": {
+        "added_parts": [],
+        "changed_parts": [
+          "xl/worksheets/sheet1.xml"
+        ],
+        "full_reopen": "openpyxl-eager",
+        "full_reopen_seconds": 17.584072396999545,
+        "package_seconds": 5.0177578830007405,
+        "removed_parts": [],
+        "semantic_sha256": "ec8fb2ef6ee770f0d327ba8ceb4cd8dd2bc05375252e2bc3d55357641fc40442",
+        "untouched_part_byte_check": "pass",
+        "xml_parse": "pass",
+        "zip_crc": "pass"
+      },
+      "engine": "wolfxl",
+      "phase_medians_seconds": {
+        "assignment": 1.7476000721217133e-05,
+        "bounded_verification": 0.005309234000378638,
+        "close": 2.9983999411342666e-05,
+        "copy": 0.005450191001727944,
+        "load": 0.11933921700074279,
+        "operation": 0.5135271380004269,
+        "save": 0.3909263639998244,
+        "total": 0.5256869960012409
+      },
+      "phase_ranges_seconds": {
+        "assignment": [
+          1.6293999578920193e-05,
+          1.8558001102064736e-05
+        ],
+        "bounded_verification": [
+          0.004812896999283112,
+          0.006676118000541464
+        ],
+        "close": [
+          2.8090998966945335e-05,
+          3.568299871403724e-05
+        ],
+        "copy": [
+          0.005209106999245705,
+          0.005778442000519135
+        ],
+        "load": [
+          0.10813414899894269,
+          0.13562498099963705
+        ],
+        "operation": [
+          0.4837209430006624,
+          0.5396643810017849
+        ],
+        "save": [
+          0.36564084599922353,
+          0.4202704349991109
+        ],
+        "total": [
+          0.4946771869999793,
+          0.5497565269997722
+        ]
+      },
+      "raw_samples": [
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.8558001102064736e-05,
+            "bounded_verification": 0.005738662999647204,
+            "close": 3.2998001188389026e-05,
+            "copy": 0.005209106999245705,
+            "load": 0.10813414899894269,
+            "operation": 0.4837209430006624,
+            "save": 0.3755225500008237,
+            "total": 0.4946771869999793
+          },
+          "round": 0,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 3,
+                "min_col": 2,
+                "min_row": 2,
+                "sheet": "Data"
+              }
+            ]
+          }
+        },
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.6293999578920193e-05,
+            "bounded_verification": 0.004812896999283112,
+            "close": 2.8090998966945335e-05,
+            "copy": 0.005274101999020786,
+            "load": 0.11933921700074279,
+            "operation": 0.5396643810017849,
+            "save": 0.4202704349991109,
+            "total": 0.5497565269997722
+          },
+          "round": 1,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 3,
+                "min_col": 2,
+                "min_row": 2,
+                "sheet": "Data"
+              }
+            ]
+          }
+        },
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.7476000721217133e-05,
+            "bounded_verification": 0.006676118000541464,
+            "close": 3.568299871403724e-05,
+            "copy": 0.005450191001727944,
+            "load": 0.1225337159994524,
+            "operation": 0.5135271380004269,
+            "save": 0.3909263639998244,
+            "total": 0.5256869960012409
+          },
+          "round": 2,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 3,
+                "min_col": 2,
+                "min_row": 2,
+                "sheet": "Data"
+              }
+            ]
+          }
+        },
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.749500006553717e-05,
+            "bounded_verification": 0.005309234000378638,
+            "close": 2.8452001060941257e-05,
+            "copy": 0.005524690999664017,
+            "load": 0.13562498099963705,
+            "operation": 0.5013225000002421,
+            "save": 0.36564084599922353,
+            "total": 0.5121702550004557
+          },
+          "round": 3,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 3,
+                "min_col": 2,
+                "min_row": 2,
+                "sheet": "Data"
+              }
+            ]
+          }
+        },
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.7275000573135912e-05,
+            "bounded_verification": 0.005287632000545273,
+            "close": 2.9983999411342666e-05,
+            "copy": 0.005778442000519135,
+            "load": 0.11518078499830153,
+            "operation": 0.518943704000776,
+            "save": 0.4037053249994642,
+            "total": 0.5300155069999164
+          },
+          "round": 4,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 3,
+                "min_col": 2,
+                "min_row": 2,
+                "sheet": "Data"
+              }
+            ]
+          }
+        }
+      ],
+      "reference_validation_seconds": 17.210881213000903,
+      "warmup_samples": [
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 3.175699930579867e-05,
+            "bounded_verification": 0.00450793900017743,
+            "close": 2.767000114545226e-05,
+            "copy": 0.002512203000151203,
+            "load": 0.1166683909996209,
+            "operation": 0.4967374309999286,
+            "save": 0.3799959729985858,
+            "total": 0.5037666560001526
+          },
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 3,
+                "min_col": 2,
+                "min_row": 2,
+                "sheet": "Data"
+              }
+            ]
+          },
+          "warmup_round": 0
+        }
+      ]
+    },
+    {
+      "case": "edit_middle",
+      "deep_validation": {
+        "added_parts": [],
+        "changed_parts": [
+          "xl/worksheets/sheet1.xml"
+        ],
+        "full_reopen": "openpyxl-eager",
+        "full_reopen_seconds": 18.33064960000047,
+        "package_seconds": 5.2442300469992915,
+        "removed_parts": [],
+        "semantic_sha256": "0ed129243c3d966a310fcdb0dcd22a6a5f537751df239c1276df5a6815300e88",
+        "untouched_part_byte_check": "pass",
+        "xml_parse": "pass",
+        "zip_crc": "pass"
+      },
+      "engine": "wolfxl",
+      "phase_medians_seconds": {
+        "assignment": 1.8507000277168117e-05,
+        "bounded_verification": 3.2102395039983094,
+        "close": 2.8722000934067182e-05,
+        "copy": 0.004867817000558716,
+        "load": 0.1058675280000898,
+        "operation": 0.783054577999792,
+        "save": 0.677126941998722,
+        "total": 4.12748712299981
+      },
+      "phase_ranges_seconds": {
+        "assignment": [
+          1.685399911366403e-05,
+          1.9267999959993176e-05
+        ],
+        "bounded_verification": [
+          2.92716437099989,
+          3.633117561999825
+        ],
+        "close": [
+          2.685899926291313e-05,
+          2.9614000595756806e-05
+        ],
+        "copy": [
+          0.0036724140009027906,
+          0.005131453999638325
+        ],
+        "load": [
+          0.10421286800010421,
+          0.131867265999972
+        ],
+        "operation": [
+          0.7333664660000068,
+          1.1712099989999842
+        ],
+        "save": [
+          0.6285523120004655,
+          1.0392846380000265
+        ],
+        "total": [
+          3.6655490239991195,
+          4.430197536999913
+        ]
+      },
+      "raw_samples": [
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.9267999959993176e-05,
+            "bounded_verification": 2.9535747049994825,
+            "close": 2.8111000574426726e-05,
+            "copy": 0.0036724140009027906,
+            "load": 0.10834783099926426,
+            "operation": 0.740313922000496,
+            "save": 0.631909297000675,
+            "total": 3.697567810999317
+          },
+          "round": 0,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 100001,
+                "min_col": 2,
+                "min_row": 100000,
+                "sheet": "Data"
+              }
+            ]
+          }
+        },
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.685399911366403e-05,
+            "bounded_verification": 2.92716437099989,
+            "close": 2.685899926291313e-05,
+            "copy": 0.005009855000025709,
+            "load": 0.1047604239993234,
+            "operation": 0.7333664660000068,
+            "save": 0.6285523120004655,
+            "total": 3.6655490239991195
+          },
+          "round": 1,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 100001,
+                "min_col": 2,
+                "min_row": 100000,
+                "sheet": "Data"
+              }
+            ]
+          }
+        },
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.8617000023368746e-05,
+            "bounded_verification": 3.633117561999825,
+            "close": 2.9614000595756806e-05,
+            "copy": 0.004867817000558716,
+            "load": 0.10421286800010421,
+            "operation": 0.7922054869995918,
+            "save": 0.6879353050007921,
+            "total": 4.430197536999913
+          },
+          "round": 2,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 100001,
+                "min_col": 2,
+                "min_row": 100000,
+                "sheet": "Data"
+              }
+            ]
+          }
+        },
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.8507000277168117e-05,
+            "bounded_verification": 3.339852981000149,
+            "close": 2.8821999876527116e-05,
+            "copy": 0.004570500999761862,
+            "load": 0.1058675280000898,
+            "operation": 0.783054577999792,
+            "save": 0.677126941998722,
+            "total": 4.12748712299981
+          },
+          "round": 3,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 100001,
+                "min_col": 2,
+                "min_row": 100000,
+                "sheet": "Data"
+              }
+            ]
+          }
+        },
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.7506001313449815e-05,
+            "bounded_verification": 3.2102395039983094,
+            "close": 2.8722000934067182e-05,
+            "copy": 0.005131453999638325,
+            "load": 0.131867265999972,
+            "operation": 1.1712099989999842,
+            "save": 1.0392846380000265,
+            "total": 4.3865877779990115
+          },
+          "round": 4,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 100001,
+                "min_col": 2,
+                "min_row": 100000,
+                "sheet": "Data"
+              }
+            ]
+          }
+        }
+      ],
+      "reference_validation_seconds": 16.984942588000195,
+      "warmup_samples": [
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.7594999007997103e-05,
+            "bounded_verification": 2.87997525100036,
+            "close": 2.7690999559126794e-05,
+            "copy": 0.0025589720007701544,
+            "load": 0.09867687599944475,
+            "operation": 0.7298592459992506,
+            "save": 0.631125558000349,
+            "total": 3.6124015109999164
+          },
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 100001,
+                "min_col": 2,
+                "min_row": 100000,
+                "sheet": "Data"
+              }
+            ]
+          },
+          "warmup_round": 0
+        }
+      ]
+    },
+    {
+      "case": "edit_bottom",
+      "deep_validation": {
+        "added_parts": [],
+        "changed_parts": [
+          "xl/worksheets/sheet1.xml"
+        ],
+        "full_reopen": "openpyxl-eager",
+        "full_reopen_seconds": 17.6102131380012,
+        "package_seconds": 5.610839061999286,
+        "removed_parts": [],
+        "semantic_sha256": "3e95587f4e8dade48392a82ae6df9f6f5bb4ad86efc073f4e0f89d56b857df04",
+        "untouched_part_byte_check": "pass",
+        "xml_parse": "pass",
+        "zip_crc": "pass"
+      },
+      "engine": "wolfxl",
+      "phase_medians_seconds": {
+        "assignment": 1.718500061542727e-05,
+        "bounded_verification": 6.037541536999925,
+        "close": 2.8451999241951853e-05,
+        "copy": 0.0036112550005782396,
+        "load": 0.10401143600029172,
+        "operation": 1.0520806270014873,
+        "save": 0.945860203999473,
+        "total": 7.093240229000003
+      },
+      "phase_ranges_seconds": {
+        "assignment": [
+          1.698400046734605e-05,
+          1.8437000107951462e-05
+        ],
+        "bounded_verification": [
+          5.84768416299994,
+          6.573114811000778
+        ],
+        "close": [
+          2.6818999685929157e-05,
+          3.055500019399915e-05
+        ],
+        "copy": [
+          0.002988821999679203,
+          0.004369536998638068
+        ],
+        "load": [
+          0.10021130200038897,
+          0.1388653020003403
+        ],
+        "operation": [
+          0.9576621340002021,
+          1.1916656070006866
+        ],
+        "save": [
+          0.8573961010006315,
+          1.0659972520006704
+        ],
+        "total": [
+          6.922495627999524,
+          7.745896263000759
+        ]
+      },
+      "raw_samples": [
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.698400046734605e-05,
+            "bounded_verification": 5.911882169999444,
+            "close": 2.824200055329129e-05,
+            "copy": 0.002988821999679203,
+            "load": 0.10401143600029172,
+            "operation": 1.007618736999575,
+            "save": 0.9035529020002286,
+            "total": 6.922495627999524
+          },
+          "round": 0,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 200000,
+                "min_col": 2,
+                "min_row": 199999,
+                "sheet": "Data"
+              }
+            ]
+          }
+        },
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.8437000107951462e-05,
+            "bounded_verification": 5.84768416299994,
+            "close": 3.055500019399915e-05,
+            "copy": 0.004369536998638068,
+            "load": 0.1388653020003403,
+            "operation": 1.1916656070006866,
+            "save": 1.05274039699907,
+            "total": 7.043727278000006
+          },
+          "round": 1,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 200000,
+                "min_col": 2,
+                "min_row": 199999,
+                "sheet": "Data"
+              }
+            ]
+          }
+        },
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.6984999092528597e-05,
+            "bounded_verification": 6.037541536999925,
+            "close": 2.8762000511051156e-05,
+            "copy": 0.0036112550005782396,
+            "load": 0.10616403099993477,
+            "operation": 1.0520806270014873,
+            "save": 0.945860203999473,
+            "total": 7.093240229000003
+          },
+          "round": 2,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 200000,
+                "min_col": 2,
+                "min_row": 199999,
+                "sheet": "Data"
+              }
+            ]
+          }
+        },
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.8307000573258847e-05,
+            "bounded_verification": 6.508696763999978,
+            "close": 2.6818999685929157e-05,
+            "copy": 0.003367356999660842,
+            "load": 0.10021130200038897,
+            "operation": 0.9576621340002021,
+            "save": 0.8573961010006315,
+            "total": 7.469733075000477
+          },
+          "round": 3,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 200000,
+                "min_col": 2,
+                "min_row": 199999,
+                "sheet": "Data"
+              }
+            ]
+          }
+        },
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.718500061542727e-05,
+            "bounded_verification": 6.573114811000778,
+            "close": 2.8451999241951853e-05,
+            "copy": 0.00368394100041769,
+            "load": 0.10303817800013348,
+            "operation": 1.1690910819997953,
+            "save": 1.0659972520006704,
+            "total": 7.745896263000759
+          },
+          "round": 4,
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 200000,
+                "min_col": 2,
+                "min_row": 199999,
+                "sheet": "Data"
+              }
+            ]
+          }
+        }
+      ],
+      "reference_validation_seconds": 16.608777026000098,
+      "warmup_samples": [
+        {
+          "order_index": 0,
+          "phase_seconds": {
+            "assignment": 1.6784999388619326e-05,
+            "bounded_verification": 6.130015312000978,
+            "close": 2.90830012090737e-05,
+            "copy": 0.0016428889994131168,
+            "load": 0.09859070600032283,
+            "operation": 1.0725181460002204,
+            "save": 0.9738702950016886,
+            "total": 7.204184167998392
+          },
+          "verification": {
+            "verified_cells": 2,
+            "verifier": "openpyxl-read-only-one-pass-per-sheet",
+            "windows": [
+              {
+                "max_col": 3,
+                "max_row": 200000,
+                "min_col": 2,
+                "min_row": 199999,
+                "sheet": "Data"
+              }
+            ]
+          },
+          "warmup_round": 0
+        }
+      ]
+    }
+  ],
+  "source": {
+    "commit": "93e48b23605c798fcb98b2e4a86445a0b9c6679e",
+    "dirty": false,
+    "root": "/workspace/scratch/e6acfd2bd33d/repos/wolfxl-oss"
+  },
+  "status": "complete",
+  "timing_contract": {
+    "bounded_read_note": "one iterator per edited sheet; late rows still require streaming the XML prefix",
+    "deep_validation": "full eager openpyxl reopen, all stored values/styles/merges and package checks; outside total",
+    "legacy_receipts": "unchanged; this v2 contract is not retroactively comparable",
+    "operation": "load + assignment + save + close (edit); load + Cell/style loop + close (read)",
+    "total": "copy + operation + same bounded openpyxl verification (edit); operation (read)"
+  },
+  "workload_config": {
+    "cases": [
+      "edit_top",
+      "edit_middle",
+      "edit_bottom"
+    ],
+    "edit_rows": 200000,
+    "engines": [
+      "wolfxl"
+    ],
+    "rounds": 5,
+    "small_rows": 2000,
+    "style_cardinality": 1024,
+    "styled_rows": 20000,
+    "warmups": 1
+  }
+}

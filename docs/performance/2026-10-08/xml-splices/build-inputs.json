@@ -1,0 +1,62 @@
+{
+  "after": {
+    "all_manifest_files_still_match_at_summary_generation": true,
+    "build_flag_environment": {
+      "CARGO_BUILD_TARGET": null,
+      "CARGO_ENCODED_RUSTFLAGS": null,
+      "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": null,
+      "CARGO_PROFILE_RELEASE_DEBUG": null,
+      "CARGO_PROFILE_RELEASE_LTO": null,
+      "CARGO_PROFILE_RELEASE_OPT_LEVEL": null,
+      "RUSTC_WORKSPACE_WRAPPER": null,
+      "RUSTC_WRAPPER": null,
+      "RUSTFLAGS": null
+    },
+    "cargo": "cargo 1.90.0 (840b83a10 2025-07-30)",
+    "local_git_head": "944b956add13270898408857489eacec6c1b9bb1",
+    "local_git_status": "",
+    "manifest_scope": "Build configuration, package metadata and all files under native/Python runtime source directories, excluding native build products and caches",
+    "maturin": "maturin 1.15.0",
+    "maturin_features": [
+      "extension-module"
+    ],
+    "metadata_sha256": "512d0c5180ad45d2e0a19cc53171087f91982020ae07031b96f70800529fc1e7",
+    "native_sha256": "94ffa193697436a8878b0647591f744729d7ad49492584557d42853b597a6c19",
+    "rustc": "rustc 1.90.0 (1159e78c4 2025-09-14)",
+    "source_file_count": 539,
+    "source_manifest_sha256": "cf7ef00eaf828427a3e70ddfb42c4095075863d89af368bd66562682b958530d",
+    "standard_maturin_features_from_pyproject": true,
+    "variant": "oss-xml-splices",
+    "wheel_sha256": "b33062c043379e4b3783068b3ebbf138ce2b435b0de802d8fb6e50eeed8c6164"
+  },
+  "before": {
+    "all_manifest_files_still_match_at_summary_generation": true,
+    "build_flag_environment": {
+      "CARGO_BUILD_TARGET": null,
+      "CARGO_ENCODED_RUSTFLAGS": null,
+      "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": null,
+      "CARGO_PROFILE_RELEASE_DEBUG": null,
+      "CARGO_PROFILE_RELEASE_LTO": null,
+      "CARGO_PROFILE_RELEASE_OPT_LEVEL": null,
+      "RUSTC_WORKSPACE_WRAPPER": null,
+      "RUSTC_WRAPPER": null,
+      "RUSTFLAGS": null
+    },
+    "cargo": null,
+    "local_git_head": "93e48b23605c798fcb98b2e4a86445a0b9c6679e",
+    "local_git_status": "",
+    "manifest_scope": "Build configuration, package metadata and all files under native/Python runtime source directories, excluding native build products and caches",
+    "maturin": "1.15.0",
+    "maturin_features": [
+      "extension-module"
+    ],
+    "metadata_sha256": "323548c1c599405a91b1800a1b5ee43268646a310dacce9a05020e49adc1f2b7",
+    "native_sha256": "0af60f1ed0becebb0b7f3033a2ecaf219026284c132d518e0f36bd09dc989baa",
+    "rustc": "rustc 1.90.0 (1159e78c4 2025-09-14)",
+    "source_file_count": 539,
+    "source_manifest_sha256": "abff347b18076ac73e2f7e542a3617e47dc683568655464235b61b1b7c5de80f",
+    "standard_maturin_features_from_pyproject": true,
+    "variant": "oss-baseline",
+    "wheel_sha256": "a517920ba7b376467517c6e7d9e60789b4a4f04958eb9d3c7f3745335cb44e7e"
+  }
+}
