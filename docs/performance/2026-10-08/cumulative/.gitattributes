@@ -1,0 +1,3 @@
+# Keep captured evidence byte-identical, including pytest traceback whitespace.
+**/*.json -text
+builds/**/*.log -text -whitespace

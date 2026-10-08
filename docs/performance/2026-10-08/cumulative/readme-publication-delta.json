@@ -1,0 +1,294 @@
+{
+  "all_code_to_docs_git_changes": [
+    {
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "path": "benchmarks/PERFORMANCE_STAGES.md",
+      "status": "A"
+    },
+    {
+      "path": "benchmarks/performance_stages.py",
+      "status": "A"
+    },
+    {
+      "path": "benchmarks/render_performance_stages.py",
+      "status": "A"
+    },
+    {
+      "path": "benchmarks/render_styled_read_validation.py",
+      "status": "A"
+    },
+    {
+      "path": "benchmarks/validate_styled_read_semantics.py",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/.gitattributes",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/README.md",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/build-gates.md",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/builds/oss-baseline/build-metadata.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/builds/oss-baseline/build.log",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/builds/oss-baseline/source-manifest.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/builds/oss-final-v2/build-metadata.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/builds/oss-final-v2/build.log",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/builds/oss-final-v2/focused-test-receipt.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/builds/oss-final-v2/focused-test-review.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/builds/oss-final-v2/focused-tests.log",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/builds/oss-final-v2/source-manifest.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/core.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/core.md",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/guards.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/guards.md",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/intermediate-core.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/intermediate-core.md",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/intermediate-guards.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/intermediate-guards.md",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/source-bindings.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/styled-read-validation.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/performance/2026-10-08/cumulative/styled-read-validation.md",
+      "status": "A"
+    },
+    {
+      "path": "scripts/performance/package_performance_evidence.py",
+      "status": "A"
+    },
+    {
+      "path": "scripts/performance/render_build_gates.py",
+      "status": "A"
+    },
+    {
+      "path": "scripts/performance/verify_publication_bindings.py",
+      "status": "A"
+    },
+    {
+      "path": "tests/test_performance_source_bindings.py",
+      "status": "A"
+    },
+    {
+      "path": "tests/test_performance_stages.py",
+      "status": "A"
+    },
+    {
+      "path": "tests/test_render_performance_stages.py",
+      "status": "A"
+    }
+  ],
+  "all_other_recorded_inputs_identical_between_code_and_docs": true,
+  "binding_verifier_sha256": "9740e1fa136ab5dad97879bdbadf62bff3d185452044b103e85dbbf35ddfdff3",
+  "build_metadata_sha256": "186cb3dbbb58aff988588db348905ddabac2e25d9d18cb8787f685c271810b0e",
+  "code_ref": "e8839a48454ee41c84532b579c395e47e4ab4da3",
+  "code_to_docs_all_recorded_inputs_identical": false,
+  "code_to_docs_identical_recorded_input_count": 546,
+  "code_tree": "3542f211f9bac8f475c9209a4bb5f833aed91944",
+  "docs_ref": "bffff4932747bf75223578a2ad70da71cd94d2d5",
+  "docs_tree": "1098aa4f78a254d5514b70ee5c04051b93f3cd4e",
+  "kind": "Measured code publication to final README documentation delta",
+  "measured_source_ref": "02884309b62de4f98b92c837c4c9184fe64ed05c",
+  "measured_source_to_code_binding_valid": true,
+  "measured_source_to_docs_recorded_input_differences": [
+    {
+      "docs_sha256": "2e298556826cbcab3ea2669755dd408f9a914c8072f6ea4f939f1781ba79cae3",
+      "measured_sha256": "054a1d002fab003b6e85d77834369226ff7139c6622cf2c7cad4a0f4d1517202",
+      "path": "README.md"
+    }
+  ],
+  "measured_source_to_final_docs_all_recorded_inputs_identical": false,
+  "note": "Strict measured-source-to-code bindings remain intact and were rerun unchanged. Final README publication changes a recorded packaging input; this separate proof does not claim all measured build inputs match the final docs tree. No native build or performance timing was run.",
+  "only_changed_recorded_input": "README.md",
+  "readme_delta": {
+    "code_sha256": "054a1d002fab003b6e85d77834369226ff7139c6622cf2c7cad4a0f4d1517202",
+    "docs_sha256": "2e298556826cbcab3ea2669755dd408f9a914c8072f6ea4f939f1781ba79cae3",
+    "path": "README.md"
+  },
+  "readme_delta_verifier_sha256": "cd2f01c27af09cc130e27de70666d09355448a9738d9c6b19455253af9533fd7",
+  "recorded_input_count": 547,
+  "repo": "/workspace/scratch/e6acfd2bd33d/repos/wolfxl-oss",
+  "runtime_and_native_build_inputs_unchanged_between_code_and_docs": true,
+  "source_audit": {
+    "explicit_root_readme_native_source_references": [],
+    "readme_references": [
+      {
+        "classification": "packaging metadata",
+        "key": "package.readme",
+        "path": "crates/wolfxl-cli/Cargo.toml",
+        "resolved_package_input": "crates/wolfxl-cli/README.md",
+        "value": "README.md"
+      },
+      {
+        "classification": "non-root-README filename identifier, comment or label",
+        "line": 452,
+        "path": "crates/wolfxl-cli/src/commands/agent.rs",
+        "text": "class: SheetClass::Readme,"
+      },
+      {
+        "classification": "non-root-README filename identifier, comment or label",
+        "line": 487,
+        "path": "crates/wolfxl-cli/src/commands/agent.rs",
+        "text": "class: SheetClass::Readme,"
+      },
+      {
+        "classification": "packaging metadata",
+        "key": "package.readme",
+        "path": "crates/wolfxl-core/Cargo.toml",
+        "resolved_package_input": "crates/wolfxl-core/README.md",
+        "value": "README.md"
+      },
+      {
+        "classification": "non-root-README filename identifier, comment or label",
+        "line": 18,
+        "path": "crates/wolfxl-core/src/map.rs",
+        "text": "/// `Readme` sheets often want a single-column dump, `Summary` sheets"
+      },
+      {
+        "classification": "non-root-README filename identifier, comment or label",
+        "line": 23,
+        "path": "crates/wolfxl-core/src/map.rs",
+        "text": "Readme,"
+      },
+      {
+        "classification": "non-root-README filename identifier, comment or label",
+        "line": 33,
+        "path": "crates/wolfxl-core/src/map.rs",
+        "text": "SheetClass::Readme => \"readme\","
+      },
+      {
+        "classification": "non-root-README filename identifier, comment or label",
+        "line": 70,
+        "path": "crates/wolfxl-core/src/map.rs",
+        "text": "/// 2. Exactly one column wide \u2192 `Readme` (notes-column convention)."
+      },
+      {
+        "classification": "non-root-README filename identifier, comment or label",
+        "line": 80,
+        "path": "crates/wolfxl-core/src/map.rs",
+        "text": "return SheetClass::Readme;"
+      },
+      {
+        "classification": "non-root-README filename identifier, comment or label",
+        "line": 122,
+        "path": "crates/wolfxl-core/src/map.rs",
+        "text": "fn single_column_sheet_is_classified_readme() {"
+      },
+      {
+        "classification": "non-root-README filename identifier, comment or label",
+        "line": 128,
+        "path": "crates/wolfxl-core/src/map.rs",
+        "text": "assert_eq!(classify_sheet(&sheet), SheetClass::Readme);"
+      },
+      {
+        "classification": "non-root-README filename identifier, comment or label",
+        "line": 244,
+        "path": "src/wolfxl_core_bridge.rs",
+        "text": "/// Returns the sheet-class string (`\"empty\"`, `\"readme\"`,"
+      }
+    ],
+    "scanned_source_extensions": [
+      ".c",
+      ".cc",
+      ".cmake",
+      ".cpp",
+      ".h",
+      ".py",
+      ".rs",
+      ".sh",
+      ".toml"
+    ],
+    "scanned_source_file_count": 517,
+    "scanned_source_inputs_sha256": "237001373375e40ee2e56fe483bdcd804341613b6a34db5c65f1e6b791eb99af",
+    "scope": "Recorded root/native/Python/build sources and TOML configuration at the immutable docs ref; filename and include-macro audit, with TOML packaging fields distinguished"
+  },
+  "source_bindings": {
+    "all_measured_inputs_identical_at_code": true,
+    "excluded_standalone_lock_exception": {
+      "applied": false,
+      "requested": false
+    },
+    "path": "publication-bindings-community-v2.json",
+    "runtime_build_dependency_closure_identical_at_code": true,
+    "sha256": "a3009a61577336ef1d4e08960b461864f4557d720564e078d7630cf4f66db5cf"
+  },
+  "wheel_metadata": {
+    "code_input_bytes": 6656,
+    "code_input_sha256": "983a28abace60746739ff97ed059156d49fa0a0884bdc0791946daaf05342679",
+    "docs_input_bytes": 6656,
+    "docs_input_sha256": "983a28abace60746739ff97ed059156d49fa0a0884bdc0791946daaf05342679",
+    "long_description_input_changed": false,
+    "measured_description_matches_code_input": true,
+    "measured_description_matches_docs_input": true,
+    "measured_metadata_sha256": "850ae4946fac9b715fce10b18203af8cc2fa4a384f0d29414c6ab521ebce3aca",
+    "measured_wheel": "/workspace/scratch/e6acfd2bd33d/variant-wheels/oss-final-v2/wolfxl-2.0.9-cp312-cp312-manylinux_2_34_x86_64.whl",
+    "measured_wheel_rebuilt_for_docs_ref": false,
+    "measured_wheel_sha256_verified": "2d4f15405dae21f98b3e9f2307dce2d45e1fdb5b732e6adceaaf6d23af9669c4",
+    "metadata_member": "wolfxl-2.0.9.dist-info/METADATA",
+    "note": "Python wheel long-description input PYPI.md is unchanged; root README.md is a separate recorded documentation/packaging input. The measured wheel was not rebuilt.",
+    "project_readme_input": "PYPI.md"
+  }
+}

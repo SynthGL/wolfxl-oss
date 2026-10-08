@@ -1,0 +1,51 @@
+COMMAND ["/workspace/scratch/e6acfd2bd33d/variant-envs/oss-final-v2/bin/python", "-m", "pytest", "tests/test_merge_negative_probe.py", "tests/test_lazy_merge_metadata.py", "tests/test_merge_xml_preservation.py", "tests/test_streaming_merge_index.py", "tests/test_streaming_style_cache.py", "tests/test_eager_style_cache_windows.py", "tests/test_template_content_type_fast_path.py", "tests/test_modify_xml_splices.py", "tests/test_modify_noop_preservation.py", "tests/test_modify_prefixed_namespace.py", "tests/test_cell_combined_styles.py", "tests/test_cell_by_cell_batch_flush.py", "tests/test_native_reader_flag.py", "tests/test_streaming_reads.py", "tests/test_native_save_lifecycle.py", "tests/test_openpyxl_workbook_lifecycle_parity.py", "tests/test_wolfxl_compat.py", "tests/test_openpyxl_template_workbook_parity.py", "-q"]
+......F................................................................. [ 22%]
+...........................................s............................ [ 45%]
+........................................................................ [ 68%]
+........................................................................ [ 91%]
+...........................                                              [100%]
+=================================== FAILURES ===================================
+______ test_lazy_python_hydration_uses_probe_once_and_keeps_compact_edits ______
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-67/test_lazy_python_hydration_use0')
+
+    def test_lazy_python_hydration_uses_probe_once_and_keeps_compact_edits(tmp_path: Path) -> None:
+        wb = wolfxl.load_workbook(_source(tmp_path), modify=True)
+        reader = wb._rust_reader
+        calls = []
+    
+        class Proxy:
+            def __getattr__(self, name):
+                target = getattr(reader, name)
+                if name != "read_merged_ranges_if_present":
+                    return target
+    
+                def recorded(sheet):
+                    calls.append(sheet)
+                    return target(sheet)
+    
+                return recorded
+    
+        wb._rust_reader = Proxy()
+        try:
+            ws = wb.active
+            assert ws._merged_ranges_loaded is False
+            ws["C2"] = "edited"
+            assert ws._merged_ranges_loaded is True
+            assert calls == ["Sheet"]
+>           assert (2, 3) not in ws._cells
+E           AssertionError: assert (2, 3) not in {(2, 3): <Cell 'Sheet'.C2>}
+E            +  where {(2, 3): <Cell 'Sheet'.C2>} = <Worksheet [Sheet]>._cells
+
+tests/test_merge_negative_probe.py:93: AssertionError
+=============================== warnings summary ===============================
+tests/test_modify_noop_preservation.py::test_modify_noop_preserves_macro_sidecar_package_shape_in_place
+tests/test_modify_noop_preservation.py::test_modify_noop_preserves_macro_sidecar_package_shape_on_copy
+tests/test_native_reader_flag.py::test_native_reader_resolves_case_variant_shared_strings_part
+  /workspace/scratch/e6acfd2bd33d/variant-envs/oss-final-v2/lib/python3.12/site-packages/wolfxl/styles/stylesheet.py:503: UserWarning: Workbook contains no stylesheet, using openpyxl's defaults
+    warn("Workbook contains no stylesheet, using openpyxl's defaults", UserWarning)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_merge_negative_probe.py::test_lazy_python_hydration_uses_probe_once_and_keeps_compact_edits
+1 failed, 313 passed, 1 skipped, 3 warnings in 8.47s
