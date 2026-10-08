@@ -104,9 +104,10 @@ def test_modify_plain_scalar_setitem_uses_compact_dirty_values(tmp_path) -> None
 
     loaded = load_workbook(path, modify=True)
     ws = loaded.active
-    assert ws._merged_ranges_loaded is True  # noqa: SLF001
+    assert ws._merged_ranges_loaded is False  # noqa: SLF001
 
     ws["C2"] = "plain"
+    assert ws._merged_ranges_loaded is True  # noqa: SLF001
 
     assert ws._plain_cell_fast_path is True  # noqa: SLF001
     assert (2, 3) not in ws._dirty  # noqa: SLF001
