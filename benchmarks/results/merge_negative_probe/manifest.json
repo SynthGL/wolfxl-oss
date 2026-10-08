@@ -1,0 +1,55 @@
+{
+  "scope": "Reader-only Community source scan diagnostic; not Python assignment, styled reads, edit/save or openpyxl comparison.",
+  "measurement_edition": "Community",
+  "source_ref": "211fe26c459f4d0759a445cb0cd19aefa34d5a71",
+  "source_file_sha256": {
+    "Cargo.toml": "9fa75ea5aa5b3ef9d477f44dd9f676a774f8d67c799999d7819bdd571204e8fc",
+    "Cargo.lock": "9f1ec9bb3fb60d5d2a342616ef3f7797c4f19a672f80aec9c113ac7a9fd5a60d",
+    "crates/wolfxl-reader/Cargo.toml": "616f4fe1bcca2fbc4a8a10c885578bd3b8890898d659f85cf0fa0677d115f7dc",
+    "crates/wolfxl-reader/src/lib.rs": "da9e21a174349ceac205b33c8e37370cf1171f9e40e2d8c44d917118bd577fd9",
+    "crates/wolfxl-reader/src/merge_metadata.rs": "8f0528a16423050bb1c48103bbba5e904761ffe24047d228b163ebd8f721f9ce",
+    "crates/wolfxl-reader/examples/merge_presence_probe.rs": "343a058b9b0ca9d10317643d0ef03286b3d49dbe6322867572183498f5490446"
+  },
+  "commercial_associated_source_ref": "e61e62be3c9df587a5910aa7efd8e865e09fbeec",
+  "commercial_helper_sha256": "8f0528a16423050bb1c48103bbba5e904761ffe24047d228b163ebd8f721f9ce",
+  "commercial_helper_identical_to_measured_community_helper": true,
+  "commercial_native_timing_measured": false,
+  "fixture_zip_path": "/workspace/scratch/e6acfd2bd33d/perf-contract-fixtures/plain-c2bbd19035ae9ff6eb0c.xlsx",
+  "fixture_zip_sha256": "0e41152df64d917eedda420f6ccb51f98323d5e3a49a88aa385e26aa73930341",
+  "fixture_shape": {
+    "rows": 200000,
+    "columns": 5,
+    "stored_cells": 1000000,
+    "sheet_title": "Data",
+    "merged_ranges": 0
+  },
+  "fixture_worksheet_member": {
+    "path": "xl/worksheets/sheet1.xml",
+    "sha256": "7d7b766636aa47c9b9fa31df79a2f6047a73fafcbbcc54d402a5107373e94000",
+    "uncompressed_bytes": 49394096,
+    "compressed_bytes": 5486310,
+    "compression_type": 8,
+    "crc32": "ed2ee953"
+  },
+  "binary_path": "/workspace/scratch/e6acfd2bd33d/build-targets/oss-merge-negative-probe/release/examples/merge_presence_probe",
+  "binary_sha256": "d2a1b8b0dea9ae59c807cb0f49d45bf9c2ebedfed8f9ece850eac141e43d77cf",
+  "rustc": "rustc 1.90.0 (1159e78c4 2025-09-14)",
+  "cargo_build_jobs": 2,
+  "standard_workspace_release_profile": true,
+  "dependency_seed_manifest_sha256": "bb6fe5cc2f58a8574166e32b2444991315c792df424b22530e209eb39abefd3c",
+  "build_command": "cargo build --release --locked -p wolfxl-reader --example merge_presence_probe",
+  "measurement_command": "merge_presence_probe FIXTURE_PATH Data 7",
+  "measurement_conditions": {
+    "warmup_calls_per_method": 1,
+    "paired_samples": 7,
+    "pair_order": [
+      "exact_xml_ranges",
+      "byte_negative_probe"
+    ],
+    "book_open_outside_timing": true,
+    "each_method_reopens_zip_and_decompresses_worksheet": true,
+    "reserved_quiet_slot": true,
+    "compilation_finished_before_timing": true
+  },
+  "validation": "Six focused release reader tests passed; source ruff/diff checks passed. PyO3 and end-to-end Python checks require rebuilt exact final artifacts."
+}
