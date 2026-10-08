@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Callable
+from weakref import WeakSet
 
 from wolfxl._utils import rowcol_to_a1
 
@@ -24,7 +25,13 @@ class StylePayloadWindow:
         cell_limit: int,
         decode: Callable[[dict[str, Any]], tuple[Any, ...]],
         disabled: object,
+        workbook: Any = None,
     ) -> None:
+        if workbook is not None:
+            windows = getattr(workbook, "_style_payload_windows", None)
+            if windows is None:
+                workbook._style_payload_windows = windows = WeakSet()
+            windows.add(self)
         self._reader = reader
         self._title = title
         self._max_row = max_row

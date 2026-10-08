@@ -1624,6 +1624,7 @@ def _style_payload_cache_for(ws: Worksheet) -> Any:
         ws._style_payload_cache = StylePayloadWindow(  # noqa: SLF001
             reader, ws.title, max_row, max_col, _STYLE_PAYLOAD_CACHE_CELL_LIMIT,
             lambda record: _style_entry_from_record(ws, record), _STYLE_PAYLOAD_CACHE_DISABLED,
+            workbook=wb,
         )
         return ws._style_payload_cache  # noqa: SLF001
 

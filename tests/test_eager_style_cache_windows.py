@@ -305,3 +305,29 @@ def test_close_clears_windows_before_replacing_native_reader(tmp_path: Path) -> 
     finally:
         workbook.close()
         replacement.close()
+
+
+def test_close_detaches_retained_window_after_style_cache_invalidation(tmp_path: Path) -> None:
+    source = tmp_path / "invalidated-window.xlsx"
+    initial = openpyxl.Workbook()
+    initial.active["A1"] = 1
+    initial.active["E30000"] = 2
+    initial.active["A1"].font = openpyxl.styles.Font(bold=True)
+    initial.save(source)
+    initial.close()
+    workbook = wolfxl.load_workbook(source)
+    worksheet = workbook.active
+    reader = CountingReader(workbook._rust_reader)
+    reader_ref = weakref.ref(reader)
+    workbook._rust_reader = reader
+    assert worksheet["A1"].font.bold
+    window = worksheet._style_payload_cache
+    worksheet["B1"].font = wolfxl.styles.Font(italic=True)
+    assert worksheet._style_payload_cache is _STYLE_PAYLOAD_CACHE_DISABLED
+    del reader
+    workbook.close()
+    workbook.close()
+    gc.collect()
+    assert reader_ref() is None
+    assert window._reader is None
+    assert window.get((30000, 5)) is _STYLE_PAYLOAD_CACHE_DISABLED

@@ -34,6 +34,11 @@ def close_workbook(workbook: Any) -> None:
 
 def _clear_worksheet_style_caches(workbook: Any) -> None:
     """Release read-side style windows before dropping the workbook reader."""
+    # A style setter can replace the cache with a disabled sentinel before
+    # close; weak registration still reaches an externally retained window.
+    for window in getattr(workbook, "_style_payload_windows", ()) or ():
+        window.close()
+    workbook._style_payload_windows = None
     for worksheet in getattr(workbook, "_sheets", {}).values():
         cache = getattr(worksheet, "_style_payload_cache", None)
         close = getattr(cache, "close", None)
