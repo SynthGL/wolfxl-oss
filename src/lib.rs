@@ -40,6 +40,7 @@ mod native_writer_workbook;
 mod native_writer_workbook_metadata;
 mod ooxml_util;
 mod streaming;
+mod streaming_blank_rows;
 mod util;
 mod wolfxl;
 mod wolfxl_core_bridge;
@@ -163,6 +164,7 @@ fn _rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_class::<streaming::StreamingSheetReader>()?;
+    m.add_function(wrap_pyfunction!(streaming_blank_rows::streaming_blank_rows, m)?)?;
     m.add_class::<wolfxl::XlsxPatcher>()?;
     wolfxl_core_bridge::register(m)?;
     Ok(())
