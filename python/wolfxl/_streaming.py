@@ -34,11 +34,14 @@ from wolfxl.utils.datetime import from_excel
 from wolfxl.styles.numbers import is_timedelta_format
 from wolfxl.utils.numbers import is_date_format
 from wolfxl._streaming_styles import (
+    _DEFAULT_STYLE,
     cell_border,
     cell_fill,
     cell_style_components,
     streaming_date_style_ids,
+    workbook_style_cache,
 )
+from wolfxl.styles.fills import GradientFill
 
 if TYPE_CHECKING:
     from wolfxl._styles import Alignment, Border, Font, PatternFill
@@ -469,6 +472,43 @@ class StreamingCell:
         )
 
 
+class StreamingBlankCell(StreamingCell):
+    """Coordinate-aware filler for an absent XML cell with a pattern default.
+
+    Source style zero resolves font/alignment/number format from an empty
+    payload. Pattern fills have the same empty default. Share those immutable
+    components without initializing value and per-cell style-cache slots.
+    Border access still resolves workbook/merge state through the normal path.
+    A gradient at source style zero uses the full proxy instead.
+    """
+
+    __slots__ = ()
+    _value = None
+    _style_id = None
+    _cell_type = "blank"
+    value = None
+    data_type = "n"
+    font = _DEFAULT_STYLE.font
+    fill = _DEFAULT_STYLE.fill
+    alignment = _DEFAULT_STYLE.alignment
+
+    def __init__(self, ws: Worksheet, row: int, col: int) -> None:
+        object.__setattr__(self, "_ws", ws)
+        object.__setattr__(self, "_row", row)
+        object.__setattr__(self, "_col", col)
+
+    @property
+    def number_format(self) -> str | None:
+        return "General" if self._ws._workbook._rust_reader is not None else None
+
+    def _resolved_style(self) -> StyleComponents:
+        return cell_style_components(self)
+
+
+def _full_blank_cell(ws: Worksheet, row: int, col: int) -> StreamingCell:
+    return StreamingCell(ws, row, col, None, None, "blank")
+
+
 def _resolve_bounds(
     ws: Worksheet,
     min_row: int | None,
@@ -715,6 +755,11 @@ def stream_iter_rows(
                     yield empty_row
                     counter += 1
         else:
+            default_style = workbook_style_cache(ws._workbook).components(ws._workbook, None)
+            blank_cell = (
+                _full_blank_cell if isinstance(default_style.fill, GradientFill)
+                else StreamingBlankCell
+            )
             counter = mn_r if mn_r is not None else 1
             while True:
                 row = reader.read_next_row()
@@ -729,7 +774,7 @@ def stream_iter_rows(
                     fixed_cmax = _fixed_cmax()
                     empty_row = (
                         tuple(
-                            StreamingCell(ws, counter, col, None, None, "blank")
+                            blank_cell(ws, counter, col)
                             for col in range(cmin, fixed_cmax + 1)
                         )
                         if fixed_cmax is not None
@@ -747,7 +792,7 @@ def stream_iter_rows(
                     rec = by_col.get(col)
                     if rec is None:
                         row_out.append(
-                            StreamingCell(ws, row_idx, col, None, None, "blank")
+                            blank_cell(ws, row_idx, col)
                         )
                     else:
                         _, value, style_id, cell_type = rec
@@ -762,7 +807,7 @@ def stream_iter_rows(
                 while counter <= stream_mx_r:
                     yield (
                         tuple(
-                            StreamingCell(ws, counter, col, None, None, "blank")
+                            blank_cell(ws, counter, col)
                             for col in range(cmin, fixed_cmax + 1)
                         )
                         if fixed_cmax is not None

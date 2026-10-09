@@ -1,0 +1,68 @@
+name: Sparse styled Python overlay evidence
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - python/wolfxl/_streaming.py
+      - tests/test_streaming_blank_cells.py
+      - benchmarks/sparse_styled_profile.py
+      - .github/workflows/sparse-styled-profile.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sparse-styled-profile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  paired-profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_LTO: "false"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "8"
+      BASELINE_REF: ${{ github.event.pull_request.base.sha || 'main' }}
+      CANDIDATE_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install pinned benchmark dependencies
+        run: python -m pip install maturin "openpyxl==3.1.5" pytest defusedxml
+      - name: Build the standard candidate wheel
+        run: |
+          maturin build --release --locked --out dist
+          python -m pip install --no-index --find-links dist wolfxl
+      - name: Test streaming compatibility
+        run: >-
+          python -m pytest tests/test_streaming_blank_cells.py
+          tests/test_streaming_reads.py tests/test_streaming_style_cache.py
+          tests/test_streaming_merge_index.py tests/parity/test_streaming_parity.py -q
+      - name: Compare against the base Python streaming module
+        run: |
+          mkdir -p sparse-profile
+          git rev-parse HEAD > sparse-profile/candidate-ref.txt
+          git rev-parse "$BASELINE_REF" > sparse-profile/baseline-ref.txt
+          git diff --name-only "$BASELINE_REF" HEAD > sparse-profile/changed-files.txt
+          git diff --exit-code "$BASELINE_REF" HEAD -- src crates Cargo.toml Cargo.lock build.rs
+          git show "$BASELINE_REF:python/wolfxl/_streaming.py" > sparse-profile/baseline-streaming.py
+          python benchmarks/sparse_styled_profile.py \
+            --baseline-streaming sparse-profile/baseline-streaming.py \
+            --baseline-ref "$BASELINE_REF" --candidate-ref "$CANDIDATE_REF" \
+            --native-origin "standard release wheel built from $CANDIDATE_REF; native sources unchanged from base" \
+            --output sparse-profile/results.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sparse-styled-python-overlay-evidence
+          path: sparse-profile/
+
