@@ -1,0 +1,806 @@
+{
+  "baseline_python": {
+    "files": 266,
+    "sha256": "229de3400f62024f5f07b34c1f1d9823ea22f93a4f1de185a922cac89980d885"
+  },
+  "baseline_ref": "7b796d4dcc30612c2c5fbc860ca53747f55316aa",
+  "baseline_streaming_sha256": "c4a6ebb0cd2e987791b85c8d008ff656dde9af2ec5faf32955f2698ba3beca71",
+  "candidate_python": {
+    "files": 266,
+    "sha256": "a26f3f7f1053d1975f5c4c4712ccd49b142c44758ec631320cf06a0140304d56"
+  },
+  "candidate_ref": "1d0927e623a35f1c0c339ed6148df1c804283d35",
+  "candidate_streaming_sha256": "8bce65f7df7ef37b7083fe59cc1d24a87d4f015d9a10c64c4dc9ca67bcc14680",
+  "fresh_process_trials": 5,
+  "native_origin": "standard release wheel built from 1d0927e623a35f1c0c339ed6148df1c804283d35; native sources unchanged from base",
+  "native_sha256": "609bb1357c7869c72a6c42122dbf908c72ec7f9ae656bbdc49c6087ef4eec7bd",
+  "openpyxl": "3.1.5",
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "python": "3.12.15",
+  "schema": "wolfxl-sparse-python-overlay-v1",
+  "timing_statistic": "median load + identical public scan + close",
+  "warmups_per_engine_per_case": 1,
+  "workloads": {
+    "dense": {
+      "baseline_over_openpyxl": 0.39562299954215163,
+      "candidate_over_openpyxl": 0.3930926720022842,
+      "candidate_speedup": 1.0064369745866255,
+      "expected_signature": {
+        "first_column_checksum": 200010000.0,
+        "rows": 20000,
+        "styled_cells": 50000
+      },
+      "fixture": {
+        "bytes": 584440,
+        "config": {
+          "builder_openpyxl": "3.1.5",
+          "fixture_version": 2,
+          "kind": "styled",
+          "rows": 20000,
+          "style_cardinality": 0
+        },
+        "max_column": 5,
+        "populated_plain_columns": 5,
+        "populated_value_cells": 100000,
+        "requested_plain_columns": 8,
+        "rows_per_sheet": 20000,
+        "sha256": "766f1a5c1f97378588d586a54665b7bd3a5ab0c0378e1f4ddaeb74fedeb88110",
+        "sheet_count": 1
+      },
+      "median_seconds": {
+        "baseline": 0.5383925910000187,
+        "candidate": 0.5349491370000123,
+        "openpyxl": 1.3608728300000053
+      },
+      "samples": {
+        "baseline": [
+          {
+            "iterate_and_close_seconds": 0.5261211609999918,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5364422060000038
+          },
+          {
+            "iterate_and_close_seconds": 0.5277987730000007,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.538112773999984
+          },
+          {
+            "iterate_and_close_seconds": 0.5280531540000197,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5385687899999994
+          },
+          {
+            "iterate_and_close_seconds": 0.5333988860000147,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5435584450000022
+          },
+          {
+            "iterate_and_close_seconds": 0.5280633260000229,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5383925910000187
+          }
+        ],
+        "candidate": [
+          {
+            "iterate_and_close_seconds": 0.524477251999997,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5349491370000123
+          },
+          {
+            "iterate_and_close_seconds": 0.5243469099999913,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5353786629999888
+          },
+          {
+            "iterate_and_close_seconds": 0.5240131310000038,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5342994260000182
+          },
+          {
+            "iterate_and_close_seconds": 0.5209716779999951,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5312517619999824
+          },
+          {
+            "iterate_and_close_seconds": 0.5279401869999845,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5382958209999913
+          }
+        ],
+        "openpyxl": [
+          {
+            "iterate_and_close_seconds": 1.3554154070000095,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 1.3608728300000053
+          },
+          {
+            "iterate_and_close_seconds": 1.365046062999994,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 1.3704243500000075
+          },
+          {
+            "iterate_and_close_seconds": 1.3614897429999928,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 1.3668800339999905
+          },
+          {
+            "iterate_and_close_seconds": 1.3548376980000114,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 1.3602458720000072
+          },
+          {
+            "iterate_and_close_seconds": 1.3485914839999964,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 1.3540600599999948
+          }
+        ]
+      }
+    },
+    "sparse": {
+      "baseline_over_openpyxl": 11.120299596873673,
+      "candidate_over_openpyxl": 2.851926852325103,
+      "candidate_speedup": 3.8992232875143964,
+      "expected_signature": {
+        "first_column_checksum": 19532811.0,
+        "rows": 25000,
+        "styled_cells": 3127
+      },
+      "fixture": {
+        "bytes": 50564,
+        "config": {
+          "builder_openpyxl": "3.1.5",
+          "fixture_version": 2,
+          "kind": "styled_sparse",
+          "rows": 25000,
+          "style_cardinality": 0
+        },
+        "max_column": 32,
+        "populated_plain_columns": 5,
+        "populated_value_cells": 7816,
+        "requested_plain_columns": 8,
+        "rows_per_sheet": 25000,
+        "sha256": "5a562d80a9cd2da0db518a52171af98f4ffadeab80297e0a8a9392850914dea5",
+        "sheet_count": 1
+      },
+      "median_seconds": {
+        "baseline": 3.279210135999989,
+        "candidate": 0.8409906010000157,
+        "openpyxl": 0.29488505300000156
+      },
+      "profiles": {
+        "baseline": {
+          "iterate_and_close_seconds": 11.232482817999994,
+          "profile_top_self_time": [
+            {
+              "calls": 800000,
+              "cumulative_seconds": 2.269303908,
+              "file": "_streaming.py",
+              "function": "__init__",
+              "line": 304,
+              "self_seconds": 1.902972585
+            },
+            {
+              "calls": 3200000,
+              "cumulative_seconds": 5.03947814,
+              "file": "_streaming.py",
+              "function": "_resolved_style",
+              "line": 395,
+              "self_seconds": 1.874459751
+            },
+            {
+              "calls": 8000739,
+              "cumulative_seconds": 1.2502912700000002,
+              "file": "~",
+              "function": "<built-in method builtins.getattr>",
+              "line": 0,
+              "self_seconds": 1.1608940520000002
+            },
+            {
+              "calls": 1,
+              "cumulative_seconds": 11.246751072,
+              "file": "sparse_styled_profile.py",
+              "function": "operation",
+              "line": 28,
+              "self_seconds": 0.9214065810000001
+            },
+            {
+              "calls": 1600000,
+              "cumulative_seconds": 4.976156457,
+              "file": "_streaming_styles.py",
+              "function": "cell_fill",
+              "line": 222,
+              "self_seconds": 0.6991583990000001
+            },
+            {
+              "calls": 800000,
+              "cumulative_seconds": 2.392375513,
+              "file": "_streaming_styles.py",
+              "function": "cell_style_components",
+              "line": 190,
+              "self_seconds": 0.618620637
+            },
+            {
+              "calls": 1600000,
+              "cumulative_seconds": 5.385921671,
+              "file": "_streaming.py",
+              "function": "fill",
+              "line": 413,
+              "self_seconds": 0.40976521400000004
+            },
+            {
+              "calls": 3200087,
+              "cumulative_seconds": 0.355602584,
+              "file": "~",
+              "function": "<built-in method builtins.id>",
+              "line": 0,
+              "self_seconds": 0.355602584
+            },
+            {
+              "calls": 773388,
+              "cumulative_seconds": 2.4766239430000003,
+              "file": "_streaming.py",
+              "function": "<genexpr>",
+              "line": 731,
+              "self_seconds": 0.35245639700000003
+            },
+            {
+              "calls": 800000,
+              "cumulative_seconds": 0.48802433900000003,
+              "file": "_streaming_styles.py",
+              "function": "components",
+              "line": 87,
+              "self_seconds": 0.34845239100000003
+            },
+            {
+              "calls": 800000,
+              "cumulative_seconds": 0.567024056,
+              "file": "_streaming_styles.py",
+              "function": "merge_bounds",
+              "line": 136,
+              "self_seconds": 0.346691793
+            },
+            {
+              "calls": 2427868,
+              "cumulative_seconds": 0.342831053,
+              "file": "~",
+              "function": "<built-in method builtins.isinstance>",
+              "line": 0,
+              "self_seconds": 0.342811307
+            },
+            {
+              "calls": 800001,
+              "cumulative_seconds": 0.480119854,
+              "file": "_streaming_styles.py",
+              "function": "workbook_style_cache",
+              "line": 175,
+              "self_seconds": 0.299926615
+            },
+            {
+              "calls": 1650834,
+              "cumulative_seconds": 0.29404624300000004,
+              "file": "~",
+              "function": "<method 'get' of 'dict' objects>",
+              "line": 0,
+              "self_seconds": 0.29404624300000004
+            },
+            {
+              "calls": 798437,
+              "cumulative_seconds": 0.749800691,
+              "file": "_streaming.py",
+              "function": "number_format",
+              "line": 428,
+              "self_seconds": 0.266743876
+            },
+            {
+              "calls": 800000,
+              "cumulative_seconds": 0.7484374730000001,
+              "file": "_streaming.py",
+              "function": "font",
+              "line": 408,
+              "self_seconds": 0.24568753200000001
+            },
+            {
+              "calls": 800000,
+              "cumulative_seconds": 0.805617165,
+              "file": "_streaming_styles.py",
+              "function": "merge_at",
+              "line": 161,
+              "self_seconds": 0.23859310900000003
+            },
+            {
+              "calls": 25001,
+              "cumulative_seconds": 2.8468286710000004,
+              "file": "_streaming.py",
+              "function": "stream_iter_rows",
+              "line": 486,
+              "self_seconds": 0.190787816
+            },
+            {
+              "calls": 800000,
+              "cumulative_seconds": 0.26405993,
+              "file": "_streaming.py",
+              "function": "_streaming_value",
+              "line": 208,
+              "self_seconds": 0.158855737
+            },
+            {
+              "calls": 800000,
+              "cumulative_seconds": 0.089397218,
+              "file": "_styles.py",
+              "function": "fill_type",
+              "line": 516,
+              "self_seconds": 0.089397218
+            },
+            {
+              "calls": 800003,
+              "cumulative_seconds": 0.074665534,
+              "file": "_worksheet.py",
+              "function": "title",
+              "line": 551,
+              "self_seconds": 0.074665534
+            },
+            {
+              "calls": 25000,
+              "cumulative_seconds": 0.024445416,
+              "file": "_streaming.py",
+              "function": "value",
+              "line": 327,
+              "self_seconds": 0.010402195000000001
+            },
+            {
+              "calls": 50617,
+              "cumulative_seconds": 0.009772893000000001,
+              "file": "~",
+              "function": "<method 'append' of 'list' objects>",
+              "line": 0,
+              "self_seconds": 0.009772893000000001
+            },
+            {
+              "calls": 1565,
+              "cumulative_seconds": 0.009737220000000001,
+              "file": "~",
+              "function": "<method 'read_next_row' of 'wolfxl._rust.StreamingSheetReader' objects>",
+              "line": 0,
+              "self_seconds": 0.009737220000000001
+            },
+            {
+              "calls": 63,
+              "cumulative_seconds": 0.014430115,
+              "file": "~",
+              "function": "<built-in method builtins.exec>",
+              "line": 0,
+              "self_seconds": 0.006424401000000001
+            }
+          ],
+          "proxy_constructions": {
+            "StreamingCell": 800000
+          },
+          "signature": {
+            "first_column_checksum": 19532811.0,
+            "rows": 25000,
+            "styled_cells": 3127
+          },
+          "total_seconds": 11.246744409999991
+        },
+        "candidate": {
+          "iterate_and_close_seconds": 2.201358364999976,
+          "profile_top_self_time": [
+            {
+              "calls": 792184,
+              "cumulative_seconds": 0.592737936,
+              "file": "_streaming.py",
+              "function": "__init__",
+              "line": 495,
+              "self_seconds": 0.592737936
+            },
+            {
+              "calls": 1,
+              "cumulative_seconds": 2.2155215740000003,
+              "file": "sparse_styled_profile.py",
+              "function": "operation",
+              "line": 28,
+              "self_seconds": 0.513884703
+            },
+            {
+              "calls": 2455452,
+              "cumulative_seconds": 0.450590747,
+              "file": "~",
+              "function": "<built-in method builtins.getattr>",
+              "line": 0,
+              "self_seconds": 0.37937986700000004
+            },
+            {
+              "calls": 773388,
+              "cumulative_seconds": 0.840651785,
+              "file": "_streaming.py",
+              "function": "<genexpr>",
+              "line": 776,
+              "self_seconds": 0.28014326900000003
+            },
+            {
+              "calls": 25001,
+              "cumulative_seconds": 1.0892840620000002,
+              "file": "_streaming.py",
+              "function": "stream_iter_rows",
+              "line": 526,
+              "self_seconds": 0.16029664300000002
+            },
+            {
+              "calls": 792184,
+              "cumulative_seconds": 0.07193228,
+              "file": "_streaming.py",
+              "function": "number_format",
+              "line": 500,
+              "self_seconds": 0.07193228
+            },
+            {
+              "calls": 800000,
+              "cumulative_seconds": 0.07121088,
+              "file": "_styles.py",
+              "function": "fill_type",
+              "line": 516,
+              "self_seconds": 0.07121088
+            },
+            {
+              "calls": 7816,
+              "cumulative_seconds": 0.025179910000000003,
+              "file": "_streaming.py",
+              "function": "__init__",
+              "line": 307,
+              "self_seconds": 0.020656576000000003
+            },
+            {
+              "calls": 31264,
+              "cumulative_seconds": 0.056469843000000006,
+              "file": "_streaming.py",
+              "function": "_resolved_style",
+              "line": 398,
+              "self_seconds": 0.020569941
+            },
+            {
+              "calls": 66467,
+              "cumulative_seconds": 0.012417732,
+              "file": "~",
+              "function": "<method 'get' of 'dict' objects>",
+              "line": 0,
+              "self_seconds": 0.012417732
+            },
+            {
+              "calls": 50617,
+              "cumulative_seconds": 0.009016207,
+              "file": "~",
+              "function": "<method 'append' of 'list' objects>",
+              "line": 0,
+              "self_seconds": 0.009016207
+            },
+            {
+              "calls": 15632,
+              "cumulative_seconds": 0.04775423,
+              "file": "_streaming_styles.py",
+              "function": "cell_fill",
+              "line": 222,
+              "self_seconds": 0.0077323290000000005
+            },
+            {
+              "calls": 1565,
+              "cumulative_seconds": 0.007393669,
+              "file": "~",
+              "function": "<method 'read_next_row' of 'wolfxl._rust.StreamingSheetReader' objects>",
+              "line": 0,
+              "self_seconds": 0.007393669
+            },
+            {
+              "calls": 7816,
+              "cumulative_seconds": 0.02754788,
+              "file": "_streaming_styles.py",
+              "function": "cell_style_components",
+              "line": 190,
+              "self_seconds": 0.007195864000000001
+            },
+            {
+              "calls": 63,
+              "cumulative_seconds": 0.0143151,
+              "file": "~",
+              "function": "<built-in method builtins.exec>",
+              "line": 0,
+              "self_seconds": 0.006320705
+            },
+            {
+              "calls": 27880,
+              "cumulative_seconds": 0.004729208,
+              "file": "~",
+              "function": "<built-in method builtins.isinstance>",
+              "line": 0,
+              "self_seconds": 0.004703420000000001
+            },
+            {
+              "calls": 15632,
+              "cumulative_seconds": 0.05218140600000001,
+              "file": "_streaming.py",
+              "function": "fill",
+              "line": 416,
+              "self_seconds": 0.0044271760000000005
+            },
+            {
+              "calls": 7817,
+              "cumulative_seconds": 0.005870668000000001,
+              "file": "_streaming_styles.py",
+              "function": "components",
+              "line": 87,
+              "self_seconds": 0.004153437
+            },
+            {
+              "calls": 31352,
+              "cumulative_seconds": 0.00395207,
+              "file": "~",
+              "function": "<built-in method builtins.id>",
+              "line": 0,
+              "self_seconds": 0.00395207
+            },
+            {
+              "calls": 7816,
+              "cumulative_seconds": 0.006447807000000001,
+              "file": "_streaming_styles.py",
+              "function": "merge_bounds",
+              "line": 136,
+              "self_seconds": 0.003793494
+            },
+            {
+              "calls": 7818,
+              "cumulative_seconds": 0.0054815110000000005,
+              "file": "_streaming_styles.py",
+              "function": "workbook_style_cache",
+              "line": 175,
+              "self_seconds": 0.003477417
+            },
+            {
+              "calls": 25001,
+              "cumulative_seconds": 0.00284839,
+              "file": "_streaming.py",
+              "function": "_fixed_cmax",
+              "line": 578,
+              "self_seconds": 0.00284839
+            },
+            {
+              "calls": 7816,
+              "cumulative_seconds": 0.009270740000000001,
+              "file": "_streaming_styles.py",
+              "function": "merge_at",
+              "line": 161,
+              "self_seconds": 0.002822933
+            },
+            {
+              "calls": 7816,
+              "cumulative_seconds": 0.008035834,
+              "file": "_streaming.py",
+              "function": "font",
+              "line": 411,
+              "self_seconds": 0.002675221
+            },
+            {
+              "calls": 6253,
+              "cumulative_seconds": 0.006471376,
+              "file": "_streaming.py",
+              "function": "number_format",
+              "line": 431,
+              "self_seconds": 0.002353052
+            }
+          ],
+          "proxy_constructions": {
+            "StreamingBlankCell": 792184,
+            "StreamingCell": 7816
+          },
+          "signature": {
+            "first_column_checksum": 19532811.0,
+            "rows": 25000,
+            "styled_cells": 3127
+          },
+          "total_seconds": 2.2155139699999893
+        }
+      },
+      "samples": {
+        "baseline": [
+          {
+            "iterate_and_close_seconds": 3.3574063249999995,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 3.368002208000007
+          },
+          {
+            "iterate_and_close_seconds": 3.253180283000006,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 3.2634471759999997
+          },
+          {
+            "iterate_and_close_seconds": 3.2407662860000244,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 3.2513173440000003
+          },
+          {
+            "iterate_and_close_seconds": 3.2799061659999893,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 3.2903815589999965
+          },
+          {
+            "iterate_and_close_seconds": 3.268758740999999,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 3.279210135999989
+          }
+        ],
+        "candidate": [
+          {
+            "iterate_and_close_seconds": 0.8306830630000093,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.8409906010000157
+          },
+          {
+            "iterate_and_close_seconds": 0.825887578999982,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.8361500729999989
+          },
+          {
+            "iterate_and_close_seconds": 0.8375240410000231,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.8482166660000132
+          },
+          {
+            "iterate_and_close_seconds": 0.8298839850000093,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.8402467790000117
+          },
+          {
+            "iterate_and_close_seconds": 0.8416764290000174,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.8518424310000228
+          }
+        ],
+        "openpyxl": [
+          {
+            "iterate_and_close_seconds": 0.3028632939999909,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.30814819599999055
+          },
+          {
+            "iterate_and_close_seconds": 0.28403483800002505,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.28920329400000355
+          },
+          {
+            "iterate_and_close_seconds": 0.28870909900001607,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.29408806200001436
+          },
+          {
+            "iterate_and_close_seconds": 0.28958117599998445,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.29488505300000156
+          },
+          {
+            "iterate_and_close_seconds": 0.2903988399999946,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.2956108399999948
+          }
+        ]
+      }
+    }
+  }
+}
