@@ -164,7 +164,10 @@ fn _rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_class::<streaming::StreamingSheetReader>()?;
-    m.add_function(wrap_pyfunction!(streaming_blank_rows::streaming_blank_rows, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        streaming_blank_rows::streaming_blank_rows,
+        m
+    )?)?;
     m.add_class::<wolfxl::XlsxPatcher>()?;
     wolfxl_core_bridge::register(m)?;
     Ok(())
