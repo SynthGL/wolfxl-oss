@@ -1432,6 +1432,7 @@ dependencies = [
 name = "wolfxl-reader"
 version = "0.1.0"
 dependencies = [
+ "memchr",
  "quick-xml 0.37.5",
  "wolfxl-formula",
  "wolfxl-rels",

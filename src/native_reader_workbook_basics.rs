@@ -25,6 +25,7 @@ pub(crate) fn open_xlsx_path(path: &str, permissive: bool) -> PyResult<NativeXls
         sheet_cache: HashMap::new(),
         sheet_cell_indexes: HashMap::new(),
         sheet_merged_bounds: HashMap::new(),
+        sheet_merge_metadata: HashMap::new(),
         opened_from_bytes: false,
         source_path: Some(path.to_string()),
     })
@@ -40,6 +41,7 @@ pub(crate) fn open_xlsx_bytes(data: &[u8], permissive: bool) -> PyResult<NativeX
         sheet_cache: HashMap::new(),
         sheet_cell_indexes: HashMap::new(),
         sheet_merged_bounds: HashMap::new(),
+        sheet_merge_metadata: HashMap::new(),
         opened_from_bytes: true,
         source_path: None,
     })

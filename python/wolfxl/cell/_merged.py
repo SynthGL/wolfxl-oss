@@ -123,7 +123,11 @@ class MergedCell:
 
     @property
     def border(self) -> Border:
-        return Border()
+        if self._parent is None:
+            return Border()
+        from wolfxl._worksheet_collections import _merged_border_for_cell
+
+        return _merged_border_for_cell(self._parent, self._row, self._col) or Border()
 
     @property
     def alignment(self) -> Alignment:

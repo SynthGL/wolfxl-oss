@@ -153,19 +153,9 @@ def _hydrate_stylesheet(
         if source_bytes is not None:
             with zipfile.ZipFile(BytesIO(source_bytes), "r") as archive:
                 apply_stylesheet(archive, wb)
-                if not read_only:
-                    if _archive_has_merged_cells(archive):
-                        _hydrate_merged_cell_borders(archive, wb)
-                    else:
-                        _mark_workbook_known_unmerged(wb)
         elif source_path is not None:
             with zipfile.ZipFile(source_path, "r") as archive:
                 apply_stylesheet(archive, wb)
-                if not read_only:
-                    if _archive_has_merged_cells(archive):
-                        _hydrate_merged_cell_borders(archive, wb)
-                    else:
-                        _mark_workbook_known_unmerged(wb)
     except Exception:
         return
 

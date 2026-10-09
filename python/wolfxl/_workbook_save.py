@@ -85,6 +85,9 @@ def save_workbook(
     if wb._rust_writer is not None:  # noqa: SLF001
         apply_writer_unmerged_ranges(wb, filename)
         apply_sheet_state_authoring(wb, filename)
+    from wolfxl._workbook_merge_updates import apply_merge_updates
+
+    apply_merge_updates(wb, filename)
     apply_workbook_template_content_type(wb, filename)
     apply_custom_doc_props_authoring(wb, filename)
     # Mark consumed AFTER save succeeds so a write failure leaves the

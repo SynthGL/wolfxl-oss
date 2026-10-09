@@ -1,0 +1,63 @@
+{
+  "before_source_ref": "93e48b23605c798fcb98b2e4a86445a0b9c6679e",
+  "after_source_ref": "9ca6e2c2d799c1f448b3ca15ff93339f5eb3e832",
+  "after_native_source_ref_at_measurement": "089ba52765860c60f8b3dac592978587a89a9034",
+  "after_package_source_ref_certified": "9ca6e2c2d799c1f448b3ca15ff93339f5eb3e832",
+  "after_package_source_manifest_sha256": "1c7e98a3d6736e0828f911cd485a860492b1e4a6c01ae2467f71b4451e7a666c",
+  "after_native_sha256_verified": true,
+  "fixture_hashes_match": true,
+  "measurement_scope": "Matched load/open+metadata/open+single-late-border diagnostic. Not a styled full-sheet read or edit/save throughput claim.",
+  "measurement_conditions": "One warm-up and seven samples per fixture/workload, sequential baseline then optimized; GC before timing, close outside timing, fixture generation excluded, root-reserved quiet slot.",
+  "validation": {
+    "rust_reader_merge_metadata_tests": 2,
+    "public_native_bridge_cargo_check": "passed",
+    "private_reader_merge_metadata_tests": 2,
+    "private_native_bridge_cargo_check": "passed",
+    "python_semantic_xml_tests": 22,
+    "public_focused_package_suite": {
+      "passed": 86,
+      "skipped": 1,
+      "seconds": 3.19,
+      "installed_source_ref": "9ca6e2c2d799c1f448b3ca15ff93339f5eb3e832"
+    }
+  },
+  "workloads": {
+    "unmerged_100000_cells/load_only": {
+      "before_median_seconds": 0.009489895001024706,
+      "after_median_seconds": 0.001195542999994359,
+      "speedup": 7.93772787852004,
+      "change_percent": -87.40193648227651
+    },
+    "unmerged_100000_cells/load_and_merge_ranges": {
+      "before_median_seconds": 0.13258063200009929,
+      "after_median_seconds": 0.03118739100136736,
+      "speedup": 4.251097246136636,
+      "change_percent": -76.47666138645047
+    },
+    "unmerged_100000_cells/load_and_first_border": {
+      "before_median_seconds": 0.14406398800019815,
+      "after_median_seconds": 0.1673306100001355,
+      "speedup": 0.8609541792746797,
+      "change_percent": 16.15019986806512
+    },
+    "one_merge_100000_cells/load_only": {
+      "before_median_seconds": 0.73039938400143,
+      "after_median_seconds": 0.0012031240003125276,
+      "speedup": 607.0857067199216,
+      "change_percent": -99.835278612405
+    },
+    "one_merge_100000_cells/load_and_merge_ranges": {
+      "before_median_seconds": 0.9101468749995547,
+      "after_median_seconds": 0.03326361499966879,
+      "speedup": 27.361634476848568,
+      "change_percent": -96.34524757340016
+    },
+    "one_merge_100000_cells/load_and_first_border": {
+      "before_median_seconds": 1.000422790999437,
+      "after_median_seconds": 0.08711989899893524,
+      "speedup": 11.48328685518407,
+      "change_percent": -91.29169189439385
+    }
+  },
+  "after_measured_python_hashes_match_final_package": true
+}

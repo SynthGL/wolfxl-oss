@@ -120,6 +120,7 @@ class Cell:
         "_font",
         "_fill",
         "_border",
+        "_border_authored",
         "_alignment",
         "_number_format",
         "_protection",
@@ -178,6 +179,7 @@ class Cell:
         self._font: Font | None | _Sentinel = _UNSET
         self._fill: PatternFill | GradientFill | None | _Sentinel = _UNSET
         self._border: Border | None | _Sentinel = _UNSET
+        self._border_authored = False
         self._alignment: Alignment | None | _Sentinel = _UNSET
         self._number_format: str | None | _Sentinel = _UNSET
         self._protection: Protection | None | _Sentinel = _UNSET
@@ -366,6 +368,7 @@ class Cell:
             self._font = _copy(value.font)
             self._fill = _copy(value.fill)
             self._border = _copy(value.border)
+            self._border_authored = True
             self._alignment = _copy(value.alignment)
             self._number_format = value.number_format
             self._protection = _copy(value.protection)
@@ -570,6 +573,8 @@ class Cell:
             style_value = getattr(style, style_attr, None)
             if getattr(self, cell_attr, _UNSET) is _UNSET and style_value is not None:
                 setattr(self, cell_attr, _copy(style_value))
+                if cell_attr == "_border":
+                    self._border_authored = True
         number_format = getattr(style, "number_format", "General")
         if (
             getattr(self, "_number_format", _UNSET) is _UNSET
@@ -1266,6 +1271,8 @@ class Cell:
             )
         self._ensure_style_slots()
         setattr(self, storage_attr, value)
+        if storage_attr == "_border":
+            self._border_authored = True
         key = (self._row, self._col)
         self._format_dirty = True
         format_dirty_cells = getattr(ws, "_format_dirty_cells", None)
@@ -1472,6 +1479,11 @@ class Cell:
         reader = getattr(wb, "_rust_reader", None)
         if reader is None:
             return Border()
+        from wolfxl._worksheet_collections import _merged_border_for_cell
+
+        merged_border = _merged_border_for_cell(self._ws, self.row, self.column)
+        if merged_border is not None:
+            return merged_border
         payload = reader.read_cell_border(
             self._ws.title, self.coordinate,
         )

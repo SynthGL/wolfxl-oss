@@ -250,7 +250,7 @@ def _inject_auto_filter_details(path: Path) -> None:
         '<filterColumn colId="0"><filters><filter val="Label"/></filters></filterColumn>'
         '<filterColumn colId="1"><customFilters and="1">'
         '<customFilter operator="greaterThan" val="10"/>'
-        '</customFilters></filterColumn>'
+        "</customFilters></filterColumn>"
         '<sortState ref="A2:D6"><sortCondition ref="B2:B6" descending="1"/></sortState>'
         "</autoFilter>"
     )
@@ -558,9 +558,7 @@ def _make_chart_xlsx(path: Path) -> None:
     chart.add_data(data, titles_from_data=True)
     chart.set_categories(cats)
     chart.dataLabels = DataLabelList(showVal=True, dLblPos="outEnd")
-    chart.series[0].trendline = Trendline(
-        trendlineType="poly", order=3, dispEq=True, dispRSqr=True
-    )
+    chart.series[0].trendline = Trendline(trendlineType="poly", order=3, dispEq=True, dispRSqr=True)
     chart.series[0].errBars = ErrorBars(
         errBarType="both", errValType="fixedVal", noEndCap=True, val=2
     )
@@ -623,16 +621,16 @@ def _make_chart_family_xlsx(path: Path) -> None:
 
     bubble = BubbleChart()
     bubble.title = "Bubble Trend"
-    bubble.series.append(
-        Series(expenses, sales, bubble_sizes, title="Bubble Expenses")
-    )
+    bubble.series.append(Series(expenses, sales, bubble_sizes, title="Bubble Expenses"))
     ws.add_chart(bubble, "F62")
 
     wb.save(path)
     wb.close()
 
 
-def test_native_reader_flag_loads_path_values(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_native_reader_flag_loads_path_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     path = tmp_path / "native-smoke.xlsx"
     _make_basic_xlsx(path)
 
@@ -774,8 +772,8 @@ def test_native_reader_resolves_case_variant_shared_strings_part(
         read_only_wb.close()
 
 
-def test_native_reader_hydrates_merged_border_table_without_materializing_cells() -> None:
-    """Merged-cell border normalization should match openpyxl's style table shape."""
+def test_native_reader_keeps_source_border_table_without_materializing_cells() -> None:
+    """Opening preserves source styles; merged borders resolve lazily."""
     path = Path(__file__).parent / "vendored_openpyxl/reader/tests/data/complex-styles.xlsx"
     if not path.exists():
         pytest.skip("vendored openpyxl fixture is not present in clean checkouts")
@@ -783,7 +781,12 @@ def test_native_reader_hydrates_merged_border_table_without_materializing_cells(
     wb = wolfxl.load_workbook(path)
     try:
         ws = wb.active
-        assert len(wb._borders) == 11  # noqa: SLF001
+        from xml.etree import ElementTree as ET
+
+        with zipfile.ZipFile(path) as archive:
+            styles = ET.fromstring(archive.read("xl/styles.xml"))
+        source_borders = next(node for node in styles if node.tag.rsplit("}", 1)[-1] == "borders")
+        assert len(wb._borders) == len(source_borders)  # noqa: SLF001
         assert len(ws._cells) == 0  # noqa: SLF001
     finally:
         wb.close()
@@ -897,9 +900,7 @@ def test_native_reader_loads_workbook_calc_properties(
         wb.close()
 
 
-def test_native_reader_loads_print_area(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_native_reader_loads_print_area(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "native-print-area.xlsx"
     _make_print_area_xlsx(path)
     expected = openpyxl.load_workbook(path)
@@ -916,9 +917,7 @@ def test_native_reader_loads_print_area(
         wb.close()
 
 
-def test_native_reader_loads_print_titles(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_native_reader_loads_print_titles(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "native-print-titles.xlsx"
     _make_print_titles_xlsx(path)
 
