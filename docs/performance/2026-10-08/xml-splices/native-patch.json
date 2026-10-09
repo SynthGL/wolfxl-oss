@@ -1,0 +1,353 @@
+{
+  "compiled_cargo_lock_sha256": "661d07ab3b72e91854fbcef65717112c21f480bc0635a159cc8272ef142cd555",
+  "contract": "wolfxl-xml-splice-patch-v1",
+  "created_utc": "2026-10-08T15:19:18.255714+00:00",
+  "environment": {
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+    "rustc": "rustc 1.90.0 (1159e78c4 2025-09-14)"
+  },
+  "fixture": {
+    "rows": 200000,
+    "sha256": "ea139603e451b66797a1feed98054cf5099f8caec9c229a0241e07a49b80a289",
+    "worksheet_bytes": 49394096,
+    "worksheet_sha256": "7d7b766636aa47c9b9fa31df79a2f6047a73fafcbbcc54d402a5107373e94000"
+  },
+  "medians_seconds": {
+    "bottom": {
+      "baseline": 0.565308496,
+      "candidate": 0.181669592
+    },
+    "middle": {
+      "baseline": 0.308016412,
+      "candidate": 0.100504302
+    },
+    "top": {
+      "baseline": 0.022462252,
+      "candidate": 0.02312305
+    }
+  },
+  "order": "alternates baseline/candidate each round",
+  "producer_sha256": "d2c349ef71fb9e310d3077613d8ffd8e31666550a8460880797c8b6ea84224a0",
+  "raw_samples": [
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 0,
+      "seconds": 0.02349768,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 0,
+      "seconds": 0.022462252,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 1,
+      "seconds": 0.023136721,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 1,
+      "seconds": 0.022128081,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 2,
+      "seconds": 0.022420169,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 2,
+      "seconds": 0.024781553,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 3,
+      "seconds": 0.025507748,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 3,
+      "seconds": 0.023748157,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 4,
+      "seconds": 0.024407454,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 4,
+      "seconds": 0.021232578,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 5,
+      "seconds": 0.022117195,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 5,
+      "seconds": 0.02166383,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 6,
+      "seconds": 0.02312305,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394073,
+      "position": "top",
+      "round": 6,
+      "seconds": 0.021266588,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 0,
+      "seconds": 0.098583705,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 0,
+      "seconds": 0.280858514,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 1,
+      "seconds": 0.284184291,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 1,
+      "seconds": 0.09764586,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 2,
+      "seconds": 0.095917375,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 2,
+      "seconds": 0.349106612,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 3,
+      "seconds": 0.312185857,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 3,
+      "seconds": 0.100504302,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 4,
+      "seconds": 0.127550966,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 4,
+      "seconds": 0.338679258,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 5,
+      "seconds": 0.278967521,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 5,
+      "seconds": 0.103016285,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 6,
+      "seconds": 0.102088745,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394066,
+      "position": "middle",
+      "round": 6,
+      "seconds": 0.308016412,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 0,
+      "seconds": 0.171237307,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 0,
+      "seconds": 0.532750522,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 1,
+      "seconds": 0.557883378,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 1,
+      "seconds": 0.181581413,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 2,
+      "seconds": 0.175242333,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 2,
+      "seconds": 0.549632434,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 3,
+      "seconds": 0.597059087,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 3,
+      "seconds": 0.189359834,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 4,
+      "seconds": 0.189842181,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 4,
+      "seconds": 0.605451344,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 5,
+      "seconds": 0.591164188,
+      "variant": "baseline"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 5,
+      "seconds": 0.181669592,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 6,
+      "seconds": 0.187076464,
+      "variant": "candidate"
+    },
+    {
+      "output_bytes": 49394069,
+      "position": "bottom",
+      "round": 6,
+      "seconds": 0.565308496,
+      "variant": "baseline"
+    }
+  ],
+  "rounds": 7,
+  "sources": {
+    "baseline": {
+      "cargo_lock_sha256": "9f2c21d24822f8887ba30516e64eeb26c58aadd5d3754afb28a77595dadc90c6",
+      "commit": "93e48b23605c798fcb98b2e4a86445a0b9c6679e",
+      "dirty": false,
+      "module": "src/wolfxl/sheet_patcher.rs",
+      "module_sha256": "bbcafddec04791cc95c5599e754dc31b16de862cb949b325e05299401709e8f2",
+      "root": "/workspace/scratch/e6acfd2bd33d/repos/wolfxl-oss"
+    },
+    "candidate": {
+      "cargo_lock_sha256": "9f2c21d24822f8887ba30516e64eeb26c58aadd5d3754afb28a77595dadc90c6",
+      "commit": "944b956add13270898408857489eacec6c1b9bb1",
+      "dirty": false,
+      "module": "src/wolfxl/sheet_patcher.rs",
+      "module_sha256": "1580184ca5061fb906625cbfcd856ba97a3da2e8e67a03e96d743aba8e4cba6f",
+      "root": "/workspace/scratch/e6acfd2bd33d/worktrees/xml-splices-oss"
+    }
+  },
+  "speedups": {
+    "bottom": 3.1117397786636745,
+    "middle": 3.0647087325674875,
+    "top": 0.9714225415764789
+  },
+  "timing_scope": "native patch_worksheet only; XML inflate/read, Cargo compilation, validation, output deallocation, and ZIP compression excluded",
+  "warmups": 1
+}

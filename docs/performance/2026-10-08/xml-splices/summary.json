@@ -1,0 +1,219 @@
+{
+  "cases": [
+    {
+      "case": "edit_top",
+      "phases": {
+        "load": {
+          "after_median_seconds": 0.11348013799943146,
+          "after_range_seconds": [
+            0.11271060800027044,
+            0.12131995200070378
+          ],
+          "before_median_seconds": 0.11933921700074279,
+          "before_range_seconds": [
+            0.10813414899894269,
+            0.13562498099963705
+          ],
+          "speedup": 1.0516308765974596
+        },
+        "operation": {
+          "after_median_seconds": 0.5283885560002091,
+          "after_range_seconds": [
+            0.5022768779999751,
+            0.5426970600001368
+          ],
+          "before_median_seconds": 0.5135271380004269,
+          "before_range_seconds": [
+            0.4837209430006624,
+            0.5396643810017849
+          ],
+          "speedup": 0.9718740729127823
+        },
+        "save": {
+          "after_median_seconds": 0.4070138239985681,
+          "after_range_seconds": [
+            0.38874286099962774,
+            0.42290533899904403
+          ],
+          "before_median_seconds": 0.3909263639998244,
+          "before_range_seconds": [
+            0.36564084599922353,
+            0.4202704349991109
+          ],
+          "speedup": 0.9604744137663483
+        },
+        "total": {
+          "after_median_seconds": 0.5398600190001162,
+          "after_range_seconds": [
+            0.5131886069993925,
+            0.553664299999582
+          ],
+          "before_median_seconds": 0.5256869960012409,
+          "before_range_seconds": [
+            0.4946771869999793,
+            0.5497565269997722
+          ],
+          "speedup": 0.9737468556661681
+        }
+      },
+      "semantic_sha256": "ec8fb2ef6ee770f0d327ba8ceb4cd8dd2bc05375252e2bc3d55357641fc40442"
+    },
+    {
+      "case": "edit_middle",
+      "phases": {
+        "load": {
+          "after_median_seconds": 0.10836721799933002,
+          "after_range_seconds": [
+            0.10195168499922147,
+            0.11504877399966063
+          ],
+          "before_median_seconds": 0.1058675280000898,
+          "before_range_seconds": [
+            0.10421286800010421,
+            0.131867265999972
+          ],
+          "speedup": 0.9769331533521911
+        },
+        "operation": {
+          "after_median_seconds": 0.5530323479997605,
+          "after_range_seconds": [
+            0.5158159179991344,
+            0.5995080579996284
+          ],
+          "before_median_seconds": 0.783054577999792,
+          "before_range_seconds": [
+            0.7333664660000068,
+            1.1712099989999842
+          ],
+          "speedup": 1.415929069668328
+        },
+        "save": {
+          "after_median_seconds": 0.4406548919996567,
+          "after_range_seconds": [
+            0.41377891799857025,
+            0.48439842500010855
+          ],
+          "before_median_seconds": 0.677126941998722,
+          "before_range_seconds": [
+            0.6285523120004655,
+            1.0392846380000265
+          ],
+          "speedup": 1.5366377505216704
+        },
+        "total": {
+          "after_median_seconds": 3.322228126000482,
+          "after_range_seconds": [
+            3.3103464400010125,
+            3.8293522670010134
+          ],
+          "before_median_seconds": 4.12748712299981,
+          "before_range_seconds": [
+            3.6655490239991195,
+            4.430197536999913
+          ],
+          "speedup": 1.2423852205383474
+        }
+      },
+      "semantic_sha256": "0ed129243c3d966a310fcdb0dcd22a6a5f537751df239c1276df5a6815300e88"
+    },
+    {
+      "case": "edit_bottom",
+      "phases": {
+        "load": {
+          "after_median_seconds": 0.11574155199923553,
+          "after_range_seconds": [
+            0.10255661600058374,
+            0.12039848399945186
+          ],
+          "before_median_seconds": 0.10401143600029172,
+          "before_range_seconds": [
+            0.10021130200038897,
+            0.1388653020003403
+          ],
+          "speedup": 0.8986525081414038
+        },
+        "operation": {
+          "after_median_seconds": 0.6783679430009215,
+          "after_range_seconds": [
+            0.6404089019997627,
+            0.6817694359997404
+          ],
+          "before_median_seconds": 1.0520806270014873,
+          "before_range_seconds": [
+            0.9576621340002021,
+            1.1916656070006866
+          ],
+          "speedup": 1.5508996818855547
+        },
+        "save": {
+          "after_median_seconds": 0.5610418539999955,
+          "after_range_seconds": [
+            0.5377942310005892,
+            0.5718875949987705
+          ],
+          "before_median_seconds": 0.945860203999473,
+          "before_range_seconds": [
+            0.8573961010006315,
+            1.0659972520006704
+          ],
+          "speedup": 1.685899540748845
+        },
+        "total": {
+          "after_median_seconds": 6.620468098999481,
+          "after_range_seconds": [
+            6.51102771800106,
+            6.807422179999776
+          ],
+          "before_median_seconds": 7.093240229000003,
+          "before_range_seconds": [
+            6.922495627999524,
+            7.745896263000759
+          ],
+          "speedup": 1.0714106801710848
+        }
+      },
+      "semantic_sha256": "3e95587f4e8dade48392a82ae6df9f6f5bb4ad86efc073f4e0f89d56b857df04"
+    }
+  ],
+  "contract": "wolfxl-xml-splices-isolated-community-v1",
+  "fixture_note": "Full phases use ZIP fixture v2; patch-only uses v1. Decompressed worksheet XML bytes are identical; ZIP work is excluded from patch-only.",
+  "harness_sha256": "fadd85865a17424cc5642e2177fdffbcd1679f37715435dafb00e23006a72922",
+  "limits": [
+    "Patch-only timing excludes ZIP inflate/read and compression; full save timing includes these costs.",
+    "Top edits show no measured improvement; before/after sample ranges overlap.",
+    "Total includes position-dependent openpyxl bounded verification and is not WolfXL operation time.",
+    "Only existing value-cell edits use the optimized path. Insertions and unsupported mutations retain the generic fallback.",
+    "XML outside edited cell spans is byte-preserved. Edited cells retain existing writer semantics: replace value/formula children and retain style.",
+    "No cumulative claim is derived by multiplying isolated speedups."
+  ],
+  "measurement_order": "Community full phases baseline cases then candidate cases; patch-only alternates before/after",
+  "measurement_serialization": "Dedicated quiet lane; heavy native builds paused during samples",
+  "native_patch_speedups": {
+    "bottom": 3.1117397786636745,
+    "middle": 3.0647087325674875,
+    "top": 0.9714225415764789
+  },
+  "operation_fixture_sha256": "0e41152df64d917eedda420f6ccb51f98323d5e3a49a88aa385e26aa73930341",
+  "patch_only_fixture": {
+    "rows": 200000,
+    "sha256": "ea139603e451b66797a1feed98054cf5099f8caec9c229a0241e07a49b80a289",
+    "worksheet_bytes": 49394096,
+    "worksheet_sha256": "7d7b766636aa47c9b9fa31df79a2f6047a73fafcbbcc54d402a5107373e94000"
+  },
+  "receipt_sha256": {
+    "after.json": "f6610c522be7af5857c3a29a8fb7d804c17ba011564c1aab53b99a7d9ec3f809",
+    "before.json": "4dc6a2df3cf9ec606108a1352bc3d438dd265559532ebc2c3df3b2dc74a1591e",
+    "build-inputs.json": "718350c76d634327f9db718e6578d64e960d12ef81ed2a8929f0ba6c1c5d7bb9",
+    "native-patch.json": "69c049afa0053b0a4d16d551eee528d469dc34a8ce5b94172c29689f0c9acf58"
+  },
+  "scope": "WolfXL-only isolated diagnostic; openpyxl comparator and cumulative stages measured separately",
+  "source_dirty_note": "Candidate source.dirty=true because untracked evidence files were present. Tracked source unchanged; clean build and every runtime/build manifest file still matched afterward.",
+  "validation": {
+    "equal_full_semantic_signatures": true,
+    "full_openpyxl_eager_reopen_per_case_and_side": "pass",
+    "rust_sheet_patcher_tests": 28,
+    "source_built_python_preservation_smoke_tests": 10,
+    "untouched_part_bytes": "pass",
+    "zip_crc_and_xml_parse": "pass"
+  }
+}
