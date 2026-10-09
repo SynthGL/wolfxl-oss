@@ -504,6 +504,11 @@ class StreamingBlankCell(StreamingCell):
     def _resolved_style(self) -> StyleComponents:
         return cell_style_components(self)
 
+    def __copy__(self) -> StreamingBlankCell:
+        # The inherited slot state also includes class-level blank constants.
+        # Construct a fresh coordinate snapshot instead of assigning those.
+        return type(self)(self._ws, self._row, self._col)
+
 
 def _full_blank_cell(ws: Worksheet, row: int, col: int) -> StreamingCell:
     return StreamingCell(ws, row, col, None, None, "blank")

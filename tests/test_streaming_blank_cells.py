@@ -1,5 +1,6 @@
 """Absent XML cells retain the coordinate-aware streaming contract."""
 from pathlib import Path
+from copy import copy
 
 import openpyxl
 import pytest
@@ -59,6 +60,28 @@ def test_missing_cells_refuse_mutations_and_observe_close(tmp_path: Path, attrib
     assert not cell.font.bold
     assert cell.fill.patternType is None
     assert cell.border.left.style is None
+
+
+def test_missing_cell_shallow_copy_keeps_coordinate_snapshot(tmp_path: Path) -> None:
+    path = tmp_path / "copy-blank.xlsx"
+    source = openpyxl.Workbook()
+    source.active["A1"] = 1
+    source.save(path)
+    wb = wolfxl.load_workbook(path, read_only=True)
+    try:
+        cell = next(wb.active.iter_rows(min_row=2, max_row=2, max_col=1))[0]
+        cloned = copy(cell)
+        assert cloned is not cell
+        assert cloned == cell
+        assert cloned.parent is cell.parent
+        assert cloned.coordinate == "A2"
+        assert cloned.font == cell.font
+        assert cloned.fill == cell.fill
+        assert cloned.number_format == cell.number_format
+        with pytest.raises(RuntimeError, match="read_only=True"):
+            cloned.value = "changed"
+    finally:
+        wb.close()
 
 
 def test_missing_cells_keep_default_source_border(tmp_path: Path) -> None:
