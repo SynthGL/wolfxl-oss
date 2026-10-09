@@ -514,6 +514,26 @@ def _full_blank_cell(ws: Worksheet, row: int, col: int) -> StreamingCell:
     return StreamingCell(ws, row, col, None, None, "blank")
 
 
+def _blank_rows(ws, blank_cell, first_row, stop_row, min_col, max_col):
+    """Build bounded batches while keeping every cell's coordinate snapshot."""
+    from wolfxl import _rust
+
+    width = 0 if max_col is None else max(0, max_col - min_col + 1)
+    native = getattr(_rust, "streaming_blank_rows", None)
+    if blank_cell is StreamingBlankCell and native is not None and 0 < width <= 4096:
+        batch_size = min(128, 4096 // width)
+        while first_row < stop_row:
+            count = min(batch_size, stop_row - first_row)
+            yield from native(blank_cell, ws, first_row, count, min_col, max_col)
+            first_row += count
+        return
+    for row in range(first_row, stop_row):
+        yield (
+            tuple(blank_cell(ws, row, col) for col in range(min_col, max_col + 1))
+            if max_col is not None else []
+        )
+
+
 def _resolve_bounds(
     ws: Worksheet,
     min_row: int | None,
@@ -775,18 +795,11 @@ def stream_iter_rows(
                 # else span observed cells.
                 cmin = mn_c if mn_c is not None else 1
                 cmax = _resolved_cmax(cells)
-                while counter < row_idx:
-                    fixed_cmax = _fixed_cmax()
-                    empty_row = (
-                        tuple(
-                            blank_cell(ws, counter, col)
-                            for col in range(cmin, fixed_cmax + 1)
-                        )
-                        if fixed_cmax is not None
-                        else []
+                if counter < row_idx:
+                    yield from _blank_rows(
+                        ws, blank_cell, counter, row_idx, cmin, _fixed_cmax()
                     )
-                    yield empty_row
-                    counter += 1
+                    counter = row_idx
                 if cmax < cmin:
                     yield ()
                     counter = row_idx + 1
@@ -809,16 +822,9 @@ def stream_iter_rows(
             if stream_mx_r is not None:
                 cmin = mn_c if mn_c is not None else 1
                 fixed_cmax = _fixed_cmax()
-                while counter <= stream_mx_r:
-                    yield (
-                        tuple(
-                            blank_cell(ws, counter, col)
-                            for col in range(cmin, fixed_cmax + 1)
-                        )
-                        if fixed_cmax is not None
-                        else []
-                    )
-                    counter += 1
+                yield from _blank_rows(
+                    ws, blank_cell, counter, stream_mx_r + 1, cmin, fixed_cmax
+                )
     finally:
         reader.close()
 

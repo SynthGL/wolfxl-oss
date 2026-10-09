@@ -1,0 +1,856 @@
+{
+  "baseline_ref": "0a7056e713e2678585642aab7fb9f84de643d120",
+  "build_description": "Separate standard release wheels; repository-default maturin features; rustc 1.99.0 (b940084d7 2026-09-28)",
+  "candidate_ref": "7a2338f96d71e12bd8d33032c40bfc4c4ce50e6b",
+  "fresh_process_trials": 5,
+  "openpyxl": "3.1.5",
+  "packages": {
+    "baseline": {
+      "native_sha256": "b51b6aabe6419ae393b3ce290dce4e17b6fcfa51652b54c67cd621382d5c2905",
+      "python_sha256": "589236290044f1f0d5d71319995ee7502d03f912894caf5da73265703625a3ca"
+    },
+    "candidate": {
+      "native_sha256": "84035d903fc0a3b331dce816e672bc127754d61fb1fb40abd5c944de5c2cc0a0",
+      "python_sha256": "e49a0cc1755ab82c803d86419f023cca25d9cdf46c4fc377195ab3f347be5f09"
+    }
+  },
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "python": "3.12.15 (main, Oct  1 2026, 02:35:59) [GCC 13.3.0]",
+  "schema": "wolfxl-native-blank-rows-v1",
+  "timing_statistic": "median load + public scan + close",
+  "warmups_per_engine_per_case": 1,
+  "workloads": {
+    "dense_rows": {
+      "baseline_over_candidate": 0.9993946226812054,
+      "fixture": {
+        "bytes": 584440,
+        "config": {
+          "builder_openpyxl": "3.1.5",
+          "fixture_version": 2,
+          "kind": "styled",
+          "rows": 20000,
+          "style_cardinality": 0
+        },
+        "max_column": 5,
+        "populated_plain_columns": 5,
+        "populated_value_cells": 100000,
+        "requested_plain_columns": 8,
+        "rows_per_sheet": 20000,
+        "sha256": "766f1a5c1f97378588d586a54665b7bd3a5ab0c0378e1f4ddaeb74fedeb88110",
+        "sheet_count": 1
+      },
+      "median_seconds": {
+        "baseline": 0.2749775380000301,
+        "candidate": 0.2751441039999918,
+        "openpyxl": 1.140119647000006
+      },
+      "openpyxl_over_candidate": 4.143718256815854,
+      "samples": {
+        "baseline": [
+          {
+            "iterate_and_close_seconds": 0.26567304799999647,
+            "load_seconds": 0.00988905200000545,
+            "native_batch_available": false,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 0.2755621000000019
+          },
+          {
+            "iterate_and_close_seconds": 0.26501760500002547,
+            "load_seconds": 0.009641708000003746,
+            "native_batch_available": false,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 0.2746593130000292
+          },
+          {
+            "iterate_and_close_seconds": 0.2636446330000126,
+            "load_seconds": 0.009868283000002975,
+            "native_batch_available": false,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 0.2735129160000156
+          },
+          {
+            "iterate_and_close_seconds": 0.26506861900003287,
+            "load_seconds": 0.00990891899999724,
+            "native_batch_available": false,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 0.2749775380000301
+          },
+          {
+            "iterate_and_close_seconds": 0.2673544009999773,
+            "load_seconds": 0.010009427999989384,
+            "native_batch_available": false,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 0.2773638289999667
+          }
+        ],
+        "candidate": [
+          {
+            "iterate_and_close_seconds": 0.2655001129999732,
+            "load_seconds": 0.00964399100001856,
+            "native_batch_available": true,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 0.2751441039999918
+          },
+          {
+            "iterate_and_close_seconds": 0.2637595790000091,
+            "load_seconds": 0.00971736899998632,
+            "native_batch_available": true,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 0.27347694799999545
+          },
+          {
+            "iterate_and_close_seconds": 0.2616893389999859,
+            "load_seconds": 0.009645503999990979,
+            "native_batch_available": true,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 0.2713348429999769
+          },
+          {
+            "iterate_and_close_seconds": 0.2669587269999738,
+            "load_seconds": 0.009847442000022966,
+            "native_batch_available": true,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 0.27680616899999677
+          },
+          {
+            "iterate_and_close_seconds": 0.26632745899996735,
+            "load_seconds": 0.009815904000049613,
+            "native_batch_available": true,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 0.27614336300001696
+          }
+        ],
+        "openpyxl": [
+          {
+            "iterate_and_close_seconds": 1.1269683520000058,
+            "load_seconds": 0.005305340000006709,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 1.1322736920000125
+          },
+          {
+            "iterate_and_close_seconds": 1.1358703369999716,
+            "load_seconds": 0.005519381999988582,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 1.1413897189999602
+          },
+          {
+            "iterate_and_close_seconds": 1.1358307639999907,
+            "load_seconds": 0.0054179169999883925,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 1.1412486809999791
+          },
+          {
+            "iterate_and_close_seconds": 1.1278736099999946,
+            "load_seconds": 0.0051725139999803105,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 1.133046123999975
+          },
+          {
+            "iterate_and_close_seconds": 1.134769887999994,
+            "load_seconds": 0.005349759000012,
+            "signature": {
+              "positions": 100000,
+              "rows": 20000
+            },
+            "total_seconds": 1.140119647000006
+          }
+        ]
+      },
+      "signature": {
+        "positions": 100000,
+        "rows": 20000
+      },
+      "trial_order": [
+        "baseline",
+        "openpyxl",
+        "candidate",
+        "baseline",
+        "candidate",
+        "openpyxl",
+        "baseline",
+        "openpyxl",
+        "candidate",
+        "openpyxl",
+        "baseline",
+        "candidate",
+        "candidate",
+        "openpyxl",
+        "baseline"
+      ]
+    },
+    "dense_styles": {
+      "baseline_over_candidate": 0.9947988383436095,
+      "fixture": {
+        "bytes": 584440,
+        "config": {
+          "builder_openpyxl": "3.1.5",
+          "fixture_version": 2,
+          "kind": "styled",
+          "rows": 20000,
+          "style_cardinality": 0
+        },
+        "max_column": 5,
+        "populated_plain_columns": 5,
+        "populated_value_cells": 100000,
+        "requested_plain_columns": 8,
+        "rows_per_sheet": 20000,
+        "sha256": "766f1a5c1f97378588d586a54665b7bd3a5ab0c0378e1f4ddaeb74fedeb88110",
+        "sheet_count": 1
+      },
+      "median_seconds": {
+        "baseline": 0.5234556389999625,
+        "candidate": 0.5261924509999858,
+        "openpyxl": 1.33686448200001
+      },
+      "openpyxl_over_candidate": 2.540637896760792,
+      "samples": {
+        "baseline": [
+          {
+            "iterate_and_close_seconds": 0.511848504999989,
+            "load_seconds": 0.009776549999969575,
+            "native_batch_available": false,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5216250549999586
+          },
+          {
+            "iterate_and_close_seconds": 0.5150611219999632,
+            "load_seconds": 0.009699694000005366,
+            "native_batch_available": false,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5247608159999686
+          },
+          {
+            "iterate_and_close_seconds": 0.5166350550000516,
+            "load_seconds": 0.009883546999958526,
+            "native_batch_available": false,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5265186020000101
+          },
+          {
+            "iterate_and_close_seconds": 0.5106839759999957,
+            "load_seconds": 0.009716674000003422,
+            "native_batch_available": false,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5204006499999991
+          },
+          {
+            "iterate_and_close_seconds": 0.51371938799997,
+            "load_seconds": 0.009736250999992535,
+            "native_batch_available": false,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5234556389999625
+          }
+        ],
+        "candidate": [
+          {
+            "iterate_and_close_seconds": 0.5201712479999969,
+            "load_seconds": 0.010066615000027923,
+            "native_batch_available": true,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5302378630000248
+          },
+          {
+            "iterate_and_close_seconds": 0.5162794749999762,
+            "load_seconds": 0.009912976000009621,
+            "native_batch_available": true,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5261924509999858
+          },
+          {
+            "iterate_and_close_seconds": 0.5166704699999514,
+            "load_seconds": 0.009602752000034798,
+            "native_batch_available": true,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5262732219999862
+          },
+          {
+            "iterate_and_close_seconds": 0.513103660000013,
+            "load_seconds": 0.009692026999971404,
+            "native_batch_available": true,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.5227956869999844
+          },
+          {
+            "iterate_and_close_seconds": 0.5154187360000151,
+            "load_seconds": 0.009741298999983883,
+            "native_batch_available": true,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 0.525160034999999
+          }
+        ],
+        "openpyxl": [
+          {
+            "iterate_and_close_seconds": 1.3365513839999608,
+            "load_seconds": 0.005277061000015237,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 1.341828444999976
+          },
+          {
+            "iterate_and_close_seconds": 1.3204231810000238,
+            "load_seconds": 0.00516995999998926,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 1.325593141000013
+          },
+          {
+            "iterate_and_close_seconds": 1.3227239199999872,
+            "load_seconds": 0.005199505000007321,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 1.3279234249999945
+          },
+          {
+            "iterate_and_close_seconds": 1.3310776630000305,
+            "load_seconds": 0.0057868189999794595,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 1.33686448200001
+          },
+          {
+            "iterate_and_close_seconds": 1.3409173079999732,
+            "load_seconds": 0.005422664000036548,
+            "signature": {
+              "first_column_checksum": 200010000.0,
+              "rows": 20000,
+              "styled_cells": 50000
+            },
+            "total_seconds": 1.3463399720000098
+          }
+        ]
+      },
+      "signature": {
+        "first_column_checksum": 200010000.0,
+        "rows": 20000,
+        "styled_cells": 50000
+      },
+      "trial_order": [
+        "candidate",
+        "openpyxl",
+        "baseline",
+        "candidate",
+        "openpyxl",
+        "baseline",
+        "candidate",
+        "openpyxl",
+        "baseline",
+        "candidate",
+        "baseline",
+        "openpyxl",
+        "openpyxl",
+        "baseline",
+        "candidate"
+      ]
+    },
+    "sparse_rows": {
+      "baseline_over_candidate": 2.0825017740431213,
+      "fixture": {
+        "bytes": 50564,
+        "config": {
+          "builder_openpyxl": "3.1.5",
+          "fixture_version": 2,
+          "kind": "styled_sparse",
+          "rows": 25000,
+          "style_cardinality": 0
+        },
+        "max_column": 32,
+        "populated_plain_columns": 5,
+        "populated_value_cells": 7816,
+        "requested_plain_columns": 8,
+        "rows_per_sheet": 25000,
+        "sha256": "5a562d80a9cd2da0db518a52171af98f4ffadeab80297e0a8a9392850914dea5",
+        "sheet_count": 1
+      },
+      "median_seconds": {
+        "baseline": 0.5804187279999837,
+        "candidate": 0.27871223699997927,
+        "openpyxl": 0.09789137400002801
+      },
+      "openpyxl_over_candidate": 0.3512273987454497,
+      "samples": {
+        "baseline": [
+          {
+            "iterate_and_close_seconds": 0.5789995670000394,
+            "load_seconds": 0.009668567000005623,
+            "native_batch_available": false,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.588668134000045
+          },
+          {
+            "iterate_and_close_seconds": 0.5705043789999991,
+            "load_seconds": 0.009758395999995173,
+            "native_batch_available": false,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.5802627749999942
+          },
+          {
+            "iterate_and_close_seconds": 0.570248988000003,
+            "load_seconds": 0.01016973999998072,
+            "native_batch_available": false,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.5804187279999837
+          },
+          {
+            "iterate_and_close_seconds": 0.5441629949999651,
+            "load_seconds": 0.009668527000030736,
+            "native_batch_available": false,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.5538315219999959
+          },
+          {
+            "iterate_and_close_seconds": 0.574002916999973,
+            "load_seconds": 0.009878000000014708,
+            "native_batch_available": false,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.5838809169999877
+          }
+        ],
+        "candidate": [
+          {
+            "iterate_and_close_seconds": 0.2684127310000122,
+            "load_seconds": 0.0096886149999591,
+            "native_batch_available": true,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.2781013459999713
+          },
+          {
+            "iterate_and_close_seconds": 0.267624426999987,
+            "load_seconds": 0.009623042000043824,
+            "native_batch_available": true,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.27724746900003083
+          },
+          {
+            "iterate_and_close_seconds": 0.27487349600005473,
+            "load_seconds": 0.009869324999954188,
+            "native_batch_available": true,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.2847428210000089
+          },
+          {
+            "iterate_and_close_seconds": 0.27196266400000013,
+            "load_seconds": 0.009645833999968545,
+            "native_batch_available": true,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.2816084979999687
+          },
+          {
+            "iterate_and_close_seconds": 0.2686505109999757,
+            "load_seconds": 0.010061726000003546,
+            "native_batch_available": true,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.27871223699997927
+          }
+        ],
+        "openpyxl": [
+          {
+            "iterate_and_close_seconds": 0.09190927000003057,
+            "load_seconds": 0.005332696999971631,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.0972419670000022
+          },
+          {
+            "iterate_and_close_seconds": 0.09217411800000264,
+            "load_seconds": 0.005318439999996372,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.09749255799999901
+          },
+          {
+            "iterate_and_close_seconds": 0.09303423700004032,
+            "load_seconds": 0.005225994999989325,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.09826023200002965
+          },
+          {
+            "iterate_and_close_seconds": 0.0931855579999592,
+            "load_seconds": 0.00526910600001429,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.09845466399997349
+          },
+          {
+            "iterate_and_close_seconds": 0.09257999800001926,
+            "load_seconds": 0.0053113760000087495,
+            "signature": {
+              "positions": 800000,
+              "rows": 25000
+            },
+            "total_seconds": 0.09789137400002801
+          }
+        ]
+      },
+      "signature": {
+        "positions": 800000,
+        "rows": 25000
+      },
+      "trial_order": [
+        "baseline",
+        "candidate",
+        "openpyxl",
+        "baseline",
+        "openpyxl",
+        "candidate",
+        "openpyxl",
+        "baseline",
+        "candidate",
+        "openpyxl",
+        "baseline",
+        "candidate",
+        "candidate",
+        "openpyxl",
+        "baseline"
+      ]
+    },
+    "sparse_styles": {
+      "baseline_over_candidate": 1.576748659182428,
+      "fixture": {
+        "bytes": 50564,
+        "config": {
+          "builder_openpyxl": "3.1.5",
+          "fixture_version": 2,
+          "kind": "styled_sparse",
+          "rows": 25000,
+          "style_cardinality": 0
+        },
+        "max_column": 32,
+        "populated_plain_columns": 5,
+        "populated_value_cells": 7816,
+        "requested_plain_columns": 8,
+        "rows_per_sheet": 25000,
+        "sha256": "5a562d80a9cd2da0db518a52171af98f4ffadeab80297e0a8a9392850914dea5",
+        "sheet_count": 1
+      },
+      "median_seconds": {
+        "baseline": 0.8309552769999868,
+        "candidate": 0.5270055390000152,
+        "openpyxl": 0.29095241099997793
+      },
+      "openpyxl_over_candidate": 0.5520860588145915,
+      "samples": {
+        "baseline": [
+          {
+            "iterate_and_close_seconds": 0.8209741910000048,
+            "load_seconds": 0.009981085999982042,
+            "native_batch_available": false,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.8309552769999868
+          },
+          {
+            "iterate_and_close_seconds": 0.8345346400000153,
+            "load_seconds": 0.009915502000012566,
+            "native_batch_available": false,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.8444501420000279
+          },
+          {
+            "iterate_and_close_seconds": 0.8178892829999995,
+            "load_seconds": 0.009615557000017816,
+            "native_batch_available": false,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.8275048400000173
+          },
+          {
+            "iterate_and_close_seconds": 0.8211920680000162,
+            "load_seconds": 0.009782341000004635,
+            "native_batch_available": false,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.8309744090000208
+          },
+          {
+            "iterate_and_close_seconds": 0.8163014950000047,
+            "load_seconds": 0.01021718999999166,
+            "native_batch_available": false,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.8265186849999964
+          }
+        ],
+        "candidate": [
+          {
+            "iterate_and_close_seconds": 0.5266335700000013,
+            "load_seconds": 0.009728338000002168,
+            "native_batch_available": true,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.5363619080000035
+          },
+          {
+            "iterate_and_close_seconds": 0.5146835379999857,
+            "load_seconds": 0.009874785000022257,
+            "native_batch_available": true,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.5245583230000079
+          },
+          {
+            "iterate_and_close_seconds": 0.5165837270000111,
+            "load_seconds": 0.010056937999991078,
+            "native_batch_available": true,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.5266406650000022
+          },
+          {
+            "iterate_and_close_seconds": 0.5170715830000177,
+            "load_seconds": 0.009933955999997579,
+            "native_batch_available": true,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.5270055390000152
+          },
+          {
+            "iterate_and_close_seconds": 0.5196646349999696,
+            "load_seconds": 0.010062378000043282,
+            "native_batch_available": true,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.5297270130000129
+          }
+        ],
+        "openpyxl": [
+          {
+            "iterate_and_close_seconds": 0.28560964199999717,
+            "load_seconds": 0.005342768999980763,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.29095241099997793
+          },
+          {
+            "iterate_and_close_seconds": 0.2868585670000243,
+            "load_seconds": 0.005471548000002713,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.29233011500002704
+          },
+          {
+            "iterate_and_close_seconds": 0.2874196129999973,
+            "load_seconds": 0.00537994600000502,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.2927995590000023
+          },
+          {
+            "iterate_and_close_seconds": 0.2798026770000206,
+            "load_seconds": 0.00529073799998514,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.28509341500000573
+          },
+          {
+            "iterate_and_close_seconds": 0.2836451000000011,
+            "load_seconds": 0.005183595000005425,
+            "signature": {
+              "first_column_checksum": 19532811.0,
+              "rows": 25000,
+              "styled_cells": 3127
+            },
+            "total_seconds": 0.2888286950000065
+          }
+        ]
+      },
+      "signature": {
+        "first_column_checksum": 19532811.0,
+        "rows": 25000,
+        "styled_cells": 3127
+      },
+      "trial_order": [
+        "openpyxl",
+        "candidate",
+        "baseline",
+        "baseline",
+        "openpyxl",
+        "candidate",
+        "candidate",
+        "openpyxl",
+        "baseline",
+        "openpyxl",
+        "baseline",
+        "candidate",
+        "openpyxl",
+        "candidate",
+        "baseline"
+      ]
+    }
+  }
+}

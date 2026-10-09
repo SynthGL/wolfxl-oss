@@ -151,3 +151,89 @@ def test_missing_cell_border_tracks_reader_replacement_and_merge_state(tmp_path:
         assert cell == StreamingCell(wb.active, 2, 2, None, None, "blank")
     finally:
         wb.close()
+
+
+def test_native_blank_batches_preserve_retained_cells_and_bounds(tmp_path, monkeypatch):
+    import wolfxl._rust as native
+
+    path = tmp_path / "blank-batches.xlsx"
+    source = openpyxl.Workbook()
+    source.active["B1"] = 1
+    source.active["D300"] = 300
+    source.save(path)
+    calls = []
+    original = native.streaming_blank_rows
+
+    def record(*args):
+        calls.append(args[2:])
+        return original(*args)
+
+    monkeypatch.setattr(native, "streaming_blank_rows", record)
+    wb = wolfxl.load_workbook(path, read_only=True)
+    try:
+        rows = list(wb.active.iter_rows(min_col=2, max_col=5, max_row=310))
+        assert len(rows) == 310
+        assert rows[0][0].value == 1
+        assert rows[299][2].value == 300
+        assert all(cell.parent is wb.active for row in rows for cell in row)
+        assert [(row[0].row, row[-1].column) for row in rows] == [
+            (index, 5) for index in range(1, 311)
+        ]
+        assert rows[1][0].coordinate == "B2"
+        assert rows[128][0].coordinate == "B129"
+        assert rows[309][-1].coordinate == "E310"
+        assert len({id(cell) for row in rows for cell in row}) == 310 * 4
+        assert calls
+        assert all(count <= 128 and count * (last - first + 1) <= 4096
+                   for _, count, first, last in calls)
+    finally:
+        wb.close()
+
+
+def test_native_blank_batch_does_not_retain_worksheet():
+    import gc
+    import weakref
+    import wolfxl._rust as native
+    from wolfxl._streaming import StreamingBlankCell
+
+    class Owner:
+        pass
+
+    owner = Owner()
+    reference = weakref.ref(owner)
+    rows = native.streaming_blank_rows(StreamingBlankCell, owner, 300, 3, 2, 4)
+    assert [[cell.coordinate for cell in row] for row in rows] == [
+        ["B300", "C300", "D300"],
+        ["B301", "C301", "D301"],
+        ["B302", "C302", "D302"],
+    ]
+    del owner
+    gc.collect()
+    assert reference() is not None
+    del rows
+    gc.collect()
+    assert reference() is None
+
+
+@pytest.mark.parametrize("bounds", [
+    (1, 1025, 1, 1), (1, 1, 1, 32769), (1, 2, 1, 20000),
+    (1, 1, 3, 1), (2**63 - 1, 1, 1, 1),
+])
+def test_native_blank_batch_rejects_invalid_or_unbounded_requests(bounds):
+    import wolfxl._rust as native
+    from wolfxl._streaming import StreamingBlankCell
+
+    with pytest.raises(ValueError):
+        native.streaming_blank_rows(StreamingBlankCell, None, *bounds)
+
+
+def test_blank_batch_fallback_and_zero_width(monkeypatch):
+    import wolfxl._rust as native
+    from wolfxl._streaming import StreamingBlankCell, _blank_rows
+
+    assert native.streaming_blank_rows(StreamingBlankCell, None, 1, 2, 4, 3) == [(), ()]
+    monkeypatch.setattr(native, "streaming_blank_rows", None)
+    rows = list(_blank_rows(None, StreamingBlankCell, 300, 302, 2, 3))
+    assert [[cell.coordinate for cell in row] for row in rows] == [
+        ["B300", "C300"], ["B301", "C301"]
+    ]

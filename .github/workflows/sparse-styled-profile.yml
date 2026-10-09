@@ -1,4 +1,4 @@
-name: Sparse styled Python overlay evidence
+name: Sparse styled source-wheel evidence
 
 on:
   workflow_dispatch:
@@ -7,6 +7,9 @@ on:
       - python/wolfxl/_streaming.py
       - tests/test_streaming_blank_cells.py
       - benchmarks/sparse_styled_profile.py
+      - benchmarks/native_blank_rows_profile.py
+      - src/streaming_blank_rows.rs
+      - src/lib.rs
       - .github/workflows/sparse-styled-profile.yml
 
 permissions:
@@ -22,8 +25,6 @@ jobs:
     timeout-minutes: 45
     env:
       CARGO_INCREMENTAL: "0"
-      CARGO_PROFILE_RELEASE_LTO: "false"
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "8"
       BASELINE_REF: ${{ github.event.pull_request.base.sha || 'main' }}
       CANDIDATE_REF: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -38,31 +39,48 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install pinned benchmark dependencies
         run: python -m pip install maturin "openpyxl==3.1.5" pytest defusedxml
-      - name: Build the standard candidate wheel
+      - name: Build separate baseline and candidate release wheels
         run: |
-          maturin build --release --locked --out dist
-          python -m pip install --no-index --find-links dist wolfxl
+          mkdir -p sparse-profile/baseline-wheel sparse-profile/candidate-wheel
+          git worktree add --detach "$RUNNER_TEMP/wolfxl-baseline" "$BASELINE_REF"
+          (
+            cd "$RUNNER_TEMP/wolfxl-baseline"
+            maturin build --release --locked --out "$GITHUB_WORKSPACE/sparse-profile/baseline-wheel"
+          )
+          maturin build --release --locked --out sparse-profile/candidate-wheel
+          python -m pip install --no-index --find-links sparse-profile/candidate-wheel wolfxl
+          python - <<'PYTHON'
+          from pathlib import Path
+          import zipfile
+          for name in ("baseline", "candidate"):
+              wheels = list(Path(f"sparse-profile/{name}-wheel").glob("*.whl"))
+              assert len(wheels) == 1
+              with zipfile.ZipFile(wheels[0]) as archive:
+                  archive.extractall(f"sparse-profile/{name}-package")
+          PYTHON
       - name: Test streaming compatibility
         run: >-
           python -m pytest tests/test_streaming_blank_cells.py
           tests/test_streaming_reads.py tests/test_streaming_style_cache.py
           tests/test_streaming_merge_index.py tests/parity/test_streaming_parity.py -q
-      - name: Compare against the base Python streaming module
+      - name: Compare complete source-built packages
         run: |
-          mkdir -p sparse-profile
           git rev-parse HEAD > sparse-profile/candidate-ref.txt
           git rev-parse "$BASELINE_REF" > sparse-profile/baseline-ref.txt
           git diff --name-only "$BASELINE_REF" HEAD > sparse-profile/changed-files.txt
-          git diff --exit-code "$BASELINE_REF" HEAD -- src crates Cargo.toml Cargo.lock build.rs
-          git show "$BASELINE_REF:python/wolfxl/_streaming.py" > sparse-profile/baseline-streaming.py
-          python benchmarks/sparse_styled_profile.py \
-            --baseline-streaming sparse-profile/baseline-streaming.py \
+          rustc --version > sparse-profile/rustc.txt
+          python benchmarks/native_blank_rows_profile.py \
+            --baseline-package sparse-profile/baseline-package \
+            --candidate-package sparse-profile/candidate-package \
             --baseline-ref "$BASELINE_REF" --candidate-ref "$CANDIDATE_REF" \
-            --native-origin "standard release wheel built from $CANDIDATE_REF; native sources unchanged from base" \
+            --build-description "Separate standard release wheels; repository-default maturin features; $(rustc --version)" \
             --output sparse-profile/results.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: sparse-styled-python-overlay-evidence
-          path: sparse-profile/
-
+          name: sparse-styled-source-wheel-evidence
+          path: |
+            sparse-profile/results.json
+            sparse-profile/*-ref.txt
+            sparse-profile/changed-files.txt
+            sparse-profile/rustc.txt
