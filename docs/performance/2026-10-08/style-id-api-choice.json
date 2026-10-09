@@ -1,0 +1,54 @@
+{
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+  "fixture_sha256": "a81da5958cace70e519543c40be608c7f3d112249d8d25c09be4175f3a6a8542",
+  "result": [
+    2000,
+    2001000.0,
+    5000
+  ],
+  "measurement": {
+    "warmups": 1,
+    "samples": 7,
+    "alternating_order": true,
+    "gc_disabled_during_timing": true
+  },
+  "samples": {
+    "cell_api": [
+      0.034795759999724396,
+      0.040695167999729165,
+      0.034946400999615435,
+      0.03816727299999911,
+      0.0348126750004667,
+      0.03474911200009956,
+      0.034902957999292994
+    ],
+    "existing_record_api": [
+      0.02106127600018226,
+      0.020511110000370536,
+      0.019800957999905222,
+      0.018943791999845416,
+      0.020240423000359442,
+      0.020467024000026868,
+      0.02078647300004377
+    ]
+  },
+  "medians": {
+    "cell_api": 0.034902957999292994,
+    "existing_record_api": 0.020467024000026868
+  },
+  "api_choice_ratio": 1.705326480256591,
+  "notes": [
+    "Different API; not included in cumulative engine speedups.",
+    "Native worksheet remains eager; Python record windows are bounded.",
+    "Raw style IDs are source-derived and resolved through a private native hook for this diagnostic."
+  ],
+  "source_commit": "2fe6832",
+  "native_sha256": "0af60f1ed0becebb0b7f3033a2ecaf219026284c132d518e0f36bd09dc989baa",
+  "fixture": {
+    "rows": 2000,
+    "columns": 5
+  },
+  "status": "Existing API comparison; runtime implementation unchanged by this documentation commit",
+  "excluded_from_cumulative_engine_gain": true
+}
