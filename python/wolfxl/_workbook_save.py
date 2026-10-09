@@ -166,50 +166,53 @@ def apply_workbook_template_content_type(wb: Any, filename: str) -> None:
 
     try:
         with zipfile.ZipFile(filename, "r") as src:
+            try:
+                content_types = src.read(ARC_CONTENT_TYPES)
+            except KeyError:
+                return
+            try:
+                root = ET.fromstring(content_types)
+            except ET.ParseError:
+                return
+
+            template = bool(getattr(wb, "template", False))
+            content_type = XLTX if template else XLSX
+            workbook_override = None
+            for child in root:
+                if (
+                    child.tag.rsplit("}", 1)[-1] == "Override"
+                    and child.get("PartName") == "/xl/workbook.xml"
+                ):
+                    workbook_override = child
+                    break
+            if workbook_override is not None and workbook_override.get("ContentType") in {
+                XLSM,
+                XLTM,
+            }:
+                content_type = XLTM if template else XLSM
+
+            changed = False
+            ET.register_namespace("", CONTYPES_NS)
+            if workbook_override is not None:
+                if workbook_override.get("ContentType") != content_type:
+                    workbook_override.set("ContentType", content_type)
+                    changed = True
+            else:
+                ET.SubElement(
+                    root,
+                    f"{{{CONTYPES_NS}}}Override",
+                    {"PartName": "/xl/workbook.xml", "ContentType": content_type},
+                )
+                changed = True
+
+            if not changed:
+                return
+
+            # Most saves keep the main content type. Decompress the remaining
+            # package only when the template flag actually requires a rewrite.
             infos = src.infolist()
             parts = {info.filename: src.read(info.filename) for info in infos}
     except (OSError, zipfile.BadZipFile):
-        return
-
-    content_types = parts.get(ARC_CONTENT_TYPES)
-    if content_types is None:
-        return
-    try:
-        root = ET.fromstring(content_types)
-    except ET.ParseError:
-        return
-
-    template = bool(getattr(wb, "template", False))
-    content_type = XLTX if template else XLSX
-    workbook_override = None
-    for child in root:
-        if (
-            child.tag.rsplit("}", 1)[-1] == "Override"
-            and child.get("PartName") == "/xl/workbook.xml"
-        ):
-            workbook_override = child
-            break
-    if workbook_override is not None and workbook_override.get("ContentType") in {
-        XLSM,
-        XLTM,
-    }:
-        content_type = XLTM if template else XLSM
-
-    changed = False
-    ET.register_namespace("", CONTYPES_NS)
-    if workbook_override is not None:
-        if workbook_override.get("ContentType") != content_type:
-            workbook_override.set("ContentType", content_type)
-            changed = True
-    else:
-        ET.SubElement(
-            root,
-            f"{{{CONTYPES_NS}}}Override",
-            {"PartName": "/xl/workbook.xml", "ContentType": content_type},
-        )
-        changed = True
-
-    if not changed:
         return
 
     parts[ARC_CONTENT_TYPES] = ET.tostring(root, encoding="utf-8", xml_declaration=True)
