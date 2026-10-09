@@ -1,0 +1,20 @@
+{
+  "initial_integrated_gate": "/workspace/scratch/e6acfd2bd33d/build-evidence/oss-final-v2/focused-test-receipt.json",
+  "initial_result": {
+    "passed": 313,
+    "skipped": 1,
+    "failed": 1
+  },
+  "finding": "Unsupported copied compact-edit assertion: Community stores a lightweight Cell for plain scalar edits and records compact dirty values.",
+  "runtime_changed": false,
+  "corrected_probe_validation": {
+    "reported_by": "/root/lazy_merges",
+    "passed": 12,
+    "seconds": 0.23,
+    "test_only_source_ref": "e1180a37e9f8d572dabf51bceddcf83fac4ac04b",
+    "runtime_source_ref": "02884309b62de4f98b92c837c4c9184fe64ed05c",
+    "native_sha256": "7ea062b1c794044b6cd1d894c780c14decbe3a5c66177bc6874b9ecdefc752dc",
+    "runtime_python": "/workspace/scratch/e6acfd2bd33d/variant-envs/oss-final-v2/bin/python"
+  },
+  "verification_boundary": "Original full-suite log retained; corrected probe-only file passed on the exact installed wheel. Remaining313 passing cases unchanged."
+}

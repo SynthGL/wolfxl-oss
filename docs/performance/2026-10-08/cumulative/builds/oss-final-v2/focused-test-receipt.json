@@ -1,0 +1,31 @@
+{
+  "source_ref": "02884309b62de4f98b92c837c4c9184fe64ed05c",
+  "python": "/workspace/scratch/e6acfd2bd33d/variant-envs/oss-final-v2/bin/python",
+  "command": [
+    "/workspace/scratch/e6acfd2bd33d/variant-envs/oss-final-v2/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_merge_negative_probe.py",
+    "tests/test_lazy_merge_metadata.py",
+    "tests/test_merge_xml_preservation.py",
+    "tests/test_streaming_merge_index.py",
+    "tests/test_streaming_style_cache.py",
+    "tests/test_eager_style_cache_windows.py",
+    "tests/test_template_content_type_fast_path.py",
+    "tests/test_modify_xml_splices.py",
+    "tests/test_modify_noop_preservation.py",
+    "tests/test_modify_prefixed_namespace.py",
+    "tests/test_cell_combined_styles.py",
+    "tests/test_cell_by_cell_batch_flush.py",
+    "tests/test_native_reader_flag.py",
+    "tests/test_streaming_reads.py",
+    "tests/test_native_save_lifecycle.py",
+    "tests/test_openpyxl_workbook_lifecycle_parity.py",
+    "tests/test_wolfxl_compat.py",
+    "tests/test_openpyxl_template_workbook_parity.py",
+    "-q"
+  ],
+  "exit_code": 1,
+  "seconds": 8.83422390099986,
+  "log": "/workspace/scratch/e6acfd2bd33d/build-evidence/oss-final-v2/focused-tests.log"
+}

@@ -1,0 +1,29 @@
+
+COMMAND ["/workspace/scratch/e6acfd2bd33d/build-env/bin/maturin", "build", "--release", "--locked", "--interpreter", "/workspace/scratch/e6acfd2bd33d/build-env/bin/python", "--out", "/workspace/scratch/e6acfd2bd33d/variant-wheels/oss-final-v2"]
+📦 Including license file `LICENSE`
+🍹 Building a mixed python/rust project
+🐍 Found CPython 3.12 at /workspace/scratch/e6acfd2bd33d/build-env/bin/python
+🔗 Found pyo3 bindings
+📡 Using build options features, bindings from pyproject.toml
+   Compiling wolfxl-rels v0.1.0 (/workspace/scratch/e6acfd2bd33d/worktrees/integration-oss-v2/crates/wolfxl-rels)
+   Compiling wolfxl-formula v0.1.0 (/workspace/scratch/e6acfd2bd33d/worktrees/integration-oss-v2/crates/wolfxl-formula)
+   Compiling wolfxl-pivot v2.0.0 (/workspace/scratch/e6acfd2bd33d/worktrees/integration-oss-v2/crates/wolfxl-pivot)
+   Compiling wolfxl-reader v0.1.0 (/workspace/scratch/e6acfd2bd33d/worktrees/integration-oss-v2/crates/wolfxl-reader)
+   Compiling wolfxl-merger v0.1.0 (/workspace/scratch/e6acfd2bd33d/worktrees/integration-oss-v2/crates/wolfxl-merger)
+   Compiling wolfxl v2.0.9 (/workspace/scratch/e6acfd2bd33d/worktrees/integration-oss-v2)
+   Compiling wolfxl-core v0.8.0 (/workspace/scratch/e6acfd2bd33d/worktrees/integration-oss-v2/crates/wolfxl-core)
+   Compiling wolfxl-writer v0.1.0 (/workspace/scratch/e6acfd2bd33d/worktrees/integration-oss-v2/crates/wolfxl-writer)
+   Compiling wolfxl-structural v0.1.0 (/workspace/scratch/e6acfd2bd33d/worktrees/integration-oss-v2/crates/wolfxl-structural)
+   Compiling wolfxl-classify v0.1.0 (/workspace/scratch/e6acfd2bd33d/worktrees/integration-oss-v2/crates/wolfxl-classify)
+   Compiling wolfxl-autofilter v2.0.0 (/workspace/scratch/e6acfd2bd33d/worktrees/integration-oss-v2/crates/wolfxl-autofilter)
+warning: unused variable: `ci`
+   --> src/native_writer_cells.rs:109:14
+    |
+109 |         for (ci, val) in cols.iter().enumerate() {
+    |              ^^ help: if this is intentional, prefix it with an underscore: `_ci`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: `wolfxl` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 1m 35s
+📦 Built wheel for CPython 3.12 to /workspace/scratch/e6acfd2bd33d/variant-wheels/oss-final-v2/wolfxl-2.0.9-cp312-cp312-manylinux_2_34_x86_64.whl

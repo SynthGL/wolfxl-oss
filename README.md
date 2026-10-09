@@ -1,6 +1,6 @@
 # WolfXL
 
-**Edit existing Excel files from Python without losing formatting, 3.0-17.3x faster than openpyxl on the committed read/write benchmark (small-file gains vary), with an openpyxl-compatible API. MIT licensed.**
+**Edit existing Excel files from Python without losing formatting, with an openpyxl-compatible API. MIT licensed.**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
@@ -37,8 +37,9 @@ wb.save("report-updated.xlsx")  # cells you did not touch keep their formatting
 wb.close()
 ```
 
-Modify mode saves the cells you change and preserves unchanged styles, charts,
-and package parts within the documented boundaries; add `keep_vba=True` for
+Modify mode patches changed cells and required owned package metadata while
+preserving unchanged styles, charts, and parts within the documented boundaries;
+add `keep_vba=True` for
 `.xlsm` macros. `calculate()` returns the computed values and leaves the cached
 results in the saved file unchanged.
 [Edit Excel in Python without losing formatting](https://wolfxl.com/openpyxl-preservation?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09).
@@ -76,15 +77,14 @@ another calculation engine recalculates. Close the workbook after saving.
   functions only, in Python. Need results that match Excel? Commercial
   includes a native engine verified on 704 Excel-calculated cases
   ([pricing](https://wolfxl.com/pricing?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09)).
-- **Large files.** In the current benchmark's 200,000-row plain workload,
-  a full read with WolfXL took 0.305 s against 4.380 s for openpyxl 3.1.5.
-  The edit-two-cells-and-save phase took 0.159 s against 9.202 s; the full
-  edit benchmark, including verification with openpyxl, took 5.458 s
-  against 14.509 s. See the [current receipts](benchmarks/results/2026-10-02-community-2.0.8-vs-openpyxl-3.1.5.md).
+- **Large files.** The [proposed-source comparison](#performance) measures
+  styled Cell reads and two-cell edits at top, middle, and bottom positions.
+  It reports the operation separately from the same independent verification
+  used for both engines; runtime depends on workbook shape and read mode.
 - **Other alternatives.** python-calamine and fastexcel specialize in reading;
   XlsxWriter and PyExcelerate specialize in writing. WolfXL reads, writes,
-  and edits through an openpyxl-compatible API. The current speed claims
-  compare only WolfXL and openpyxl, not these specialists.
+  and edits through an openpyxl-compatible API. The performance comparison
+  below measures WolfXL and openpyxl, not these specialists.
 - **Where openpyxl fits.** openpyxl is pure Python and installs anywhere
   Python runs. WolfXL needs a published wheel for your platform or a Rust
   toolchain to build from source.
@@ -98,15 +98,6 @@ rendering, format conversion, or VBA and Power Query operations. Those ship in
 - [Coming from Aspose.Cells for Python](https://wolfxl.com/aspose-cells-python-alternative?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09)
 
 See [Community and Commercial](#community-and-commercial).
-
-Median read and write speedups over openpyxl 3.1.5 range from 3.0x on styled
-reads to 17.3x on multi-sheet bulk writes (WolfXL 2.0.8 PyPI wheel,
-Apple M5 Pro, Python 3.13.9, median of 5 rounds). Bulk writes use a
-different API shape from openpyxl's per-row or per-cell calls; workload
-details and all samples are in the [current results](benchmarks/results/2026-10-02-community-2.0.8-vs-openpyxl-3.1.5.md).
-This is a measured range on this machine, not a guarantee for every workbook.
-Small-file gains vary: the separate [officelibs small-feature benchmark](https://officelibs.com/excel/)
-reports about 1.7x for reads and 2.4x for writes, outside this range.
 
 ## Switch from openpyxl
 
@@ -188,9 +179,94 @@ your agent's skills folder, for example `~/.claude/skills/wolfxl-xlsx`.
 
 ## Performance
 
-The current comparison uses the published WolfXL 2.0.8 and openpyxl 3.1.5
-packages on Apple M5 Pro, macOS 26.5.1, Python 3.13.9. Every timed case,
-including the large workloads, reports the median of five measured rounds.
+### Proposed source comparison: 2026-10-08
+
+This comparison uses unreleased proposed Community source builds and a pinned
+source baseline on Linux, CPython 3.12, with openpyxl 3.1.5. Both WolfXL variants
+use standard release builds with Community features. These results are separate
+from published-wheel measurements and apply to the fixed synthetic fixtures.
+
+Measured source baseline `93e48b23605c` → final `02884309b62d`.
+
+**Variance note:** some operation ranges exceed 20% of their medians. Use the linked core and guard raw ranges to assess these results.
+
+| Workload / mode | Baseline operation (s) | Final operation (s) | Baseline/final operation | openpyxl/final operation | Baseline/final total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Two-cell edit: top (modify) | 0.4718 | 0.3299 | 1.43× | 46.28× | 1.42× |
+| Two-cell edit: middle (modify) | 0.8365 | 0.3834 | 2.18× | 38.35× | 1.18× |
+| Two-cell edit: bottom (modify) | 1.1251 | 0.4812 | 2.34× | 31.61× | 1.11× |
+| Two-cell edit: merged fixture (modify) | 5.5876 | 0.6350 | 8.80× | Not measured | 8.74× |
+| Styled 2,000 × 5 (eager Cells) | 0.0522 | 0.0463 | 1.13× | 2.25× | 1.13× |
+| Styled 20,000 × 5 (read-only Cells) | 0.8446 | 0.3369 | 2.51× | 2.25× | 2.51× |
+| Merged 20,000 × 5 (eager Cells) | 0.9529 | 0.7725 | 1.23× | 1.39× | 1.23× |
+
+Operation covers load, assignment, save, and close for edits; reads cover load,
+the identical public Cell/font/fill/number-format loop, and close. Edit total adds
+fixture copy and the same independent bounded openpyxl verification. Edit
+outputs receive independent full value/type/style-meaning/merge and ZIP/XML
+package checks outside both timings. Styled reads match rows, first-column
+checksum, and styled-cell count against openpyxl; their input ZIP integrity is
+checked separately. This read signature does not certify every cell's value,
+type, or style meaning. Late-row verification streams the worksheet XML prefix
+and costs more than verification near the top.
+
+Separate untimed [styled-read validation](docs/performance/2026-10-08/cumulative/styled-read-validation.md)
+checks every coordinate, including sparse and merged placeholders. Coordinates,
+values, exact Python value types, Excel data types, geometry, merges, alignment,
+and number formats match openpyxl on these fixtures. Four baseline merged-border
+color mismatches are fixed. Remaining font metadata differences are identical to
+the baseline; Community also retains fill ARGB `FFFFD966` versus openpyxl
+`00FFD966`. These getter checks do not certify visual or rendered equivalence.
+
+Plain edit fixtures contain 200,000 rows × five populated columns: 1,000,000
+value cells, despite the historical eight-column setting. The merged edit
+fixture contains 999,997 values. Small styled reads contain 2,000 × five cells;
+large styled core reads contain 20,000 × five, with 99,997 values in the merged
+case. Eager and `read_only=True` modes remain separate workloads. Read-only
+limits Python Cell allocation; the native worksheet model is still eager.
+
+| Workload / mode | Baseline operation (s) | Final operation (s) | Baseline/final operation | openpyxl/final operation | Baseline/final total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Styled 25,000 × 5 (eager Cells) | 0.7980 | 0.5483 | 1.46× | 2.66× | 1.46× |
+| Sparse 25,000 × 32 (eager Cells) | 3.4357 | 1.7656 | 1.95× | 1.84× | 1.95× |
+| 1,024 format variants (eager Cells) | 0.9805 | 0.6669 | 1.47× | 2.13× | 1.47× |
+| Sparse 25,000 × 32 (read-only Cells) | 4.3397 | 1.9321 | 2.25× | 0.08× | 2.25× |
+| 1,024 format variants (read-only Cells) | 1.2953 | 0.5705 | 2.27× | 1.85× | 2.27× |
+
+**Sparse read-only guard:** final WolfXL is 12.01× slower than openpyxl on this fixture (1.9321 s vs 0.1609 s), with a direct 2.25× baseline/final operation ratio. Eager and read-only modes have different tradeoffs; this result is not covered by a blanket speed claim.
+
+The guard fixtures use 25,000 rows: dense and high-cardinality sheets contain
+125,000 values; sparse sheets have 32-column dimensions and 7,816 stored values.
+The high-cardinality guard configures 1,024 number-format variants. Sparse
+read-only behavior is reported explicitly rather than inferred from dense reads.
+
+Engine ratios divide matched WolfXL baseline/final medians; openpyxl comparisons
+divide openpyxl/final medians. Ratios below 1 mean the final variant is slower.
+Isolated PR gains are never multiplied, and the separate values/style-ID record
+API choice is excluded from cumulative engine gains. Five fresh-process trials
+follow one warmup, with serial, reproducibly shuffled variant order. Sample ranges and high-variance cases are
+in the [core evidence](docs/performance/2026-10-08/cumulative/core.md) and
+[guard evidence](docs/performance/2026-10-08/cumulative/guards.md), alongside raw
+JSON samples, fixture hashes, source/native/build identities, and validation
+boundaries. The [source bindings](docs/performance/2026-10-08/cumulative/source-bindings.json)
+map measured build inputs to the proposed PR trees. Sample ranges are descriptive
+rather than confidence intervals. The fixed-fixture headless checks are not
+Microsoft Excel certification. [Build and functional gates](docs/performance/2026-10-08/cumulative/build-gates.md)
+are reported separately; their overlapping per-run test counts must not be added
+to imply distinct coverage.
+
+For ingestion that needs values and workbook-local style IDs, see the existing
+[bounded record recipe](docs/performance/style-id-records.md). It uses a different
+API and has explicit date, elapsed-duration, merge, and pending-style limits.
+The retained [intermediate top-regression experiment](docs/performance/2026-10-08/cumulative/intermediate-core.md)
+record the earlier source stage separately and do not supply the final ratios.
+
+### Historical published-wheel comparison: 2026-10-02
+
+The released WolfXL 2.0.8 PyPI wheel was measured against openpyxl 3.1.5 on
+Apple M5 Pro, macOS 26.5.1, Python 3.13.9. Each workload reports five-round
+medians. This historical protocol differs from the proposed Linux source run
+above and must not be combined with it.
 
 | Workload | openpyxl seconds | WolfXL seconds | Speedup |
 | --- | ---: | ---: | ---: |
@@ -200,18 +276,13 @@ including the large workloads, reports the median of five measured rounds.
 | Large plain bulk write | 3.399683 | 0.228258 | 14.9x |
 | Large two-cell edit, including verification | 14.509416 | 5.458442 | 2.7x |
 
-Read and write ratios span **3.0-17.3x**. End-to-end edit ratios span
-2.4-2.7x and include openpyxl verification; edit-only phases are reported
-separately, not folded into the headline range. The large plain case is
-configured for 200,000 rows and eight columns, but the committed harness
-generates only five populated columns (one million cells). See the result
-notes rather than interpreting its nominal units-per-second as populated
-cell throughput.
-
-The [results and reproduction notes](benchmarks/results/2026-10-02-community-2.0.8-vs-openpyxl-3.1.5.md)
-include raw samples, machine and package identities, warmup policy, and memory
-measurements. Earlier runs remain under [`benchmarks/results/`](benchmarks/results/)
-as historical evidence, not current headline claims.
+Bulk writes use a different API shape from openpyxl's per-row/per-cell calls.
+The historical large fixture also has five populated columns, despite its
+nominal eight-column configuration. Its edit total includes the historical
+openpyxl verification, so it is not an operation-only ratio. Read the
+[historical receipts and reproduction notes](benchmarks/results/2026-10-02-community-2.0.8-vs-openpyxl-3.1.5.md)
+for raw samples, environment identities, warmup policy, and memory measurements.
+Older runs remain under [benchmarks/results/](benchmarks/results/).
 
 ## Fidelity
 

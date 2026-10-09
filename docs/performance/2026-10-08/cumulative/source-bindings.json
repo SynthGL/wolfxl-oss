@@ -1,0 +1,2241 @@
+{
+  "all_measured_inputs_identical": true,
+  "all_other_recorded_inputs_identical": true,
+  "build_flag_environment": {
+    "CARGO_BUILD_TARGET": null,
+    "CARGO_ENCODED_RUSTFLAGS": null,
+    "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": null,
+    "CARGO_PROFILE_RELEASE_DEBUG": null,
+    "CARGO_PROFILE_RELEASE_LTO": null,
+    "CARGO_PROFILE_RELEASE_OPT_LEVEL": null,
+    "RUSTC_WORKSPACE_WRAPPER": null,
+    "RUSTC_WRAPPER": null,
+    "RUSTFLAGS": null
+  },
+  "build_metadata_sha256": "186cb3dbbb58aff988588db348905ddabac2e25d9d18cb8787f685c271810b0e",
+  "excluded_standalone_lock_exception": {
+    "applied": false,
+    "requested": false
+  },
+  "kind": "Published Git tree versus measured source-build inputs",
+  "manifest_scope": "Build configuration, package metadata and all files under native/Python runtime source directories, excluding native build products and caches",
+  "measured_runtime_build_scope_sha256": "753dc6532996dff8ab200aedb25dd61ee1a886350486f7a442ac0990d75d5671",
+  "measured_source_ref": "02884309b62de4f98b92c837c4c9184fe64ed05c",
+  "native_sha256": "7ea062b1c794044b6cd1d894c780c14decbe3a5c66177bc6874b9ecdefc752dc",
+  "note": "Publication includes additional tests, diagnostics and documentation; every recorded build input is byte-identical. The remote tree is independently checked at publication.",
+  "publication_local_ref": "e8839a48454ee41c84532b579c395e47e4ab4da3",
+  "publication_recorded_inputs_sha256": "753dc6532996dff8ab200aedb25dd61ee1a886350486f7a442ac0990d75d5671",
+  "publication_remote_ref": "0ae83649ab649c5e588d786e96bb1130401ebf93",
+  "publication_repo": "/workspace/scratch/e6acfd2bd33d/repos/wolfxl-oss",
+  "publication_resolved_local_ref": "e8839a48454ee41c84532b579c395e47e4ab4da3",
+  "publication_runtime_build_scope_sha256": "753dc6532996dff8ab200aedb25dd61ee1a886350486f7a442ac0990d75d5671",
+  "publication_tree": "3542f211f9bac8f475c9209a4bb5f833aed91944",
+  "python": "/workspace/scratch/e6acfd2bd33d/variant-envs/oss-final-v2/bin/python",
+  "recorded_input_count": 547,
+  "runtime_and_build_dependency_closure_inputs_identical": true,
+  "runtime_build_scope": "Every recorded measured input; only the proved excluded standalone lock is removed when the explicit exception is applied",
+  "rustc": "rustc 1.90.0 (1159e78c4 2025-09-14)",
+  "source_manifest_sha256": "753dc6532996dff8ab200aedb25dd61ee1a886350486f7a442ac0990d75d5671",
+  "standard_maturin_features": [
+    "extension-module"
+  ],
+  "verified_input_count": 547,
+  "verified_input_group_counts": {
+    "native_crates_and_assets": 195,
+    "root_build_configuration": 2,
+    "root_cargo": 2,
+    "root_python": 267,
+    "root_rust": 78
+  },
+  "verified_inputs": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "9f1ec9bb3fb60d5d2a342616ef3f7797c4f19a672f80aec9c113ac7a9fd5a60d"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "9fa75ea5aa5b3ef9d477f44dd9f676a774f8d67c799999d7819bdd571204e8fc"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "e964e5946cdb43f1270f78870fc68875f23ddbd308dbf0a174b9ce881674a39c"
+    },
+    {
+      "path": "PYPI.md",
+      "sha256": "983a28abace60746739ff97ed059156d49fa0a0884bdc0791946daaf05342679"
+    },
+    {
+      "path": "README.md",
+      "sha256": "054a1d002fab003b6e85d77834369226ff7139c6622cf2c7cad4a0f4d1517202"
+    },
+    {
+      "path": "build.rs",
+      "sha256": "b7d3a8e039bd0423045824d65975540ffe5f9c806c3b6d6ed728a7d58e34f213"
+    },
+    {
+      "path": "crates/wolfxl-autofilter/Cargo.toml",
+      "sha256": "f46ff79168abe9d2d047c30640b9d64c2e03dd2efa7f2961f6db8b7163023126"
+    },
+    {
+      "path": "crates/wolfxl-autofilter/src/emit.rs",
+      "sha256": "dea54c377746bfd8bf0e9ee8f9e6becfdcdc9511038c9c8f2e6dd1ba65196c04"
+    },
+    {
+      "path": "crates/wolfxl-autofilter/src/evaluate.rs",
+      "sha256": "1653443ddd745dd3912ef92f81c236f77f245c8949e6de88c7f1112dceb26476"
+    },
+    {
+      "path": "crates/wolfxl-autofilter/src/lib.rs",
+      "sha256": "2744292d4e5b2f66a8919e9665a7fe91798bb8cc12c0e4582e8ccba0a220fb1b"
+    },
+    {
+      "path": "crates/wolfxl-autofilter/src/model/column.rs",
+      "sha256": "2a5eacaa98652ae05679d7ef9b059cb2e072028f4532a8aa9277a78ed6633972"
+    },
+    {
+      "path": "crates/wolfxl-autofilter/src/model/filter.rs",
+      "sha256": "b77370593ff6571d47822a301019db7c6977c796a6aeaca40d0db913491648c5"
+    },
+    {
+      "path": "crates/wolfxl-autofilter/src/model/mod.rs",
+      "sha256": "0d0c19c604a6940279487a6e9d8524499be4b8b7654ca177f4bbd75b05f3207a"
+    },
+    {
+      "path": "crates/wolfxl-autofilter/src/model/sort.rs",
+      "sha256": "cdcd74e01788118d13d280043208b1e05a6c395241416591418cfe5ab0cb85b2"
+    },
+    {
+      "path": "crates/wolfxl-autofilter/src/parse.rs",
+      "sha256": "c203dee73407a7821aa34aa569977d29638aafacd78b913b9ccbe2cf262bf1c3"
+    },
+    {
+      "path": "crates/wolfxl-classify/Cargo.toml",
+      "sha256": "23cc779b837e6e340e75169dc03e186e4f1c8fd051e74fa2296d43dc9201e23f"
+    },
+    {
+      "path": "crates/wolfxl-classify/src/lib.rs",
+      "sha256": "0d777e174b43a3a88ad13b742142819b0189faea0d0f9c838440134d475198ae"
+    },
+    {
+      "path": "crates/wolfxl-cli/Cargo.toml",
+      "sha256": "6a16cfc207974aff89dc4faa02526fe9c7658dcdcab3f56c4ad587700e20eedc"
+    },
+    {
+      "path": "crates/wolfxl-cli/README.md",
+      "sha256": "558b646484078dbe23ca562bbcc878371315d7a367d075e8558cb396ae309678"
+    },
+    {
+      "path": "crates/wolfxl-cli/src/commands/agent.rs",
+      "sha256": "26764ae1100b2d185617ebaa07e05a44811785ce3bf00cf51bc75199f612d0a5"
+    },
+    {
+      "path": "crates/wolfxl-cli/src/commands/map.rs",
+      "sha256": "63835b37351cf24ce286d3a7f26aae9a1d2fa8d58d3b606399117f47ef4fcd79"
+    },
+    {
+      "path": "crates/wolfxl-cli/src/commands/mod.rs",
+      "sha256": "26ab99c6e8d1cf881f2e56e89516d5387f33a72433afa9cbaf274ec09cfb9d0d"
+    },
+    {
+      "path": "crates/wolfxl-cli/src/commands/peek.rs",
+      "sha256": "1a1bf4a8543f6bb9115d14159256c467af38a1f15b60d64c0bf3253fce27b26e"
+    },
+    {
+      "path": "crates/wolfxl-cli/src/commands/schema.rs",
+      "sha256": "6261efefa3c27cf72d4c1e6a3ebfd87ef6f10ffc093df405c299e63a4c8e406d"
+    },
+    {
+      "path": "crates/wolfxl-cli/src/main.rs",
+      "sha256": "c459bff07513c88e6375455cfcdcc59bc538a47491f10bdeadca9b52334dba38"
+    },
+    {
+      "path": "crates/wolfxl-cli/src/render.rs",
+      "sha256": "cd25d72bb374376bf0b27984f9344fc51241a34599e5e546b3b6659d75ad9103"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/cli.rs",
+      "sha256": "ecbe7f907cadb489de81a5e33434bae8bde7312d2e2281a92f51e1788c457690"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/fixtures/formatted-values.xlsx",
+      "sha256": "47d3825feba4157799adfb42b1c04619e98717fd4fd9573267d7e43b95203670"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/fixtures/sample-date.xlsb",
+      "sha256": "68d36adf4d4de3890209e786eeb89a98778d25158628f83e96587e652fbb4eca"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/fixtures/sample-financials.xlsx",
+      "sha256": "dad5a50fa494b99b9cf6e7bfd12c6e92e76c7bf82aac512ebd93ed7f8efd7842"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/fixtures/sample-minimal.csv",
+      "sha256": "a2a37ce231191d69b5a378f131f66770c0808039033471330806bf4b183d4ddd"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/fixtures/sample-minimal.ods",
+      "sha256": "32416af66f602ad283a8402b0d7aa137e7f6b44f2820dcdf8c6080413ef94b19"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/fixtures/sample-minimal.xls",
+      "sha256": "25ec0e84750123909701659cc64331c26773c8824dda934575a043d3a9b73974"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/fixtures/wide-table.xlsx",
+      "sha256": "a2ee78b9df7343feee507829ebed939fc0732c2f3ddbc96d765c04983a307cc5"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/golden/sample-financials.csv",
+      "sha256": "fab96ce03d0fa9e76b2da86a7735a641225f997f6a4cf8edca5ee72b132ac74e"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/golden/sample-financials.json",
+      "sha256": "509a07408873e8ac34056d4bb8e75987832bedb94857b4dd6823afb3878a436b"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/golden/sample-financials.markdown",
+      "sha256": "555f70563cc7ef22e6d71879f5d883e019e203615f3dabdaabbb5e4784da0441"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/golden/sample-financials.text",
+      "sha256": "4ec57b36c2edfd6943b4edf537c4997f59654e044caa736c2c246a539afc9c6d"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/golden/wide-table.csv",
+      "sha256": "f58fb067b78156922b7daeacd7bea1f7c75c282781589fe1a143698ef2663b6a"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/golden/wide-table.json",
+      "sha256": "3063048db3806760ab8ffb585045a106a0a5854497d8ce7b26c2f74f4df7aa71"
+    },
+    {
+      "path": "crates/wolfxl-cli/tests/golden/wide-table.text",
+      "sha256": "afa7c42b85dff574bb899a51ac0707a6e031fa7ac0e81a75ac8a8be6d9416836"
+    },
+    {
+      "path": "crates/wolfxl-core/Cargo.toml",
+      "sha256": "cd1e4674611db93f6168d7e40350f22827093beb5b5c5c5da5a2f793b43244e6"
+    },
+    {
+      "path": "crates/wolfxl-core/README.md",
+      "sha256": "b1d9eb63ddddd4c8a3a34b3a9656003699299a22bfaa682d832e0a32ebea9c40"
+    },
+    {
+      "path": "crates/wolfxl-core/src/cell.rs",
+      "sha256": "82161d2a3de26d87511d9f446cf08988bda92bd852400df5adc928bd68ae39d7"
+    },
+    {
+      "path": "crates/wolfxl-core/src/csv_reader.rs",
+      "sha256": "b994e07e450af957bd8e32799edf285f88df5d3eb6d79c69a6accc0453308cc5"
+    },
+    {
+      "path": "crates/wolfxl-core/src/error.rs",
+      "sha256": "2b83ed8c51b984a9692fce99ae139ea16907adbc1f9f4840d50ee311f705c85f"
+    },
+    {
+      "path": "crates/wolfxl-core/src/format.rs",
+      "sha256": "85edb96e0e41258f61a8247faabd5a74e05f080cd467cadce55e45650c5c6360"
+    },
+    {
+      "path": "crates/wolfxl-core/src/lib.rs",
+      "sha256": "ea6a6c9e629aae48d407ceae4f181cf4034398c7cf124e4e1113fd25114a3dea"
+    },
+    {
+      "path": "crates/wolfxl-core/src/map.rs",
+      "sha256": "3894f29af00cea76d582a4708b5c705e909890e6a18f6e470881e89371e615f1"
+    },
+    {
+      "path": "crates/wolfxl-core/src/ooxml.rs",
+      "sha256": "0c22a05afe98524c461fba4412873731740717f738b8d4de9385924c11a3ca7d"
+    },
+    {
+      "path": "crates/wolfxl-core/src/schema.rs",
+      "sha256": "5813f79ec34dce99f568cd1ef11e7eeb3aead89468ddca7284ce1d8fb0afd113"
+    },
+    {
+      "path": "crates/wolfxl-core/src/sheet.rs",
+      "sha256": "dfb9a0e68959661d0bebd12ed77718657f5c2fa7751e95419aae5911d40a09a2"
+    },
+    {
+      "path": "crates/wolfxl-core/src/styles.rs",
+      "sha256": "5b3a0694619af47e1f134e5ea70b7d271817ec54f8d173213c108475dc5d1592"
+    },
+    {
+      "path": "crates/wolfxl-core/src/workbook.rs",
+      "sha256": "b0b5081592c4b9dda0b63be41ca942bba1d6e52aceddf57d98b306afef66b9a2"
+    },
+    {
+      "path": "crates/wolfxl-core/src/worksheet_xml.rs",
+      "sha256": "96617b30698cf41c47556548eefb21ffdfc9a7f01a38912b299f74742c6390c8"
+    },
+    {
+      "path": "crates/wolfxl-core/tests/fixtures/formatted-values.xlsx",
+      "sha256": "47d3825feba4157799adfb42b1c04619e98717fd4fd9573267d7e43b95203670"
+    },
+    {
+      "path": "crates/wolfxl-core/tests/fixtures/sample-date.xlsb",
+      "sha256": "68d36adf4d4de3890209e786eeb89a98778d25158628f83e96587e652fbb4eca"
+    },
+    {
+      "path": "crates/wolfxl-core/tests/fixtures/sample-financials.xlsx",
+      "sha256": "dad5a50fa494b99b9cf6e7bfd12c6e92e76c7bf82aac512ebd93ed7f8efd7842"
+    },
+    {
+      "path": "crates/wolfxl-core/tests/fixtures/sample-minimal.csv",
+      "sha256": "a2a37ce231191d69b5a378f131f66770c0808039033471330806bf4b183d4ddd"
+    },
+    {
+      "path": "crates/wolfxl-core/tests/fixtures/sample-minimal.ods",
+      "sha256": "32416af66f602ad283a8402b0d7aa137e7f6b44f2820dcdf8c6080413ef94b19"
+    },
+    {
+      "path": "crates/wolfxl-core/tests/fixtures/sample-minimal.xls",
+      "sha256": "25ec0e84750123909701659cc64331c26773c8824dda934575a043d3a9b73974"
+    },
+    {
+      "path": "crates/wolfxl-core/tests/fixtures/tier1_01_cell_values.xlsx",
+      "sha256": "7be7af2cef08d1dc7dcec997c85d259d30e08ea3bb2ed2adf09c11e0186aa112"
+    },
+    {
+      "path": "crates/wolfxl-core/tests/integration_real_xlsx.rs",
+      "sha256": "8d8005c42c6bbeb4e9cfcfc39015df039badba687c2effcb5f6965a4fe0a7bdb"
+    },
+    {
+      "path": "crates/wolfxl-core/tests/multi_format.rs",
+      "sha256": "35fa2a44ec9dd5150f19b2a998aa3150b04d5de1b8c5941dde15b1e73408de29"
+    },
+    {
+      "path": "crates/wolfxl-core/tests/styles_walker.rs",
+      "sha256": "f1c3006e8b516bfb5ab8dff08bc41b267a5a0f9b230a1e1da5a427f316ffecde"
+    },
+    {
+      "path": "crates/wolfxl-formula/Cargo.toml",
+      "sha256": "01b44501768f59c0e82324c7b6efff8cff8e49a77c2ba5875cc4e972a53d478e"
+    },
+    {
+      "path": "crates/wolfxl-formula/README.md",
+      "sha256": "bcdbf52435d7c3b513641037d62faa3de0da99bf7464fdc63295b8c9acfb056f"
+    },
+    {
+      "path": "crates/wolfxl-formula/src/lib.rs",
+      "sha256": "c405741c01c9b654a0f6a951dbe162d301bde637734e69858ea296b503d478f3"
+    },
+    {
+      "path": "crates/wolfxl-formula/src/reference.rs",
+      "sha256": "386bc90233bb0d247b965da116f4208123c8b297a64d652f0bc96be8b35356d9"
+    },
+    {
+      "path": "crates/wolfxl-formula/src/tests.rs",
+      "sha256": "d255df78ac72eb5db85f1bc00a6183374a2e930fc7b4a0cf948eaa4331bec4bf"
+    },
+    {
+      "path": "crates/wolfxl-formula/src/tokenizer.rs",
+      "sha256": "5a51c10b7c077b28bc911add3cdd31d18cbed2d770ce4e90ae32bf116ed22e74"
+    },
+    {
+      "path": "crates/wolfxl-formula/src/translate.rs",
+      "sha256": "bf52d4bdbef4b90deaa18ef68c83a15a17942814765dd23543c75177b94af28b"
+    },
+    {
+      "path": "crates/wolfxl-merger/Cargo.toml",
+      "sha256": "5e2503ac2809229e31f7c541bf446ecef9d2f620bb48804352345074c521dc2b"
+    },
+    {
+      "path": "crates/wolfxl-merger/src/lib.rs",
+      "sha256": "bdef910ac0e4e0c3a972597fc7467e3cc192d35bea343b03ea5a22bd152f7608"
+    },
+    {
+      "path": "crates/wolfxl-merger/tests/proptest_merge.rs",
+      "sha256": "e17a38ac154c2334708219ffc4fe01766762f706f009ee2e6c008b57534050eb"
+    },
+    {
+      "path": "crates/wolfxl-merger/tests/round_trip.rs",
+      "sha256": "163e4d65ee7f961395badf5a998657a6748a5b8f25e01ba04fd1d238c7125c3a"
+    },
+    {
+      "path": "crates/wolfxl-pivot/Cargo.toml",
+      "sha256": "f834717327a2d476ef237da8f0cadf53ac8fb41c574fffc8bc0d65eea884ca0a"
+    },
+    {
+      "path": "crates/wolfxl-pivot/README.md",
+      "sha256": "689e13195b9f7c7a3ebc0204aa9d5a1aec8fcbefe957a40dc5bb24eafeb572bb"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/emit/cache.rs",
+      "sha256": "e873dc0e3e5e82486c52553f815f7d5c74001f795dfe2e1335fbb275b15dd0a1"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/emit/mod.rs",
+      "sha256": "3075653e088336fa123b602b4fc30e82a76d4e40d340be668e49d9db5209c5ac"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/emit/records.rs",
+      "sha256": "0bf18def478b707c0ec4ddfbdb399116030c8189a7d6f052c3e217712ff24f57"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/emit/slicer.rs",
+      "sha256": "6dfd99db0297213457700479d11527138c7859831639cb0a93e245745113f87f"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/emit/slicer_cache.rs",
+      "sha256": "a665fcb9c13134a115c5e4d0281270ba26ad748bd2058eba7980b095a12d9931"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/emit/table.rs",
+      "sha256": "c8a9bdd38383fbc6edc5cac8d589870bd91f8e5aca4d3a764f6cb67f4cf33878"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/lib.rs",
+      "sha256": "b3456c8b6a92969bf0d15b9809c3521bf29ff789395db27db8f64bd791f98dd7"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/model/cache.rs",
+      "sha256": "27c27a70927de2e4dede09bf962fac5dbe4eea4b1a74c6bc1cbadd9f7bc26f73"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/model/mod.rs",
+      "sha256": "a811653aefdf3e0771d1e55018c382e950e8d809afd02b7b4d54f51ec32da694"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/model/records.rs",
+      "sha256": "ffa66ebc5579e24164afd1547eceeff8a5e1071d162449674e9dd031a4cec73f"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/model/slicer.rs",
+      "sha256": "23d924d8fdb9d22b035dcebf4f85e8cbc41b85b0a614f6d1322212870cb063d3"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/model/slicer_cache.rs",
+      "sha256": "aa43bc913a8b850d088a2387bfeacbbf94a518b1bcbe630908538ec061be9e94"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/model/table.rs",
+      "sha256": "915875efab5dfa6988b9df6bdc8187fd84bda110520133b03cb4f54e514c387b"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/mutate.rs",
+      "sha256": "b09c3df2b53e438d7e816d5bcf59be45b0a5034798e743abf2aeff8536eeb46d"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/parse.rs",
+      "sha256": "2683b2f44a131fd6f4ff2ef269522497a754352e5734fa1100340ea8fd3d6276"
+    },
+    {
+      "path": "crates/wolfxl-pivot/src/structural.rs",
+      "sha256": "237b3ca2c79391fe3ed32fadb12ad3a01334728723950e2e309c28fe26428fe7"
+    },
+    {
+      "path": "crates/wolfxl-pivot/tests/parse_existing.rs",
+      "sha256": "aa32058797f9d4da2b609b59d9f7a80cad208d4bad337cb3a870b1ddb5414f81"
+    },
+    {
+      "path": "crates/wolfxl-reader/Cargo.toml",
+      "sha256": "616f4fe1bcca2fbc4a8a10c885578bd3b8890898d659f85cf0fa0677d115f7dc"
+    },
+    {
+      "path": "crates/wolfxl-reader/examples/merge_presence_probe.rs",
+      "sha256": "343a058b9b0ca9d10317643d0ef03286b3d49dbe6322867572183498f5490446"
+    },
+    {
+      "path": "crates/wolfxl-reader/src/external_links.rs",
+      "sha256": "5b44a552f2e99578c49a7ebc3aa3eb750568d615642f1b613deedaeeba3e08fc"
+    },
+    {
+      "path": "crates/wolfxl-reader/src/lib.rs",
+      "sha256": "da9e21a174349ceac205b33c8e37370cf1171f9e40e2d8c44d917118bd577fd9"
+    },
+    {
+      "path": "crates/wolfxl-reader/src/merge_metadata.rs",
+      "sha256": "8f0528a16423050bb1c48103bbba5e904761ffe24047d228b163ebd8f721f9ce"
+    },
+    {
+      "path": "crates/wolfxl-reader/src/xlsb/formula.rs",
+      "sha256": "2f8fdf037d8fa515ffeaf00278fb1243ef0502fc0c6d6f33c48879ed45ec631d"
+    },
+    {
+      "path": "crates/wolfxl-reader/src/xlsb/style_records.rs",
+      "sha256": "ed78a2a94b4aa37184b4d5a926787b2c47b93769511b085f26822939331a1a1a"
+    },
+    {
+      "path": "crates/wolfxl-reader/src/xlsb/worksheet_features.rs",
+      "sha256": "a7211edb15d2ef4e87184fc8eeedbafb95d3ac41c3ce27e7a4da93e092600c42"
+    },
+    {
+      "path": "crates/wolfxl-reader/src/xlsb/worksheet_meta.rs",
+      "sha256": "c57aaface060626c12b342a7ffe264d79c68910f5c76f82a9b6ed671204fb5bb"
+    },
+    {
+      "path": "crates/wolfxl-reader/src/xlsb.rs",
+      "sha256": "5258cfeba38dcfc16964bc8188c17b8f4841df991f3d45d7c0d5cc47b4824647"
+    },
+    {
+      "path": "crates/wolfxl-reader/tests/external_links_parse.rs",
+      "sha256": "294a1c52694cc29fde79c8508bf34cb05eb2b0c6ce53e35fe114d5e54f3bbf7c"
+    },
+    {
+      "path": "crates/wolfxl-rels/Cargo.toml",
+      "sha256": "f223df9c299a0bb283ab286a9dcbf88ccbf406205a68bb4b8a2a1e236fcdd2ef"
+    },
+    {
+      "path": "crates/wolfxl-rels/src/lib.rs",
+      "sha256": "9bf8724ce44c7eab97f5acc84c72a00e1aa01a1e8962c79b51555580d8213b46"
+    },
+    {
+      "path": "crates/wolfxl-rels/src/part_id_allocator.rs",
+      "sha256": "35b65e4ed2d288d24c7b4331da9be9713234b995cb78c9f061d191e2865dc14e"
+    },
+    {
+      "path": "crates/wolfxl-rels/src/subgraph_walk.rs",
+      "sha256": "eaa78d8aa502d50bf15ec13dd88eee5c89e06373c8c0de019e4b9d7338f5666d"
+    },
+    {
+      "path": "crates/wolfxl-rels/tests/dedup.rs",
+      "sha256": "5effc20564956fa4c2f5fbf5ed91b98f0268d935c95166841f150c67ae0a0e45"
+    },
+    {
+      "path": "crates/wolfxl-rels/tests/proptest_round_trip.rs",
+      "sha256": "c1df52a97bdaa1a0a441a90bd3af6f2a8ff600f0648b96ffdab8406fa22a4105"
+    },
+    {
+      "path": "crates/wolfxl-rels/tests/round_trip.rs",
+      "sha256": "91216d4ad1ec8a9e9469711f76b58c8e248a5523d16f4b0ca0f278599c2bc89a"
+    },
+    {
+      "path": "crates/wolfxl-structural/Cargo.toml",
+      "sha256": "2c1e76a8699bd5684c3adfd79a21f615bb0e52b0b5dd6e815c92f32f784c0faa"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/axis.rs",
+      "sha256": "8365e96f7c368268238fb20794203362a8d29ab60738ff8de594412385bfa0eb"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/cols.rs",
+      "sha256": "41d3e238256059c7cec1b2a4ac7b4ab66486c5fe1b3150be83bb8f01dd673235"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/control_props_shift.rs",
+      "sha256": "0fe9eb55fdae1606cd93f35e7eed56402e3afb2768b2e5ef8a54eccba648b421"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/drawing_shift.rs",
+      "sha256": "447d69672ae34399f857a470aa4b7b24a3207853685a135d0e4bac1fc5b1db2d"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/lib.rs",
+      "sha256": "7b8d29b6e72b9e6b06d19c1c0d501d6f710cbfd2a072ecd8f8763a27e4e1fec5"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/range_move.rs",
+      "sha256": "798505e137c1a99538c27c2305f67fdb5c572fa84b0dcc381833894789702812"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/sheet_copy.rs",
+      "sha256": "451653dfe3714eba5fa246c931b88c44b45e62c6080b168bbb9240dce9984cc8"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/shift_anchors.rs",
+      "sha256": "d8fdb228d573499390b790e455eb7059ab9d21fc535448ae8a5599b07ec9d510"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/shift_cells.rs",
+      "sha256": "bff4cfabaf2c2cf18a1928f8e6e7e3244b56e85fe0e6ff13fcce2c49f2652e05"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/shift_formulas.rs",
+      "sha256": "b37a7c95bbaa0b4f78e2d113e348e152103c7e8149e43480907f5a90c26f6e26"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/shift_workbook.rs",
+      "sha256": "18c6daaf72a9971b818c027234712a8a5a55dd2865dea87217dfb7f2bd85bb64"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/table_shift.rs",
+      "sha256": "4cdadc02a8aa50ef80dd7772981114f5d8f978176d165a955b59b41693781931"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/tests.rs",
+      "sha256": "61731ef883270c81b309a05540f9cda1c70ef2cce22f3e016a1d13819cfb3427"
+    },
+    {
+      "path": "crates/wolfxl-structural/src/vml_shift.rs",
+      "sha256": "e4b4072e6652d5c6b0a060d65d16996f9968c74321326f4a1fafac61fb229b25"
+    },
+    {
+      "path": "crates/wolfxl-structural/tests/prop_apply_workbook_shift.rs",
+      "sha256": "8ceeeaeedffd7a86e2594e72c563f8f5471f1f828cc073feca83d4b373aa7b9e"
+    },
+    {
+      "path": "crates/wolfxl-writer/Cargo.toml",
+      "sha256": "5c10a394ca1f9642a51bf23c4eba368695b67b7e2484360dd2de9c3324de7171"
+    },
+    {
+      "path": "crates/wolfxl-writer/examples/dense_write_hotpaths.rs",
+      "sha256": "30dbb07901010d5f4e3ee00405e1992378bf69e1416abbf8fbb517c9a0288b3f"
+    },
+    {
+      "path": "crates/wolfxl-writer/examples/writer_hotpaths.rs",
+      "sha256": "909b63e88abc4bcabe2f9cde7681b98609ef6de6e05a99efa251bc5841027c63"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/calc_chain_xml.rs",
+      "sha256": "7ac23bd879de8568bf608ec7632e0c8a0c1713e0263b1730d49273658f93fa10"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/charts/axes.rs",
+      "sha256": "cb8262173d0af3b53e8f86ab25d8e3181bdea130427be6af247644ff50a21807"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/charts/layout.rs",
+      "sha256": "e28d16794a9ff6fd39cd44509157c431e49750eeedaecbeb13cc929179c73160"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/charts/pivot.rs",
+      "sha256": "2521979edf42255720daffb313082456387c54b85b5ad06c7c5bedd4814a15ad"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/charts/plot.rs",
+      "sha256": "c089d8a8575e25067a28a5536b1f2fba3f0dbd64e7918e6d63a2dcabf222b019"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/charts/primitives.rs",
+      "sha256": "ffc3aecc43919aaff0c17c5a7d4b2b119c8ef86eff944a399e7f9dd3a831e2ff"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/charts/series.rs",
+      "sha256": "820e6ea07b6552e55fdcfb4ee2094ae2ed3a9e441ae14dead48b32dbd37a53c7"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/charts/style.rs",
+      "sha256": "7c5d345a0e5544eb9fb8d496b8594ed05600b0924af6127b3872d67c11ce75ae"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/charts/text.rs",
+      "sha256": "850211d0275f98819b464ade8e3a3cb25c03ef76cfa78c762208eb85f36a871d"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/charts.rs",
+      "sha256": "42a8aaea9a2171882686fe30cb8494e27a8f4aa851b083f61ac9a67044894786"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/columns.rs",
+      "sha256": "9d322f8547ce521bc0f06f28be6db1ad0f422d37ea7221c27bf416820cc93676"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/comments_xml.rs",
+      "sha256": "4980b8ddf94e421b28554394e3ecdf41f3d7a81082dbd821f362b6fab85feff1"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/conditional_formats.rs",
+      "sha256": "92320f27983b275619292c40d6fe71f4c9b0801a09d83dcfeca0798fc0de0d92"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/content_types.rs",
+      "sha256": "4778ffd277c53ee7c6535c9d08197b6951d14e7c8658562470bc732f94629007"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/data_validations.rs",
+      "sha256": "3b7e4812f252a7aff8872545bb3f42d7979cf78575d5733f0b53853354ee7e3f"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/dimension.rs",
+      "sha256": "2de2f3b4717c5a850d9bc14c82036f1a0f4e7bfb881828ae6d881aab4989d049"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/doc_props.rs",
+      "sha256": "41ac46093bc7d360debbf8ef2b5ca2d2fda21bbc92c501bec75e8bb5880e343a"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/drawing_refs.rs",
+      "sha256": "d049fee020eff3bc8ed8d9698835181e6b926c40806e38ffb609f63f00b0dbb0"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/drawings.rs",
+      "sha256": "f10b7c1b492f12cfd737821b629bdc04d27d4be6487daaa8f8ece972cd09b78b"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/drawings_vml.rs",
+      "sha256": "7e8a4b7aa7241f75c0088063ef6ba5fbcfde2be55928e6b933641bdb8a83e7a1"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/hyperlinks.rs",
+      "sha256": "909990953c3badd7b06c8822ab1b5b6d73a0cedff4b6fa4d324d701ff5271fbb"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/merges.rs",
+      "sha256": "d37700d58339cbf01f7ef140ddeb18c620241cbde9d8ede2f581028e880600cc"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/mod.rs",
+      "sha256": "5a33169182d1764316316846d0b3827dbf7cb7c8add2402ac01011794020485e"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/page_breaks.rs",
+      "sha256": "a8a88e11bfb94bc78d8d1377d2d08800117c94b9579312aade3632491492d4c5"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/persons_xml.rs",
+      "sha256": "81f591b43c3af44ed1079d1cf5c17b61f4d3aafa1f3b1714ed6066ac7dc5ff0c"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/rels.rs",
+      "sha256": "f0a51ef507a422239629d77a209ff8397df62c2c314946f449c01efc7604f069"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/shared_strings_xml.rs",
+      "sha256": "7bc83f07679880e49962afcfbb6584e47c5bd00e06ba3f91f669f7a5bab4642e"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/sheet_data.rs",
+      "sha256": "d8a266f584166c798f0e0449c0007512f9be5b4eb33aaaea2084ca2d142337f9"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/sheet_format.rs",
+      "sha256": "6aad70d979d54c0d12924c1479132f1791c5bce0044b6637334ebc59f4eb9c4b"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/sheet_rel_ids.rs",
+      "sha256": "89d53e023f78071d72f16745c70e625cf11f4390074dcde49df9b9dfac6d5de3"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/sheet_setup.rs",
+      "sha256": "ab8a431d0f36b190e17f6b4b7e3c72d7cb77b6a5254ede1c0d82c1a71f2d811d"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/sheet_views.rs",
+      "sha256": "6140c1e02b69e8e9500fa3f695cfc26b79d9fe713f89cdc9041606d7f85172c1"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/sheet_xml.rs",
+      "sha256": "f66f3f75714da32610baabb4f4fc9d5587c95c800526658db611e09f8eb9546f"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/styles_xml.rs",
+      "sha256": "151b05d5682d8ac3a085cfc400d4a170f15e34859913e23628aa0a83380a4d54"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/table_parts.rs",
+      "sha256": "bcb76006955976187ef5213f7ef36a00bf8edc51946a6f2989921e36ca71cfa8"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/tables_xml.rs",
+      "sha256": "2bdd6e7279ab7a835dbeffcd0f6825293d56d1cf2d9f37ff34eaf9fde3a2ee85"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/threaded_comments_xml.rs",
+      "sha256": "0393cb7869610544449ad74ea306830b2b55e3773760408acd83ece3a55a6af6"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/emit/workbook_xml.rs",
+      "sha256": "dae1ef26a630d7c0b85abf626049d5af87a0c3f72ffb6c06af3ddddeee567c1b"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/intern.rs",
+      "sha256": "2ecdfd7543089d88708c0077f5c9dfdcea55a50394a0e672a693ead98977c46e"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/lib.rs",
+      "sha256": "a8135d2395417b47e57e7704671ec7acd828d47a0fdf25fec4b1f3dfe4c03600"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/cell.rs",
+      "sha256": "bea1d39e0cafabb5db1b71daff78307d3961a6bb9f44777b7fb7ddf46ff238bb"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/chart.rs",
+      "sha256": "8b0041be90d32067e92b9613fdbccdf224eb616d127938b2f5286cd8ad4f26c9"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/comment.rs",
+      "sha256": "2a23ee6c404d37a32590b9818a49a303b720ecbe4380c7178cfe53eeb331d64b"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/conditional.rs",
+      "sha256": "134b9ac9f0f0e556b42d256f76b1485469783a9f21469d87fc21d20ef3f4ca28"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/date.rs",
+      "sha256": "8bf5be8759d2f1a9c3bc0e2f39f631468854b36c271df9fa088a871e30ca59f8"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/defined_name.rs",
+      "sha256": "8cb7a0d46fb42ebfcd9ddc6a34557e081292e72a299f8eede64132f7c023b7a3"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/format.rs",
+      "sha256": "ef8cb8988c089cef9939b20d429ab7db508d4e1774806dbd1ec95c4679a828b2"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/image.rs",
+      "sha256": "f1d23b73089213411986be44fa7b4b295c99094e4a443db45f2a6bfee466d04e"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/mod.rs",
+      "sha256": "fa98880f636ad8beeac006a2175a8dda1f87e85650f3cbe139a542cf79107c8d"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/table.rs",
+      "sha256": "e3e6696587e430622488d730fdc1167f26eb6d408daa2aba604509ad57503ecc"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/threaded_comment.rs",
+      "sha256": "1bfa8bc4c6af8060def57f1f39fca44964ea127759867a5543666ea9194f2009"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/validation.rs",
+      "sha256": "86b64b8fcbfcffb943d28fcc855e001855beac457e01b8f442821aaadabab396"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/workbook.rs",
+      "sha256": "f64a42d1b9d51d8cb34facb49faecf98f3f127f381e170f52a26696a063ba03b"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/model/worksheet.rs",
+      "sha256": "ecd7ed0aaf7e1191a01f90846b8d7b76c1919ea766d194a4bb5981eb2f8a8c61"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/parse/mod.rs",
+      "sha256": "ddfb2ddf0a0c0f8990a0418016ddd0358c1ddf2c99145c74de710ad6c0c1f427"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/parse/page_breaks.rs",
+      "sha256": "59644aed1caebb04722e9fe0f5fc6eb15ec9d1fd6d2f570753fea7a6f0c7316d"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/parse/sheet_setup.rs",
+      "sha256": "d125647a497eeccf520fa6297e4fd1f63a841d198e2ca588685816b6434c60b6"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/parse/workbook_security.rs",
+      "sha256": "921ddcaf3386ad65fbb14422d6b9ab55b137f139140152f8375b27df438c9e19"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/refs.rs",
+      "sha256": "c1af854ba02c3d242ff979ec75180c1021817b3a7e7f07396cb809f558a956d5"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/rich_text.rs",
+      "sha256": "2f2bd7980de04d0aa84c7d9726f142aa4c8b105e7a55824649edfd7223b75305"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/streaming.rs",
+      "sha256": "30251762bf3c9b6054bfeda9975fe336f31f175266f0cd7126bf08ebeaf646a9"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/test_utils.rs",
+      "sha256": "bfd8d2ed0df2927c0aef1a9b469e70145b70a80ad06d9b3c77fb07bf15af7289"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/xml_escape.rs",
+      "sha256": "e5e7daa7d4091d742c8907004198f77b5b53984709c0e128b5e8c9d504a35cab"
+    },
+    {
+      "path": "crates/wolfxl-writer/src/zip.rs",
+      "sha256": "1ccd8fb33133b572b2b9c55875f2f43dfaa4459c54c4c404ae41f9ff152d8af6"
+    },
+    {
+      "path": "crates/wolfxl-writer/tests/calc_chain_resave.rs",
+      "sha256": "c8713e54a9d52459f411fad4dec3f01a4fdfa3ac1b143f7c9e0f46206487b9af"
+    },
+    {
+      "path": "crates/wolfxl-writer/tests/charts.rs",
+      "sha256": "49e09c0d9e7e16089df7a21f797027c401b1b983344e3517f2a4bbe9d2aabe09"
+    },
+    {
+      "path": "crates/wolfxl-writer/tests/roundtrip_minimal.rs",
+      "sha256": "3a6d9434f4dc405db415873d44b6ba3002c56e8400d843fece3d356af393b1ed"
+    },
+    {
+      "path": "crates/wolfxl-writer/tests/streaming_write.rs",
+      "sha256": "994cc1652e7decb1fd4cc599fcad248c523d139395ca0c2132aacf660f73a9e1"
+    },
+    {
+      "path": "crates/wolfxl-writer/tests/threaded_comments_roundtrip.rs",
+      "sha256": "4687ee4af15ddae402a83249e77f37d5ce30b89e2942ce13873bac84af2d649e"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "657311869b32b5fd7d5eb0ee65634857e5dc2cd50ede210631f8ece820e6b5e9"
+    },
+    {
+      "path": "python/wolfxl/__init__.py",
+      "sha256": "b7c7c9f882db73821a4d9aa27564c5fd51d6af8d5a3acf9f04f058f371cd13e8"
+    },
+    {
+      "path": "python/wolfxl/_backend.py",
+      "sha256": "88f4c2aa03ff5bb87c99195ae14c69552fe7165415a456e90ad50e205948accf"
+    },
+    {
+      "path": "python/wolfxl/_cell.py",
+      "sha256": "b42233f61ac38e9d16fb1c6658d78effb8064f5df0dba13e3e32f7754fee3625"
+    },
+    {
+      "path": "python/wolfxl/_cell_annotations.py",
+      "sha256": "05cf852ddb93bf5a92acfc82fbce162a3727b764a5c660662e1fde1a410fa9e5"
+    },
+    {
+      "path": "python/wolfxl/_cell_payloads.py",
+      "sha256": "1185d360cb92c07f17a79c4fe7ebda45e434edbc82471ff75549e9c4cae52a51"
+    },
+    {
+      "path": "python/wolfxl/_cell_style_window.py",
+      "sha256": "32d665c2065d1c2c9858e5758d9501a3c64fef6eabb92ad597230c0a97dfdfa2"
+    },
+    {
+      "path": "python/wolfxl/_chartsheets.py",
+      "sha256": "8444d9967d8b536a2b9ea3d1d01fac6f0738bf20b4dcc880d7710c45fbf11eae"
+    },
+    {
+      "path": "python/wolfxl/_compat.py",
+      "sha256": "dfac1bdde6953497648025793f4f52282725136c7db439f6498212d5a33ea04f"
+    },
+    {
+      "path": "python/wolfxl/_constants.py",
+      "sha256": "35db4fe7168b2b8b834b964abc78bde5fe6a915c64a5aabe4a14ad5a34a36ffd"
+    },
+    {
+      "path": "python/wolfxl/_encryption.py",
+      "sha256": "1ab15a1218e00ff6261e47a05dc6670d952c444587fccb0bcbc3f2a63407f3b6"
+    },
+    {
+      "path": "python/wolfxl/_external_links.py",
+      "sha256": "15cdceebac55bd12301890a269118981d1a577da169cc8c7472ef6b03ead735d"
+    },
+    {
+      "path": "python/wolfxl/_images.py",
+      "sha256": "a55c6123a6817e79d6bd5f1cd6a5ff9393a128b0ac202f2f25a38365a11f4774"
+    },
+    {
+      "path": "python/wolfxl/_loader.py",
+      "sha256": "b63259d2c88b0c14309f0a396f4722a9bbd14e046b75551394b24ae9bbe9014f"
+    },
+    {
+      "path": "python/wolfxl/_openpyxl_package_shape.py",
+      "sha256": "9e9ea953fb7cb9cd09c0050aa9bf17e84a86e5f3ec37ec49fcc1201f92538bfd"
+    },
+    {
+      "path": "python/wolfxl/_source_charts.py",
+      "sha256": "5d9f499fda5da87e68a65e777cbd7cbb7a66acbe764d98088fdd8c20a49f6e94"
+    },
+    {
+      "path": "python/wolfxl/_streaming.py",
+      "sha256": "c4a6ebb0cd2e987791b85c8d008ff656dde9af2ec5faf32955f2698ba3beca71"
+    },
+    {
+      "path": "python/wolfxl/_streaming_styles.py",
+      "sha256": "4044dce7bf871029f3244e6b960fb018320c46cb9b8b26a4161f464061459809"
+    },
+    {
+      "path": "python/wolfxl/_styles.py",
+      "sha256": "14221c212c66ee569bd1cd16e03f65225be3b09534bbd2bbd2dd2627ee941ffe"
+    },
+    {
+      "path": "python/wolfxl/_utils.py",
+      "sha256": "07d17185ff8a381088be759d811d78b9e9bc4e1932e34812ab4bdeb5be454903"
+    },
+    {
+      "path": "python/wolfxl/_workbook.py",
+      "sha256": "761100466c200647da9cba9fc43f6049c8919240eb91f7fdcac7bd2427bf9998"
+    },
+    {
+      "path": "python/wolfxl/_workbook_calc.py",
+      "sha256": "60df73d2e39f310e1eb49dc833914c536a0a404355005407401e113288cd7174"
+    },
+    {
+      "path": "python/wolfxl/_workbook_features.py",
+      "sha256": "00cb577197966234c2a1b64d981f77d24a403b17635d848d0f65a3dc53d6dba3"
+    },
+    {
+      "path": "python/wolfxl/_workbook_lifecycle.py",
+      "sha256": "5125afd7f8a26073c2a942040e207d49e5f86dd3b4657cb76bd90370f7b42791"
+    },
+    {
+      "path": "python/wolfxl/_workbook_merge_updates.py",
+      "sha256": "4ff258635ff5e9151dcd3f0e9ca45741744f6aa84c30fe486aee6f1509432bb9"
+    },
+    {
+      "path": "python/wolfxl/_workbook_metadata.py",
+      "sha256": "d98fc35ff85119e884fc1f0224109a1f19fc54c8ee8c31dca4cd8805f3ab00b5"
+    },
+    {
+      "path": "python/wolfxl/_workbook_patcher_flush.py",
+      "sha256": "f6b5aad4fb7bf38c3cec62dbb0f8125ed3cc109c2015b9ad52ea74662dfb9b5e"
+    },
+    {
+      "path": "python/wolfxl/_workbook_save.py",
+      "sha256": "938ef486b474814da2d729928a93416a39c96699c00018f44ccdda06a2692af2"
+    },
+    {
+      "path": "python/wolfxl/_workbook_sheets.py",
+      "sha256": "c19a5476cff8004111a49137dc006c2299be82453edbd13de6b2893b160043f9"
+    },
+    {
+      "path": "python/wolfxl/_workbook_sources.py",
+      "sha256": "1bac39acccfe5c8631d7a938d4aab9d6b7efb15af5551c7fb28a9ba7772a7776"
+    },
+    {
+      "path": "python/wolfxl/_workbook_state.py",
+      "sha256": "cca92c1e65b9726a38a02030b034a0feda79973d41fe917b22b00819c1f13e0a"
+    },
+    {
+      "path": "python/wolfxl/_workbook_writer_flush.py",
+      "sha256": "a36195c913da351b6f6d2c8bda9dfec1b92ea17d3a82be4903bc92b9a031b69b"
+    },
+    {
+      "path": "python/wolfxl/_worksheet.py",
+      "sha256": "4b902398612dae5eee4005e760fa37a2309718e769e04d3b79c4941dc229f0b5"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_access.py",
+      "sha256": "c5b4c9e5ac88eecee56fdf624fe7004ba0bf29487d877301ba4b4abd51f434a4"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_bounds.py",
+      "sha256": "243199cca056d5bde40d1b3cd3d384926e7363a1519ab97dfae19858265f97e9"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_collections.py",
+      "sha256": "58d4a42c4d5adeacbb55032e8e447cceb1dfbbc703be5ea3ecbec94c5cd7d66f"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_dimensions.py",
+      "sha256": "39bdfa6f18be05c0d912f0b8a199e5bc22d2a88ce10406e21180c8c2a8f6e788"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_features.py",
+      "sha256": "1271cc45e9a3e8d12e17e1cbce6338dc454086a470f27273870b98583d1629f0"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_flush.py",
+      "sha256": "2b039e4a09e28f0d216b1edf78c035d55c13bd605dc06a07cfd17f1548197a3b"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_iteration.py",
+      "sha256": "6b4c652bf97b212c40011239766551173d6990ba5dbe4bff6ca20262c5855b25"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_media.py",
+      "sha256": "e28ded6ec98bb3e581b7b9d88f89bab101fd0e802b31dc4fc7c03d57f6f8ba93"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_merge_metadata.py",
+      "sha256": "75490faa28fe7b9429104ef22b85f2d59a9c9a6ae92888a35184737d21d3253e"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_merged_index.py",
+      "sha256": "a67e8e7d789eccd850bdece4e769d3e87c2cd947f1416d295c5c78991f3e7790"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_patcher_flush.py",
+      "sha256": "453fe53951966f7d6cfb6473304df50f37a9e0ad0c3b2b8ad5b6291a7a275a8e"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_pending.py",
+      "sha256": "10f21245f8393b096a3fcfa467e0da52d0f806d40b907c1a532bc3a1d036d6be"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_records.py",
+      "sha256": "08eca4cd1d5e2ed32a114451c1bf10a724391a85c56694584130c5a26c4c233d"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_repr.py",
+      "sha256": "2de4e853065119132db1e6355ac3dc729028b838e04a630cb59dfb5fc091c16c"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_rich_text.py",
+      "sha256": "9cfbc8f003fd87060833688b0b2fce00713e367e9fd274c40304ebcdfe4d3ab9"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_setup.py",
+      "sha256": "21ac9ab022dd7e776fc0b1e0e150da2330156d3cab5c14bd916f8947e8350056"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_state.py",
+      "sha256": "b2d9581b6015ea9fe8b503f4b36cbd8f7aa7ab0b8ab37ec252705846a3ef2cc0"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_structural.py",
+      "sha256": "e0da5d9bb82615ec150f70a624d242f09f97e12261ea27382e6c0b75bc6fbc2c"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_write_buffers.py",
+      "sha256": "0e8255c2fcdfa66814c6a86abe151a45470aad843dfd561fe08bcc365efa930f"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_write_only.py",
+      "sha256": "390387d7cd03ed0e1ada557e176b00268d80b0804876420a77c7832f878f9c9d"
+    },
+    {
+      "path": "python/wolfxl/_worksheet_writer_flush.py",
+      "sha256": "9ee95489515698b31b7f547637ca94423ba2d0d760040f9bfcbd37ab5ad5653a"
+    },
+    {
+      "path": "python/wolfxl/_zip_safety.py",
+      "sha256": "5f9d7f8afcbe14ac1f96f110b3427d42e60a1d45b0184f9386eb31f234c7ece2"
+    },
+    {
+      "path": "python/wolfxl/calc/__init__.py",
+      "sha256": "94396912276244acd07ddcc17f881e8860af1396813745ecdd5c9a50caf638e6"
+    },
+    {
+      "path": "python/wolfxl/calc/_evaluator.py",
+      "sha256": "ad22ff4f00ec70306a2d391880da311da1571c802f42346f12b437dc6598fc43"
+    },
+    {
+      "path": "python/wolfxl/calc/_functions.py",
+      "sha256": "fa7aa6ff0e212c09cfc9ba3127ba2780edba6680158b5bd44c826b045d7c04e8"
+    },
+    {
+      "path": "python/wolfxl/calc/_graph.py",
+      "sha256": "8c27978e0a941b4d1435e04d217cfb680c98c921dfef52658fe684eb988d6555"
+    },
+    {
+      "path": "python/wolfxl/calc/_parser.py",
+      "sha256": "feaaf8fb7d2e6a28aef42d0c55695165c5b64bcab394a31433ce8f3f28abdb78"
+    },
+    {
+      "path": "python/wolfxl/calc/_protocol.py",
+      "sha256": "6fbeff558f4c3960452b5bcd5ed2c92f9f82b8476bf8df352216d739fa2e38e0"
+    },
+    {
+      "path": "python/wolfxl/cell/__init__.py",
+      "sha256": "db2c9479f4b810b7c51074a2a43f0af6ecf01f41296e3e41c13668b205a5aacb"
+    },
+    {
+      "path": "python/wolfxl/cell/_merged.py",
+      "sha256": "59bf38f6aa7deb1d2861a68dae868af3f21667f60c9ca4ecb418d99f26b0582a"
+    },
+    {
+      "path": "python/wolfxl/cell/_write_only.py",
+      "sha256": "edab15ae543681d77e7fe4b9fde68ddc0fa0f30b5d36b0d15f57a42368598a12"
+    },
+    {
+      "path": "python/wolfxl/cell/_writer.py",
+      "sha256": "ac0943ae83a8584b87ef0b63b5210b4d9c500861d0457a003d409ac66ce830a4"
+    },
+    {
+      "path": "python/wolfxl/cell/cell.py",
+      "sha256": "2c78bc057559f21ab637a07d69bf4603ff9648d5760a2332c8c64dfa32e767e9"
+    },
+    {
+      "path": "python/wolfxl/cell/read_only.py",
+      "sha256": "569f978680e0715663a55aecfb6876e7d0ce42a562108b60196f423d16dce468"
+    },
+    {
+      "path": "python/wolfxl/cell/rich_text.py",
+      "sha256": "3ff9f8135d882f4951862e7da669127104c24570781cc741e5e10b5dd5a2b54d"
+    },
+    {
+      "path": "python/wolfxl/cell/text.py",
+      "sha256": "252409f621af3b2850819005c3e0db92f83dd99141d0e6639d683f20d5aa2fe4"
+    },
+    {
+      "path": "python/wolfxl/chart/_3d.py",
+      "sha256": "17fb5bd900b7a3ac1ca1c8e53cda607fe8de03830c07eaa9813b626d036e97f0"
+    },
+    {
+      "path": "python/wolfxl/chart/__init__.py",
+      "sha256": "7729fd269da47e7eeb79754f75637f34f9c7c6c0e562057a6b4f4e046cd02989"
+    },
+    {
+      "path": "python/wolfxl/chart/_chart.py",
+      "sha256": "417de58b8f1cde5f0c9051a0ead081accebde03afa0c2ad5940391259a3cd324"
+    },
+    {
+      "path": "python/wolfxl/chart/area_chart.py",
+      "sha256": "97f9b8b42a4f7c84ec4a57c81c570ea60c569fae24b8224e5f33845441362115"
+    },
+    {
+      "path": "python/wolfxl/chart/axis.py",
+      "sha256": "ffd804d256cb00b840fbd2f65050615f43af6cbe03f3078f844467d81a8a5d46"
+    },
+    {
+      "path": "python/wolfxl/chart/bar_chart.py",
+      "sha256": "53aec846e2a8a60e24397305b37cb3107646e47733f71c430fb97e5193d0780a"
+    },
+    {
+      "path": "python/wolfxl/chart/bubble_chart.py",
+      "sha256": "1307ef551ce23444c33030dce8b66f3028e98613cdbd8d78d1f67529fada3005"
+    },
+    {
+      "path": "python/wolfxl/chart/chartspace.py",
+      "sha256": "56bc915a658d15b479829eb44f32f00961fa323592f89bc4c9ef4e8b92a6696b"
+    },
+    {
+      "path": "python/wolfxl/chart/data_source.py",
+      "sha256": "f6c3b81a7a89172d790fce26cef20d681d2d640f94cdeff65bb42909b35cd86b"
+    },
+    {
+      "path": "python/wolfxl/chart/descriptors.py",
+      "sha256": "925b47af4519812e110167374754d2915f7fb7810b5edde71e2564d69a9ec980"
+    },
+    {
+      "path": "python/wolfxl/chart/doughnut_chart.py",
+      "sha256": "d7fbaf45842100eafedeae3bbe4f9b3fa935630f05606d82615ea53f0c80bad9"
+    },
+    {
+      "path": "python/wolfxl/chart/error_bar.py",
+      "sha256": "292a1ead605de76e5d3fb20a362ef2fd019cac9e5df533155c29e554a45f11f6"
+    },
+    {
+      "path": "python/wolfxl/chart/label.py",
+      "sha256": "5a94939a91a6189097d0010abcd862fabc9b9f34ce66175df5a0e67d17118175"
+    },
+    {
+      "path": "python/wolfxl/chart/layout.py",
+      "sha256": "310aa966cd11fdc55c9e2e009b69b5e05ca712f80b7629931e5145b480d60037"
+    },
+    {
+      "path": "python/wolfxl/chart/legend.py",
+      "sha256": "c97f591706ccbef6d17f6a94489ca5bbb5e68d1e8d0f75651eb5f05fdf58c6a7"
+    },
+    {
+      "path": "python/wolfxl/chart/line_chart.py",
+      "sha256": "30a56da2c41eedbf6a806caeef2d81dcd5c4978298e237463c7dbee88694ce1c"
+    },
+    {
+      "path": "python/wolfxl/chart/marker.py",
+      "sha256": "65835e7f6eced2e99671fd3964c83bdd120ab12b86264f52f3a6fccc5e90fd71"
+    },
+    {
+      "path": "python/wolfxl/chart/picture.py",
+      "sha256": "80b0ccf923290887f9b49556a6ca920428b07986440d4771f44bf19c4af4698f"
+    },
+    {
+      "path": "python/wolfxl/chart/pie_chart.py",
+      "sha256": "a5699d5b83db74fbea0d32a13ddeca4e48653094b4187c6526644e496e926784"
+    },
+    {
+      "path": "python/wolfxl/chart/pivot.py",
+      "sha256": "f748ebf16f3cca553ab944d1ae049543317b40c50edfebfb867344164adfdb72"
+    },
+    {
+      "path": "python/wolfxl/chart/plotarea.py",
+      "sha256": "134a49334e59d1ea81a3f593405f5d613fd2166cf961d84024fa162abd8c69ff"
+    },
+    {
+      "path": "python/wolfxl/chart/print_settings.py",
+      "sha256": "e2e41c5f2acba44d55637080803bff1b86fcc83838927600afa7d831913f98f3"
+    },
+    {
+      "path": "python/wolfxl/chart/projected_pie_chart.py",
+      "sha256": "ec5a7e5c507d68f448261c20b622be7fae06b2f8a9d0bf0679cbcb685aff36bf"
+    },
+    {
+      "path": "python/wolfxl/chart/radar_chart.py",
+      "sha256": "dc05d501159205c69c057ddcfa4381be7f6a74b70b58bd626f9a357fa9c0f090"
+    },
+    {
+      "path": "python/wolfxl/chart/reader.py",
+      "sha256": "7809674cc241bc270e44f54070c0d26e7ba4bf0e4b520b805d75af571b48e69e"
+    },
+    {
+      "path": "python/wolfxl/chart/reference.py",
+      "sha256": "67c91fa683483d1b1ba056ea1b4a70c01b00e27102b1370e240c8d5b31a01c29"
+    },
+    {
+      "path": "python/wolfxl/chart/scatter_chart.py",
+      "sha256": "174b6ed179f187345435a2d7409ed4db3075d2be5295021082aae8fb624308f9"
+    },
+    {
+      "path": "python/wolfxl/chart/series.py",
+      "sha256": "4476bdb03a2353e69ea934e2c1c986dcb5e97498de4f5dd741f1638730117b68"
+    },
+    {
+      "path": "python/wolfxl/chart/series_factory.py",
+      "sha256": "8abd99587bcc592159476ed4085f1a93910c0e388c0a9c93205b7cff5cb0b0a9"
+    },
+    {
+      "path": "python/wolfxl/chart/shapes.py",
+      "sha256": "f952b1be48efb626a8e39cbf04e5ed62cc01242fbfdf56dbb513e9162e05125e"
+    },
+    {
+      "path": "python/wolfxl/chart/stock_chart.py",
+      "sha256": "50e256904b2dc7283ae1807b74a8ded01e4fc58b8e1099749cfd2fd3b883441a"
+    },
+    {
+      "path": "python/wolfxl/chart/surface_chart.py",
+      "sha256": "32eaf1ab1c238c7707f067ad2ec48279997505f482ee2f428ad18eec119531d7"
+    },
+    {
+      "path": "python/wolfxl/chart/text.py",
+      "sha256": "4aff737c0e74dd28ccc9bf7b2c585a84ba4c64f42c816611017b46f43cf9e8d4"
+    },
+    {
+      "path": "python/wolfxl/chart/title.py",
+      "sha256": "2c37b07ec131a54a1a7caab1b95a95e1d79155d7b37af6f9275bd96446293ec3"
+    },
+    {
+      "path": "python/wolfxl/chart/trendline.py",
+      "sha256": "8a320aa0a3d43ebe8082a93220ae5a7d261dcd5b96e827957178406f3e389ebc"
+    },
+    {
+      "path": "python/wolfxl/chart/updown_bars.py",
+      "sha256": "9068a56eaffa06730ebb7b20fcda53cf3f5dd5b1ab80d135184f82c8a1091691"
+    },
+    {
+      "path": "python/wolfxl/chartsheet/__init__.py",
+      "sha256": "23f5ba881df1a0e3d2e8dd8dd53347dc7cd017c7e44ab8fd414aa17e97c19149"
+    },
+    {
+      "path": "python/wolfxl/chartsheet/chartsheet.py",
+      "sha256": "78aae41c92371b7f5fddc33c02cde8085db6cf5ebd5abc48f86b44b128c34354"
+    },
+    {
+      "path": "python/wolfxl/chartsheet/custom.py",
+      "sha256": "8e88acdaeeb97456d68fe28e8f4791b8185db2d6eb2910b3911d41db6caae6c6"
+    },
+    {
+      "path": "python/wolfxl/chartsheet/properties.py",
+      "sha256": "0aa6ea98aba471a3d0667deb0f19dd89dae887049be1a48b59eaa4aab4a05e03"
+    },
+    {
+      "path": "python/wolfxl/chartsheet/protection.py",
+      "sha256": "7aa76a5b388a584d71deb4eccfef58bc8bab56aa59990de770e9ec1ed8570123"
+    },
+    {
+      "path": "python/wolfxl/chartsheet/publish.py",
+      "sha256": "04255a7e2655f4c6068401e78273c4733ca130ef9e7407836cd12f303abf5400"
+    },
+    {
+      "path": "python/wolfxl/chartsheet/relation.py",
+      "sha256": "eb88942de2af050809eaf6397cc4edafc030e8b9a05a5b04875ceec108a760ad"
+    },
+    {
+      "path": "python/wolfxl/chartsheet/views.py",
+      "sha256": "3d957f956cd97814dce9f193ea0b20b1c0fc7d137dac1f0a4796d33fe2e8926c"
+    },
+    {
+      "path": "python/wolfxl/comments/__init__.py",
+      "sha256": "4dfbd491b9689620ca72b5a9e3924a879f7ec5f3ab9c3e29eab9e45749407abb"
+    },
+    {
+      "path": "python/wolfxl/comments/_person.py",
+      "sha256": "e8ec9d96f579975ecd7c84b910a6013888fba470e395fd50aac917441a6e2d49"
+    },
+    {
+      "path": "python/wolfxl/comments/_threaded_comment.py",
+      "sha256": "52105c85647c30ac6b1f271c0387f59926fd7bdb38778c357d51a610d9417448"
+    },
+    {
+      "path": "python/wolfxl/comments/author.py",
+      "sha256": "556b72508d57ccbfdc0b8ee3b55690cb352e5226272bc4a1815cc58ff0f77574"
+    },
+    {
+      "path": "python/wolfxl/comments/comment_sheet.py",
+      "sha256": "6badfbd02a854a93868da889532337b630ad7cbbb46e88d8d9d157ef83b7f01e"
+    },
+    {
+      "path": "python/wolfxl/comments/comments.py",
+      "sha256": "621578eb7d6719c8dd4aaeb1b170e01c579cffc3cc99721f1e3836ff464571d8"
+    },
+    {
+      "path": "python/wolfxl/comments/shape_writer.py",
+      "sha256": "a1d72ce708697b8cff6b7b528967a4958f0745093cf73cb48634c8266ca2a8b6"
+    },
+    {
+      "path": "python/wolfxl/compat/__init__.py",
+      "sha256": "92fef4ec6804bedce868192456ca4f5b5bd0b6791480fbfd485d03ba6f1b8fce"
+    },
+    {
+      "path": "python/wolfxl/compat/abc.py",
+      "sha256": "3b197201a81736fbd8074e0c099538507f8aed0a29a855e3a5b31dcefaef161c"
+    },
+    {
+      "path": "python/wolfxl/compat/numbers.py",
+      "sha256": "3eaa37c29a966a5551e132d382532248adedd13ace75d1ef74c24b8879181ac7"
+    },
+    {
+      "path": "python/wolfxl/compat/product.py",
+      "sha256": "6aebb2b8362ff81c1113763581a29e3a7e7eae0a10bd4b824d23794e1f888c9b"
+    },
+    {
+      "path": "python/wolfxl/compat/singleton.py",
+      "sha256": "f73467131efac81bba492b13a4fc0f32c094b324f08b272eb28c9332648613a3"
+    },
+    {
+      "path": "python/wolfxl/compat/strings.py",
+      "sha256": "fb305e1f93d6e6710f8b0dad0f2d7b87742d0876a8851f8584aa84fcc16c3903"
+    },
+    {
+      "path": "python/wolfxl/descriptors/__init__.py",
+      "sha256": "6f7ac0b210748e9b29fe6bcac9622c5bf508e37dbdfe976432116e02c8f1b44b"
+    },
+    {
+      "path": "python/wolfxl/descriptors/base.py",
+      "sha256": "2a587e0d11e40b8eab5fb30021750c01cd91c044ddb0077e2e74c3d51ad333b4"
+    },
+    {
+      "path": "python/wolfxl/descriptors/container.py",
+      "sha256": "94e1368881cf7f53b5c1dae81153c8a5f05a07af8653f67e916354d7b26b8c0c"
+    },
+    {
+      "path": "python/wolfxl/descriptors/excel.py",
+      "sha256": "049b5c47f0d8df40b654f08a7082236cc6f0aeb2328465cd8836a079bdf4ca1f"
+    },
+    {
+      "path": "python/wolfxl/descriptors/namespace.py",
+      "sha256": "220a812c2017e558c24dff6a72ebf6d5913d6a4026f00a97fc7daf5cf5f8fe35"
+    },
+    {
+      "path": "python/wolfxl/descriptors/nested.py",
+      "sha256": "cc3c5127ee06ee5d4375cf942daa5085f7248b0b52e946fb7a272c439e03ff33"
+    },
+    {
+      "path": "python/wolfxl/descriptors/sequence.py",
+      "sha256": "2652dd671f99e2d281a1a26aa33c50e9eb6b8270e0390f2e29bbce90ed456c1d"
+    },
+    {
+      "path": "python/wolfxl/descriptors/serialisable.py",
+      "sha256": "958943112b8ba3411fae14b38862e1cdef96ec00889d81084b8dbcee70756c54"
+    },
+    {
+      "path": "python/wolfxl/descriptors/slots.py",
+      "sha256": "06d4e818b9a9505abde984327bb3f0328c634cd3a069e75669b7085b29e1a246"
+    },
+    {
+      "path": "python/wolfxl/drawing/__init__.py",
+      "sha256": "b337540ec900e32ceff2f2e19330409b73c067c5d5f087d2c73880415eb9f5d3"
+    },
+    {
+      "path": "python/wolfxl/drawing/colors.py",
+      "sha256": "b0438b1afadfb6a46e8ec6dea80747a075ededc839232ac92a10cead17478b29"
+    },
+    {
+      "path": "python/wolfxl/drawing/connector.py",
+      "sha256": "d12a77fad519b0d71db991435af65986b8231bcf48901097464b22c3a773c606"
+    },
+    {
+      "path": "python/wolfxl/drawing/drawing.py",
+      "sha256": "2a5ef85a5a0e4de9e8d0ffe38381c4d69dbb75e0a6eb9af07a9f866d061eb185"
+    },
+    {
+      "path": "python/wolfxl/drawing/effect.py",
+      "sha256": "535daf52c190ee520752503dc00288bdb907c78d3694b902560cb3456464ceed"
+    },
+    {
+      "path": "python/wolfxl/drawing/fill.py",
+      "sha256": "3581ed28a1819e51d6b577dbbe88d05510b988e5f955fd733a5ffa7206032122"
+    },
+    {
+      "path": "python/wolfxl/drawing/geometry.py",
+      "sha256": "c63107930fc1f4fa6bb7400f0bf7807eb596f42e0154e32493e19b802df620b9"
+    },
+    {
+      "path": "python/wolfxl/drawing/graphic.py",
+      "sha256": "f19f828195bd611595936197fbe6186bf2d35e04b5dbae7ef48f6e5bf9107945"
+    },
+    {
+      "path": "python/wolfxl/drawing/image.py",
+      "sha256": "4b117a562fa6db8c63a7101d3efa89ae656a6ce89ff6c311b964c481a2ccf7e6"
+    },
+    {
+      "path": "python/wolfxl/drawing/line.py",
+      "sha256": "c809bf5c62eb9fd04d7da4cc391172ee486704aca168fbcaba845889a16ca0a5"
+    },
+    {
+      "path": "python/wolfxl/drawing/picture.py",
+      "sha256": "7db5da0abad54170c7607c73461c73b0ee0fcd2e31c562e056857c80ff629971"
+    },
+    {
+      "path": "python/wolfxl/drawing/properties.py",
+      "sha256": "3b4084f53cff2f27d5a362a6613092b4fb0d91e5686a4b43fe75769318140155"
+    },
+    {
+      "path": "python/wolfxl/drawing/relation.py",
+      "sha256": "f458a65a39c55dec74a55c3e2f880361c25968cb44aa3b76de5997596f9fc958"
+    },
+    {
+      "path": "python/wolfxl/drawing/spreadsheet_drawing.py",
+      "sha256": "c2a2b24fdc70378e327899eee070abcee212710e6681a7894f4b87dffbf567bc"
+    },
+    {
+      "path": "python/wolfxl/drawing/text.py",
+      "sha256": "1506ed44ae6dc19990c28730d54682c9315904cb851778a57e526bac253ef5a4"
+    },
+    {
+      "path": "python/wolfxl/drawing/xdr.py",
+      "sha256": "329cc66c990f023e2a4853cb8f4446609ab9028a104a133051dd00f9c983e4af"
+    },
+    {
+      "path": "python/wolfxl/formatting/__init__.py",
+      "sha256": "cb8ab0fc09006cc4e25ea407b6e0fb4cc6b4e01c8024481e9b14f0f401c22ad2"
+    },
+    {
+      "path": "python/wolfxl/formatting/formatting.py",
+      "sha256": "bd2bde32e553f941b23199f01e38f396c1df00b72277a5dd7d71fd04ea3199b8"
+    },
+    {
+      "path": "python/wolfxl/formatting/rule.py",
+      "sha256": "7eaad229082f3aa1b3940d0c444d7a272b3a3b2f2fd70406f58a11115290cf3f"
+    },
+    {
+      "path": "python/wolfxl/formula/__init__.py",
+      "sha256": "302873a20f717dbb83535ccb6d9403828ae482b81f5ed81e2cf3c4e4ee7ea402"
+    },
+    {
+      "path": "python/wolfxl/formula/tokenizer.py",
+      "sha256": "c65e6e876efca5676110b3f0343131a696c608bd3d9d905fad71bf99496550e1"
+    },
+    {
+      "path": "python/wolfxl/formula/translate.py",
+      "sha256": "e2a9e6e7baca9cf54e44d9aaae707bcb3a4f83dc44bbca95eafbf5c62dd42007"
+    },
+    {
+      "path": "python/wolfxl/openpyxl_compat.py",
+      "sha256": "3d87b7925478c41077ec06ace45fa41018d49dce0d39c4281e0dd27b09602395"
+    },
+    {
+      "path": "python/wolfxl/packaging/__init__.py",
+      "sha256": "d4926bfa900bd889b30f5d193858ac202dfb539449c4d7a5c4bc9fa5eaa3bc3b"
+    },
+    {
+      "path": "python/wolfxl/packaging/core.py",
+      "sha256": "68494bac0375b426538e7971ff3ff3007d6348ea047f0f941a06f16fe1482c21"
+    },
+    {
+      "path": "python/wolfxl/packaging/custom.py",
+      "sha256": "ad62073584c212c81de2f840a5df81f3b6456b652486bc8896bd8d1784c350eb"
+    },
+    {
+      "path": "python/wolfxl/packaging/extended.py",
+      "sha256": "9bfdce5efe172d14d0f88fb04dd3d49ec9a19cbbbdea3607eb5f635bdf10d352"
+    },
+    {
+      "path": "python/wolfxl/packaging/interface.py",
+      "sha256": "8a42ccd691ef33adcba06efcbf1784e0c848d3913f2e37a3092d89dc8621247f"
+    },
+    {
+      "path": "python/wolfxl/packaging/manifest.py",
+      "sha256": "cc046839d0edfd11b71f9fb33a99ba8f3355dbdd7941ac4c9f6ec127f1185296"
+    },
+    {
+      "path": "python/wolfxl/packaging/relationship.py",
+      "sha256": "4d4748d918d68a02b2af38581a794baffdeaf00f79eb8d3018f86c06b56409ec"
+    },
+    {
+      "path": "python/wolfxl/packaging/workbook.py",
+      "sha256": "b6c8f0d5cdbf7bd0a9661001c0871cbaae807e1ac09e4b2e7881fd6af5d3085b"
+    },
+    {
+      "path": "python/wolfxl/pivot/__init__.py",
+      "sha256": "506316be6154fe20722496144261d50cc686c890340f8ea0f55095609de3326f"
+    },
+    {
+      "path": "python/wolfxl/pivot/_cache.py",
+      "sha256": "7853d3092c336ca3098d9d64d6bd518f9501d79b85aade63b6fc0b0fb516c16a"
+    },
+    {
+      "path": "python/wolfxl/pivot/_calc.py",
+      "sha256": "103c0494e481c13683589db586e3d51eaa51f90ffc968f946d13b8321971f2e4"
+    },
+    {
+      "path": "python/wolfxl/pivot/_group.py",
+      "sha256": "f7380033703f42653f12c898c1b3f295be63ac98d6e7c22d626e4457fd27a7e2"
+    },
+    {
+      "path": "python/wolfxl/pivot/_handle.py",
+      "sha256": "976917adc684e199d39f7721729830d1244b2b42ee5e1514bada9dd1e8de45e4"
+    },
+    {
+      "path": "python/wolfxl/pivot/_load.py",
+      "sha256": "794c49cc9ece231416e564b1033fc2d2ea1fec5069e3d0b5f8d63c73c17dd3a8"
+    },
+    {
+      "path": "python/wolfxl/pivot/_slicer.py",
+      "sha256": "277d4dc0e8779a4a7c953714e3cb4aeb031b239645ae4fd8e4344fd9812d7da0"
+    },
+    {
+      "path": "python/wolfxl/pivot/_styling.py",
+      "sha256": "e4320650fac9f3ec10851129b64cc951ce3be4a6d6b3780c7278f2b7185e6f11"
+    },
+    {
+      "path": "python/wolfxl/pivot/_table.py",
+      "sha256": "79929c7df5f38da751330dad64f2f9c4be9972e1a6fc046b82f177be62800197"
+    },
+    {
+      "path": "python/wolfxl/pivot/cache.py",
+      "sha256": "d426dc36a39d7351a04705a0c4dce4037bc8f2d5127b0218b04b6b9f26f4e313"
+    },
+    {
+      "path": "python/wolfxl/pivot/fields.py",
+      "sha256": "7cd2e77d1010a12b7c8057c995860b4faa7fba8eeafc11f7a5524158c221c404"
+    },
+    {
+      "path": "python/wolfxl/pivot/record.py",
+      "sha256": "d5c45c8ba1f7449cd0a490127c116d497b7722e15791a3a0214ace198575374d"
+    },
+    {
+      "path": "python/wolfxl/pivot/table.py",
+      "sha256": "791f11e0dea3c5d7b9dfd61f3c371ad9a08f42e7a30f219b007b6c4862302899"
+    },
+    {
+      "path": "python/wolfxl/py.typed",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "python/wolfxl/reader/__init__.py",
+      "sha256": "24d331f9458931e232b46bb1a149477c9f3913d92e7901f623c321e9a2aa0787"
+    },
+    {
+      "path": "python/wolfxl/reader/drawings.py",
+      "sha256": "f4a7058f892709472d25ed7be954b724e1857c209a63ee92482fe0d3b8385f78"
+    },
+    {
+      "path": "python/wolfxl/reader/excel.py",
+      "sha256": "63ec79a8c4ebd2daaeb12584f2c0e9704f9260a71cd06328d8a51d09ea52f583"
+    },
+    {
+      "path": "python/wolfxl/reader/strings.py",
+      "sha256": "ee11e372f877d70eb3ea5f5103069ba9830d2c44db2779ec428eadf6ae449bb3"
+    },
+    {
+      "path": "python/wolfxl/reader/workbook.py",
+      "sha256": "a63cfacbc1564e02e162a037fee7ab37c60fa3de735d94f1d71a48954bcac79c"
+    },
+    {
+      "path": "python/wolfxl/styles/__init__.py",
+      "sha256": "af946fc935ba0da4ee782c7367865a3b2e9e0681a5bc63daedcc27e798625b81"
+    },
+    {
+      "path": "python/wolfxl/styles/_named_style.py",
+      "sha256": "46fdee89f8b3ac1950afc98dafc0d1a53302265deff2c92fccdbabf960f3f230"
+    },
+    {
+      "path": "python/wolfxl/styles/alignment.py",
+      "sha256": "fd574e9f1c5ed622355437289eeba4a85d2458909e03ea9d233f8edb7b511bf5"
+    },
+    {
+      "path": "python/wolfxl/styles/borders.py",
+      "sha256": "43290586ff271a54ede164d580c060ab068d828e43afa8cb45cb694f3a812679"
+    },
+    {
+      "path": "python/wolfxl/styles/builtins.py",
+      "sha256": "39da95eff616cb350dea020f00fb4c4e14a916270635eceedbaed84fccb3291d"
+    },
+    {
+      "path": "python/wolfxl/styles/cell_style.py",
+      "sha256": "2315cf8e1abc9b24428fc9ac56439f946e83e0228047c3ff5c066f7143928e7c"
+    },
+    {
+      "path": "python/wolfxl/styles/colors.py",
+      "sha256": "33064cb785f6b436d362c893e448c303e21d59f6463c96e08ca4ecfbf4a62d16"
+    },
+    {
+      "path": "python/wolfxl/styles/differential.py",
+      "sha256": "7c46477590595b7bf4b10e4547105fc8ee9452a352f5a9feb18c8cdbe91eecef"
+    },
+    {
+      "path": "python/wolfxl/styles/fills.py",
+      "sha256": "d98cf5475952d0cedb56b6b0fb3614ddf8257d3956c69abd02bd6412de110c6a"
+    },
+    {
+      "path": "python/wolfxl/styles/fonts.py",
+      "sha256": "be85c738aca0732890e3829debabc704ad3e30a03c0cc76d3447e82ebaaf7f7c"
+    },
+    {
+      "path": "python/wolfxl/styles/named_styles.py",
+      "sha256": "2da8eb11bf6ab7885b058dec97277ccf6ff98528ae11bc72f5a00da92e0432cc"
+    },
+    {
+      "path": "python/wolfxl/styles/numbers.py",
+      "sha256": "17bf17e7f4b12187255e74199ed687c0a8aa5b7067aa42db753f4e23a26d5b08"
+    },
+    {
+      "path": "python/wolfxl/styles/protection.py",
+      "sha256": "f96b58eaee4f409a0962eebfe12522f8e2c5e232da8b5a52ebdb2ea2cddc718e"
+    },
+    {
+      "path": "python/wolfxl/styles/proxy.py",
+      "sha256": "325976ec516abc69f1f95e21be0f32c3ce7cf0d308823b41a2018d517cabb80a"
+    },
+    {
+      "path": "python/wolfxl/styles/styleable.py",
+      "sha256": "bed928e03bd3096631eefb5c3f85ab6d6f4bde22d1d25b62076d0b37d81e8609"
+    },
+    {
+      "path": "python/wolfxl/styles/stylesheet.py",
+      "sha256": "efe33a18d6e6cfec2898cb03c1ae1fc714910b49c449cdaab07a23ff7d38ddd8"
+    },
+    {
+      "path": "python/wolfxl/styles/table.py",
+      "sha256": "38e4f39919d9d889b83e485982ef0baeba88ba2460abc1fa5373d116e5ad4887"
+    },
+    {
+      "path": "python/wolfxl/utils/__init__.py",
+      "sha256": "a8bf64284d7b1171d9f3565526da8ae70f3aa2b07d6cf2c477e798993744b00e"
+    },
+    {
+      "path": "python/wolfxl/utils/bound_dictionary.py",
+      "sha256": "f8c6e0905b60dfb0b878abf22eec59a006ad3a78f54d22a28ac2173cd3f18a18"
+    },
+    {
+      "path": "python/wolfxl/utils/cell.py",
+      "sha256": "7e8b70d54f91bd7418252e0fea6fe9e4bd1bf34533b1e07f05e4ec3424371dae"
+    },
+    {
+      "path": "python/wolfxl/utils/dataframe.py",
+      "sha256": "ad68865b7eca3034f5d554a12f326b70b1bef7445b2903f607d4d6b8fc032143"
+    },
+    {
+      "path": "python/wolfxl/utils/datetime.py",
+      "sha256": "85d2746862f7e8539033833ad4276d25f7a8f18a7eb03d4ee691dceb8fc227a2"
+    },
+    {
+      "path": "python/wolfxl/utils/escape.py",
+      "sha256": "a7b88241ebdea3924e893a9de3362955f7cee9be969715dd8c94c2ca5b884a59"
+    },
+    {
+      "path": "python/wolfxl/utils/exceptions.py",
+      "sha256": "8119d570e016c2b44459743da2ee1afecdb70c84f278cb1b779b8c09cb6bc4f2"
+    },
+    {
+      "path": "python/wolfxl/utils/formulas.py",
+      "sha256": "097dcdce214c20993e10e21ed828620e42e1801b8cc65725f5599069faca8f47"
+    },
+    {
+      "path": "python/wolfxl/utils/indexed_list.py",
+      "sha256": "dfa8a84585078612b4fb63243d4aa69b00636e38c623093ee56f80107799be0d"
+    },
+    {
+      "path": "python/wolfxl/utils/inference.py",
+      "sha256": "290b333bc7a0c85d9e55c82fa43d4794f0d1bf99d8b06cfacd3fa3a76f2d274a"
+    },
+    {
+      "path": "python/wolfxl/utils/numbers.py",
+      "sha256": "2108cead1b3b42417e0607363c848e44f154eb41db470a96afcd99efe32b2a3f"
+    },
+    {
+      "path": "python/wolfxl/utils/protection.py",
+      "sha256": "49abe281f228f04a1fbb34dc0e9fe598e98890710970a0dca59e3fddbab756f0"
+    },
+    {
+      "path": "python/wolfxl/utils/units.py",
+      "sha256": "e48435fb3695048a1cb3ce37e626098f1ff8b412cf7aea0a90b18e32b3a41c4e"
+    },
+    {
+      "path": "python/wolfxl/workbook/__init__.py",
+      "sha256": "9da27784fd59ee8f85d209de89f24bc228c0e0ec1987ad111c1d76e8b2cf8976"
+    },
+    {
+      "path": "python/wolfxl/workbook/_writer.py",
+      "sha256": "c24974c2ecc465195b752307fb83f9292401957eadb2f61114b8f91058254696"
+    },
+    {
+      "path": "python/wolfxl/workbook/child.py",
+      "sha256": "cda99cf1a7fa9ade2dd2f84759bfc3c477f222d5b71df296a851eb35807466cf"
+    },
+    {
+      "path": "python/wolfxl/workbook/defined_name.py",
+      "sha256": "1aa7098f4c15152e4bb761b63ac968204e384ce2548b66e5bc44db1d74be9820"
+    },
+    {
+      "path": "python/wolfxl/workbook/external_link/__init__.py",
+      "sha256": "3b16a86e43f0a1704727398a986823a56b7aa872f609c36e1ef2da33c051b66a"
+    },
+    {
+      "path": "python/wolfxl/workbook/external_link/external.py",
+      "sha256": "b8fcc81c6afcb82aaeb153e3468f74ea73a6b8f0f13848203972545109d50a98"
+    },
+    {
+      "path": "python/wolfxl/workbook/external_reference.py",
+      "sha256": "f3e4442e169113344378de7810fda4bba25c7c730c970f38990955a6232ab070"
+    },
+    {
+      "path": "python/wolfxl/workbook/function_group.py",
+      "sha256": "ff2d8b20f2ed1e1d2e4adc5723e9fc8d7c1b956cc2c766fce9520bab50cad04d"
+    },
+    {
+      "path": "python/wolfxl/workbook/properties.py",
+      "sha256": "f96fc3f2d7ed1afc9564d7fe6d2b3d4855a0ddcfdf8d62d0605943408732ad1a"
+    },
+    {
+      "path": "python/wolfxl/workbook/protection.py",
+      "sha256": "5877d4237368d1818b3f447e0ffec6e9b6060f2c89d4d11aec27116e5bbf4558"
+    },
+    {
+      "path": "python/wolfxl/workbook/smart_tags.py",
+      "sha256": "b8dfc6f0175a4edb32b8ea3c4fcff055f4188a13064e1fb05d4321b36cb3402d"
+    },
+    {
+      "path": "python/wolfxl/workbook/views.py",
+      "sha256": "974e2733f13dfe9214957cc52bbaf9654d03e6fc0424b4eb7843b794331c14cc"
+    },
+    {
+      "path": "python/wolfxl/workbook/web.py",
+      "sha256": "70cafad73ea105a1fa101d18a6f7ae8300a30092e9396286b6dc599d1d13ceae"
+    },
+    {
+      "path": "python/wolfxl/workbook/workbook.py",
+      "sha256": "83859f2c145451377f21ed002d4c551cec7830a00b055534dba4dc5aa1a3ec56"
+    },
+    {
+      "path": "python/wolfxl/worksheet/__init__.py",
+      "sha256": "c380dcc9521523c8e19d78a315e10bf068f528b749c1295ee1bd02acc021b582"
+    },
+    {
+      "path": "python/wolfxl/worksheet/_read_only.py",
+      "sha256": "72b6afc8821e7b188086c6866c09c1522288329a942e2dda7edd942fd551691d"
+    },
+    {
+      "path": "python/wolfxl/worksheet/_reader.py",
+      "sha256": "e8c2f01ec1c6632a9e13f622c9cb9376f8a327e22f093d1e753804ee6edeace8"
+    },
+    {
+      "path": "python/wolfxl/worksheet/_write_only.py",
+      "sha256": "59c297dfd26f6b1cd6031b575c3858cc9d7425e5fb344396fb74eff63e0df63e"
+    },
+    {
+      "path": "python/wolfxl/worksheet/_writer.py",
+      "sha256": "a0e8f0e9a618b0d0fb4b6fce1febc193f8467bfed7986514859fc2ae43d81ad1"
+    },
+    {
+      "path": "python/wolfxl/worksheet/cell_range.py",
+      "sha256": "bef8dee24a4e890c4f7326c3109ef3d43643ea7a66bfb899b50a6ab91ca2dde3"
+    },
+    {
+      "path": "python/wolfxl/worksheet/cell_watch.py",
+      "sha256": "992f5051ce3a954464803d6c6d78aa0e76920cce5f90c0b6895ed5d348dbf0e9"
+    },
+    {
+      "path": "python/wolfxl/worksheet/controls.py",
+      "sha256": "209177d5fff61851524d615fa167af9486a3f9959c9319acfdcd796d70bf6a84"
+    },
+    {
+      "path": "python/wolfxl/worksheet/copier.py",
+      "sha256": "fe33803eae60af74eccb587da552d65be3bd44cf65b6f0d62a5d242754255a9f"
+    },
+    {
+      "path": "python/wolfxl/worksheet/custom.py",
+      "sha256": "5501de7fc1bf2b53fee698a2cc2a6a05f0e2be0ef7718cb63655cb55a12853d9"
+    },
+    {
+      "path": "python/wolfxl/worksheet/datavalidation.py",
+      "sha256": "b39e0dd6b2581360f5b219c28f29ad83e16b98030d44fc5ac26915616fd8f390"
+    },
+    {
+      "path": "python/wolfxl/worksheet/dimensions.py",
+      "sha256": "f12dc95555d6b7c0be0474eae4668bd7d899133d0a5435275efcca52dbe68b06"
+    },
+    {
+      "path": "python/wolfxl/worksheet/drawing.py",
+      "sha256": "2e67fca9444bb2072f424b54d86b156e718150fc17d0d8e93555eb9792efbf21"
+    },
+    {
+      "path": "python/wolfxl/worksheet/errors.py",
+      "sha256": "3dba7a1111241f9c385b66ca0a6ac81b41067686416fdab0640ebe3645f9035b"
+    },
+    {
+      "path": "python/wolfxl/worksheet/filters.py",
+      "sha256": "ddf2ec972ab3b8db6349f5e0ba474442f8214a96cd4f982889c57041a9618ff4"
+    },
+    {
+      "path": "python/wolfxl/worksheet/formula.py",
+      "sha256": "2025ea813da86866f6cf4392425ffd9b96e4dd0c8b311204b0e34530ad4b0ab0"
+    },
+    {
+      "path": "python/wolfxl/worksheet/header_footer.py",
+      "sha256": "f93a7133315786ab4218e911a83c3221d3347fc4d12eb43bb4c937641a4deb41"
+    },
+    {
+      "path": "python/wolfxl/worksheet/hyperlink.py",
+      "sha256": "9001cbec9e87d018032df9667bdc077d34b5d404c807ccdc9786ed77bfb132df"
+    },
+    {
+      "path": "python/wolfxl/worksheet/merge.py",
+      "sha256": "8f377e78fbbe2be6980b23d8ea4e93c13d2a5461385cd62a822d5c0679eb065b"
+    },
+    {
+      "path": "python/wolfxl/worksheet/ole.py",
+      "sha256": "dd170e4f90460779bb1fb4ca6f1ae0b158838e51c843ef91268871a5223ad152"
+    },
+    {
+      "path": "python/wolfxl/worksheet/page.py",
+      "sha256": "8dd842312081508323b3ac39c1cc759d9c2a1e7fad2fe6c4ef7b8dbe99a226b5"
+    },
+    {
+      "path": "python/wolfxl/worksheet/page_setup.py",
+      "sha256": "976fd97531728110fd3a7e79b821847dad1b4f76343e6375878397e35b887b42"
+    },
+    {
+      "path": "python/wolfxl/worksheet/pagebreak.py",
+      "sha256": "0a32bfbe210aa5addcbe43445e89be5636a4c3f370f88d422975594282e27435"
+    },
+    {
+      "path": "python/wolfxl/worksheet/picture.py",
+      "sha256": "4fc1f2987049155f9f39925c4887d1283c78b66059d41a56ff97c6e38117b4b0"
+    },
+    {
+      "path": "python/wolfxl/worksheet/print_settings.py",
+      "sha256": "8d8c13a7bdf040b7433ed882c4c3e422f0eea80590be40fa6b2e60c9af5d9c7e"
+    },
+    {
+      "path": "python/wolfxl/worksheet/properties.py",
+      "sha256": "2eb9d2a68b2c525f7da1539c6e8f3a1cb58a3a797411c43b271773b686728eb8"
+    },
+    {
+      "path": "python/wolfxl/worksheet/protection.py",
+      "sha256": "45a15aee32bd0b1e9f99ef3be3542897930d78cef3c050aec471fda438ec1aac"
+    },
+    {
+      "path": "python/wolfxl/worksheet/related.py",
+      "sha256": "3052d17cea4f2eeb594ba06e8aafb03e9a6438a5c283cfeb1ab925c25adb1b09"
+    },
+    {
+      "path": "python/wolfxl/worksheet/scenario.py",
+      "sha256": "1ffc13108e4f47a68c0e4a024e78db0da5240ba6feb4fbc55f3acfd04a2340fc"
+    },
+    {
+      "path": "python/wolfxl/worksheet/smart_tag.py",
+      "sha256": "96d64812ff63762908a23681bc3d2b9a1abbd10bcfed43b389d032d136a7d896"
+    },
+    {
+      "path": "python/wolfxl/worksheet/table.py",
+      "sha256": "91170434a327d9efec15d1d769c03428999b4116b1cdb3806efa31d2bacf746f"
+    },
+    {
+      "path": "python/wolfxl/worksheet/views.py",
+      "sha256": "8da4a69ce3b5944d665171be5af519b7335769b37e7031c533b3095ca9922e4c"
+    },
+    {
+      "path": "python/wolfxl/worksheet/worksheet.py",
+      "sha256": "de9ff8c307a6f30f14f2dc493ae5301c423f4c7e9a4e3d1334b3f2e9c7bfda80"
+    },
+    {
+      "path": "python/wolfxl/writer/__init__.py",
+      "sha256": "566b6a2c81a47e7bd8d9a081f5b8c72761631fc2cf3eadabdc8f855eabf1aec2"
+    },
+    {
+      "path": "python/wolfxl/writer/excel.py",
+      "sha256": "02593eb4880bf73e9fb6206d012501d653d18ef8bb8ece5dff632315427e2f67"
+    },
+    {
+      "path": "python/wolfxl/writer/theme.py",
+      "sha256": "dfb7fc34c56b5eff00e35ede5a4aee39182305c8a04324ef9a97e4c5f6645dd4"
+    },
+    {
+      "path": "python/wolfxl/xml/__init__.py",
+      "sha256": "60e609344c1fb5045b6b46dad250b6d16fda907599e090a526cbba9f0d0518a8"
+    },
+    {
+      "path": "python/wolfxl/xml/constants.py",
+      "sha256": "c6f2d9b3b81b85214b538fd1b54c0c67830e6fa9304f293ad743f0407a6e950c"
+    },
+    {
+      "path": "python/wolfxl/xml/functions.py",
+      "sha256": "1c0c5571fcae802c738aa13ccf0f7d59a9b3a06166c0bef658063a9cdc71db4f"
+    },
+    {
+      "path": "src/atomic_save.rs",
+      "sha256": "3d7403c92757098ef0d60e97efd2f86b58e2104adff971d43f2b4799061c44de"
+    },
+    {
+      "path": "src/calamine_xlsb_xls_backend.rs",
+      "sha256": "af02c16418972f3dcd37b7d4e75b0bcc9d8ba077271b2fc2ef86535f9c82b6a8"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "df52ca769afcd824c7c198c291bb90906405a2d2c6d3009def79a0277ef0efd1"
+    },
+    {
+      "path": "src/native_reader_backend.rs",
+      "sha256": "37fd26d3130bc7f2864e621f0447c3bfb6057a836b00639e2cc32ba64557d5cf"
+    },
+    {
+      "path": "src/native_reader_cell_helpers.rs",
+      "sha256": "c1a66f22423cdd741e639648ccb5900d2c333425d45b877ad09176286293e2d8"
+    },
+    {
+      "path": "src/native_reader_cf.rs",
+      "sha256": "98b2acc9e4b60f462152a78c35f0be95cade5adecebd5bb0cbdea43e238fb440"
+    },
+    {
+      "path": "src/native_reader_comments.rs",
+      "sha256": "d02be2a6ebeddf8f3fa2b93473175ca95b4e7aafd313536924c8882695b1ed7f"
+    },
+    {
+      "path": "src/native_reader_dimensions.rs",
+      "sha256": "a0d3e4c4ae2a50ab110db0b6284c256ecc552365653777c5b4d09c0ba1575f60"
+    },
+    {
+      "path": "src/native_reader_drawings.rs",
+      "sha256": "b7931dea12df20b29195f1c61d2dfc0986de47da51ffc3a5396f46605d4e75c6"
+    },
+    {
+      "path": "src/native_reader_filter.rs",
+      "sha256": "2197232b93a477b3e3f6877a14e4c54d87e819ed082eba0235cd2f893322b1b7"
+    },
+    {
+      "path": "src/native_reader_hyperlinks.rs",
+      "sha256": "810a0f81f795d9c305ecd8f6164050ee5b98803224f3aa62f3b6f8d792998c2a"
+    },
+    {
+      "path": "src/native_reader_merges.rs",
+      "sha256": "44980bba83f0c51c2b034ef9b6290a83f4c00c10a7e15172164567464a9efb94"
+    },
+    {
+      "path": "src/native_reader_metadata.rs",
+      "sha256": "e7c58556dcf49997748686c23fc8dfa553806120147029ba3fdef64931c91906"
+    },
+    {
+      "path": "src/native_reader_named_ranges.rs",
+      "sha256": "29624e8a3dfeb78c57a0883d4f1a46e11f1b65f60f1a47b2204fa67c0ae2d4ea"
+    },
+    {
+      "path": "src/native_reader_page_setup.rs",
+      "sha256": "5cf70978467b702691416d5a42bdd5224254158b93001d8f1b0c593627f114f1"
+    },
+    {
+      "path": "src/native_reader_records.rs",
+      "sha256": "2b84372327993a189c411824e156a29d9aedef8dc82500b7a0ef6768c3f2bacf"
+    },
+    {
+      "path": "src/native_reader_sheet_data.rs",
+      "sha256": "16dd25aafedc5e2c5e0f91528be5ba95f3b38485a09a330a8d37f09a66c2a3eb"
+    },
+    {
+      "path": "src/native_reader_sheet_view.rs",
+      "sha256": "18978767f834667e7180a32b6eb21887ea02c4d004882a3a445e54fdd6082052"
+    },
+    {
+      "path": "src/native_reader_styles.rs",
+      "sha256": "d4d989d866b6da09b418e1decc9d9fea5f30fd506d0baec321ecc6c81628a087"
+    },
+    {
+      "path": "src/native_reader_tables.rs",
+      "sha256": "fd9e0059153720de3a5b05e6769d4b5116afe0b1d1a18294a533adbbf4cf6834"
+    },
+    {
+      "path": "src/native_reader_traits.rs",
+      "sha256": "033d2bfaf9d1a654a53fb3736b70ef387e457e1b5e0b67bb5d78425aa5312ad5"
+    },
+    {
+      "path": "src/native_reader_validations.rs",
+      "sha256": "1662902d61d798ce1283d9f4a9c6b6fdb79aee7dfda137a7d60519d25e510571"
+    },
+    {
+      "path": "src/native_reader_workbook_basics.rs",
+      "sha256": "67836e41eeea6d64c0160d57134eb7eaff8094802baf6463071d7099fe198de1"
+    },
+    {
+      "path": "src/native_writer_anchors.rs",
+      "sha256": "d2c42011554d5d9c1b248bbadad318114b8ad44a0e413560acaf6b74fdc80733"
+    },
+    {
+      "path": "src/native_writer_autofilter.rs",
+      "sha256": "f8eeb79857951179fc3281a55c1fde4cdcdcafc3647fbb57d5a7687c3c85a5ac"
+    },
+    {
+      "path": "src/native_writer_backend.rs",
+      "sha256": "d703008a0a6d28e36a9dba82acd061750e209ae57b8cab281e4336eb8fc2d103"
+    },
+    {
+      "path": "src/native_writer_cells.rs",
+      "sha256": "5c09b1f910147a0ed5403c1542b2ec7e8996ec2cdc3363c0521b001865be58ed"
+    },
+    {
+      "path": "src/native_writer_charts.rs",
+      "sha256": "43334b026e6a5566e0f4c5507a32e5640f192fbb8b3414b371d482a723ef3d0d"
+    },
+    {
+      "path": "src/native_writer_formats.rs",
+      "sha256": "0faeb75a92089996813640a499ad61e5ffb3602d3625ba0e9d6fe342271dd93c"
+    },
+    {
+      "path": "src/native_writer_images.rs",
+      "sha256": "772ee5a0291a5be823bc2b19c98c72f4dec5ab51b1cf72dca7dbc4d52df1cfed"
+    },
+    {
+      "path": "src/native_writer_rich_text.rs",
+      "sha256": "e078bf8abd9664ebf4b465126b2d3e7dde3b4d3755aa430e78593c65e8e47f6b"
+    },
+    {
+      "path": "src/native_writer_sheet_features.rs",
+      "sha256": "2b836b651f43037e6243bd75663e6d4f36f760199c1d152881f170ca82d8fcf7"
+    },
+    {
+      "path": "src/native_writer_sheet_state.rs",
+      "sha256": "0b09160ed07fce3b4335ec934e8fa3dd84becc37121a58f9d7f9ed7f2dd1e2ad"
+    },
+    {
+      "path": "src/native_writer_streaming.rs",
+      "sha256": "d19d8cb7e50031cf8ed8c5c06189a6019efa5b35ef193334172959702d09c616"
+    },
+    {
+      "path": "src/native_writer_workbook.rs",
+      "sha256": "c355e1fbba1464944ec175a5433eef96a989e4cbb75a96d8d113ab1384735964"
+    },
+    {
+      "path": "src/native_writer_workbook_metadata.rs",
+      "sha256": "8d27bb11d9ff8948b37b4a7cc7c22fbda3e48f25e8d53cd0563f9116b7f9afb7"
+    },
+    {
+      "path": "src/ooxml_util.rs",
+      "sha256": "fbde8b0717875619b2d95a6314c45e1de4fe92bba3e161cb84e41eced8221928"
+    },
+    {
+      "path": "src/streaming.rs",
+      "sha256": "d57cc78dfc579dffe699f22d88d2a506dc336516a3894a8ff0114d3bbf263318"
+    },
+    {
+      "path": "src/util.rs",
+      "sha256": "71dfef906e5deca1e2b22b1d27e415244ff00e44cc91196b21473417f4a516d8"
+    },
+    {
+      "path": "src/wolfxl/ancillary.rs",
+      "sha256": "4a535c2bb63d90df0fa00c8ab6cfbcd67cd4bcbc481e9423f2af937cc70b0986"
+    },
+    {
+      "path": "src/wolfxl/autofilter.rs",
+      "sha256": "439ca2b4bb9fe7d06362664f9f5c3e6684e73b68f3a7ade27089cd5ff92a4992"
+    },
+    {
+      "path": "src/wolfxl/autofilter_helpers.rs",
+      "sha256": "4cccd7127820c1f8cadb1d813dfdf5b5c9d3a2946666e4247740245bf847521f"
+    },
+    {
+      "path": "src/wolfxl/calcchain.rs",
+      "sha256": "940702f9d178ff395a16cbd5b3dc5b21f616338e2cf8f64858b0c057730a5301"
+    },
+    {
+      "path": "src/wolfxl/comments.rs",
+      "sha256": "f452988af13cb5a53530467c15cc02d3d1ffb9fffea5fb2e13c0998a17cbdf2b"
+    },
+    {
+      "path": "src/wolfxl/conditional_formatting.rs",
+      "sha256": "6505f19cf3571d149980b79ff40ebf6c3daca4bd729e99434d9a3d7512fde8f2"
+    },
+    {
+      "path": "src/wolfxl/content_types.rs",
+      "sha256": "cb7a76a6dd8502a4e1ac6e4960fd1b50cfa1fb0e3f8ae13b8b16033284161bda"
+    },
+    {
+      "path": "src/wolfxl/defined_names.rs",
+      "sha256": "62c46314e0920131ce9b1148db8b29c45501cf5f3447ae0aa9ed7fa3f320c9f8"
+    },
+    {
+      "path": "src/wolfxl/external_links.rs",
+      "sha256": "4bfa0b05f3f5835cccd0a78e25a9289e2af245be5c789d5afba3ca878abba27f"
+    },
+    {
+      "path": "src/wolfxl/hyperlinks.rs",
+      "sha256": "e332e038070a91ad37192b0832df982f1585f2278b7aa6250a8861118cc0c273"
+    },
+    {
+      "path": "src/wolfxl/mod.rs",
+      "sha256": "5460cc99aeab4ed60230f5603f57e15b92ff5ea4ac097d7fbe118ef3a3fac5f6"
+    },
+    {
+      "path": "src/wolfxl/page_breaks.rs",
+      "sha256": "011d033de12634e0cb05e0463d17322a9fb8aacff692a75e0bb731be805087f8"
+    },
+    {
+      "path": "src/wolfxl/patcher_cells.rs",
+      "sha256": "321d3a91c38f8f9eed116c8a05e6805df4540b4635abb0ef5a5e0ad81eff217e"
+    },
+    {
+      "path": "src/wolfxl/patcher_drawing.rs",
+      "sha256": "961006cc2f82400a0e44751db834e7ecfad9857dd18f9f5ad3299d30b409af82"
+    },
+    {
+      "path": "src/wolfxl/patcher_external_links.rs",
+      "sha256": "cf5d31211da30baaa1eb162cb7c6ef903fb5e273a753c5aab7037d51d30cddf6"
+    },
+    {
+      "path": "src/wolfxl/patcher_models.rs",
+      "sha256": "9d5679c476315a7517ef4a62c211a18eb56e90bb21924776cfbe13a2186efe1a"
+    },
+    {
+      "path": "src/wolfxl/patcher_payload.rs",
+      "sha256": "e76a403a76f089006566ebd73eaa7e968a5e23eb841a98c739003258f66a7be4"
+    },
+    {
+      "path": "src/wolfxl/patcher_pivot.rs",
+      "sha256": "afc818d1450b5b59f023317f0d3004aa5c7c6c85ffaeef25716f19bd3ede2470"
+    },
+    {
+      "path": "src/wolfxl/patcher_pivot_edit.rs",
+      "sha256": "d5c0cecacb8a5eaed0f2f4398b986ee535d60ab167e65b0805124c4769a177c9"
+    },
+    {
+      "path": "src/wolfxl/patcher_pivot_parse.rs",
+      "sha256": "54e0a700bb9eacc10bb779017e8980493ebc25d11218fd9c97077330d49adf8c"
+    },
+    {
+      "path": "src/wolfxl/patcher_save.rs",
+      "sha256": "a10c799234c02d209819762e6d832ee1c075368f8c704ee75eac08b96b9578d2"
+    },
+    {
+      "path": "src/wolfxl/patcher_sheet_blocks.rs",
+      "sha256": "a66f07a87eb233cae2cab9105765136d88d2bcaf28abf5b285b01161a2e1f722"
+    },
+    {
+      "path": "src/wolfxl/patcher_sheet_copy.rs",
+      "sha256": "8f5a9387178ccf6859fdb30631db03cf8909596a2ca63042cccbb04bbf2af372"
+    },
+    {
+      "path": "src/wolfxl/patcher_structural.rs",
+      "sha256": "19c22065dd26f0fde3a7e661a30b0864f44c0e354d01f1c2877569f6482e24f4"
+    },
+    {
+      "path": "src/wolfxl/patcher_workbook.rs",
+      "sha256": "9c7b14dfa29788f90be1b2f34ad176c1c55590ae64c5b640d2a6bf4fa312bf11"
+    },
+    {
+      "path": "src/wolfxl/pivot.rs",
+      "sha256": "42ed862ddfb4b1fddbf2310b0a21e6b4be22c437dfddeffa17b8a87165f338b9"
+    },
+    {
+      "path": "src/wolfxl/pivot_slicer.rs",
+      "sha256": "e67aebb94b211b708687f039bc802567ae5053aba4e72cfa5adeaf64df72755b"
+    },
+    {
+      "path": "src/wolfxl/properties.rs",
+      "sha256": "a0439f5ac4806f0ead1ceb6875c6e6bad4269d896fd955dca868f1e1bb690545"
+    },
+    {
+      "path": "src/wolfxl/security.rs",
+      "sha256": "77fd41028ce80ba87eaa691aa8012a226e8c5a76b9f1d1c0c9f86158c55f3ed6"
+    },
+    {
+      "path": "src/wolfxl/shared_strings.rs",
+      "sha256": "a484ccbdc5bb4f6d9cf4608e3c1161adcfc802c330c33d2b46d52bee3d4cc324"
+    },
+    {
+      "path": "src/wolfxl/sheet_copy.rs",
+      "sha256": "1ea7f5a241f4afa734319042939edb28aa9dd5277f7a5f9e91c5cf0adec5e7c2"
+    },
+    {
+      "path": "src/wolfxl/sheet_order.rs",
+      "sha256": "47eea74b846b23c7f06fdacf731680e07b24115746548c529eab64ff63ddff6a"
+    },
+    {
+      "path": "src/wolfxl/sheet_patcher.rs",
+      "sha256": "1580184ca5061fb906625cbfcd856ba97a3da2e8e67a03e96d743aba8e4cba6f"
+    },
+    {
+      "path": "src/wolfxl/sheet_setup.rs",
+      "sha256": "27797ffe1458be363b199942733faf5a2b03fdb55bafd75be361bb69b19893f3"
+    },
+    {
+      "path": "src/wolfxl/styles.rs",
+      "sha256": "a3224ab9911dc7d14238a728b1a6c0bfccf52d7a1ac1ea013a46cc3cf6767fcf"
+    },
+    {
+      "path": "src/wolfxl/tables.rs",
+      "sha256": "b1bd986a008475640d51efe9c34e90171af7f16cfc905fd1064ce0b0c322b8ab"
+    },
+    {
+      "path": "src/wolfxl/threaded_comments.rs",
+      "sha256": "4fb99dfd248caee18fd0cbb9bf414a711c7a36ac9f1b0c6cd1372183c92e31f9"
+    },
+    {
+      "path": "src/wolfxl/validations.rs",
+      "sha256": "82877f182453a976034f1684f4bf4a390826d8666ae3968dd82f38f0dbc6e5b8"
+    },
+    {
+      "path": "src/wolfxl_core_bridge.rs",
+      "sha256": "5dff0ca09ad85ff27340b89a5b6fca2608585f150aa585f659f42a6acaa3b26c"
+    }
+  ],
+  "wheel_sha256": "2d4f15405dae21f98b3e9f2307dce2d45e1fdb5b732e6adceaaf6d23af9669c4"
+}
