@@ -179,9 +179,41 @@ your agent's skills folder, for example `~/.claude/skills/wolfxl-xlsx`.
 
 ## Performance
 
-### Proposed source comparison: 2026-10-08
+### Sparse read-only follow-up: 2026-10-09
 
-This comparison uses unreleased proposed Community source builds and a pinned
+Missing XML cells now use a lightweight coordinate-aware proxy. The sparse
+fixture has 800,000 positions but only 7,816 stored values. Full proxy
+constructions fall from 800,000 to 7,816, and style-resolution calls from
+3,200,000 to 31,264. Coordinates, default styles, border resolution, close
+behavior, and mutation refusal are retained; authored empty cells and gradients
+at source style zero keep the original style-aware path.
+
+Five fresh-process medians, one warmup, GitHub-hosted Ubuntu 24.04, CPython
+3.12.15, openpyxl 3.1.5, standard release Community wheel. Load + identical public
+fill/font/number-format scan + close; all benchmark signatures match.
+
+| Read-only styled workload | Before (s) | After (s) | openpyxl (s) | Before/after |
+| --- | ---: | ---: | ---: | ---: |
+| Sparse 25,000 × 32, 7,816 stored values | 3.279210 | 0.840991 | 0.294885 | 3.899× |
+| Dense 20,000 × 5, 100,000 stored values | 0.538393 | 0.534949 | 1.360873 | 1.006× |
+
+Sparse elapsed time falls 74.4%, but remains **2.85× slower than openpyxl**.
+WolfXL still constructs 792,184 coordinate-aware blank proxies; openpyxl reuses
+an empty-cell singleton. Dense timing is effectively unchanged. All 70 targeted
+streaming compatibility tests pass in the source-built lane.
+
+Baseline main `7b796d4dcc30` → candidate code `1d0927e623a3` (merged in PR #48).
+The [raw receipt](benchmarks/sparse-styled-source-built-20261009.json) records all
+samples, source/module/native hashes, signatures, and untimed profiles; the
+[workflow](https://github.com/SynthGL/wolfxl-oss/actions/runs/37885386977) builds
+the standard candidate wheel and confirms native sources are unchanged from the
+base. Both Python overlays use that same binary and differ only in
+`_streaming.py`. These measurements use a separate runner from the October 8
+matrix below; their ratios are not multiplied into its cumulative figures.
+
+### Pinned source comparison: 2026-10-08
+
+This comparison uses unreleased Community source builds and a pinned
 source baseline on Linux, CPython 3.12, with openpyxl 3.1.5. Both WolfXL variants
 use standard release builds with Community features. These results are separate
 from published-wheel measurements and apply to the fixed synthetic fixtures.
@@ -233,7 +265,7 @@ limits Python Cell allocation; the native worksheet model is still eager.
 | Sparse 25,000 × 32 (read-only Cells) | 4.3397 | 1.9321 | 2.25× | 0.08× | 2.25× |
 | 1,024 format variants (read-only Cells) | 1.2953 | 0.5705 | 2.27× | 1.85× | 2.27× |
 
-**Sparse read-only guard:** final WolfXL is 12.01× slower than openpyxl on this fixture (1.9321 s vs 0.1609 s), with a direct 2.25× baseline/final operation ratio. Eager and read-only modes have different tradeoffs; this result is not covered by a blanket speed claim.
+**Pinned 2026-10-08 sparse read-only guard:** that source build was 12.01× slower than openpyxl on this fixture (1.9321 s vs 0.1609 s), with a direct 2.25× baseline/final operation ratio. Eager and read-only modes have different tradeoffs; this result is not covered by a blanket speed claim.
 
 The guard fixtures use 25,000 rows: dense and high-cardinality sheets contain
 125,000 values; sparse sheets have 32-column dimensions and 7,816 stored values.

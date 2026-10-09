@@ -85,3 +85,18 @@ constant. This isolates the Python change, rather than claiming two independent
 native builds. These new results must stay separately labelled; the existing
 README performance receipts are unchanged.
 
+## Completed source-built validation
+
+The Community source-built [workflow](https://github.com/SynthGL/wolfxl-oss/actions/runs/37885386977)
+passed all 70 targeted tests, including the three tests unsupported by the older
+published native extension used in the local diagnostic. Normal product CI is
+also green. PR #48 is merged.
+
+The separately labelled [source-built raw receipt](sparse-styled-source-built-20261009.json)
+records sparse medians 3.279210 → 0.840991 seconds (3.899×), versus openpyxl
+0.294885 seconds (candidate still 2.852× slower). Dense medians are 0.538393 →
+0.534949 seconds (1.006×). All signatures match. CPython 3.12.15, openpyxl 3.1.5,
+Ubuntu 24.04 GitHub-hosted runner; standard release wheel with unchanged native
+sources. The baseline Python fingerprint matches the local exact-main source
+fingerprint, and the candidate _streaming.py hash is identical in both receipts.
+No cross-run or cross-machine cumulative ratio is inferred.
