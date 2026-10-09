@@ -16,6 +16,7 @@ def close_workbook(workbook: Any) -> None:
         except Exception:
             pass
     workbook._merged_border_metadata_cache = None
+    _clear_worksheet_style_caches(workbook)
     workbook._rust_reader = None
     workbook._streaming_style_cache = None
     workbook._rust_writer = None
@@ -29,6 +30,24 @@ def close_workbook(workbook: Any) -> None:
         except OSError:
             pass
         workbook._tempfile_path = None
+
+
+def _clear_worksheet_style_caches(workbook: Any) -> None:
+    """Release read-side style windows before dropping the workbook reader."""
+    # A style setter can replace the cache with a disabled sentinel before
+    # close; weak registration still reaches an externally retained window.
+    for window in getattr(workbook, "_style_payload_windows", ()) or ():
+        window.close()
+    workbook._style_payload_windows = None
+    for worksheet in getattr(workbook, "_sheets", {}).values():
+        cache = getattr(worksheet, "_style_payload_cache", None)
+        close = getattr(cache, "close", None)
+        if close is not None:
+            close()
+        if hasattr(worksheet, "_style_payload_cache"):
+            worksheet._style_payload_cache = None
+        if hasattr(worksheet, "_style_component_cache"):
+            worksheet._style_component_cache = None
 
 
 def enter_workbook(workbook: WorkbookT) -> WorkbookT:
