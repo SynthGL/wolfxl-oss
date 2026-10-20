@@ -66,9 +66,9 @@ def _find_matching_paren(expr: str, start: int) -> int:
         if ch == '"':
             in_string = not in_string
         elif not in_string:
-            if ch == '(':
+            if ch == "(":
                 depth += 1
-            elif ch == ')':
+            elif ch == ")":
                 depth -= 1
                 if depth == 0:
                     return i
@@ -83,7 +83,7 @@ def _match_function_call(expr: str) -> tuple[str, str] | None:
     (there's trailing content after the close-paren).
     """
     stripped = expr.strip()
-    m = re.match(r'^([A-Z][A-Z0-9_.]*)\s*\(', stripped, re.IGNORECASE)
+    m = re.match(r"^([A-Z_][A-Z0-9_.]*)\s*\(", stripped, re.IGNORECASE)
     if not m:
         return None
     open_idx = m.end() - 1  # position of '('
@@ -136,11 +136,11 @@ def _find_top_level_split(expr: str) -> tuple[str, str, str] | None:
                 continue
 
             # Track parentheses (inverted for right-to-left)
-            if ch == ')':
+            if ch == ")":
                 depth += 1
                 i -= 1
                 continue
-            if ch == '(':
+            if ch == "(":
                 depth -= 1
                 i -= 1
                 continue
@@ -157,15 +157,15 @@ def _find_top_level_split(expr: str) -> tuple[str, str, str] | None:
                 if i >= 1 and expr[i - 1 : i + 1] in (">=", "<=", "<>"):
                     matched_op = expr[i - 1 : i + 1]
                     op_start = i - 1
-                elif ch in ('>', '<'):
+                elif ch in (">", "<"):
                     matched_op = ch
-                elif ch == '=' and not (i >= 1 and expr[i - 1] in ('>', '<', '!')):
+                elif ch == "=" and not (i >= 1 and expr[i - 1] in (">", "<", "!")):
                     matched_op = ch
-            elif pass_type == "add" and ch in ('+', '-', '&'):
+            elif pass_type == "add" and ch in ("+", "-", "&"):
                 matched_op = ch
-            elif pass_type == "mul" and ch in ('*', '/'):
+            elif pass_type == "mul" and ch in ("*", "/"):
                 matched_op = ch
-            elif pass_type == "pow" and ch == '^':
+            elif pass_type == "pow" and ch == "^":
                 matched_op = ch
 
             if matched_op is not None:
@@ -175,13 +175,13 @@ def _find_top_level_split(expr: str) -> tuple[str, str, str] | None:
                     continue
                 # Check preceding non-space character
                 j = op_start - 1
-                while j >= 0 and expr[j] == ' ':
+                while j >= 0 and expr[j] == " ":
                     j -= 1
-                if j < 0 or expr[j] in ('(', ',', '+', '-', '*', '/', '^', '>', '<', '='):
+                if j < 0 or expr[j] in ("(", ",", "+", "-", "*", "/", "^", ">", "<", "="):
                     i -= 1
                     continue
                 # Skip +/- that are part of scientific notation (e.g. 2.5e-1)
-                if matched_op in ('+', '-') and j >= 1 and expr[j] in ('e', 'E'):
+                if matched_op in ("+", "-") and j >= 1 and expr[j] in ("e", "E"):
                     pre_e = j - 1
                     if pre_e >= 0 and expr[pre_e].isdigit():
                         i -= 1
@@ -201,11 +201,11 @@ def _has_top_level_colon(expr: str) -> bool:
     """``True`` when *expr* contains ``:`` at paren depth 0 (range ref)."""
     depth = 0
     for ch in expr:
-        if ch == '(':
+        if ch == "(":
             depth += 1
-        elif ch == ')':
+        elif ch == ")":
             depth -= 1
-        elif ch == ':' and depth == 0:
+        elif ch == ":" and depth == 0:
             return True
     return False
 
@@ -216,19 +216,19 @@ def _binary_op(left: Any, op: str, right: Any) -> Any:
     err = first_error(left, right)
     if err is not None:
         return err
-    if op == '&':
+    if op == "&":
         return str(left if left is not None else "") + str(right if right is not None else "")
     if not isinstance(left, (int, float)) or not isinstance(right, (int, float)):
         return None
-    if op == '+':
+    if op == "+":
         return left + right
-    if op == '-':
+    if op == "-":
         return left - right
-    if op == '*':
+    if op == "*":
         return left * right
-    if op == '/':
+    if op == "/":
         return ExcelError.DIV0 if right == 0 else left / right
-    if op == '^':
+    if op == "^":
         # Excel: 0 to a negative power is #DIV/0!; a negative base with a
         # fractional exponent or an out-of-range result is #NUM!.
         if left == 0 and right < 0:
@@ -266,30 +266,30 @@ def _compare(left: Any, right: Any, op: str) -> Any:
             # Fall back to string comparison (case-insensitive, like Excel)
             ls = str(left).lower() if left is not None else ""
             rs = str(right).lower() if right is not None else ""
-            if op in ('=', '=='):
+            if op in ("=", "=="):
                 return ls == rs
-            if op in ('<>', '!='):
+            if op in ("<>", "!="):
                 return ls != rs
-            if op == '>':
+            if op == ">":
                 return ls > rs
-            if op == '<':
+            if op == "<":
                 return ls < rs
-            if op == '>=':
+            if op == ">=":
                 return ls >= rs
-            if op == '<=':
+            if op == "<=":
                 return ls <= rs
             return False
-    if op == '>':
+    if op == ">":
         return lf > rf
-    if op == '<':
+    if op == "<":
         return lf < rf
-    if op == '>=':
+    if op == ">=":
         return lf >= rf
-    if op == '<=':
+    if op == "<=":
         return lf <= rf
-    if op in ('=', '=='):
+    if op in ("=", "=="):
         return lf == rf
-    if op in ('<>', '!='):
+    if op in ("<>", "!="):
         return lf != rf
     return False
 
@@ -358,7 +358,10 @@ class WorkbookEvaluator:
                         # Formula cell: store formula string, register in graph
                         self._cell_values[cell_ref] = val
                         self._graph.add_formula(
-                            cell_ref, val, sheet_name, named_ranges=nr,
+                            cell_ref,
+                            val,
+                            sheet_name,
+                            named_ranges=nr,
                         )
                     elif val is not None:
                         # Value cell: store the value
@@ -420,12 +423,14 @@ class WorkbookEvaluator:
             new_val = self._cell_values.get(cell_ref)
             if _values_differ(old_val, new_val, tolerance):
                 propagated += 1
-                deltas.append(CellDelta(
-                    cell_ref=cell_ref,
-                    old_value=old_val,
-                    new_value=new_val,
-                    formula=self._graph.formulas.get(cell_ref),
-                ))
+                deltas.append(
+                    CellDelta(
+                        cell_ref=cell_ref,
+                        old_value=old_val,
+                        new_value=new_val,
+                        formula=self._graph.formulas.get(cell_ref),
+                    )
+                )
 
         max_depth = self._graph.max_depth(set(perturbations.keys()))
 
@@ -448,7 +453,7 @@ class WorkbookEvaluator:
         None (unsupported function), falls back to the ``formulas`` library.
         """
         body = formula.strip()
-        if body.startswith('='):
+        if body.startswith("="):
             body = body[1:]
         sheet = self._sheet_from_ref(cell_ref)
         result = self._eval_expr(body.strip(), sheet)
@@ -488,12 +493,12 @@ class WorkbookEvaluator:
             left_str, op, right_str = split
             left_val = self._eval_expr(left_str, sheet)
             right_val = self._eval_expr(right_str, sheet)
-            if op in ('+', '-', '*', '/', '^', '&'):
+            if op in ("+", "-", "*", "/", "^", "&"):
                 return _binary_op(left_val, op, right_val)
             return _compare(left_val, right_val, op)
 
         # 2. Parenthesized sub-expression: (expr)
-        if expr.startswith('('):
+        if expr.startswith("("):
             close = _find_matching_paren(expr, 0)
             if close == len(expr) - 1:
                 return self._eval_expr(expr[1:close], sheet)
@@ -504,12 +509,12 @@ class WorkbookEvaluator:
             return self._eval_function(func[0].upper(), func[1], sheet)
 
         # 4. Unary minus / plus
-        if expr.startswith('-'):
+        if expr.startswith("-"):
             val = self._eval_expr(expr[1:], sheet)
             if isinstance(val, (int, float)):
                 return -val
             return val
-        if expr.startswith('+'):
+        if expr.startswith("+"):
             return self._eval_expr(expr[1:], sheet)
 
         # 5. Numeric literal (int, float, and scientific notation like 1E3)
@@ -519,7 +524,7 @@ class WorkbookEvaluator:
             pass
         else:
             # Preserve int for plain integer literals
-            if re.fullmatch(r'[+-]?\d+', expr):
+            if re.fullmatch(r"[+-]?\d+", expr):
                 return int(expr)
             return num
 
@@ -529,15 +534,15 @@ class WorkbookEvaluator:
 
         # 7. Boolean
         upper = expr.upper()
-        if upper == 'TRUE':
+        if upper == "TRUE":
             return True
-        if upper == 'FALSE':
+        if upper == "FALSE":
             return False
 
         # 7b. Named range resolution
         if upper in self._named_ranges:
             refers_to = self._named_ranges[upper]
-            if ':' in refers_to:
+            if ":" in refers_to:
                 return self._resolve_range_2d(refers_to, sheet)
             return self._resolve_cell_ref(refers_to, sheet)
 
@@ -550,9 +555,9 @@ class WorkbookEvaluator:
 
     def _resolve_cell_ref(self, expr: str, sheet: str) -> Any:
         """Resolve a cell reference string to its stored value."""
-        clean = expr.strip().replace('$', '')
-        if '!' in clean:
-            parts = clean.split('!', 1)
+        clean = expr.strip().replace("$", "")
+        if "!" in clean:
+            parts = clean.split("!", 1)
             ref_sheet = parts[0].strip("'")
             ref = f"{ref_sheet}!{parts[1].upper()}"
         else:
@@ -564,11 +569,11 @@ class WorkbookEvaluator:
 
         Kept for the ``formulas`` library fallback which needs flat lists.
         """
-        clean = arg.strip().replace('$', '')
-        if '!' not in clean:
+        clean = arg.strip().replace("$", "")
+        if "!" not in clean:
             range_ref = f"{sheet}!{clean.upper()}"
         else:
-            parts = clean.split('!', 1)
+            parts = clean.split("!", 1)
             ref_sheet = parts[0].strip("'")
             range_ref = f"{ref_sheet}!{parts[1].upper()}"
         cells = expand_range(range_ref)
@@ -576,11 +581,11 @@ class WorkbookEvaluator:
 
     def _resolve_range_2d(self, arg: str, sheet: str) -> RangeValue:
         """Resolve a range to a :class:`RangeValue` preserving 2D shape."""
-        clean = arg.strip().replace('$', '')
-        if '!' not in clean:
+        clean = arg.strip().replace("$", "")
+        if "!" not in clean:
             range_ref = f"{sheet}!{clean.upper()}"
         else:
-            parts = clean.split('!', 1)
+            parts = clean.split("!", 1)
             ref_sheet = parts[0].strip("'")
             range_ref = f"{ref_sheet}!{parts[1].upper()}"
         cells = expand_range(range_ref)
@@ -598,11 +603,13 @@ class WorkbookEvaluator:
         Functions with ``_raw_args = True`` receive raw argument strings
         and the evaluator's expression evaluator, rather than resolved values.
         """
+        if func_name.startswith("_XLFN."):
+            func_name = func_name[len("_XLFN.") :]
         func = self._functions.get(func_name)
         if func is None:
             logger.debug("Unsupported function: %s", func_name)
             return None
-        if getattr(func, '_raw_args', False):
+        if getattr(func, "_raw_args", False):
             raw_args = self._split_top_level_args(args_str)
             try:
                 return func(raw_args, self._eval_expr, sheet)
@@ -627,13 +634,13 @@ class WorkbookEvaluator:
                 in_string = not in_string
                 current += ch
             elif not in_string:
-                if ch == '(':
+                if ch == "(":
                     depth += 1
                     current += ch
-                elif ch == ')':
+                elif ch == ")":
                     depth -= 1
                     current += ch
-                elif ch == ',' and depth == 0:
+                elif ch == "," and depth == 0:
                     args.append(current)
                     current = ""
                 else:
@@ -668,13 +675,13 @@ class WorkbookEvaluator:
                     in_string = True
                 current += ch
             elif not in_string:
-                if ch == '(':
+                if ch == "(":
                     depth += 1
                     current += ch
-                elif ch == ')':
+                elif ch == ")":
                     depth -= 1
                     current += ch
-                elif ch == ',' and depth == 0:
+                elif ch == "," and depth == 0:
                     args.append(self._resolve_arg(current.strip(), sheet))
                     current = ""
                 else:
@@ -708,7 +715,7 @@ class WorkbookEvaluator:
         upper = arg.strip().upper()
         if upper in self._named_ranges:
             refers_to = self._named_ranges[upper]
-            if ':' in refers_to:
+            if ":" in refers_to:
                 return self._resolve_range_2d(refers_to, sheet)
             return self._resolve_cell_ref(refers_to, sheet)
 
@@ -762,10 +769,10 @@ class WorkbookEvaluator:
         for param in params:
             # Param names from formulas lib use the formula's raw ref tokens
             # like "A1:A5" or "A1" (no sheet prefix for same-sheet refs)
-            if ':' in param:
+            if ":" in param:
                 # Range parameter - resolve to numpy array
                 # Qualify with sheet name for range_shape parsing
-                qualified = param if '!' in param else f"{sheet}!{param}"
+                qualified = param if "!" in param else f"{sheet}!{param}"
                 values = self._resolve_range(param, sheet)
                 flat = np.array([v if v is not None else 0 for v in values])
                 n_rows, n_cols = range_shape(qualified)
@@ -795,7 +802,7 @@ class WorkbookEvaluator:
         if raw is None:
             return None
         # numpy scalar types
-        if hasattr(raw, 'item'):
+        if hasattr(raw, "item"):
             try:
                 val = raw.item()
                 if isinstance(val, float) and val == int(val):
@@ -804,11 +811,11 @@ class WorkbookEvaluator:
             except (ValueError, TypeError):
                 pass
         # numpy array with single element
-        if hasattr(raw, 'shape') and hasattr(raw, 'flat'):
+        if hasattr(raw, "shape") and hasattr(raw, "flat"):
             try:
                 if raw.size == 1:
                     val = raw.flat[0]
-                    if hasattr(val, 'item'):
+                    if hasattr(val, "item"):
                         val = val.item()
                     if isinstance(val, float) and val == int(val):
                         return int(val)
@@ -823,6 +830,6 @@ class WorkbookEvaluator:
     @staticmethod
     def _sheet_from_ref(cell_ref: str) -> str:
         """Extract sheet name from a canonical cell reference."""
-        if '!' in cell_ref:
-            return cell_ref.rsplit('!', 1)[0]
-        return 'Sheet1'
+        if "!" in cell_ref:
+            return cell_ref.rsplit("!", 1)[0]
+        return "Sheet1"

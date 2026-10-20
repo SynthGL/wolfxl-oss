@@ -43,9 +43,7 @@ def save_workbook(
     password: str | bytes | None = None,
 ) -> None:
     """Flush workbook state and save it through the active backend."""
-    if hasattr(filename, "write") and not isinstance(
-        filename, (str, bytes, os.PathLike)
-    ):
+    if hasattr(filename, "write") and not isinstance(filename, (str, bytes, os.PathLike)):
         save_workbook_to_fileobj(wb, filename, password=password)
         return
     filename = str(filename)
@@ -56,8 +54,7 @@ def save_workbook(
         from wolfxl.utils.exceptions import WorkbookAlreadySaved
 
         raise WorkbookAlreadySaved(
-            "Workbook(write_only=True) is consumed-on-save; "
-            "open a new workbook to write again"
+            "Workbook(write_only=True) is consumed-on-save; open a new workbook to write again"
         )
 
     if password is not None:
@@ -69,6 +66,9 @@ def save_workbook(
         save_encrypted(wb, filename, password)
         return
 
+    from wolfxl._formula_cache import apply_formula_results, saved_formula_results
+
+    formula_results, formula_results_stale = saved_formula_results(wb)
     if wb._rust_patcher is not None:  # noqa: SLF001
         save_modify_mode(wb, filename)
     elif wb._rust_writer is not None:  # noqa: SLF001
@@ -76,9 +76,7 @@ def save_workbook(
             save_write_only_mode(wb, filename)
         else:
             save_write_mode(wb, filename)
-    elif getattr(wb, "_rust_reader", None) is not None and getattr(
-        wb, "_source_path", None
-    ):
+    elif getattr(wb, "_rust_reader", None) is not None and getattr(wb, "_source_path", None):
         save_read_mode(wb, filename)
     else:
         raise RuntimeError("save requires write or modify mode")
@@ -90,6 +88,7 @@ def save_workbook(
     apply_merge_updates(wb, filename)
     apply_workbook_template_content_type(wb, filename)
     apply_custom_doc_props_authoring(wb, filename)
+    apply_formula_results(wb, filename, formula_results, formula_results_stale)
     # Mark consumed AFTER save succeeds so a write failure leaves the
     # workbook in a re-tryable state for the eager path. Write-only
     # mode flips this once and never re-saves.
@@ -112,9 +111,7 @@ def save_workbook_to_fileobj(
     """Save to a binary file-like object using the path-oriented backends."""
     import tempfile
 
-    tmp = tempfile.NamedTemporaryFile(
-        prefix="wolfxl-save-", suffix=".xlsx", delete=False
-    )
+    tmp = tempfile.NamedTemporaryFile(prefix="wolfxl-save-", suffix=".xlsx", delete=False)
     tmp_path = tmp.name
     tmp.close()
     try:
@@ -299,9 +296,7 @@ def _read_mode_has_pending_changes(wb: Any) -> bool:
         if has_pending_image_deletions(ws):
             return True
         for handle in getattr(ws, "_pivot_handles_cache", None) or []:
-            if getattr(handle, "_dirty", False) or getattr(
-                handle, "_layout_dirty", False
-            ):
+            if getattr(handle, "_dirty", False) or getattr(handle, "_layout_dirty", False):
                 return True
     return False
 
@@ -696,9 +691,7 @@ def apply_sheet_state_authoring(wb: Any, filename: str) -> None:
         active_index = getattr(wb, "_active_index_for_save", wb._active_index)()
         changed = _apply_active_tab(root, ns_main, active_index) or changed
     if tab_colors:
-        changed = (
-            _apply_sheet_tab_colors(parts, root, tab_colors, ns_main, ns_rel) or changed
-        )
+        changed = _apply_sheet_tab_colors(parts, root, tab_colors, ns_main, ns_rel) or changed
     if outline_props:
         changed = (
             _apply_sheet_outline_properties(
@@ -948,9 +941,7 @@ def apply_writer_unmerged_ranges(wb: Any, filename: str) -> None:
         except ET.ParseError:
             continue
         if _remove_merge_cells(sheet_root, refs):
-            parts[path] = ET.tostring(
-                sheet_root, encoding="utf-8", xml_declaration=True
-            )
+            parts[path] = ET.tostring(sheet_root, encoding="utf-8", xml_declaration=True)
             changed = True
 
     if not changed:
@@ -985,17 +976,10 @@ def _remove_merge_cells(sheet_root: Any, refs: set[str]) -> bool:
         if parent.tag.rsplit("}", 1)[-1] != "mergeCells":
             continue
         for child in list(parent):
-            if (
-                child.tag.rsplit("}", 1)[-1] == "mergeCell"
-                and child.attrib.get("ref") in refs
-            ):
+            if child.tag.rsplit("}", 1)[-1] == "mergeCell" and child.attrib.get("ref") in refs:
                 parent.remove(child)
                 changed = True
-        remaining = [
-            child
-            for child in list(parent)
-            if child.tag.rsplit("}", 1)[-1] == "mergeCell"
-        ]
+        remaining = [child for child in list(parent) if child.tag.rsplit("}", 1)[-1] == "mergeCell"]
         if remaining:
             parent.set("count", str(len(remaining)))
         else:
@@ -1190,9 +1174,7 @@ def _apply_sheet_page_setup_properties(
     return changed
 
 
-def _workbook_relationship_targets(
-    parts: dict[str, bytes], ns_rel: str
-) -> dict[str, str]:
+def _workbook_relationship_targets(parts: dict[str, bytes], ns_rel: str) -> dict[str, str]:
     from xml.etree import ElementTree as ET
 
     rels_xml = parts.get("xl/_rels/workbook.xml.rels")
@@ -1220,9 +1202,7 @@ def _apply_sheet_tab_color(sheet_root: Any, color: str, ns_main: str) -> bool:
         return node.tag.rsplit("}", 1)[-1]
 
     children = list(sheet_root)
-    sheet_pr = next(
-        (child for child in children if local_name(child) == "sheetPr"), None
-    )
+    sheet_pr = next((child for child in children if local_name(child) == "sheetPr"), None)
     if sheet_pr is None:
         sheet_pr = ET.Element(f"{{{ns_main}}}sheetPr")
         sheet_root.insert(0, sheet_pr)
@@ -1250,9 +1230,7 @@ def _apply_sheet_outline_property(
         return node.tag.rsplit("}", 1)[-1]
 
     children = list(sheet_root)
-    sheet_pr = next(
-        (child for child in children if local_name(child) == "sheetPr"), None
-    )
+    sheet_pr = next((child for child in children if local_name(child) == "sheetPr"), None)
     if sheet_pr is None:
         sheet_pr = ET.Element(f"{{{ns_main}}}sheetPr")
         sheet_root.insert(0, sheet_pr)
@@ -1289,9 +1267,7 @@ def _apply_sheet_page_setup_property(
         return node.tag.rsplit("}", 1)[-1]
 
     children = list(sheet_root)
-    sheet_pr = next(
-        (child for child in children if local_name(child) == "sheetPr"), None
-    )
+    sheet_pr = next((child for child in children if local_name(child) == "sheetPr"), None)
     if sheet_pr is None:
         sheet_pr = ET.Element(f"{{{ns_main}}}sheetPr")
         sheet_root.insert(0, sheet_pr)
@@ -1374,9 +1350,7 @@ def flush_chartsheets_authoring(wb: Any, filename: str) -> None:
 def flush_source_chart_authoring(wb: Any, filename: str) -> None:
     ops = list(getattr(wb, "_pending_source_chart_ops", []))
     touched = {
-        op.get("meta", {}).get("chart_path")
-        for op in ops
-        if isinstance(op.get("meta"), dict)
+        op.get("meta", {}).get("chart_path") for op in ops if isinstance(op.get("meta"), dict)
     }
     for ws in getattr(wb, "_sheets", {}).values():
         for chart in getattr(ws, "_charts_cache", None) or []:

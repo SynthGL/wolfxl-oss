@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.0.10 - 2026-10-20
+
+### Fixed
+
+- `calculate()` followed by `save()` now writes supported formula results to
+  the saved workbook's cached values, in both write and modify mode, so
+  `load_workbook(path, data_only=True)` and other cache readers see them.
+  Results that cannot be computed stay uncached, and editing inputs, formulas,
+  sheet names, or defined names after `calculate()` requires calculating again
+  before saving. In 2.0.9 and earlier the saved caches were left unchanged.
+- Shallow copies of implicit blank cells in streaming reads are preserved.
+
+### Changed
+
+- Faster reads, saves, and streaming: lazy merge metadata, shared styles in
+  bounded read windows, spliced in-place cell patches, and a content-types fast
+  path for unchanged templates. Measured receipts are in `benchmarks/`.
+
 ## 2.0.9 - 2026-10-03
 
 ### Added
