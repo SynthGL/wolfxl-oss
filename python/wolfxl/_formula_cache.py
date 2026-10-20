@@ -102,9 +102,17 @@ def saved_formula_results(wb: Any) -> tuple[dict[str, Any] | None, bool]:
     what-if ``recalculate()`` never changes the workbook, so it never affects
     this decision.
     """
+    if getattr(wb, "_pending_axis_shifts", None) or getattr(wb, "_pending_range_moves", None):
+        wb._cells_relocated_on_save = True  # noqa: SLF001
     state = getattr(wb, "_calculated_state", None)
     if state is None:
         return None, False
+    if getattr(wb, "_cells_relocated_on_save", False):
+        # Row, column and range moves in modify mode relocate cells only in the
+        # saved package; in-memory cells keep their old addresses. Results keyed
+        # by those addresses would land on the wrong formulas, so they are
+        # never written for this workbook object.
+        return {}, True
     if calculation_state(wb) != state:
         return {}, True
     return wb._calculated_formula_results, False  # noqa: SLF001
@@ -281,23 +289,31 @@ def apply_formula_results(
                 updates[path] = patched
         if not updates:
             return
-        fd, temporary = tempfile.mkstemp(
-            prefix=".wolfxl-formula-cache-",
-            suffix=".xlsx",
-            dir=os.path.dirname(os.path.abspath(filename)),
-        )
-        os.close(fd)
-        try:
-            with zipfile.ZipFile(temporary, "w") as dst:
-                dst.comment = src.comment
-                for info in src.infolist():
-                    data = updates[info.filename] if info.filename in updates else None
-                    dst.writestr(
-                        copy.copy(info),
-                        src.read(info.filename) if data is None else data,
-                    )
-            shutil.copymode(filename, temporary)
-            os.replace(temporary, filename)
-        finally:
-            if os.path.exists(temporary):
-                os.unlink(temporary)
+        comment = src.comment
+        parts = [
+            (
+                copy.copy(info),
+                updates[info.filename]
+                if info.filename in updates
+                else src.read(info.filename),
+            )
+            for info in src.infolist()
+        ]
+    # The source must be closed before os.replace: Windows refuses to replace
+    # a file that is still open.
+    fd, temporary = tempfile.mkstemp(
+        prefix=".wolfxl-formula-cache-",
+        suffix=".xlsx",
+        dir=os.path.dirname(os.path.abspath(filename)),
+    )
+    os.close(fd)
+    try:
+        with zipfile.ZipFile(temporary, "w") as dst:
+            dst.comment = comment
+            for info, data in parts:
+                dst.writestr(info, data)
+        shutil.copymode(filename, temporary)
+        os.replace(temporary, filename)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)

@@ -9,7 +9,10 @@
   `load_workbook(path, data_only=True)` and other cache readers see them.
   Results that cannot be computed stay uncached, and editing inputs, formulas,
   sheet names, or defined names after `calculate()` requires calculating again
-  before saving. In 2.0.9 and earlier the saved caches were left unchanged.
+  before saving. After `insert_rows`, `delete_rows`, `insert_cols`,
+  `delete_cols`, or `move_range` in modify mode, that workbook object writes
+  no calculated results; reopen the saved file and calculate it to cache them.
+  In 2.0.9 and earlier the saved caches were left unchanged.
 - Shallow copies of implicit blank cells in streaming reads are preserved.
 
 ### Changed

@@ -419,3 +419,35 @@ def test_uncomputed_results_do_not_retain_stale_caches(tmp_path):
     assert _cached(cells["B3"]) is None
     assert cells["B2"].find("s:f", NS).text == "UNSUPPORTED_FUNCTION(A1)"
     assert cells["B3"].find("s:f", NS).get("t") == "array"
+
+
+@pytest.mark.parametrize("move", ["insert_rows", "move_range"])
+@pytest.mark.parametrize("calculate_first", [True, False])
+def test_row_and_range_moves_never_misplace_results(tmp_path, move, calculate_first):
+    source = tmp_path / "source.xlsx"
+    wb = wolfxl.Workbook()
+    wb.active["A1"] = 2
+    wb.active["A2"] = 3
+    wb.active["B1"] = "=SUM(A1:A2)"
+    wb.active["B2"] = "=A1*10"
+    wb.save(source)
+
+    wb = wolfxl.load_workbook(source, modify=True)
+    if calculate_first:
+        wb.calculate()
+    if move == "insert_rows":
+        wb["Sheet"].insert_rows(1)
+    else:
+        wb["Sheet"].move_range("A1:B2", rows=1)
+    output = tmp_path / "output.xlsx"
+    # Save, calculate, and save again: every save must agree with the moves.
+    wb.save(output)
+    wb.calculate()
+    wb.save(output)
+
+    formulas = openpyxl.load_workbook(output)["Sheet"]
+    assert formulas["B2"].value == "=SUM(A2:A3)"
+    assert formulas["B3"].value == "=A2*10"
+    saved = _data_only(output, openpyxl.load_workbook)["Sheet"]
+    assert saved["B2"].value in (None, 5)
+    assert saved["B3"].value in (None, 20)
