@@ -76,6 +76,10 @@ class Workbook:
         # Flipped to True via load_workbook(rich_text=True).
         self._rich_text: bool = False
         self._evaluator: Any = None
+        # Last calculate() snapshot: (inputs, defined names, date1904) and its
+        # results, persisted as formula caches by the next save.
+        self._calculated_state: Any = None
+        self._calculated_formula_results: dict[str, Any] = {}
         # G20: streaming write-only mode. When set, create_sheet returns
         # WriteOnlyWorksheet instances and the default sheet is skipped.
         self._write_only: bool = bool(write_only)
@@ -491,11 +495,7 @@ class Workbook:
         """Workbook date epoch, matching openpyxl's public property."""
         from wolfxl.utils.datetime import CALENDAR_MAC_1904, CALENDAR_WINDOWS_1900
 
-        return (
-            CALENDAR_MAC_1904
-            if self.workbook_properties.date1904
-            else CALENDAR_WINDOWS_1900
-        )
+        return CALENDAR_MAC_1904 if self.workbook_properties.date1904 else CALENDAR_WINDOWS_1900
 
     @epoch.setter
     def epoch(self, value: Any) -> None:
@@ -527,9 +527,7 @@ class Workbook:
     @property
     def mime_type(self) -> str:
         """Openpyxl-compatible workbook MIME type."""
-        has_vba = bool(getattr(self, "_vba_archive_override", None)) or bool(
-            self.vba_archive
-        )
+        has_vba = bool(getattr(self, "_vba_archive_override", None)) or bool(self.vba_archive)
         if getattr(self, "template", False):
             return XLTM if has_vba else XLTX
         return XLSM if has_vba else XLSX
@@ -579,9 +577,7 @@ class Workbook:
         read_names = self._read_style_names()
         if read_names is not None:
             return read_names
-        return ["Normal"] + [
-            style.name for style in self._named_style_registry().user_styles()
-        ]
+        return ["Normal"] + [style.name for style in self._named_style_registry().user_styles()]
 
     def _read_style_names(self) -> list[str] | None:
         """Read named-style names from ``xl/styles.xml`` when available."""
@@ -729,9 +725,7 @@ class Workbook:
             except AttributeError:
                 values = []
             for table in values:
-                table_name = getattr(table, "name", None) or getattr(
-                    table, "displayName", None
-                )
+                table_name = getattr(table, "name", None) or getattr(table, "displayName", None)
                 if table_name and str(table_name).lower() == target:
                     return True
         return False
@@ -991,9 +985,7 @@ class Workbook:
             raise ValueError("Cannot copy worksheets in read-only or write-only mode")
         return _workbook_sheets.copy_worksheet(self, source, name=name)
 
-    def _copy_worksheet_write_mode(
-        self, source: Worksheet, new_title: str
-    ) -> Worksheet:
+    def _copy_worksheet_write_mode(self, source: Worksheet, new_title: str) -> Worksheet:
         """Clone an in-memory worksheet into a fresh sheet (write mode).
 
         Materialises any pending append/bulk-write buffers on the source
@@ -1500,10 +1492,22 @@ class Workbook:
         """Evaluate all formulas in the workbook.
 
         Returns a dict of cell_ref -> computed value for all formula cells.
-        Requires the ``wolfxl.calc`` module (install via ``pip install wolfxl[calc]``).
+        Builtin functions need no extra dependencies; the optional
+        ``wolfxl[calc]`` extra enables additional formula evaluation.
 
         The internal evaluator is cached so that a subsequent
         :meth:`recalculate` call can reuse it without rescanning.
+
+        The next :meth:`save` writes the computed numbers, strings, booleans
+        and errors as typed XLSX formula caches, readable with
+        ``load_workbook(data_only=True)``; the formula text is kept. Formulas
+        the evaluator cannot compute are not given a new cache. Editing an
+        input, formula, sheet name, defined name or the date system after
+        ``calculate()`` invalidates these caches and the save drops cached
+        formula values rather than keep them out of date; call ``calculate()``
+        again before saving to write fresh results. :meth:`recalculate` is a
+        what-if and never changes what is saved. Saved XLOOKUP formulas use
+        Excel's ``_xlfn.XLOOKUP`` spelling.
         """
         return _workbook_calc.calculate_workbook(self)
 
@@ -1560,9 +1564,7 @@ class Workbook:
 Workbook.copy_worksheet.__signature__ = _inspect.Signature(
     [
         _inspect.Parameter("self", _inspect.Parameter.POSITIONAL_OR_KEYWORD),
-        _inspect.Parameter(
-            "from_worksheet", _inspect.Parameter.POSITIONAL_OR_KEYWORD
-        ),
+        _inspect.Parameter("from_worksheet", _inspect.Parameter.POSITIONAL_OR_KEYWORD),
     ]
 )
 Workbook.__signature__ = _inspect.Signature(

@@ -326,6 +326,8 @@ def flush_pending_axis_shifts_to_patcher(wb: Any) -> None:
     for sheet_title, axis, idx, n in wb._pending_axis_shifts:  # noqa: SLF001
         patcher.queue_axis_shift(sheet_title, axis, idx, n)
     wb._pending_axis_shifts.clear()  # noqa: SLF001
+    # In-memory cells keep their pre-shift addresses from now on.
+    wb._cells_relocated_on_save = True  # noqa: SLF001
 
 
 def flush_pending_range_moves_to_patcher(wb: Any) -> None:
@@ -354,6 +356,7 @@ def flush_pending_range_moves_to_patcher(wb: Any) -> None:
             translate,
         )
     wb._pending_range_moves.clear()  # noqa: SLF001
+    wb._cells_relocated_on_save = True  # noqa: SLF001
 
 
 def flush_pending_sheet_copies_to_patcher(wb: Any) -> None:

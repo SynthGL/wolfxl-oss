@@ -12,7 +12,7 @@ WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported 
 ## Install
 
 ```bash
-python -m pip install wolfxl==2.0.9
+python -m pip install wolfxl==2.0.10
 ```
 
 ## Edit an existing workbook
@@ -29,8 +29,9 @@ wb.close()
 
 Modify mode saves the cells you change and preserves unchanged styles, charts,
 and package parts within the documented boundaries; add `keep_vba=True` for
-`.xlsm` macros. `calculate()` returns the computed values and leaves the cached
-results in the saved file unchanged.
+`.xlsm` macros. Since 2.0.10, `calculate()` followed by `save()` writes
+supported formula results into the saved file's cached values; calculate again
+after further edits, before saving.
 [Edit Excel in Python without losing formatting](https://wolfxl.com/openpyxl-preservation?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
 
 ## Compared with openpyxl

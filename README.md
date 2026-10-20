@@ -39,9 +39,14 @@ wb.close()
 
 Modify mode patches changed cells and required owned package metadata while
 preserving unchanged styles, charts, and parts within the documented boundaries;
-add `keep_vba=True` for
-`.xlsm` macros. `calculate()` returns the computed values and leaves the cached
-results in the saved file unchanged.
+add `keep_vba=True` for `.xlsm` macros.
+
+Since 2.0.10, `calculate()` followed by `save()` writes supported formula
+results into the saved file, so readers that use cached values (including
+`load_workbook(path, data_only=True)`) see them. After changing inputs,
+formulas, sheet names, or defined names, calculate again before saving.
+Results Community cannot compute are left uncached. In 2.0.9 and earlier,
+`calculate()` returned the values without saving them.
 [Edit Excel in Python without losing formatting](https://wolfxl.com/openpyxl-preservation?utm_source=github&utm_medium=readme&utm_campaign=problem_pages_2026_09).
 
 The following free recalculation-on-open recipe requires Community 2.0.9
@@ -144,7 +149,7 @@ Step-by-step guide: [openpyxl migration](https://wolfxl.com/openpyxl-migration).
 Install the current Community release:
 
 ```bash
-python -m pip install wolfxl==2.0.9
+python -m pip install wolfxl==2.0.10
 ```
 
 WolfXL Community supports Python 3.9 and newer CPython versions for which a

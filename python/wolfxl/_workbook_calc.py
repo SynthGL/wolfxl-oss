@@ -9,13 +9,22 @@ if TYPE_CHECKING:
 
 
 def calculate_workbook(wb: Any) -> dict[str, Any]:
-    """Evaluate all formulas and cache the evaluator for future recalcs."""
+    """Evaluate all formulas, cache the evaluator, and remember the results.
+
+    The results are persisted as typed formula caches by the next save while
+    the calculation inputs are unchanged.
+    """
+    from wolfxl._formula_cache import record_calculation
     from wolfxl.calc._evaluator import WorkbookEvaluator
 
     ev = WorkbookEvaluator()
     ev.load(wb)
+    # Taken before evaluation replaces formula text with results, and copied
+    # so what-if recalculate() perturbations cannot alter the saved snapshot.
+    inputs = ev._cell_values.copy()  # noqa: SLF001
     result = ev.calculate()
     wb._evaluator = ev  # noqa: SLF001
+    record_calculation(wb, inputs, result)
     return result
 
 
