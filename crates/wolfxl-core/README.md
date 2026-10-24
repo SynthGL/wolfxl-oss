@@ -23,17 +23,16 @@ println!("{} rows x {} columns", rows, cols);
 
 ## Scope
 
-- **In scope today**: read xlsx / xls / xlsb / ods / csv values, extract
-  best-effort number-format strings for xlsx and native xlsb paths via
-  [`calamine-styles`], WolfXL's native reader, and the `xl/styles.xml`
-  cellXfs walker fallback, classify formats into `FormatCategory`, render
-  via `format_cell`, map workbook structure, and infer per-column
-  schema/cardinality summaries.
+- **In scope today**: read xlsx / xls / xlsb / ods through the native readers,
+  and csv through the delimited reader. Resolve best-effort number-format
+  metadata with the `xl/styles.xml` cellXfs fallback, classify formats into
+  `FormatCategory`, render via `format_cell`, map workbook structure, and infer
+  per-column schema/cardinality summaries. Preserve sparse origins, date
+  epochs, names, XLSX tables, and canonical Excel error values.
 - **Not yet**: write side.
 
 The PyO3 layer in the sibling [`wolfxl`](https://pypi.org/project/wolfxl/)
-PyPI package still owns its own xlsx implementation; unifying the two is
-follow-up work.
+package consumes the same native readers through edition-specific adapters.
 
 ## Exports
 

@@ -245,8 +245,9 @@ const ERROR_CODES: &[&str] = &[
     "#GETTING_DATA",
 ];
 
-/// Characters that terminate an in-progress operand token.
-const TOKEN_ENDERS: &[u8] = b",;}) +-*/^&=><%";
+/// Characters that terminate an in-progress operand token. Every whitespace
+/// byte is one, so a line break after `B1` ends the operand like a space does.
+const TOKEN_ENDERS: &[u8] = b",;}) \r\n+-*/^&=><%";
 
 /// Tokenize a formula. Returns the flat list of tokens.
 ///
@@ -335,7 +336,7 @@ impl<'a> Tokenizer<'a> {
                     let n = self.parse_error()?;
                     self.offset += n;
                 }
-                b' ' | b'\n' => {
+                b' ' | b'\r' | b'\n' => {
                     let n = self.parse_whitespace();
                     self.offset += n;
                 }
@@ -442,23 +443,21 @@ impl<'a> Tokenizer<'a> {
         })
     }
 
+    /// One whitespace token for a run of spaces and line breaks (LF, CR, or
+    /// CRLF), kept byte for byte so rendering restores the run in place.
     fn parse_whitespace(&mut self) -> usize {
-        debug_assert!(matches!(self.bytes[self.offset], b' ' | b'\n'));
+        debug_assert!(matches!(self.bytes[self.offset], b' ' | b'\r' | b'\n'));
+        let start = self.offset;
+        let end = self.bytes[start..]
+            .iter()
+            .position(|b| !matches!(b, b' ' | b'\r' | b'\n'))
+            .map_or(self.bytes.len(), |n| start + n);
         self.items.push(Token::new(
-            (self.bytes[self.offset] as char).to_string(),
+            &self.formula[start..end],
             TokenKind::Wspace,
             TokenSubKind::None,
         ));
-        let mut n = 0;
-        while self.offset + n < self.bytes.len() {
-            let b = self.bytes[self.offset + n];
-            if b == b' ' || b == b'\n' {
-                n += 1;
-            } else {
-                break;
-            }
-        }
-        n
+        end - start
     }
 
     fn parse_operator(&mut self) -> usize {

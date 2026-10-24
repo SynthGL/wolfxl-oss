@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.0.11 - 2026-10-24
+
+### Security
+
+- Remove `calamine-styles` after the native reader cutover and move direct XML
+  parsing and the isolated reader qualifier to `quick-xml` 0.42.
+- Upgrade ZIP handling to `zip` 9.0.5, clearing RUSTSEC-2026-0367,
+  RUSTSEC-2026-0368 and RUSTSEC-2026-0369 (patched in 9.0.0).
+- Exclude Python 3.9.0 and 3.9.1, which cannot install the fixed cryptography
+  resolution for the encrypted extra. Python 3.9.2 and later remain supported.
+- Keep Community Python ODS refusal and existing binary-format read, style, and
+  modification boundaries.
+- The optional `test` extra on Python 3.9 and 3.10 still resolves Pillow releases
+  affected by CVE-2026-96639 and GHSA-78g4-xqwv-q3g8, because fixed Pillow 13
+  requires Python 3.11. Runtime installs do not depend on Pillow.
+
+### Fixed
+
+- Calling `calculate()` on a workbook opened with `data_only=True` preserves
+  its existing formula caches when saving, and writes caches only for formulas
+  actually computed by that call.
+- Preserve indexed streaming merge lookup and merged endpoint borders without
+  materializing worksheet cells.
+- Match openpyxl's inline-font boolean defaults and XML serialization.
+- Build supported CPython 3.9 wheels explicitly and require the complete
+  CPython 3.9 through 3.14 wheel matrix without dropping published platforms.
+- Keep existing public benchmark test helpers available to the Community
+  source-export regression tests.
+- Complete the isolated native-reader qualification dependency closure.
+- Pin historical evidence and contribution links to the public source snapshot.
+- Keep shared-string reference parsing compatible with the XML dependency
+  update in the Rust round-trip regression fixture.
+- Preserve existing-cell XML byte splicing and its regression coverage in
+  modify mode while updating the XML dependency.
+
 ## 2.0.10 - 2026-10-20
 
 ### Fixed

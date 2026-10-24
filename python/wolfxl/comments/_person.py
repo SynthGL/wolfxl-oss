@@ -6,15 +6,17 @@ Excel 365 stores threaded-comment authors in a workbook-scoped registry at
 openpyxl's surface: ``Person(name=..., user_id=..., provider_id=...)``
 with an auto-allocated ``id`` GUID at registration time.
 """
+
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from typing import Iterator
 
 
 def _new_guid() -> str:
     """Return a lowercase brace-wrapped GUID matching Excel's threadedComments style."""
+    import uuid
+
     return "{" + str(uuid.uuid4()).upper() + "}"
 
 
@@ -54,10 +56,7 @@ class PersonRegistry:
     ) -> Person:
         if user_id and provider_id:
             for existing in self._items:
-                if (
-                    existing.user_id == user_id
-                    and existing.provider_id == provider_id
-                ):
+                if existing.user_id == user_id and existing.provider_id == provider_id:
                     return existing
         person = Person(
             name=name,

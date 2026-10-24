@@ -276,9 +276,7 @@ def _normalise_streaming_value_tuple(row: tuple[Any, ...], *, data_only: bool) -
     for value in row:
         if isinstance(value, dict):
             return tuple(
-                _streaming_value(item, data_only=data_only)
-                if isinstance(item, dict)
-                else item
+                _streaming_value(item, data_only=data_only) if isinstance(item, dict) else item
                 for item in row
             )
     return row
@@ -300,8 +298,14 @@ class StreamingCell:
     """
 
     __slots__ = (
-        "_ws", "_row", "_col", "_value", "_style_id", "_cell_type",
-        "_style_cache", "_style_components",
+        "_ws",
+        "_row",
+        "_col",
+        "_value",
+        "_style_id",
+        "_cell_type",
+        "_style_cache",
+        "_style_components",
     )
 
     def __init__(
@@ -405,7 +409,9 @@ class StreamingCell:
         ):
             style = cell_style_components(self)
             object.__setattr__(self, "_style_components", style)
-            object.__setattr__(self, "_style_cache", getattr(workbook, "_streaming_style_cache", None))
+            object.__setattr__(
+                self, "_style_cache", getattr(workbook, "_streaming_style_cache", None)
+            )
         return self._style_components
 
     @property
@@ -514,6 +520,27 @@ def _full_blank_cell(ws: Worksheet, row: int, col: int) -> StreamingCell:
     return StreamingCell(ws, row, col, None, None, "blank")
 
 
+def _blank_rows(ws, blank_cell, first_row, stop_row, min_col, max_col):
+    """Build bounded batches while keeping every cell's coordinate snapshot."""
+    from wolfxl import _rust
+
+    width = 0 if max_col is None else max(0, max_col - min_col + 1)
+    native = getattr(_rust, "streaming_blank_rows", None)
+    if blank_cell is StreamingBlankCell and native is not None and 0 < width <= 4096:
+        batch_size = min(128, 4096 // width)
+        while first_row < stop_row:
+            count = min(batch_size, stop_row - first_row)
+            yield from native(blank_cell, ws, first_row, count, min_col, max_col)
+            first_row += count
+        return
+    for row in range(first_row, stop_row):
+        yield (
+            tuple(blank_cell(ws, row, col) for col in range(min_col, max_col + 1))
+            if max_col is not None
+            else []
+        )
+
+
 def _resolve_bounds(
     ws: Worksheet,
     min_row: int | None,
@@ -567,15 +594,13 @@ def stream_iter_rows(
         if dimensions is not None:
             forced_bounds = (1, 1, int(dimensions[0]), int(dimensions[1]))
     default_bounds = source_bounds or forced_bounds
-    stream_mx_r = mx_r if mx_r is not None else (
-        default_bounds[2] if default_bounds is not None else None
+    stream_mx_r = (
+        mx_r if mx_r is not None else (default_bounds[2] if default_bounds is not None else None)
     )
-    stream_mx_c = mx_c if mx_c is not None else (
-        default_bounds[3] if default_bounds is not None else None
+    stream_mx_c = (
+        mx_c if mx_c is not None else (default_bounds[3] if default_bounds is not None else None)
     )
-    reader = _rust.StreamingSheetReader.open(
-        path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c
-    )
+    reader = _rust.StreamingSheetReader.open(path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
 
     # The hydrated stylesheet has already classified source style IDs.
     date_styles, timedelta_styles = streaming_date_style_ids(wb)
@@ -601,21 +626,14 @@ def stream_iter_rows(
                 cmin = mn_c if mn_c is not None else 1
                 fixed_cmax = _fixed_cmax()
                 empty_row = (
-                    (None,) * max(0, fixed_cmax + 1 - cmin)
-                    if fixed_cmax is not None
-                    else []
+                    (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else []
                 )
-                read_chunk_with_flags = getattr(
-                    reader, "read_next_values_chunk_with_flags", None
-                )
+                read_chunk_with_flags = getattr(reader, "read_next_values_chunk_with_flags", None)
                 read_compact_chunk_with_flags = getattr(
                     reader, "read_next_values_compact_chunk_with_flags", None
                 )
                 read_chunk = getattr(reader, "read_next_values_chunk", None)
-                if (
-                    read_compact_chunk_with_flags is not None
-                    or read_chunk_with_flags is not None
-                ):
+                if read_compact_chunk_with_flags is not None or read_chunk_with_flags is not None:
                     while True:
                         if read_compact_chunk_with_flags is not None:
                             chunk_result = read_compact_chunk_with_flags(1024)
@@ -664,9 +682,7 @@ def stream_iter_rows(
                             while counter < row_idx:
                                 yield empty_row
                                 counter += 1
-                            yield _normalise_streaming_value_tuple(
-                                values, data_only=data_only
-                            )
+                            yield _normalise_streaming_value_tuple(values, data_only=data_only)
                             counter = row_idx + 1
                 else:
                     while True:
@@ -699,9 +715,7 @@ def stream_iter_rows(
                 cmax = _resolved_cmax(cells)
                 fixed_cmax = _fixed_cmax()
                 empty_row = (
-                    (None,) * max(0, fixed_cmax + 1 - cmin)
-                    if fixed_cmax is not None
-                    else []
+                    (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else []
                 )
                 while counter < row_idx:
                     yield empty_row
@@ -752,9 +766,7 @@ def stream_iter_rows(
                 cmin = mn_c if mn_c is not None else 1
                 fixed_cmax = _fixed_cmax()
                 empty_row = (
-                    (None,) * max(0, fixed_cmax + 1 - cmin)
-                    if fixed_cmax is not None
-                    else []
+                    (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else []
                 )
                 while counter <= stream_mx_r:
                     yield empty_row
@@ -762,7 +774,8 @@ def stream_iter_rows(
         else:
             default_style = workbook_style_cache(ws._workbook).components(ws._workbook, None)
             blank_cell = (
-                _full_blank_cell if isinstance(default_style.fill, GradientFill)
+                _full_blank_cell
+                if isinstance(default_style.fill, GradientFill)
                 else StreamingBlankCell
             )
             counter = mn_r if mn_r is not None else 1
@@ -775,18 +788,9 @@ def stream_iter_rows(
                 # else span observed cells.
                 cmin = mn_c if mn_c is not None else 1
                 cmax = _resolved_cmax(cells)
-                while counter < row_idx:
-                    fixed_cmax = _fixed_cmax()
-                    empty_row = (
-                        tuple(
-                            blank_cell(ws, counter, col)
-                            for col in range(cmin, fixed_cmax + 1)
-                        )
-                        if fixed_cmax is not None
-                        else []
-                    )
-                    yield empty_row
-                    counter += 1
+                if counter < row_idx:
+                    yield from _blank_rows(ws, blank_cell, counter, row_idx, cmin, _fixed_cmax())
+                    counter = row_idx
                 if cmax < cmin:
                     yield ()
                     counter = row_idx + 1
@@ -796,29 +800,16 @@ def stream_iter_rows(
                 for col in range(cmin, cmax + 1):
                     rec = by_col.get(col)
                     if rec is None:
-                        row_out.append(
-                            blank_cell(ws, row_idx, col)
-                        )
+                        row_out.append(blank_cell(ws, row_idx, col))
                     else:
                         _, value, style_id, cell_type = rec
-                        row_out.append(
-                            StreamingCell(ws, row_idx, col, value, style_id, cell_type)
-                        )
+                        row_out.append(StreamingCell(ws, row_idx, col, value, style_id, cell_type))
                 yield tuple(row_out)
                 counter = row_idx + 1
             if stream_mx_r is not None:
                 cmin = mn_c if mn_c is not None else 1
                 fixed_cmax = _fixed_cmax()
-                while counter <= stream_mx_r:
-                    yield (
-                        tuple(
-                            blank_cell(ws, counter, col)
-                            for col in range(cmin, fixed_cmax + 1)
-                        )
-                        if fixed_cmax is not None
-                        else []
-                    )
-                    counter += 1
+                yield from _blank_rows(ws, blank_cell, counter, stream_mx_r + 1, cmin, fixed_cmax)
     finally:
         reader.close()
 
@@ -870,11 +861,11 @@ def stream_value_chunks(
         if dimensions is not None:
             forced_bounds = (1, 1, int(dimensions[0]), int(dimensions[1]))
     default_bounds = source_bounds or forced_bounds
-    stream_mx_r = mx_r if mx_r is not None else (
-        default_bounds[2] if default_bounds is not None else None
+    stream_mx_r = (
+        mx_r if mx_r is not None else (default_bounds[2] if default_bounds is not None else None)
     )
-    stream_mx_c = mx_c if mx_c is not None else (
-        default_bounds[3] if default_bounds is not None else None
+    stream_mx_c = (
+        mx_c if mx_c is not None else (default_bounds[3] if default_bounds is not None else None)
     )
     direct_chunks = _direct_plain_value_chunks(
         wb,
@@ -889,9 +880,7 @@ def stream_value_chunks(
         yield from direct_chunks
         return
 
-    reader = _rust.StreamingSheetReader.open(
-        path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c
-    )
+    reader = _rust.StreamingSheetReader.open(path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
     try:
         read_chunk_with_flags = getattr(reader, "read_next_values_chunk_with_flags", None)
         if read_chunk_with_flags is None:
@@ -914,14 +903,12 @@ def stream_value_chunks(
         data_only = bool(getattr(wb, "_data_only", False))
         counter = mn_r if mn_r is not None else 1
         cmin = mn_c if mn_c is not None else 1
-        fixed_cmax = mx_c if mx_c is not None else (
-            default_bounds[3] if default_bounds is not None else None
+        fixed_cmax = (
+            mx_c
+            if mx_c is not None
+            else (default_bounds[3] if default_bounds is not None else None)
         )
-        empty_row = (
-            (None,) * max(0, fixed_cmax + 1 - cmin)
-            if fixed_cmax is not None
-            else ()
-        )
+        empty_row = (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else ()
         pending: list[tuple[Any, ...]] = []
         while True:
             if read_compact_chunk_with_flags is not None:

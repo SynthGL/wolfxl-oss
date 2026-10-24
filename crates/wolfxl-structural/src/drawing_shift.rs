@@ -5,6 +5,7 @@ use quick_xml::Reader as XmlReader;
 use quick_xml::Writer as XmlWriter;
 
 use crate::axis::{Axis, ShiftPlan};
+use crate::xml_text::TextNode;
 
 /// Rewrite an `xl/drawings/drawingN.xml` part by shifting zero-based
 /// `<xdr:row>` / `<xdr:col>` marker values under `<xdr:from>` and `<xdr:to>`.
@@ -22,11 +23,27 @@ pub fn shift_drawing_xml(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut in_marker = false;
     let mut in_axis_coord = false;
+    // Text of the current `<row>` / `<col>` coordinate, collected across
+    // text and entity-reference events and rewritten as one node.
+    let mut coord = TextNode::default();
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event = reader.read_event_into(&mut buf);
+        if !coord.is_empty() && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
+            let shifted = coord
+                .unescaped()
+                .ok()
+                .and_then(|s| s.trim().parse::<i64>().ok())
+                .map(|n| shift_zero_based_point(n, plan).to_string());
+            let _ = match shifted {
+                Some(text) => writer.write_event(Event::Text(BytesText::new(&text))),
+                None => writer.write_event(Event::Text(BytesText::from_escaped(coord.raw()))),
+            };
+            coord.clear();
+        }
+        match event {
             Ok(Event::Start(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name().as_ref().as_bytes().to_vec();
                 match local.as_slice() {
                     b"from" | b"to" => in_marker = true,
                     b"row" if in_marker && plan.axis == Axis::Row => in_axis_coord = true,
@@ -39,7 +56,7 @@ pub fn shift_drawing_xml(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
                 let _ = writer.write_event(Event::Empty(e.to_owned()));
             }
             Ok(Event::End(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name().as_ref().as_bytes().to_vec();
                 match local.as_slice() {
                     b"from" | b"to" => in_marker = false,
                     b"row" | b"col" => in_axis_coord = false,
@@ -47,23 +64,8 @@ pub fn shift_drawing_xml(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
                 }
                 let _ = writer.write_event(Event::End(e.to_owned()));
             }
-            Ok(Event::Text(ref t)) => {
-                if in_axis_coord {
-                    let s = match t.unescape() {
-                        Ok(c) => c.into_owned(),
-                        Err(_) => String::from_utf8_lossy(t.as_ref()).into_owned(),
-                    };
-                    if let Ok(n) = s.trim().parse::<i64>() {
-                        let text = shift_zero_based_point(n, plan).to_string();
-                        let new_t = BytesText::new(&text);
-                        let _ = writer.write_event(Event::Text(new_t));
-                    } else {
-                        let _ = writer.write_event(Event::Text(t.to_owned()));
-                    }
-                } else {
-                    let _ = writer.write_event(Event::Text(t.to_owned()));
-                }
-            }
+            Ok(Event::Text(ref t)) if in_axis_coord => coord.push_text(t),
+            Ok(Event::GeneralRef(ref r)) if in_axis_coord => coord.push_ref(r),
             Ok(Event::Eof) => break,
             Ok(other) => {
                 let _ = writer.write_event(other);

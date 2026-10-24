@@ -129,8 +129,8 @@ pub fn extract_existing_dv_block(sheet_xml: &str) -> Option<Vec<u8>> {
     }
 }
 
-fn is_main_data_validations_name(name: &[u8]) -> bool {
-    name == b"dataValidations"
+fn is_main_data_validations_name(name: &str) -> bool {
+    name == "dataValidations"
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +192,7 @@ fn extract_dv_children(block: &[u8]) -> Vec<Vec<u8>> {
 
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
-                if e.local_name().as_ref() == b"dataValidation" {
+                if e.local_name().as_ref() == "dataValidation" {
                     if child_start.is_none() {
                         child_start = Some(pre);
                         child_depth = 1;
@@ -202,13 +202,13 @@ fn extract_dv_children(block: &[u8]) -> Vec<Vec<u8>> {
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                if e.local_name().as_ref() == b"dataValidation" && child_start.is_none() {
+                if e.local_name().as_ref() == "dataValidation" && child_start.is_none() {
                     let end = reader.buffer_position() as usize;
                     children.push(block[pre..end].to_vec());
                 }
             }
             Ok(Event::End(ref e)) => {
-                if e.local_name().as_ref() == b"dataValidation" && child_start.is_some() {
+                if e.local_name().as_ref() == "dataValidation" && child_start.is_some() {
                     child_depth -= 1;
                     if child_depth == 0 {
                         let start = child_start.take().expect("end without start");
@@ -342,6 +342,19 @@ fn text_escape(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validation_merge_preserves_split_reference_text_and_cdata() {
+        let child = r#"<dataValidation type="custom" sqref="A1"><formula1> A1 &lt; &#50; &amp; " &custom; " <![CDATA[ & raw ]]></formula1></dataValidation>"#;
+        let block = format!(r#"<dataValidations count="1">{child}</dataValidations>"#);
+        let sheet = format!("<worksheet><sheetData/>{block}</worksheet>");
+        let extracted = extract_existing_dv_block(&sheet).unwrap();
+        assert_eq!(extracted, block.as_bytes());
+        let out = build_data_validations_block(Some(&extracted), &[list_patch()]);
+        let text = std::str::from_utf8(&out).unwrap();
+        assert!(text.starts_with(r#"<dataValidations count="2">"#));
+        assert!(text.contains(child));
+    }
 
     fn list_patch() -> DataValidationPatch {
         DataValidationPatch {

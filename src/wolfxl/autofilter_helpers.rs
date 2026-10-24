@@ -14,13 +14,13 @@ use pyo3::exceptions::PyIOError;
 use pyo3::PyErr;
 use pyo3::PyResult;
 
-use quick_xml::events::{BytesStart, BytesText, Event};
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader as XmlReader;
 use quick_xml::Writer as XmlWriter;
 
 use wolfxl_autofilter::Cell;
 
-use crate::ooxml_util::attr_value;
+use crate::ooxml_util::{attr_value, resolve_general_ref};
 
 /// Parse an A1-notation range like `"A1:D100"` into 1-based
 /// `(start_row, end_row, start_col, end_col)`. Returns `None` if the
@@ -106,20 +106,21 @@ pub fn extract_cell_grid(
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("autofilter read XML: {e}")))?;
         match event {
             Event::Start(e) => {
-                let local = e.local_name().as_ref().to_vec();
-                if local == b"row" {
+                let name = e.local_name();
+                let local = name.as_ref();
+                if local == "row" {
                     current_row = attr_value(&e, b"r")
                         .and_then(|s| s.parse::<u32>().ok())
                         .unwrap_or(0);
                     current_row_target = current_row >= start_row && current_row <= end_row;
-                } else if local == b"c" && current_row_target {
+                } else if local == "c" && current_row_target {
                     let cell_ref = attr_value(&e, b"r").unwrap_or_default();
                     let (col, _) = parse_cell_ref_local(&cell_ref);
                     current_col = col;
                     current_type = attr_value(&e, b"t").unwrap_or_else(|| "n".to_string());
                     in_target_cell = col >= start_col && col <= end_col;
-                } else if (local == b"v" || local == b"t") && in_target_cell {
-                    if local == b"v" {
+                } else if (local == "v" || local == "t") && in_target_cell {
+                    if local == "v" {
                         in_v = true;
                     } else {
                         in_t = true;
@@ -129,19 +130,27 @@ pub fn extract_cell_grid(
             }
             Event::Text(t) => {
                 if (in_v || in_t) && in_target_cell {
-                    if let Ok(s) = t.unescape() {
-                        text_acc.push_str(&s);
-                    }
+                    text_acc.push_str(t.as_ref());
+                }
+            }
+            // quick-xml 0.42 emits references separately from adjacent text.
+            Event::GeneralRef(reference) => {
+                if (in_v || in_t) && in_target_cell {
+                    let value = resolve_general_ref(&reference).map_err(|e| {
+                        PyErr::new::<PyIOError, _>(format!("autofilter reference: {e}"))
+                    })?;
+                    text_acc.push_str(&value);
                 }
             }
             Event::CData(t) => {
                 if (in_v || in_t) && in_target_cell {
-                    text_acc.push_str(&String::from_utf8_lossy(&t));
+                    text_acc.push_str(t.as_ref());
                 }
             }
             Event::End(e) => {
-                let local = e.local_name().as_ref().to_vec();
-                if local == b"v" || local == b"t" {
+                let name = e.local_name();
+                let local = name.as_ref();
+                if local == "v" || local == "t" {
                     if in_target_cell {
                         // Decode according to the cell type.
                         let cell = decode_cell(&current_type, &text_acc);
@@ -157,15 +166,16 @@ pub fn extract_cell_grid(
                     }
                     in_v = false;
                     in_t = false;
-                } else if local == b"c" {
+                } else if local == "c" {
                     in_target_cell = false;
                 }
             }
             Event::Empty(e) => {
-                let local = e.local_name().as_ref().to_vec();
-                if local == b"row" {
+                let name = e.local_name();
+                let local = name.as_ref();
+                if local == "row" {
                     // self-closing row: nothing to extract.
-                } else if local == b"c" {
+                } else if local == "c" {
                     // empty cell, leave as Empty.
                 }
             }
@@ -241,7 +251,7 @@ pub fn stamp_row_hidden(sheet_xml: &[u8], hidden_rows: &[u32]) -> PyResult<Vec<u
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("stamp_row_hidden read: {e}")))?;
         match event {
             Event::Start(e) => {
-                if e.local_name().as_ref() == b"row" {
+                if e.local_name().as_ref() == "row" {
                     if let Some(rewritten) = maybe_set_row_hidden(&e, &row_set) {
                         writer
                             .write_event(Event::Start(rewritten))
@@ -258,7 +268,7 @@ pub fn stamp_row_hidden(sheet_xml: &[u8], hidden_rows: &[u32]) -> PyResult<Vec<u
                 }
             }
             Event::Empty(e) => {
-                if e.local_name().as_ref() == b"row" {
+                if e.local_name().as_ref() == "row" {
                     if let Some(rewritten) = maybe_set_row_hidden(&e, &row_set) {
                         writer
                             .write_event(Event::Empty(rewritten))
@@ -310,17 +320,14 @@ fn maybe_set_row_hidden(
     if attr_value(e, b"hidden").as_deref() == Some("1") {
         return None;
     }
-    let name_bytes = e.name().as_ref().to_vec();
-    let mut new_e = BytesStart::new(String::from_utf8_lossy(&name_bytes).into_owned());
+    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
     let mut had_hidden = false;
     for attr in e.attributes().with_checks(false).flatten() {
-        let key = attr.key.as_ref().to_vec();
-        if key == b"hidden" {
+        if attr.key.as_ref() == "hidden" {
             had_hidden = true;
-            new_e.push_attribute((key.as_slice(), b"1".as_slice()));
+            new_e.push_attribute(("hidden", "1"));
         } else {
-            let val = attr.value.as_ref().to_vec();
-            new_e.push_attribute((key.as_slice(), val.as_slice()));
+            new_e.push_attribute(attr);
         }
     }
     if !had_hidden {
@@ -354,13 +361,14 @@ fn insert_hidden_only_rows(xml: &[u8], rows: &[u32]) -> PyResult<Vec<u8>> {
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("insert_hidden read: {e}")))?;
         match event {
             Event::Start(e) => {
-                let local_owned = e.local_name().as_ref().to_vec();
-                if local_owned == b"sheetData" {
+                let name = e.local_name();
+                let local = name.as_ref();
+                if local == "sheetData" {
                     in_sheet_data = true;
                     writer
                         .write_event(Event::Start(e.borrow()))
                         .map_err(|e| PyErr::new::<PyIOError, _>(format!("w: {e}")))?;
-                } else if local_owned == b"row" && in_sheet_data {
+                } else if local == "row" && in_sheet_data {
                     let r = attr_value(&e, b"r")
                         .and_then(|s| s.parse::<u32>().ok())
                         .unwrap_or(0);
@@ -381,8 +389,9 @@ fn insert_hidden_only_rows(xml: &[u8], rows: &[u32]) -> PyResult<Vec<u8>> {
                 }
             }
             Event::Empty(e) => {
-                let local_owned = e.local_name().as_ref().to_vec();
-                if local_owned == b"row" && in_sheet_data {
+                let name = e.local_name();
+                let local = name.as_ref();
+                if local == "row" && in_sheet_data {
                     let r = attr_value(&e, b"r")
                         .and_then(|s| s.parse::<u32>().ok())
                         .unwrap_or(0);
@@ -395,7 +404,7 @@ fn insert_hidden_only_rows(xml: &[u8], rows: &[u32]) -> PyResult<Vec<u8>> {
                     writer
                         .write_event(Event::Empty(e.borrow()))
                         .map_err(|e| PyErr::new::<PyIOError, _>(format!("w: {e}")))?;
-                } else if local_owned == b"sheetData" {
+                } else if local == "sheetData" {
                     // self-closing sheetData: emit all rows now
                     let opened = quick_xml::events::BytesStart::new("sheetData");
                     writer
@@ -417,7 +426,7 @@ fn insert_hidden_only_rows(xml: &[u8], rows: &[u32]) -> PyResult<Vec<u8>> {
                 }
             }
             Event::End(e) => {
-                if e.local_name().as_ref() == b"sheetData" && in_sheet_data {
+                if e.local_name().as_ref() == "sheetData" && in_sheet_data {
                     for &p in &sorted {
                         if !emitted.contains(&p) {
                             write_hidden_row(&mut writer, p)?;
@@ -451,14 +460,37 @@ fn write_hidden_row<W: std::io::Write>(writer: &mut XmlWriter<W>, row_num: u32) 
     writer
         .write_event(Event::Empty(start))
         .map_err(|e| PyErr::new::<PyIOError, _>(format!("write hidden row: {e}")))?;
-    // Suppress unused-import warning for BytesText
-    let _ = BytesText::new("");
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extract_cell_grid_aggregates_references_and_cdata() {
+        let xml = br#"<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t> A &amp; B &#x3C; &#65;<![CDATA[ & raw]]> </t></is></c><c r="B1"><v>&#49;2</v></c></row></sheetData>"#;
+        let grid = extract_cell_grid(xml, 1, 1, 1, 2).unwrap();
+        assert!(matches!(&grid[0][0], Cell::String(s) if s == " A & B < A & raw "));
+        assert!(matches!(grid[0][1], Cell::Number(n) if n == 12.0));
+    }
+
+    #[test]
+    fn extract_cell_grid_rejects_unknown_references() {
+        let xml =
+            br#"<sheetData><row r="1"><c r="A1" t="str"><v>A&unknown;B</v></c></row></sheetData>"#;
+        assert!(extract_cell_grid(xml, 1, 1, 1, 1).is_err());
+    }
+
+    #[test]
+    fn stamp_row_hidden_preserves_escaped_attributes_and_text() {
+        let xml = br#"<sheetData><row r="1" custom="A&amp;B"><c r="A1" t="str"><v>A&amp;B&#32;C</v></c></row></sheetData>"#;
+        let out = stamp_row_hidden(xml, &[1]).unwrap();
+        let text = std::str::from_utf8(&out).unwrap();
+        assert!(text.contains(r#"custom="A&amp;B""#));
+        assert!(text.contains("<v>A&amp;B&#32;C</v>"));
+        assert!(!text.contains("&amp;amp;"));
+    }
 
     #[test]
     fn parse_a1_cell_simple() {

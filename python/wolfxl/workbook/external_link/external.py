@@ -50,12 +50,34 @@ class ExternalDefinedName:
     sheetId: int | None = None  # noqa: N815
 
 
+class ExternalDefinedNames(list[ExternalDefinedName]):
+    """Ordered external defined names; ``definedName`` is the same sequence (openpyxl shape)."""
+
+    @property
+    def definedName(self) -> ExternalDefinedNames:  # noqa: N802
+        return self
+
+
 @dataclass
 class ExternalBook:
+    """Externally linked workbook parts.
+
+    A loaded book is a snapshot of its source part. ``definedNames`` is authoritative
+    and saved; ``sheetNames`` and ``sheetDataSet`` are read-only views, so edit
+    ``ExternalLink.sheet_names`` and ``ExternalLink.cached_data`` instead. Saving a
+    changed view refuses with a typed error.
+    """
+
     sheetNames: ExternalSheetNames | None = None  # noqa: N815
-    definedNames: list[ExternalDefinedName] = field(default_factory=list)  # noqa: N815
+    definedNames: list[ExternalDefinedName] = field(  # noqa: N815
+        default_factory=ExternalDefinedNames
+    )
     sheetDataSet: ExternalSheetDataSet | None = None  # noqa: N815
     id: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.definedNames, ExternalDefinedNames):
+            self.definedNames = ExternalDefinedNames(self.definedNames or ())
 
 
 def read_external_link(archive: Any, book_path: str) -> ExternalLink:  # noqa: ARG001
@@ -79,6 +101,7 @@ __all__ = [
     "ExternalBook",
     "ExternalCell",
     "ExternalDefinedName",
+    "ExternalDefinedNames",
     "ExternalFileLink",
     "ExternalLink",
     "ExternalRow",

@@ -1,136 +1,118 @@
-use std::fs::File;
-use std::io::BufReader;
-
-use calamine_styles::{Data, Reader, Sheets};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::cell::{Cell, CellValue};
 use crate::error::{Error, Result};
 use crate::format::{classify_format, FormatCategory};
-use crate::workbook::WorkbookStyles;
 use wolfxl_reader::{
-    Cell as NativeCell, CellValue as NativeCellValue, NativeXlsbBook, WorksheetData,
+    Cell as NativeCell, CellDataType, CellValue as NativeCellValue, WorksheetData,
 };
-
-/// The calamine-styles reader bundle dispatch-wraps Xlsx/Xls/Ods behind a
-/// single enum. All three implement the `Reader` trait, so `worksheet_range`
-/// and `worksheet_style` work uniformly; xls/ods return an empty `StyleRange`
-/// (styles walker is xlsx-only), which is the expected behavior.
-pub(crate) type SheetsReader = Sheets<BufReader<File>>;
 
 pub struct Sheet {
     pub name: String,
     rows: Vec<Vec<Cell>>,
+    origin: (u32, u32),
+    tables: Vec<String>,
+    legacy_error_names: bool,
 }
 
 impl Sheet {
-    pub(crate) fn load(
-        wb: &mut SheetsReader,
+    // Independently authored Community adapter over the admitted MIT value models.
+    pub(crate) fn read_native<'a, E: std::fmt::Display>(
         name: &str,
-        mut styles: Option<&mut WorkbookStyles>,
+        data: std::result::Result<WorksheetData, E>,
+        epoch1904: bool,
+        legacy_error_names: bool,
+        format_code: impl Fn(u32) -> Option<&'a str>,
     ) -> Result<Self> {
-        let value_range = wb
-            .worksheet_range(name)
-            .map_err(|e| Error::Xlsx(format!("read range for {name:?}: {e}")))?;
-
-        let style_range = wb.worksheet_style(name).ok();
-
-        // Pre-populate the per-cell styleId map once so we don't re-walk
-        // the worksheet XML per cell. Failure here (e.g. missing sheet
-        // part in the zip) degrades gracefully to the calamine-only path.
-        if let Some(s) = styles.as_mut() {
-            let _ = s.sheet_style_ids_mut(name);
-        }
-
-        let (h, w) = value_range.get_size();
-        let (start_row, start_col) = value_range.start().unwrap_or((0, 0));
-        let mut rows: Vec<Vec<Cell>> = Vec::with_capacity(h);
-        for r in 0..h {
-            let mut row: Vec<Cell> = Vec::with_capacity(w);
-            for c in 0..w {
-                let value = value_range
-                    .get((r, c))
-                    .map(data_to_cell_value)
-                    .unwrap_or(CellValue::Empty);
-                let absolute_position = absolute_position(start_row, start_col, r, c);
-                let number_format = style_range
-                    .as_ref()
-                    .and_then(|sr| {
-                        let (row, col) = absolute_position?;
-                        style_at_absolute_position(sr, row, col)
-                    })
-                    .and_then(extract_number_format)
-                    .or_else(|| {
-                        // Calamine fast path missed. Fall back to the
-                        // cellXfs walker for openpyxl-style workbooks
-                        // where Style::get_number_format returns None.
-                        styles
-                            .as_ref()
-                            .and_then(|s| walker_number_format(s, name, start_row, start_col, r, c))
-                    });
-                row.push(Cell {
-                    value,
-                    number_format,
-                });
+        let data =
+            data.map_err(|error| Error::Xlsx(format!("read range for {name:?}: {error}")))?;
+        let tables = data.tables.into_iter().map(|entry| entry.name).collect();
+        let bounds = native_bounds(&data.cells);
+        let (rows, origin) = match bounds {
+            None => (Vec::new(), (0, 0)),
+            Some((top, left, bottom, right)) => {
+                let mut rows = vec![
+                    vec![Cell::empty(); (right - left + 1) as usize];
+                    (bottom - top + 1) as usize
+                ];
+                for cell in data.cells.into_iter().filter(has_value_or_formula) {
+                    let r = (cell.row - top) as usize;
+                    let c = (cell.col - left) as usize;
+                    let number_format = cell
+                        .style_id
+                        .and_then(&format_code)
+                        .filter(|code| {
+                            !code.trim().is_empty() && !code.eq_ignore_ascii_case("general")
+                        })
+                        .map(str::to_owned);
+                    let value = native_to_cell_value(cell, number_format.as_deref(), epoch1904);
+                    rows[r][c] = Cell {
+                        value,
+                        number_format,
+                    };
+                }
+                (rows, (top - 1, left - 1))
             }
-            rows.push(row);
-        }
-
+        };
         Ok(Self {
-            name: name.to_string(),
+            name: name.to_owned(),
             rows,
+            origin,
+            tables,
+            legacy_error_names,
         })
     }
 
-    pub(crate) fn load_native_xlsb(book: &NativeXlsbBook, name: &str) -> Result<Self> {
-        let data = book
-            .worksheet(name)
-            .map_err(|e| Error::Xlsx(format!("read native xlsb sheet {name:?}: {e}")))?;
-        Ok(Self::from_native_xlsb_data(
-            name.to_string(),
-            data,
-            book,
-            book.date1904(),
-        ))
+    pub(crate) fn table_names(&self) -> &[String] {
+        &self.tables
     }
 
-    fn from_native_xlsb_data(
-        name: String,
-        data: WorksheetData,
-        book: &NativeXlsbBook,
-        date1904: bool,
-    ) -> Self {
-        let Some((min_row, min_col, max_row, max_col)) = native_bounds(&data.cells) else {
-            return Self {
-                name,
-                rows: Vec::new(),
-            };
-        };
-        let height = (max_row - min_row + 1) as usize;
-        let width = (max_col - min_col + 1) as usize;
-        let mut rows = vec![
-            vec![
-                Cell {
-                    value: CellValue::Empty,
-                    number_format: None,
-                };
-                width
-            ];
-            height
-        ];
-        for native in &data.cells {
-            let row = (native.row - min_row) as usize;
-            let col = (native.col - min_col) as usize;
-            let number_format = native
-                .style_id
-                .and_then(|style_id| book.number_format_for_style_id(style_id))
-                .map(str::to_string);
-            rows[row][col] = Cell {
-                value: native_to_cell_value(native, number_format.as_deref(), date1904),
-                number_format,
-            };
+    /// Absolute zero-based origin of the compact populated rectangle.
+    pub fn origin(&self) -> (u32, u32) {
+        self.origin
+    }
+
+    /// Resolve an absolute A1 coordinate into the compact row grid.
+    pub fn get_at_address(&self, address: &str) -> Option<&Cell> {
+        let (row, column) = crate::ooxml::a1_to_row_col(&address.replace('$', "")).ok()?;
+        let r = row.checked_sub(self.origin.0)? as usize;
+        let c = column.checked_sub(self.origin.1)? as usize;
+        self.rows.get(r)?.get(c)
+    }
+
+    /// Convert a compact grid coordinate into an absolute A1 address.
+    pub fn cell_address(&self, row: usize, column: usize) -> String {
+        let mut column = u64::from(self.origin.1) + column as u64 + 1;
+        let mut letters = Vec::new();
+        while column != 0 {
+            letters.push(b'A' + ((column - 1) % 26) as u8);
+            column = (column - 1) / 26;
         }
-        Self { name, rows }
+        letters.reverse();
+        format!(
+            "{}{}",
+            String::from_utf8(letters).expect("ASCII"),
+            u64::from(self.origin.0) + row as u64 + 1
+        )
+    }
+
+    /// Historical CLI spelling; canonical error literals remain in stored values.
+    pub fn error_text<'a>(&self, literal: &'a str) -> &'a str {
+        if self.legacy_error_names {
+            match literal {
+                "#DIV/0!" => "Div0",
+                "#N/A" => "NA",
+                "#NAME?" => "Name",
+                "#NULL!" => "Null",
+                "#NUM!" => "Num",
+                "#REF!" => "Ref",
+                "#VALUE!" => "Value",
+                "#GETTING_DATA" => "GettingData",
+                _ => literal,
+            }
+        } else {
+            literal
+        }
     }
 
     pub fn dimensions(&self) -> (usize, usize) {
@@ -148,6 +130,9 @@ impl Sheet {
         Self {
             name: name.to_string(),
             rows,
+            origin: (0, 0),
+            tables: Vec::new(),
+            legacy_error_names: false,
         }
     }
 
@@ -159,7 +144,13 @@ impl Sheet {
     /// attached - callers with that information should set
     /// `Cell::number_format` on the cells they build.
     pub fn from_rows(name: String, rows: Vec<Vec<Cell>>) -> Self {
-        Self { name, rows }
+        Self {
+            name,
+            rows,
+            origin: (0, 0),
+            tables: Vec::new(),
+            legacy_error_names: false,
+        }
     }
 
     pub fn rows(&self) -> &[Vec<Cell>] {
@@ -180,6 +171,7 @@ impl Sheet {
                     .map(|c| match &c.value {
                         CellValue::String(s) => s.clone(),
                         CellValue::Empty => String::new(),
+                        CellValue::Error(error) => self.error_text(error).to_owned(),
                         other => format_value_plain(other),
                     })
                     .collect()
@@ -188,8 +180,12 @@ impl Sheet {
     }
 }
 
+fn has_value_or_formula(cell: &NativeCell) -> bool {
+    cell.formula.is_some() || !matches!(cell.value, NativeCellValue::Empty)
+}
+
 fn native_bounds(cells: &[NativeCell]) -> Option<(u32, u32, u32, u32)> {
-    let mut iter = cells.iter();
+    let mut iter = cells.iter().filter(|cell| has_value_or_formula(cell));
     let first = iter.next()?;
     let mut min_row = first.row;
     let mut min_col = first.col;
@@ -205,16 +201,22 @@ fn native_bounds(cells: &[NativeCell]) -> Option<(u32, u32, u32, u32)> {
 }
 
 fn native_to_cell_value(
-    cell: &NativeCell,
+    cell: NativeCell,
     number_format: Option<&str>,
     date1904: bool,
 ) -> CellValue {
-    match &cell.value {
+    match cell.value {
         NativeCellValue::Empty => CellValue::Empty,
-        NativeCellValue::String(s) => CellValue::String(s.clone()),
-        NativeCellValue::Bool(b) => CellValue::Bool(*b),
-        NativeCellValue::Error(e) => CellValue::Error(e.clone()),
-        NativeCellValue::Number(n) => native_number_to_cell_value(*n, number_format, date1904),
+        NativeCellValue::String(text) => {
+            if cell.data_type == CellDataType::DateIso {
+                parse_iso_datetime_or_string(&text)
+            } else {
+                CellValue::String(text)
+            }
+        }
+        NativeCellValue::Bool(b) => CellValue::Bool(b),
+        NativeCellValue::Error(e) => CellValue::Error(e),
+        NativeCellValue::Number(n) => native_number_to_cell_value(n, number_format, date1904),
     }
 }
 
@@ -234,31 +236,6 @@ fn native_number_to_cell_value(
     }
 }
 
-fn absolute_position(
-    start_row: u32,
-    start_col: u32,
-    row_offset: usize,
-    col_offset: usize,
-) -> Option<(u32, u32)> {
-    let row = start_row.checked_add(u32::try_from(row_offset).ok()?)?;
-    let col = start_col.checked_add(u32::try_from(col_offset).ok()?)?;
-    Some((row, col))
-}
-
-fn style_at_absolute_position(
-    range: &calamine_styles::StyleRange,
-    row: u32,
-    col: u32,
-) -> Option<&calamine_styles::Style> {
-    let (start_row, start_col) = range.start()?;
-    if row < start_row || col < start_col {
-        return None;
-    }
-    let rel_row = usize::try_from(row - start_row).ok()?;
-    let rel_col = usize::try_from(col - start_col).ok()?;
-    range.get((rel_row, rel_col))
-}
-
 fn format_value_plain(v: &CellValue) -> String {
     match v {
         CellValue::Empty => String::new(),
@@ -273,31 +250,11 @@ fn format_value_plain(v: &CellValue) -> String {
     }
 }
 
-fn data_to_cell_value(d: &Data) -> CellValue {
-    match d {
-        Data::Empty => CellValue::Empty,
-        Data::String(s) => CellValue::String(s.clone()),
-        Data::Int(i) => CellValue::Int(*i),
-        Data::Float(f) => {
-            if f.fract() == 0.0 && f.abs() < (i64::MAX as f64) {
-                CellValue::Int(*f as i64)
-            } else {
-                CellValue::Float(*f)
-            }
-        }
-        Data::Bool(b) => CellValue::Bool(*b),
-        Data::DateTime(dt) => excel_serial_to_datetime(dt.as_f64()),
-        Data::DateTimeIso(s) => parse_iso_datetime_or_string(s),
-        Data::DurationIso(s) => CellValue::String(s.clone()),
-        Data::Error(e) => CellValue::Error(format!("{e:?}")),
-        Data::RichText(rt) => CellValue::String(rt.plain_text().to_string()),
-    }
-}
-
 /// Excel serial date → chrono. Sub-day fractions become Time; ≥1.0 with no
 /// fractional part becomes Date; otherwise DateTime. Serial 0.0 is the Excel
 /// epoch but for time-formatted cells means midnight; route it to Time(0,0,0)
 /// to match openpyxl rather than returning the epoch date.
+#[cfg(test)]
 fn excel_serial_to_datetime(serial: f64) -> CellValue {
     excel_serial_to_datetime_with_epoch(serial, false)
 }
@@ -389,42 +346,6 @@ fn parse_iso_datetime_or_string(s: &str) -> CellValue {
     CellValue::String(s.to_string())
 }
 
-/// Pull the resolved format-code string off a calamine-styles `Style`. The
-/// upstream crate handles built-in vs custom (>=164) resolution; we just
-/// normalize the result and skip the no-op "General".
-fn extract_number_format(style: &calamine_styles::Style) -> Option<String> {
-    let nf = style.get_number_format()?;
-    let code = nf.format_code.trim();
-    if code.is_empty() || code.eq_ignore_ascii_case("general") {
-        None
-    } else {
-        Some(code.to_string())
-    }
-}
-
-/// Walker fallback: look up the cell's styleId in the pre-parsed map and
-/// resolve it against cellXfs + numFmts. Returns `None` when the cell has
-/// no style override (the common case) or when the referenced format is
-/// `General` / absent.
-fn walker_number_format(
-    styles: &WorkbookStyles,
-    sheet_name: &str,
-    start_row: u32,
-    start_col: u32,
-    r: usize,
-    c: usize,
-) -> Option<String> {
-    let row = start_row.checked_add(u32::try_from(r).ok()?)?;
-    let col = start_col.checked_add(u32::try_from(c).ok()?)?;
-    let style_id = styles
-        .sheet_style_ids(sheet_name)?
-        .get(&(row, col))
-        .copied()?;
-    styles
-        .number_format_for_style_id(style_id)
-        .map(|s| s.to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use chrono::Datelike;
@@ -436,14 +357,6 @@ mod tests {
             CellValue::Date(d) => d,
             other => panic!("expected Date, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn absolute_position_overflow_returns_none() {
-        assert_eq!(absolute_position(10, 20, 2, 3), Some((12, 23)));
-        assert_eq!(absolute_position(u32::MAX, 20, 1, 0), None);
-        assert_eq!(absolute_position(10, u32::MAX, 0, 1), None);
-        assert_eq!(absolute_position(10, 20, usize::MAX, 0), None);
     }
 
     #[test]

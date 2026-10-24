@@ -216,7 +216,9 @@ def _normalize_nonstandard_workbook_part(path: str) -> str | None:
                 target = target.lstrip("/")
             if not target or target not in names:
                 return None
-            tmp = tempfile.NamedTemporaryFile(prefix="wolfxl-normalized-", suffix=".xlsx", delete=False)
+            tmp = tempfile.NamedTemporaryFile(
+                prefix="wolfxl-normalized-", suffix=".xlsx", delete=False
+            )
             tmp_path = tmp.name
             tmp.close()
             target_rels = _workbook_rels_for_part(target)
@@ -421,8 +423,7 @@ def from_encrypted(
         import msoffcrypto  # type: ignore[import-not-found]
     except ImportError as exc:
         raise ImportError(
-            "password reads require msoffcrypto-tool; install with: "
-            "pip install wolfxl[encrypted]"
+            "password reads require msoffcrypto-tool; install with: pip install wolfxl[encrypted]"
         ) from exc
 
     import io
@@ -462,9 +463,7 @@ def from_encrypted(
         try:
             office.decrypt(buf)
         except Exception as exc:
-            raise ValueError(
-                f"failed to decrypt workbook (wrong password?): {exc}"
-            ) from exc
+            raise ValueError(f"failed to decrypt workbook (wrong password?): {exc}") from exc
         decrypted_bytes = buf.getvalue()
     finally:
         src_fp.close()
@@ -509,9 +508,7 @@ def from_bytes(
         import os
         import tempfile
 
-        with tempfile.NamedTemporaryFile(
-            prefix="wolfxl-", suffix=".xlsx", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(prefix="wolfxl-", suffix=".xlsx", delete=False) as tmp:
             tmp.write(data_bytes)
             tmp_path = tmp.name
 
@@ -617,8 +614,7 @@ def from_xlsb(
     rust_cls = getattr(_rust, "NativeXlsbBook", None)
     if rust_cls is None:
         raise NotImplementedError(
-            ".xlsb reads require the NativeXlsbBook backend from the "
-            "wolfxl Rust extension."
+            ".xlsb reads require the NativeXlsbBook backend from the wolfxl Rust extension."
         )
 
     if data is not None:
@@ -654,14 +650,13 @@ def from_xls(
     data_only: bool = False,
     permissive: bool = False,
 ) -> Any:
-    """Open a legacy .xls workbook via ``CalamineXlsBook``."""
+    """Open a legacy .xls workbook via the independent native Community reader."""
     from wolfxl import _rust
 
-    rust_cls = getattr(_rust, "CalamineXlsBook", None)
+    rust_cls = getattr(_rust, "NativeXlsBook", None)
     if rust_cls is None:
         raise NotImplementedError(
-            ".xls reads require the CalamineXlsBook backend "
-            "from the wolfxl Rust extension."
+            ".xls reads require the NativeXlsBook backend from the wolfxl Rust extension."
         )
 
     if data is not None:

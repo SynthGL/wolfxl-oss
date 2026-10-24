@@ -1,10 +1,13 @@
 //! Per-type chart plot element emission.
 
-use crate::model::chart::{BarDir, BarGrouping, Chart, ChartKind, RadarStyle};
+use crate::model::chart::{
+    BarDir, BarGrouping, Chart, ChartKind, Gridlines, RadarStyle, UpDownBars,
+};
 use crate::xml_escape;
 
 use super::primitives::{bool_str, fmt_f64};
 use super::series::{emit_data_labels, emit_series};
+use super::style::emit_graphical_props;
 
 pub(super) fn emit_plot_chart(out: &mut String, chart: &Chart, ax_a: u32, ax_b: u32) {
     let elem = chart.kind.plot_element_name();
@@ -130,9 +133,12 @@ pub(super) fn emit_plot_chart(out: &mut String, chart: &Chart, ax_a: u32, ax_b: 
             }
         }
         ChartKind::Stock => {
-            // Stock charts emit hiLowLines + upDownBars decorators.
-            out.push_str("<c:hiLowLines/>");
-            out.push_str("<c:upDownBars><c:gapWidth val=\"150\"/></c:upDownBars>");
+            // Both decorations are optional in CT_StockChart; `None` means the
+            // chart has none (StockChart(hi_low_lines=False, up_down_bars=False)).
+            emit_chart_lines(out, "hiLowLines", chart.hi_low_lines.as_ref());
+            if let Some(bars) = &chart.up_down_bars {
+                emit_up_down_bars(out, bars);
+            }
         }
         _ => {}
     }
@@ -144,4 +150,24 @@ pub(super) fn emit_plot_chart(out: &mut String, chart: &Chart, ax_a: u32, ax_b: 
     }
 
     out.push_str(&format!("</c:{elem}>"));
+}
+
+fn emit_chart_lines(out: &mut String, name: &str, lines: Option<&Gridlines>) {
+    if let Some(lines) = lines {
+        out.push_str(&format!("<c:{name}>"));
+        if let Some(properties) = &lines.graphical_properties {
+            emit_graphical_props(out, properties);
+        }
+        out.push_str(&format!("</c:{name}>"));
+    }
+}
+
+fn emit_up_down_bars(out: &mut String, bars: &UpDownBars) {
+    out.push_str(&format!(
+        "<c:upDownBars><c:gapWidth val=\"{}\"/>",
+        bars.gap_width.unwrap_or(150)
+    ));
+    emit_chart_lines(out, "upBars", bars.up_bars.as_ref());
+    emit_chart_lines(out, "downBars", bars.down_bars.as_ref());
+    out.push_str("</c:upDownBars>");
 }

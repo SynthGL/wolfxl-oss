@@ -5,12 +5,16 @@ This folder holds **placeholder** fixtures that exercise the `.xlsx` /
 just enough to guarantee that:
 
 1. `_rust.classify_file_format(path)` returns the right format string.
-2. `NativeXlsbBook.open` / `CalamineXlsBook.open` (and their
+2. `NativeXlsbBook.open` / `NativeXlsBook.open` (and their
    `open_from_bytes` siblings) accept real, parseable input.
 3. Legacy `.xls` strict-raise style accessors fire `NotImplementedError`.
 
 Curated parity fixtures live under `tests/parity/fixtures/{xls,xlsb}/`.
 This directory remains the minimal format-dispatch smoke corpus.
+
+For independently authored Community XLS/ODS scalar expectations, use
+`crates/wolfxl-reader/qualification/fixtures.*` with `expected.json`; produce
+the fixtures with the pinned xlwt/odfpy generator in that directory.
 
 ## Files
 

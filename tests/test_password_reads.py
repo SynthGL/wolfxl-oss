@@ -20,6 +20,7 @@ import pytest
 import wolfxl
 
 TEST_PASSWORD = "wolfxl-test-pw"
+TEST_PASSWORD_BYTES = TEST_PASSWORD.encode("utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +104,7 @@ def test_password_read_unlocks_encrypted_workbook(encrypted_xlsx: Path) -> None:
 
 def test_password_accepts_bytes(encrypted_xlsx: Path) -> None:
     """Password may be passed as bytes; matches openpyxl signature."""
-    wb = wolfxl.load_workbook(encrypted_xlsx, password=TEST_PASSWORD.encode("utf-8"))
+    wb = wolfxl.load_workbook(encrypted_xlsx, password=TEST_PASSWORD_BYTES)
     try:
         assert len(wb.sheetnames) >= 1
     finally:

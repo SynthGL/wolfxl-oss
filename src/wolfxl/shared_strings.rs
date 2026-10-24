@@ -22,34 +22,39 @@ pub fn parse_shared_strings(xml: &str) -> Vec<String> {
     let mut strings: Vec<String> = Vec::new();
     let mut current: Option<String> = None;
     let mut in_t = false; // inside a <t> element
+    let mut node = crate::ooxml_util::XmlTextNode::default();
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event = reader.read_event_into(&mut buf);
+        if !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
+            if in_t {
+                if let Some(s) = &mut current {
+                    if let Ok(text) = quick_xml::escape::unescape(node.raw()) {
+                        s.push_str(&text);
+                    }
+                }
+            }
+            node.clear();
+        }
+        match event {
             Ok(Event::Start(e)) => {
                 let tag = e.local_name();
-                if tag.as_ref() == b"si" {
+                if tag.as_ref() == "si" {
                     current = Some(String::new());
-                } else if tag.as_ref() == b"t" {
+                } else if tag.as_ref() == "t" {
                     in_t = true;
                 }
             }
             Ok(Event::End(e)) => {
                 let tag = e.local_name();
-                if tag.as_ref() == b"si" {
+                if tag.as_ref() == "si" {
                     strings.push(current.take().unwrap_or_default());
-                } else if tag.as_ref() == b"t" {
+                } else if tag.as_ref() == "t" {
                     in_t = false;
                 }
             }
-            Ok(Event::Text(e)) => {
-                if in_t {
-                    if let Some(ref mut s) = current {
-                        if let Ok(text) = e.unescape() {
-                            s.push_str(&text);
-                        }
-                    }
-                }
-            }
+            Ok(Event::Text(e)) if in_t => node.push_text(&e),
+            Ok(Event::GeneralRef(e)) if in_t => node.push_ref(&e),
             Ok(Event::Eof) => break,
             Err(_) => break,
             _ => {}
@@ -126,5 +131,18 @@ mod tests {
 </sst>"#;
         let result = parse_shared_strings(xml);
         assert_eq!(result, vec!["", "After empty"]);
+    }
+
+    #[test]
+    fn split_references_preserve_whitespace_and_rich_runs() {
+        let xml = "<sst><si><t> A &amp; &#x1F600;&#10; B </t>\
+                   <r><t>&lt; tail&#13;</t></r></si></sst>";
+        assert_eq!(parse_shared_strings(xml), vec![" A & 😀\n B < tail\r"]);
+    }
+
+    #[test]
+    fn malformed_reference_retains_whole_node_omission() {
+        let xml = "<sst><si><t>before &unknown; after</t><r><t>kept</t></r></si></sst>";
+        assert_eq!(parse_shared_strings(xml), vec!["kept"]);
     }
 }

@@ -163,11 +163,21 @@ pub fn extract_comments(xml: &[u8]) -> (Vec<String>, BTreeMap<String, ExistingCo
     let mut in_authors = false;
     let mut in_author = false;
     let mut current_author = String::new();
+    let mut node = crate::ooxml_util::XmlTextNode::default();
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event = reader.read_event_into(&mut buf);
+        if !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
+            if in_author {
+                if let Ok(text) = quick_xml::escape::unescape(node.raw()) {
+                    current_author.push_str(&text);
+                }
+            }
+            node.clear();
+        }
+        match event {
             Ok(Event::Start(e)) => {
                 let n = e.local_name();
-                let name = n.as_ref();
+                let name = n.as_ref().as_bytes();
                 if name == b"authors" {
                     in_authors = true;
                 } else if in_authors && name == b"author" {
@@ -177,7 +187,7 @@ pub fn extract_comments(xml: &[u8]) -> (Vec<String>, BTreeMap<String, ExistingCo
             }
             Ok(Event::End(e)) => {
                 let n = e.local_name();
-                let name = n.as_ref();
+                let name = n.as_ref().as_bytes();
                 if name == b"author" && in_author {
                     authors.push(std::mem::take(&mut current_author));
                     in_author = false;
@@ -185,11 +195,8 @@ pub fn extract_comments(xml: &[u8]) -> (Vec<String>, BTreeMap<String, ExistingCo
                     break;
                 }
             }
-            Ok(Event::Text(t)) if in_author => {
-                if let Ok(s) = t.unescape() {
-                    current_author.push_str(&s);
-                }
-            }
+            Ok(Event::Text(t)) if in_author => node.push_text(&t),
+            Ok(Event::GeneralRef(r)) if in_author => node.push_ref(&r),
             Ok(Event::Eof) => break,
             Err(_) => break,
             _ => {}
@@ -372,12 +379,11 @@ pub fn parse_col_widths(sheet_xml: &[u8]) -> ColWidthMap {
         None => return map,
     };
     let mut reader = XmlReader::from_str(&cols_inner);
-    reader.config_mut().trim_text(true);
     let mut buf: Vec<u8> = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
-                if e.local_name().as_ref() != b"col" {
+                if e.local_name().as_ref() != "col" {
                     buf.clear();
                     continue;
                 }
@@ -385,11 +391,10 @@ pub fn parse_col_widths(sheet_xml: &[u8]) -> ColWidthMap {
                 let mut max_v: Option<u32> = None;
                 let mut width_v: Option<f64> = None;
                 for a in e.attributes().with_checks(false).flatten() {
-                    let key = a.key.as_ref();
-                    let val = a
-                        .unescape_value()
+                    let key = a.key.as_ref().as_bytes();
+                    let val = quick_xml::escape::unescape(&a.value)
                         .map(|v| v.into_owned())
-                        .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned());
+                        .unwrap_or_else(|_| a.value.to_string());
                     match key {
                         b"min" => min_v = val.parse().ok(),
                         b"max" => max_v = val.parse().ok(),
@@ -1032,6 +1037,14 @@ mod tests {
         assert_eq!(t.intern("Alice"), 0);
         assert_eq!(t.intern("Alice "), 1);
         assert_eq!(t.len(), 2);
+    }
+
+    #[test]
+    fn author_entities_preserve_node_boundaries_and_whitespace() {
+        let xml = b"<comments><authors><author> A &amp; B&#10;&#13; </author>\
+                    <author>before &unknown; after</author></authors></comments>";
+        let (authors, _) = extract_comments(xml);
+        assert_eq!(authors, vec![" A & B\n\r ", ""]);
     }
 
     #[test]

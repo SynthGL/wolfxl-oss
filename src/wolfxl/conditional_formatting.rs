@@ -160,14 +160,14 @@ pub fn extract_existing_cf_blocks(sheet_xml: &str) -> Vec<Vec<u8>> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
                 let current_depth = depth;
-                if current_depth == 1 && e.local_name().as_ref() == b"conditionalFormatting" {
+                if current_depth == 1 && e.local_name().as_ref() == "conditionalFormatting" {
                     if start_pos.is_none() {
                         start_pos = find_local_start(bytes, search_from, b"conditionalFormatting");
                         cf_depth = 1;
                     } else {
                         cf_depth += 1;
                     }
-                } else if start_pos.is_some() && e.local_name().as_ref() == b"conditionalFormatting"
+                } else if start_pos.is_some() && e.local_name().as_ref() == "conditionalFormatting"
                 {
                     cf_depth += 1;
                 }
@@ -175,7 +175,7 @@ pub fn extract_existing_cf_blocks(sheet_xml: &str) -> Vec<Vec<u8>> {
             }
             Ok(Event::Empty(ref e)) => {
                 if depth == 1
-                    && e.local_name().as_ref() == b"conditionalFormatting"
+                    && e.local_name().as_ref() == "conditionalFormatting"
                     && start_pos.is_none()
                 {
                     if let Some(start) =
@@ -189,7 +189,7 @@ pub fn extract_existing_cf_blocks(sheet_xml: &str) -> Vec<Vec<u8>> {
                 }
             }
             Ok(Event::End(ref e)) => {
-                if e.local_name().as_ref() == b"conditionalFormatting" && start_pos.is_some() {
+                if e.local_name().as_ref() == "conditionalFormatting" && start_pos.is_some() {
                     cf_depth -= 1;
                     if cf_depth == 0 {
                         let start = start_pos.take().expect("end without start");
@@ -308,10 +308,11 @@ pub fn scan_max_cf_priority(sheet_xml: &str) -> u32 {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
-                if e.local_name().as_ref() == b"cfRule" {
+                if e.local_name().as_ref() == "cfRule" {
                     for attr in e.attributes().with_checks(false).flatten() {
-                        if attr.key.local_name().as_ref() == b"priority" {
-                            if let Ok(v) = std::str::from_utf8(&attr.value) {
+                        if attr.key.local_name().as_ref() == "priority" {
+                            if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                            {
                                 if let Ok(p) = v.parse::<u32>() {
                                     if p > max_priority {
                                         max_priority = p;
@@ -351,19 +352,19 @@ pub fn count_dxfs(styles_xml: &str) -> u32 {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
-                if e.local_name().as_ref() == b"dxfs" {
+                if e.local_name().as_ref() == "dxfs" {
                     in_dxfs += 1;
-                } else if in_dxfs > 0 && e.local_name().as_ref() == b"dxf" {
+                } else if in_dxfs > 0 && e.local_name().as_ref() == "dxf" {
                     count += 1;
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                if in_dxfs > 0 && e.local_name().as_ref() == b"dxf" {
+                if in_dxfs > 0 && e.local_name().as_ref() == "dxf" {
                     count += 1;
                 }
             }
             Ok(Event::End(ref e)) => {
-                if e.local_name().as_ref() == b"dxfs" && in_dxfs > 0 {
+                if e.local_name().as_ref() == "dxfs" && in_dxfs > 0 {
                     in_dxfs -= 1;
                 }
             }
@@ -680,9 +681,9 @@ pub fn main_xml_prefix(xml: &str, root_local_name: &[u8]) -> String {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
-                if e.local_name().as_ref() == root_local_name {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
-                    if let Some((prefix, _)) = name.split_once(':') {
+                if e.local_name().as_ref().as_bytes() == root_local_name {
+                    let name = e.name();
+                    if let Some((prefix, _)) = name.as_ref().split_once(':') {
                         return format!("{prefix}:");
                     }
                     return String::new();
@@ -950,7 +951,7 @@ fn count_dxf_substrings(s: &str) -> u32 {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
-                if e.local_name().as_ref() == b"dxf" {
+                if e.local_name().as_ref() == "dxf" {
                     count += 1;
                 }
             }
@@ -1047,6 +1048,17 @@ fn text_escape(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn entity_encoded_priority_and_formula_are_preserved() {
+        let block = r#"<conditionalFormatting sqref="A1"><cfRule type="expression" priority="&#55;"><formula>A1&lt;&#50;&amp;B1</formula></cfRule></conditionalFormatting>"#;
+        let xml = format!("<worksheet>{block}</worksheet>");
+        assert_eq!(scan_max_cf_priority(&xml), 7);
+        assert_eq!(
+            extract_existing_cf_blocks(&xml),
+            vec![block.as_bytes().to_vec()]
+        );
+    }
 
     fn cellis_gt5() -> CfRulePatch {
         CfRulePatch {

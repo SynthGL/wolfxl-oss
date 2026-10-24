@@ -7,5 +7,4 @@ repository.workspace = true
 description = "Magic-byte file-format sniffer + Read+Seek source enums for the .xlsx / .xlsb / .xls / .ods read backends. Sprint Κ Pod-α."
 
 [dependencies]
-calamine-styles.workspace = true
 zip.workspace = true

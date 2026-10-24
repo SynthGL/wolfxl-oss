@@ -78,7 +78,10 @@ pub fn validate_zip_archive<R: Read + Seek>(zip: &mut ZipArchive<R>) -> PyResult
         let file = zip
             .by_index(i)
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("ZIP entry read error: {e}")))?;
-        let name = file.name().to_string();
+        let name = file
+            .name()
+            .map_err(|e| PyIOError::new_err(format!("ZIP entry name error: {e}")))?
+            .into_owned();
         validate_part_name(&name)?;
         if !names.insert(name.clone()) {
             return Err(PyErr::new::<PyIOError, _>(format!(
@@ -151,11 +154,11 @@ pub fn join_and_normalize(base_dir: &str, target: &str) -> String {
 
 pub fn attr_value(e: &BytesStart<'_>, key: &[u8]) -> Option<String> {
     for a in e.attributes().with_checks(false).flatten() {
-        if a.key.as_ref() == key {
-            if let Ok(v) = a.unescape_value() {
+        if a.key.as_ref().as_bytes() == key {
+            if let Ok(v) = quick_xml::escape::unescape(&a.value) {
                 return Some(v.to_string());
             }
-            return Some(String::from_utf8_lossy(a.value.as_ref()).into_owned());
+            return Some(a.value.into_owned());
         }
     }
     None
@@ -167,11 +170,11 @@ fn relationship_id_attr(e: &BytesStart<'_>) -> Option<String> {
 
 fn attr_value_by_suffix(e: &BytesStart<'_>, suffix: &[u8]) -> Option<String> {
     for a in e.attributes().with_checks(false).flatten() {
-        if a.key.as_ref().ends_with(suffix) {
-            if let Ok(v) = a.unescape_value() {
+        if a.key.as_ref().as_bytes().ends_with(suffix) {
+            if let Ok(v) = quick_xml::escape::unescape(&a.value) {
                 return Some(v.to_string());
             }
-            return Some(String::from_utf8_lossy(a.value.as_ref()).into_owned());
+            return Some(a.value.into_owned());
         }
     }
     None
@@ -179,14 +182,13 @@ fn attr_value_by_suffix(e: &BytesStart<'_>, suffix: &[u8]) -> Option<String> {
 
 pub fn parse_workbook_sheet_rids(xml: &str) -> PyResult<Vec<(String, String)>> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf: Vec<u8> = Vec::new();
     let mut out: Vec<(String, String)> = Vec::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.local_name().as_ref() == b"sheet" {
+                if e.local_name().as_ref() == "sheet" {
                     let name = attr_value(&e, b"name");
                     let rid = relationship_id_attr(&e);
                     if let (Some(n), Some(r)) = (name, rid) {
@@ -237,7 +239,7 @@ pub fn zip_read_to_string(zip: &mut ZipArchive<File>, name: &str) -> PyResult<St
             )));
         }
     }
-    let actual_name = resolve_zip_name_case_insensitive(zip, name)
+    let actual_name = resolve_zip_name_case_insensitive(zip, name)?
         .ok_or_else(|| PyErr::new::<PyIOError, _>(format!("Missing zip entry {name}")))?;
     let mut f = zip
         .by_name(&actual_name)
@@ -265,7 +267,7 @@ pub fn zip_read_to_string_opt(zip: &mut ZipArchive<File>, name: &str) -> PyResul
             )));
         }
     }
-    let Some(actual_name) = resolve_zip_name_case_insensitive(zip, name) else {
+    let Some(actual_name) = resolve_zip_name_case_insensitive(zip, name)? else {
         return Ok(None);
     };
     match zip.by_name(&actual_name) {
@@ -282,10 +284,62 @@ pub fn zip_read_to_string_opt(zip: &mut ZipArchive<File>, name: &str) -> PyResul
     }
 }
 
-fn resolve_zip_name_case_insensitive(zip: &ZipArchive<File>, name: &str) -> Option<String> {
-    zip.file_names()
-        .find(|candidate| candidate.eq_ignore_ascii_case(name))
-        .map(str::to_string)
+fn resolve_zip_name_case_insensitive(
+    zip: &ZipArchive<File>,
+    name: &str,
+) -> PyResult<Option<String>> {
+    for candidate in zip.file_names() {
+        let candidate =
+            candidate.map_err(|e| PyIOError::new_err(format!("ZIP entry name error: {e}")))?;
+        if candidate.eq_ignore_ascii_case(name) {
+            return Ok(Some(candidate.into_owned()));
+        }
+    }
+    Ok(None)
+}
+
+/// Resolve quick-xml 0.42's split references without normalizing literal
+/// whitespace. Matches the former `BytesText::unescape` contract.
+pub(crate) fn resolve_general_ref(
+    reference: &quick_xml::events::BytesRef<'_>,
+) -> quick_xml::Result<std::borrow::Cow<'static, str>> {
+    use quick_xml::escape::{resolve_predefined_entity, EscapeError};
+    if let Some(ch) = reference.resolve_char_ref()? {
+        return Ok(std::borrow::Cow::Owned(ch.to_string()));
+    }
+    let name: &str = reference;
+    match resolve_predefined_entity(name) {
+        Some(text) => Ok(std::borrow::Cow::Borrowed(text)),
+        None => Err(EscapeError::UnrecognizedEntity(1..name.len() + 1, name.to_owned()).into()),
+    }
+}
+
+/// Collect a single text node before transforming it. quick-xml 0.42 emits
+/// references separately; trimming or transforming each fragment loses data.
+/// Keep the raw spelling so callers can retain their existing error policy.
+#[derive(Default)]
+pub(crate) struct XmlTextNode {
+    raw: String,
+}
+
+impl XmlTextNode {
+    pub(crate) fn push_text(&mut self, text: &quick_xml::events::BytesText<'_>) {
+        self.raw.push_str(text);
+    }
+
+    pub(crate) fn push_ref(&mut self, reference: &quick_xml::events::BytesRef<'_>) {
+        self.raw.push('&');
+        self.raw.push_str(reference);
+        self.raw.push(';');
+    }
+
+    pub(crate) fn raw(&self) -> &str {
+        &self.raw
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.raw.clear();
+    }
 }
 
 #[cfg(test)]
@@ -296,5 +350,39 @@ mod tests {
     fn compression_ratio_rejects_fractional_over_limit() {
         let result = validate_zip_entry_metadata("xl/workbook.xml", 10_001, 10);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn references_resolve_without_normalizing_referenced_whitespace() {
+        use quick_xml::events::BytesRef;
+        for (reference, expected) in [
+            ("amp", "&"),
+            ("lt", "<"),
+            ("gt", ">"),
+            ("apos", "'"),
+            ("quot", "\""),
+            ("#10", "\n"),
+            ("#13", "\r"),
+            ("#x1F600", "😀"),
+        ] {
+            assert_eq!(
+                super::resolve_general_ref(&BytesRef::new(reference)).unwrap(),
+                expected
+            );
+        }
+        for reference in ["unknown", "#0", "#xD800", "#x110000"] {
+            assert!(super::resolve_general_ref(&BytesRef::new(reference)).is_err());
+        }
+    }
+
+    #[test]
+    fn workbook_attributes_keep_entities_and_literal_whitespace() {
+        let xml = "<workbook><sheets><sheet name=\" A\t&amp;\r\nB&#10; \" \
+                   r:id=\"rId&#49;\"/></sheets></workbook>";
+        let sheets = super::parse_workbook_sheet_rids(xml).unwrap();
+        assert_eq!(
+            sheets,
+            vec![(" A\t&\r\nB\n ".to_owned(), "rId1".to_owned())]
+        );
     }
 }

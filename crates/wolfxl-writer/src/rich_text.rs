@@ -20,8 +20,11 @@
 //! Sprint Ι Pod-α (RFC pending) — closes the Phase 3 rich-text-reads
 //! gap and the implicit T3 rich-text-write deferral.
 
+use std::borrow::Cow;
+
+use quick_xml::escape::{resolve_predefined_entity, EscapeError};
 use quick_xml::events::attributes::Attribute;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesRef, Event};
 use quick_xml::Reader as XmlReader;
 
 /// One inline-font property block.  Mirrors the keyword arguments
@@ -97,7 +100,7 @@ pub fn parse_runs_in_element(
         {
             Event::Start(e) => {
                 let name = e.local_name();
-                let tag = name.as_ref();
+                let tag = name.as_ref().as_bytes();
                 if !in_wrapper && tag == wrapper_tag {
                     in_wrapper = true;
                     continue;
@@ -138,7 +141,7 @@ pub fn parse_runs_in_element(
             }
             Event::Empty(e) => {
                 let name = e.local_name();
-                let tag = name.as_ref();
+                let tag = name.as_ref().as_bytes();
                 if !in_wrapper {
                     continue;
                 }
@@ -148,7 +151,7 @@ pub fn parse_runs_in_element(
             }
             Event::End(e) => {
                 let name = e.local_name();
-                let tag = name.as_ref();
+                let tag = name.as_ref().as_bytes();
                 if in_wrapper && tag == wrapper_tag {
                     break;
                 }
@@ -186,10 +189,14 @@ pub fn parse_runs_in_element(
             }
             Event::Text(e) => {
                 if in_t {
-                    let unescaped = e
-                        .unescape()
+                    t_buf.push_str(&e);
+                }
+            }
+            Event::GeneralRef(r) => {
+                if in_t {
+                    let resolved = resolve_general_ref(&r)
                         .map_err(|err| format!("xml text unescape: {err}"))?;
-                    t_buf.push_str(&unescaped);
+                    t_buf.push_str(&resolved);
                 }
             }
             Event::Eof => break,
@@ -210,6 +217,22 @@ pub fn parse_runs_in_element(
     }
 }
 
+/// Resolve a general entity reference that quick-xml reports between text
+/// runs (`&amp;`, `&#10;`, ...) to the text it stands for. Recognises the
+/// same references as `quick_xml::escape::unescape`: character references
+/// and the predefined XML entities; anything else is an unrecognised-entity
+/// error.
+fn resolve_general_ref(r: &BytesRef<'_>) -> quick_xml::Result<Cow<'static, str>> {
+    if let Some(ch) = r.resolve_char_ref()? {
+        return Ok(Cow::Owned(ch.to_string()));
+    }
+    let name: &str = r;
+    match resolve_predefined_entity(name) {
+        Some(text) => Ok(Cow::Borrowed(text)),
+        None => Err(EscapeError::UnrecognizedEntity(1..name.len() + 1, name.to_owned()).into()),
+    }
+}
+
 fn apply_rpr_attr(
     props: &mut InlineFontProps,
     tag: &[u8],
@@ -224,8 +247,8 @@ fn apply_rpr_attr(
     for a in attrs.with_checks(false) {
         if let Ok(Attribute { key, value }) = a {
             all_attrs.push((
-                key.local_name().as_ref().to_vec(),
-                String::from_utf8_lossy(value.as_ref()).into_owned(),
+                key.local_name().as_ref().as_bytes().to_vec(),
+                value.into_owned(),
             ));
         }
     }

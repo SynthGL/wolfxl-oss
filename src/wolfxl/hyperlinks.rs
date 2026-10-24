@@ -86,16 +86,16 @@ pub fn extract_hyperlinks(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                if e.local_name().as_ref() == b"hyperlinks" {
+                if e.local_name().as_ref() == "hyperlinks" {
                     in_block = true;
                 }
             }
             Ok(Event::End(e)) => {
-                if e.local_name().as_ref() == b"hyperlinks" {
+                if e.local_name().as_ref() == "hyperlinks" {
                     in_block = false;
                 }
             }
-            Ok(Event::Empty(e)) if in_block && e.local_name().as_ref() == b"hyperlink" => {
+            Ok(Event::Empty(e)) if in_block && e.local_name().as_ref() == "hyperlink" => {
                 if let Some(parsed) = parse_one(&e, rels) {
                     out.insert(parsed.coordinate.clone(), parsed);
                 }
@@ -119,18 +119,18 @@ fn parse_one(e: &quick_xml::events::BytesStart<'_>, rels: &RelsGraph) -> Option<
     for a in e.attributes().with_checks(false).flatten() {
         let key = a.key.as_ref();
         let val = a
-            .unescape_value()
+            .normalized_value(quick_xml::XmlVersion::Implicit1_0)
             .map(|v| v.into_owned())
-            .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned());
+            .unwrap_or_else(|_| a.value.to_string());
         match key {
-            b"ref" => coord = val,
+            "ref" => coord = val,
             // Real files use the prefixed form `r:id`. The `id` fallback is
             // for documents that bind the relationships namespace to a
             // different prefix or use no prefix at all.
-            b"r:id" | b"id" => rid_str = Some(val),
-            b"location" => location = Some(val),
-            b"tooltip" => tooltip = Some(val),
-            b"display" => display = Some(val),
+            "r:id" | "id" => rid_str = Some(val),
+            "location" => location = Some(val),
+            "tooltip" => tooltip = Some(val),
+            "display" => display = Some(val),
             _ => {}
         }
     }
@@ -294,6 +294,20 @@ fn push_xml_attr_escape(out: &mut String, s: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn entity_encoded_hyperlink_attributes_roundtrip() {
+        let xml = sheet_xml_with_hyperlinks(
+            r#"<hyperlink ref="A&#49;" location="&apos;A&amp;B&apos;!A1" tooltip="A&#32;&amp;&#32;B" display="&quot;Go&quot;"/>"#,
+        );
+        let mut rels = RelsGraph::new();
+        let existing = extract_hyperlinks(xml.as_bytes(), &rels);
+        assert_eq!(existing["A1"].location.as_deref(), Some("'A&B'!A1"));
+        assert_eq!(existing["A1"].tooltip.as_deref(), Some("A & B"));
+        assert_eq!(existing["A1"].display.as_deref(), Some("\"Go\""));
+        let (bytes, _) = build_hyperlinks_block(existing.clone(), &BTreeMap::new(), &mut rels);
+        assert_eq!(extract_hyperlinks(&bytes, &rels), existing);
+    }
 
     fn rels_with_hyperlinks(targets: &[&str]) -> RelsGraph {
         let mut g = RelsGraph::new();

@@ -24,9 +24,10 @@ use crate::shift_cells::shift_sheet_cells;
 use crate::shift_formulas::shift_formula_on_sheet;
 use crate::table_shift::{repair_deleted_table_header_row, shift_table_xml};
 use crate::vml_shift::shift_vml_xml;
+use crate::xml_text::TextNode;
 
-fn push_attr<'a>(e: &mut BytesStart<'a>, key: &[u8], val: &str) {
-    e.push_attribute((key, val.as_bytes()));
+fn push_attr<'a>(e: &mut BytesStart<'a>, key: &str, val: &str) {
+    e.push_attribute((key, val));
 }
 
 /// One queued structural-shift op, as supplied by the patcher's
@@ -341,7 +342,6 @@ pub fn shift_comments_xml(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
         Err(_) => return xml.to_vec(),
     };
     let mut reader = XmlReader::from_str(xml_str);
-    reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(std::io::Cursor::new(Vec::new()));
     let mut buf: Vec<u8> = Vec::new();
     let mut skip_depth: u32 = 0;
@@ -349,24 +349,23 @@ pub fn shift_comments_xml(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name();
                 if skip_depth > 0 {
                     skip_depth += 1;
                     buf.clear();
                     continue;
                 }
-                if local.as_slice() == b"comment" {
+                if local.as_ref() == "comment" {
                     let mut keep = true;
-                    let mut new_e =
-                        BytesStart::new(String::from_utf8_lossy(e.name().as_ref()).into_owned());
+                    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
                     for attr_res in e.attributes().with_checks(false) {
                         let Ok(attr) = attr_res else { continue };
                         let key = attr.key.as_ref();
-                        let val = match attr.unescape_value() {
+                        let val = match quick_xml::escape::unescape(&attr.value) {
                             Ok(v) => v.into_owned(),
                             Err(_) => continue,
                         };
-                        if key == b"ref" {
+                        if key == "ref" {
                             let new_val = shift_anchor(&val, plan);
                             if new_val == "#REF!" {
                                 keep = false;
@@ -386,23 +385,22 @@ pub fn shift_comments_xml(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name();
                 if skip_depth > 0 {
                     buf.clear();
                     continue;
                 }
-                if local.as_slice() == b"comment" {
+                if local.as_ref() == "comment" {
                     let mut keep = true;
-                    let mut new_e =
-                        BytesStart::new(String::from_utf8_lossy(e.name().as_ref()).into_owned());
+                    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
                     for attr_res in e.attributes().with_checks(false) {
                         let Ok(attr) = attr_res else { continue };
                         let key = attr.key.as_ref();
-                        let val = match attr.unescape_value() {
+                        let val = match quick_xml::escape::unescape(&attr.value) {
                             Ok(v) => v.into_owned(),
                             Err(_) => continue,
                         };
-                        if key == b"ref" {
+                        if key == "ref" {
                             let new_val = shift_anchor(&val, plan);
                             if new_val == "#REF!" {
                                 keep = false;
@@ -469,26 +467,40 @@ pub fn shift_defined_names(
         Err(_) => return xml.to_vec(),
     };
     let mut reader = XmlReader::from_str(xml_str);
-    reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(std::io::Cursor::new(Vec::new()));
     let mut buf: Vec<u8> = Vec::new();
 
     let mut in_dn = false;
     let mut current_local_sheet_id: Option<u32> = None;
-    // Buffer the start tag so we can decide to apply or skip when we
-    // hit the text event.
+    // Resolve split Text/GeneralRef events before translating a whole formula.
+    let mut formula = TextNode::default();
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event = reader.read_event_into(&mut buf);
+        if !formula.is_empty() && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
+            let applies = match (current_local_sheet_id, op_sheet_position) {
+                (Some(sid), Some(pos)) => sid == pos,
+                (None, _) => true,
+                (Some(_), None) => false,
+            };
+            if let Some(text) = formula.unescaped().ok().filter(|_| applies) {
+                let shifted = shift_formula_on_sheet(text, plan, op_sheet);
+                let _ = writer.write_event(Event::Text(BytesText::new(&shifted)));
+            } else {
+                let _ = writer.write_event(Event::Text(BytesText::from_escaped(formula.raw())));
+            }
+            formula.clear();
+        }
+        match event {
             Ok(Event::Start(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
-                if local.as_slice() == b"definedName" {
+                let local = e.local_name();
+                if local.as_ref() == "definedName" {
                     in_dn = true;
                     current_local_sheet_id = None;
                     for attr_res in e.attributes().with_checks(false) {
                         let Ok(attr) = attr_res else { continue };
-                        if attr.key.as_ref() == b"localSheetId" {
-                            if let Ok(v) = attr.unescape_value() {
+                        if attr.key.as_ref() == "localSheetId" {
+                            if let Ok(v) = quick_xml::escape::unescape(&attr.value) {
                                 if let Ok(n) = v.parse::<u32>() {
                                     current_local_sheet_id = Some(n);
                                 }
@@ -502,55 +514,15 @@ pub fn shift_defined_names(
                 let _ = writer.write_event(Event::Empty(e.to_owned()));
             }
             Ok(Event::End(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
-                if local.as_slice() == b"definedName" {
+                let local = e.local_name();
+                if local.as_ref() == "definedName" {
                     in_dn = false;
                     current_local_sheet_id = None;
                 }
                 let _ = writer.write_event(Event::End(e.to_owned()));
             }
-            Ok(Event::Text(ref t)) => {
-                if in_dn {
-                    // Decide if this DN's scope matches our op.
-                    let applies = match (current_local_sheet_id, op_sheet_position) {
-                        // Per-sheet name: only shift if the localSheetId
-                        // matches the op sheet's position.
-                        (Some(sid), Some(pos)) => sid == pos,
-                        // Workbook-scope name: always thread through
-                        // shift_formula_on_sheet so refs to other sheets
-                        // are left alone.
-                        (None, _) => true,
-                        // Per-sheet name but no sheet_position info:
-                        // be conservative and don't shift.
-                        (Some(_), None) => false,
-                    };
-                    if applies {
-                        let s = match t.unescape() {
-                            Ok(c) => c.into_owned(),
-                            Err(_) => String::from_utf8_lossy(t.as_ref()).into_owned(),
-                        };
-                        let new_s = if current_local_sheet_id.is_some() {
-                            // For per-sheet names, the formula's
-                            // unqualified refs implicitly belong to
-                            // the local sheet; treat them as on op_sheet.
-                            shift_formula_on_sheet(&s, plan, op_sheet)
-                        } else {
-                            // Workbook-scope: refs MUST be qualified; the
-                            // formula translator handles sheet matching
-                            // via sheet_renames-empty + formula_sheet=None
-                            // semantics — but to scope by sheet name we
-                            // route through shift_formula_on_sheet too.
-                            shift_formula_on_sheet(&s, plan, op_sheet)
-                        };
-                        let new_t = BytesText::new(&new_s);
-                        let _ = writer.write_event(Event::Text(new_t));
-                    } else {
-                        let _ = writer.write_event(Event::Text(t.to_owned()));
-                    }
-                } else {
-                    let _ = writer.write_event(Event::Text(t.to_owned()));
-                }
-            }
+            Ok(Event::Text(t)) if in_dn => formula.push_text(&t),
+            Ok(Event::GeneralRef(r)) if in_dn => formula.push_ref(&r),
             Ok(Event::Eof) => break,
             Ok(other) => {
                 let _ = writer.write_event(other);
@@ -566,6 +538,30 @@ pub fn shift_defined_names(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn defined_names_shift_whole_entity_split_formulas() {
+        let xml = br#"<workbook><definedNames><definedName name="global">'A&amp;B'!A&#49;&amp;&quot;A1&quot;</definedName><definedName name="other" localSheetId="1">'A&amp;B'!A&#49;</definedName></definedNames></workbook>"#;
+        let out = shift_defined_names(xml, &ShiftPlan::insert(Axis::Row, 1, 1), "A&B", Some(0));
+        let text = String::from_utf8(out).unwrap();
+        assert!(
+            text.contains("&apos;A&amp;B&apos;!A2&amp;&quot;A1&quot;"),
+            "{text}"
+        );
+        assert!(
+            text.contains(r#"localSheetId="1">'A&amp;B'!A&#49;</definedName>"#),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn comment_text_keeps_raw_entities_when_refs_shift() {
+        let xml = br#"<comments><commentList><comment ref="A1" author="A&amp;B"><text><t> &#65;&amp;&lt; </t></text></comment></commentList></comments>"#;
+        let out = shift_comments_xml(xml, &ShiftPlan::insert(Axis::Row, 1, 1));
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains(r#"ref="A2" author="A&amp;B""#), "{text}");
+        assert!(text.contains("<t> &#65;&amp;&lt; </t>"), "{text}");
+    }
 
     #[test]
     fn empty_ops_returns_empty_mutations() {

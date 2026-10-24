@@ -125,9 +125,7 @@ _SHEET_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="openpyxl.worksheet.worksheet.Worksheet",
         wolfxl_path="wolfxl.Worksheet",
         category=SurfaceCategory.SHEET_ACCESS,
-        synthgl_usage=(
-            "src/synthgl/app/adapters/excel_parser.py",
-        ),
+        synthgl_usage=("src/synthgl/app/adapters/excel_parser.py",),
         parity_note=(
             "Re-exported at top level via ``wolfxl.Worksheet`` for type-hint "
             "narrowing. Backed by ``wolfxl._worksheet.Worksheet``."
@@ -138,9 +136,7 @@ _SHEET_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="openpyxl.cell.cell.Cell",
         wolfxl_path="wolfxl.Cell",
         category=SurfaceCategory.SHEET_ACCESS,
-        synthgl_usage=(
-            "src/synthgl/app/adapters/excel_parser.py",
-        ),
+        synthgl_usage=("src/synthgl/app/adapters/excel_parser.py",),
         parity_note=(
             "Re-exported at top level via ``wolfxl.Cell`` for type-hint "
             "narrowing. Backed by ``wolfxl._cell.Cell``."
@@ -174,9 +170,7 @@ _CELL_READ_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Cell.number_format",
         wolfxl_path="wolfxl._cell.Cell.number_format",
         category=SurfaceCategory.CELL_READ,
-        synthgl_usage=(
-            "packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",
-        ),
+        synthgl_usage=("packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",),
         parity_note=(
             "Round-trip the raw Excel format code. openpyxl returns ``'General'`` "
             "for unformatted cells; wolfxl should too. Critical for the date-vs-"
@@ -188,9 +182,7 @@ _CELL_READ_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Cell.font",
         wolfxl_path="wolfxl._cell.Cell.font",
         category=SurfaceCategory.CELL_READ,
-        synthgl_usage=(
-            "scripts/ingest/generate_sheet_archetype_fixtures.py",
-        ),
+        synthgl_usage=("scripts/ingest/generate_sheet_archetype_fixtures.py",),
         parity_note=(
             "Parity on ``name, size, bold, italic, underline, color``. "
             "Strike + family/scheme currently INFO-tier."
@@ -201,9 +193,7 @@ _CELL_READ_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Cell.fill",
         wolfxl_path="wolfxl._cell.Cell.fill",
         category=SurfaceCategory.CELL_READ,
-        synthgl_usage=(
-            "scripts/ingest/generate_sheet_archetype_fixtures.py",
-        ),
+        synthgl_usage=("scripts/ingest/generate_sheet_archetype_fixtures.py",),
         parity_note="Compare ``patternType`` + ``fgColor`` hex.",
         tags=frozenset({"soft"}),
     ),
@@ -211,9 +201,7 @@ _CELL_READ_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Cell.border",
         wolfxl_path="wolfxl._cell.Cell.border",
         category=SurfaceCategory.CELL_READ,
-        synthgl_usage=(
-            "scripts/ingest/generate_sheet_archetype_fixtures.py",
-        ),
+        synthgl_usage=("scripts/ingest/generate_sheet_archetype_fixtures.py",),
         parity_note="Compare each edge's ``style`` + ``color``. Diagonal is INFO.",
         tags=frozenset({"soft"}),
     ),
@@ -221,9 +209,7 @@ _CELL_READ_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Cell.alignment",
         wolfxl_path="wolfxl._cell.Cell.alignment",
         category=SurfaceCategory.CELL_READ,
-        synthgl_usage=(
-            "scripts/ingest/generate_sheet_archetype_fixtures.py",
-        ),
+        synthgl_usage=("scripts/ingest/generate_sheet_archetype_fixtures.py",),
         parity_note="Parity on ``horizontal, vertical, wrap_text``. Indent + rotation SOFT.",
         tags=frozenset({"soft"}),
     ),
@@ -237,9 +223,7 @@ _RANGE_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Worksheet.max_row",
         wolfxl_path="wolfxl._worksheet.Worksheet.max_row",
         category=SurfaceCategory.RANGE_LAYOUT,
-        synthgl_usage=(
-            "packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",
-        ),
+        synthgl_usage=("packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",),
         parity_note=(
             "Shipped as a ``@property`` wrapper around ``_max_row()`` on the "
             "Worksheet class (in both read and write modes)."
@@ -250,9 +234,7 @@ _RANGE_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Worksheet.max_column",
         wolfxl_path="wolfxl._worksheet.Worksheet.max_column",
         category=SurfaceCategory.RANGE_LAYOUT,
-        synthgl_usage=(
-            "packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",
-        ),
+        synthgl_usage=("packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",),
         parity_note=(
             "Shipped as a ``@property`` wrapper around ``_max_col()`` on the "
             "Worksheet class. Note: openpyxl uses ``max_column`` (not "
@@ -264,9 +246,7 @@ _RANGE_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Worksheet.merged_cells",
         wolfxl_path="wolfxl._worksheet.Worksheet.merged_cells",
         category=SurfaceCategory.RANGE_LAYOUT,
-        synthgl_usage=(
-            "scripts/ingest/generate_sheet_archetype_fixtures.py",
-        ),
+        synthgl_usage=("scripts/ingest/generate_sheet_archetype_fixtures.py",),
         parity_note=(
             "Shipped as a ``@property`` returning ``_MergedCellsProxy``. The "
             "proxy exposes ``.ranges`` (list of range strings) backed by the "
@@ -279,9 +259,7 @@ _RANGE_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Worksheet.freeze_panes",
         wolfxl_path="wolfxl._worksheet.Worksheet.freeze_panes",
         category=SurfaceCategory.RANGE_LAYOUT,
-        synthgl_usage=(
-            "scripts/ingest/generate_sheet_archetype_fixtures.py",
-        ),
+        synthgl_usage=("scripts/ingest/generate_sheet_archetype_fixtures.py",),
         parity_note="Cell-reference string (e.g. ``'B2'``) or ``None``.",
         tags=frozenset({"hard"}),
     ),
@@ -308,9 +286,7 @@ _RANGE_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Worksheet.column_dimensions[letter].width",
         wolfxl_path="wolfxl._worksheet.Worksheet.column_dimensions",
         category=SurfaceCategory.RANGE_LAYOUT,
-        synthgl_usage=(
-            "scripts/ingest/generate_sheet_archetype_fixtures.py",
-        ),
+        synthgl_usage=("scripts/ingest/generate_sheet_archetype_fixtures.py",),
         parity_note=(
             "Property-of-proxy access. Smoke test verifies the proxy attribute "
             "exists; round-trip behavior covered by ``test_write_parity``. "
@@ -325,9 +301,7 @@ _RANGE_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Worksheet.row_dimensions[i].height",
         wolfxl_path="wolfxl._worksheet.Worksheet.row_dimensions",
         category=SurfaceCategory.RANGE_LAYOUT,
-        synthgl_usage=(
-            "scripts/ingest/generate_sheet_archetype_fixtures.py",
-        ),
+        synthgl_usage=("scripts/ingest/generate_sheet_archetype_fixtures.py",),
         parity_note="INFO-tier per plan; not currently exercised in parity.",
         tags=frozenset({"info"}),
     ),
@@ -341,9 +315,7 @@ _DEFINED_NAME_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Workbook.defined_names",
         wolfxl_path="wolfxl._workbook.Workbook.defined_names",
         category=SurfaceCategory.DEFINED_NAMES,
-        synthgl_usage=(
-            "packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",
-        ),
+        synthgl_usage=("packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",),
         parity_note=(
             "Read: openpyxl returns ``DefinedNameDict``; wolfxl returns "
             "``dict[str, str]``. SynthGL only needs ``name -> refers_to`` lookup + "
@@ -376,9 +348,7 @@ _WRITE_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Worksheet.append(iterable)",
         wolfxl_path="wolfxl._worksheet.Worksheet.append",
         category=SurfaceCategory.WRITE,
-        synthgl_usage=(
-            "tests/ingest/test_round_trip_compound.py",
-        ),
+        synthgl_usage=("tests/ingest/test_round_trip_compound.py",),
         parity_note="Values appended to next free row starting at column A.",
         write_api=True,
         tags=frozenset({"hard"}),
@@ -387,9 +357,7 @@ _WRITE_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="Worksheet.merge_cells(range)",
         wolfxl_path="wolfxl._worksheet.Worksheet.merge_cells",
         category=SurfaceCategory.WRITE,
-        synthgl_usage=(
-            "scripts/ingest/generate_sheet_archetype_fixtures.py",
-        ),
+        synthgl_usage=("scripts/ingest/generate_sheet_archetype_fixtures.py",),
         parity_note="After save + reopen, range must appear in ``merged_cells``.",
         write_api=True,
         tags=frozenset({"hard"}),
@@ -431,9 +399,7 @@ _STYLE_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="openpyxl.styles.PatternFill",
         wolfxl_path="wolfxl.PatternFill",
         category=SurfaceCategory.STYLES,
-        synthgl_usage=(
-            "scripts/ingest/generate_sheet_archetype_fixtures.py",
-        ),
+        synthgl_usage=("scripts/ingest/generate_sheet_archetype_fixtures.py",),
         parity_note=(
             "Must accept both ``patternType=`` and ``fill_type=`` kwargs "
             "(openpyxl alias). Already handled in wolfxl 0.3.2."
@@ -541,9 +507,7 @@ _UTILS_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="openpyxl.styles.numbers.is_date_format",
         wolfxl_path="wolfxl.utils.numbers.is_date_format",
         category=SurfaceCategory.UTILS,
-        synthgl_usage=(
-            "packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",
-        ),
+        synthgl_usage=("packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",),
         parity_note=(
             "Shipped via ``wolfxl.utils.numbers.is_date_format`` — ports "
             "openpyxl's STRIP_RE + DATE_TOKEN_RE bug-for-bug, including the "
@@ -555,9 +519,7 @@ _UTILS_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="openpyxl.utils.datetime.from_excel",
         wolfxl_path="wolfxl.utils.datetime.from_excel",
         category=SurfaceCategory.UTILS,
-        synthgl_usage=(
-            "packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",
-        ),
+        synthgl_usage=("packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",),
         parity_note=(
             "Shipped via ``wolfxl.utils.datetime.from_excel`` — reproduces "
             "the 1900 leap-year bug (epoch=1899-12-30, +1 day for serials in "
@@ -569,9 +531,7 @@ _UTILS_ENTRIES: tuple[SurfaceEntry, ...] = (
         openpyxl_path="openpyxl.utils.datetime.CALENDAR_WINDOWS_1900",
         wolfxl_path="wolfxl.utils.datetime.CALENDAR_WINDOWS_1900",
         category=SurfaceCategory.UTILS,
-        synthgl_usage=(
-            "packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",
-        ),
+        synthgl_usage=("packages/synthgl-ingest/src/synthgl/ingest/adapters/excel.py",),
         parity_note=(
             "Shipped via ``wolfxl.utils.datetime.CALENDAR_WINDOWS_1900`` as a "
             "``datetime(1899, 12, 30)`` sentinel (matches openpyxl after its "
@@ -713,10 +673,10 @@ _GAP_ENTRIES: tuple[SurfaceEntry, ...] = (
         category=SurfaceCategory.WORKBOOK_OPEN,
         synthgl_usage=(),
         parity_note=(
-            "Sprint Κ Pod-α: .xls (legacy BIFF8) reads via the new "
-            "``CalamineXlsBook`` backend. Values + cached formula "
-            "results only; style accessors raise NotImplementedError. "
-            "Parity target is pandas+calamine — verified by "
+            "Read .xls (legacy BIFF8) through independently authored MIT "
+            "``NativeXlsBook``. Values + cached formula results only; "
+            "style accessors raise NotImplementedError. "
+            "Use committed independent xlwt fixture expectations in "
             "``tests/parity/test_xls_reads.py``. The "
             "``(.xls dispatch)`` annotation is a parametric marker."
         ),
@@ -740,8 +700,8 @@ _GAP_ENTRIES: tuple[SurfaceEntry, ...] = (
             "plaintext is materialised to a tempfile then re-encoded "
             "and atomic-renamed onto the user's target path. Empty "
             "passwords raise ``ValueError``; the lazy ``msoffcrypto-tool`` "
-            "import surfaces ``ImportError(\"install with "
-            "pip install wolfxl[encrypted]\")``. Round-trip verified "
+            'import surfaces ``ImportError("install with '
+            'pip install wolfxl[encrypted]")``. Round-trip verified '
             "wolfxl-write → wolfxl-read and wolfxl-write → "
             "msoffcrypto-decrypt by ``tests/test_encrypted_writes.py`` "
             "and ``tests/parity/test_encrypted_write_parity.py``. "
@@ -849,10 +809,7 @@ _GAP_ENTRIES: tuple[SurfaceEntry, ...] = (
         wolfxl_path="wolfxl.chart.DoughnutChart",
         category=SurfaceCategory.WRITE,
         synthgl_usage=(),
-        parity_note=(
-            "Sprint Μ Pod-β: DoughnutChart adds ``holeSize`` on top "
-            "of the Pie surface."
-        ),
+        parity_note=("Sprint Μ Pod-β: DoughnutChart adds ``holeSize`` on top of the Pie surface."),
         wolfxl_supported=True,
         write_api=True,
         tags=frozenset({"phase-charts", "shipped-1.6"}),
@@ -889,10 +846,7 @@ _GAP_ENTRIES: tuple[SurfaceEntry, ...] = (
         wolfxl_path="wolfxl.chart.BubbleChart",
         category=SurfaceCategory.WRITE,
         synthgl_usage=(),
-        parity_note=(
-            "Sprint Μ Pod-β: BubbleChart — third value series drives "
-            "marker size."
-        ),
+        parity_note=("Sprint Μ Pod-β: BubbleChart — third value series drives marker size."),
         wolfxl_supported=True,
         write_api=True,
         tags=frozenset({"phase-charts", "shipped-1.6"}),
@@ -903,8 +857,7 @@ _GAP_ENTRIES: tuple[SurfaceEntry, ...] = (
         category=SurfaceCategory.WRITE,
         synthgl_usage=(),
         parity_note=(
-            "Sprint Μ Pod-β: RadarChart with ``radarStyle`` "
-            "(standard / marker / filled)."
+            "Sprint Μ Pod-β: RadarChart with ``radarStyle`` (standard / marker / filled)."
         ),
         wolfxl_supported=True,
         write_api=True,

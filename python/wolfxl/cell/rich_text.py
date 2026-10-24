@@ -35,6 +35,14 @@ from wolfxl.styles.colors import Color
 from wolfxl.xml.functions import Element, localname, whitespace
 
 NUMERIC_TYPES = (int, float, Decimal)
+_NULLABLE_BOOL_ELEMENTS = ("strike", "outline", "shadow", "condense", "extend")
+
+
+def _to_bool(value: object) -> bool:
+    """Coerce a value the way openpyxl's ``Bool`` descriptor does."""
+    if isinstance(value, str) and value in ("false", "f", "0"):
+        return False
+    return bool(value)
 
 
 class Text(_OpenpyxlSerialisable):
@@ -66,9 +74,10 @@ class InlineFont:
 
     Field names mirror openpyxl's ``InlineFont`` keyword arguments
     (single-letter for the boolean attributes — ``b`` for bold, ``i``
-    for italic, ``u`` for underline style, etc.).  All fields default
-    to ``None`` so an empty ``InlineFont()`` round-trips as a run with
-    no explicit ``<rPr>`` block.
+    for italic, ``u`` for underline style, etc.).  ``b`` and ``i`` are
+    always booleans (``None`` coerces to ``False``) and are only
+    serialized when true; the remaining boolean flags stay ``None`` until
+    set and serialize ``val="1"``/``val="0"`` like openpyxl.
 
     Attributes:
         rFont: Font family name.
@@ -109,9 +118,9 @@ class InlineFont:
 
     charset: Optional[int] = None
     family: Optional[int] = None
-    b: Optional[bool] = False
+    b: bool = False
     """Bold."""
-    i: Optional[bool] = False
+    i: bool = False
     """Italic."""
     strike: Optional[bool] = None
     outline: Optional[bool] = None
@@ -130,6 +139,14 @@ class InlineFont:
     scheme: Optional[str] = None
 
     def __post_init__(self) -> None:
+        # openpyxl's ``b``/``i`` descriptors are non-nullable bools, while
+        # the remaining flags are nullable bools; all share string coercion.
+        self.b = _to_bool(self.b)
+        self.i = _to_bool(self.i)
+        for attr in _NULLABLE_BOOL_ELEMENTS:
+            value = getattr(self, attr)
+            if value is not None:
+                setattr(self, attr, _to_bool(value))
         if self.sz is not None:
             try:
                 self.sz = float(self.sz)
@@ -160,8 +177,8 @@ class InlineFont:
                 attrs[name] = child.get("val", "single")
             elif name in {"rFont", "charset", "family", "sz", "vertAlign", "scheme"}:
                 attrs[name] = child.get("val")
-            elif name in {"b", "i", "strike", "outline", "shadow", "condense", "extend"}:
-                attrs[name] = child.get("val", "1") != "0"
+            elif name in {"b", "i", *_NULLABLE_BOOL_ELEMENTS}:
+                attrs[name] = child.get("val", True)
             elif name == "color":
                 attrs[name] = Color.from_tree(child)
         return cls(**attrs)
@@ -170,7 +187,7 @@ class InlineFont:
         node = Element(tagname or self.tagname)
         for attr in self.__elements__:
             value = getattr(self, attr)
-            if value is None or value is False:
+            if value is None or (attr in ("b", "i") and not value):
                 continue
             if attr == "color":
                 color = value if isinstance(value, Color) else Color(rgb=value)
@@ -189,7 +206,9 @@ class InlineFont:
                 node.append(child)
                 continue
             child = Element(attr)
-            if value is not True:
+            if isinstance(value, bool):
+                child.set("val", "1" if value else "0")
+            else:
                 child.set("val", str(value).rstrip("0").rstrip(".") if attr == "sz" else str(value))
             node.append(child)
         return node

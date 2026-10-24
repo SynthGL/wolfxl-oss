@@ -13,13 +13,23 @@ Pod 2 (RFC-060).
 
 from __future__ import annotations
 
+from typing import Any
+
 from wolfxl._compat import _openpyxl_name_fallback
 
-try:
-    from wolfxl.calc._functions import _BUILTINS as _FUNCTIONS
-    FORMULAE: frozenset[str] = frozenset(name.upper() for name in _FUNCTIONS)
-except Exception:  # pragma: no cover — defensive: calc engine optional at import.
-    FORMULAE = frozenset()
+
+def _load_formulae() -> frozenset[str]:
+    try:
+        from wolfxl.calc._functions import _BUILTINS as _FUNCTIONS
+
+        return frozenset(name.upper() for name in _FUNCTIONS)
+    except Exception:  # pragma: no cover — defensive: calc engine optional at import.
+        return frozenset()
+
+
+def _formulae() -> frozenset[str]:
+    cached = globals().get("FORMULAE")
+    return cached if cached is not None else __getattr__("FORMULAE")
 
 
 def validate(formula: str) -> bool:
@@ -29,7 +39,7 @@ def validate(formula: str) -> bool:
     for token in tokenized.items:
         if token.type == "FUNC" and token.subtype == "OPEN":
             name = token.value[:-1]
-            if not token.value.startswith("_xlfn.") and name not in FORMULAE:
+            if not token.value.startswith("_xlfn.") and name not in _formulae():
                 raise ValueError(
                     f"Unknown function {token.value} in {formula}. "
                     "The function may need a prefix"
@@ -46,6 +56,16 @@ class Tokenizer:
         return FormulaTokenizer(formula)
 
 
-__all__ = ["FORMULAE", "Tokenizer", "validate"]
+__all__ = ["FORMULAE", "Tokenizer", "validate"]  # noqa: F822  # FORMULAE is bound lazily by __getattr__
 
-__getattr__ = _openpyxl_name_fallback(globals())
+_name_fallback = _openpyxl_name_fallback(globals())
+
+
+def __getattr__(name: str) -> Any:
+    # The catalogue is built from the calc engine on first use; ``import wolfxl``
+    # and the write path never load the engine for it.
+    if name == "FORMULAE":
+        value = _load_formulae()
+        globals()[name] = value
+        return value
+    return _name_fallback(name)

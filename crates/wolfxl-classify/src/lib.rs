@@ -181,11 +181,15 @@ fn classify_zip_archive<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> FileFor
     let mut saw_mimetype = false;
     let mut saw_content_xml = false;
     for i in 0..zip.len() {
-        let name = match zip.by_index_raw(i) {
-            Ok(entry) => entry.name().to_string(),
+        let entry = match zip.by_index_raw(i) {
+            Ok(entry) => entry,
             Err(_) => continue,
         };
-        match name.as_str() {
+        let name = match entry.name() {
+            Ok(name) => name,
+            Err(_) => continue,
+        };
+        match name.as_ref() {
             "xl/workbook.xml" => saw_workbook_xml = true,
             "xl/workbook.bin" => saw_workbook_bin = true,
             "mimetype" => saw_mimetype = true,
@@ -212,7 +216,6 @@ fn classify_zip_archive<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> FileFor
 #[cfg(test)]
 mod tests {
     use super::*;
-    use calamine_styles::{Reader, Xls, Xlsb};
 
     const XLSB_BYTES: &[u8] = include_bytes!("../../../tests/fixtures/sprint_kappa_smoke.xlsb");
     const XLS_BYTES: &[u8] = include_bytes!("../../../tests/fixtures/sprint_kappa_smoke.xls");
@@ -222,6 +225,27 @@ mod tests {
     #[test]
     fn classify_xlsx_bytes_smoke() {
         assert_eq!(classify_file_format_bytes(XLSX_BYTES), FileFormat::Xlsx);
+    }
+
+    #[test]
+    fn classify_legacy_encoded_zip_filename() {
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+        writer.start_file("bad.txt", options).unwrap();
+        writer.start_file("xl/workbook.xml", options).unwrap();
+        let mut bytes = writer.finish().unwrap().into_inner();
+        let central = bytes.windows(4).position(|w| w == b"PK\x01\x02").unwrap();
+        // ZIP 9 falls back to CP437 for non-UTF-8 bytes, even with this flag.
+        bytes[7] |= 0x08;
+        bytes[30] = 0xff;
+        bytes[central + 9] |= 0x08;
+        bytes[central + 46] = 0xff;
+        let mut archive = zip::ZipArchive::new(Cursor::new(&bytes)).unwrap();
+        assert_eq!(
+            archive.by_index_raw(0).unwrap().name().unwrap(),
+            "\u{a0}ad.txt"
+        );
+        assert_eq!(classify_file_format_bytes(&bytes), FileFormat::Xlsx);
     }
 
     #[test]
@@ -305,37 +329,27 @@ mod tests {
         );
     }
 
-    /// Confirms upstream calamine_styles' `Xlsb::new` accepts our
-    /// `XlsbSource` enum (Read+Seek delegation) and round-trips the
-    /// committed fixture.
     #[test]
-    fn xlsb_source_reads_fixture() {
-        let source = XlsbSource::Bytes(Cursor::new(XLSB_BYTES.to_vec()));
-        let mut wb: Xlsb<XlsbSource> =
-            Xlsb::new(source).expect("Xlsb::new on smoke fixture should succeed");
-        let names = wb.sheet_names();
-        assert!(!names.is_empty(), "xlsb fixture has at least one sheet");
-        let first = names[0].clone();
-        let range = wb
-            .worksheet_range(&first)
-            .expect("worksheet_range on first sheet should succeed");
-        let (h, w) = range.get_size();
-        assert!(h > 0 && w > 0, "first sheet should have data");
+    fn xlsb_source_delegates_read_and_seek() {
+        let mut source = XlsbSource::Bytes(Cursor::new(XLSB_BYTES.to_vec()));
+        let mut header = [0_u8; 4];
+        source.read_exact(&mut header).unwrap();
+        assert_eq!(&header, b"PK\x03\x04");
+        source.seek(SeekFrom::End(-4)).unwrap();
+        let mut trailer = [0_u8; 4];
+        source.read_exact(&mut trailer).unwrap();
+        assert_eq!(trailer, XLSB_BYTES[XLSB_BYTES.len() - 4..]);
     }
 
-    /// Same smoke for the BIFF8 / OLE2 path.
     #[test]
-    fn xls_source_reads_fixture() {
-        let source = XlsSource::Bytes(Cursor::new(XLS_BYTES.to_vec()));
-        let mut wb: Xls<XlsSource> =
-            Xls::new(source).expect("Xls::new on smoke fixture should succeed");
-        let names = wb.sheet_names();
-        assert!(!names.is_empty(), "xls fixture has at least one sheet");
-        let first = names[0].clone();
-        let range = wb
-            .worksheet_range(&first)
-            .expect("worksheet_range on first sheet should succeed");
-        let (h, w) = range.get_size();
-        assert!(h > 0 && w > 0, "first sheet should have data");
+    fn xls_source_delegates_read_and_seek() {
+        let mut source = XlsSource::Bytes(Cursor::new(XLS_BYTES.to_vec()));
+        let mut header = [0_u8; 8];
+        source.read_exact(&mut header).unwrap();
+        assert_eq!(header, [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
+        source.seek(SeekFrom::Start(512)).unwrap();
+        let mut sector = [0_u8; 16];
+        source.read_exact(&mut sector).unwrap();
+        assert_eq!(sector, XLS_BYTES[512..528]);
     }
 }

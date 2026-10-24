@@ -10,10 +10,8 @@ Targets the four scenarios called out in RFC-069 §7.2:
 4. Validation: refuse two families with identical kind + identical
    axIds (likely copy-paste bug — fail loudly).
 
-Read-side assertions exercise the dual-emission strategy: each chart
-family is *also* emitted as its own standalone chartspace so
-``openpyxl.load_workbook`` exposes every family on
-``ws._charts`` (closes the gap noted in RFC-069 §2). Write-side
+Read-side assertions check that ``openpyxl.load_workbook`` sees each
+combo as one chart whose ``_charts`` lists every family. Write-side
 assertions sanity-check the multi-family ``<plotArea>`` shape per
 RFC-069 §6 by inspecting ``xl/charts/chart1.xml`` directly.
 """
@@ -47,16 +45,22 @@ def _read_primary_chart_xml(out: Path) -> str:
         return z.read("xl/charts/chart1.xml").decode("utf-8")
 
 
+def _openpyxl_families(out: Path) -> list[str]:
+    """Return the family types of the single chart openpyxl reads back."""
+    import openpyxl as _opx
+
+    ref_ws = _opx.load_workbook(out).active
+    assert len(ref_ws._charts) == 1, [type(c).__name__ for c in ref_ws._charts]
+    return [type(family).__name__ for family in ref_ws._charts[0]._charts]
+
+
 def test_bar_plus_line_shared_axes_no_secondary(tmp_path: Path) -> None:
     """Bar + Line sharing both x and y axes (RFC-069 §7.2 case 1).
 
     The line chart inherits the primary's value-axis ``ax_id`` so no
-    secondary ``<c:valAx>`` is emitted. openpyxl's reload still sees
-    both families because each is also written as a standalone
-    chartspace at the same anchor (dual-emission strategy).
+    secondary ``<c:valAx>`` is emitted. openpyxl's reload sees one
+    chart carrying both families.
     """
-    import openpyxl as _opx
-
     wb = wolfxl.Workbook()
     ws = wb.active
     _seed_sheet(ws)
@@ -82,22 +86,13 @@ def test_bar_plus_line_shared_axes_no_secondary(tmp_path: Path) -> None:
         f"{chart_xml.count('<c:valAx>')}\n{chart_xml}"
     )
 
-    # openpyxl read: both families are visible as distinct ws._charts
-    # entries thanks to the dual-emission fallback.
-    ref_wb = _opx.load_workbook(out)
-    ref_ws = ref_wb[ref_wb.sheetnames[0]]
-    types = {type(c).__name__ for c in ref_ws._charts}
-    assert "BarChart" in types and "LineChart" in types, (
-        f"openpyxl saw {types}, expected both BarChart and LineChart"
-    )
+    assert _openpyxl_families(out) == ["BarChart", "LineChart"]
 
 
 def test_bar_plus_line_with_secondary_value_axis(tmp_path: Path) -> None:
     """The probe scenario: Bar + Line with line on a secondary axis
     (RFC-069 §7.2 case 2 / compat-oracle ``charts_combination``).
     """
-    import openpyxl as _opx
-
     wb = wolfxl.Workbook()
     ws = wb.active
     _seed_sheet(ws)
@@ -128,11 +123,7 @@ def test_bar_plus_line_with_secondary_value_axis(tmp_path: Path) -> None:
     assert '<c:axPos val="r"/>' in chart_xml
     assert '<c:crosses val="max"/>' in chart_xml
 
-    # openpyxl reload sees both families.
-    ref_wb = _opx.load_workbook(out)
-    ref_ws = ref_wb[ref_wb.sheetnames[0]]
-    types = {type(c).__name__ for c in ref_ws._charts}
-    assert "BarChart" in types and "LineChart" in types
+    assert _openpyxl_families(out) == ["BarChart", "LineChart"]
 
 
 def test_bar_plus_line_plus_area_three_family(tmp_path: Path) -> None:
@@ -140,14 +131,12 @@ def test_bar_plus_line_plus_area_three_family(tmp_path: Path) -> None:
 
     Bar + Line + Area in one ``__iadd__`` chain. Verifies the multi-family
     plotArea handles N>2 secondaries and that openpyxl's reload sees all
-    three types via dual-emission.
+    three families on one chart.
 
     *Partial-coverage note*: wolfxl's combo emit path supports an
     arbitrary number of axis-bearing 2D secondaries. 3D combos and Pie
     secondaries remain out of scope per RFC-069 §8.
     """
-    import openpyxl as _opx
-
     wb = wolfxl.Workbook()
     ws = wb.active
     _seed_sheet(ws)
@@ -169,12 +158,7 @@ def test_bar_plus_line_plus_area_three_family(tmp_path: Path) -> None:
     assert "<c:lineChart>" in chart_xml
     assert "<c:areaChart>" in chart_xml
 
-    ref_wb = _opx.load_workbook(out)
-    ref_ws = ref_wb[ref_wb.sheetnames[0]]
-    types = {type(c).__name__ for c in ref_ws._charts}
-    assert {"BarChart", "LineChart", "AreaChart"} <= types, (
-        f"openpyxl saw {types}, expected all three families"
-    )
+    assert _openpyxl_families(out) == ["BarChart", "LineChart", "AreaChart"]
 
 
 def test_secondary_with_same_kind_and_axids_raises(tmp_path: Path) -> None:
@@ -236,13 +220,9 @@ def test_secondary_with_empty_series_rejected(tmp_path: Path) -> None:
         wb.save(tmp_path / "empty_secondary.xlsx")
 
 
-def test_secondary_chart_anchored_off_screen(tmp_path: Path) -> None:
-    """The dual-emission shadow chart parks at row 1048576 (Excel's last
-    row) so Excel/LibreOffice render only the real combo from
-    ``chart1.xml`` and never the overlapping standalone secondary.
-    Without this guard, two charts at the same anchor stack on top of
-    each other when the file opens in real spreadsheet apps.
-    """
+def test_combo_is_written_as_one_chart(tmp_path: Path) -> None:
+    """A combo is one chart part and one drawing anchor, and wolfxl reads it
+    back as one chart carrying every family."""
     wb = wolfxl.Workbook()
     ws = wb.active
     _seed_sheet(ws)
@@ -255,18 +235,17 @@ def test_secondary_chart_anchored_off_screen(tmp_path: Path) -> None:
     line.y_axis.axId = 200
     bar += line
     ws.add_chart(bar, "E2")
-    out = tmp_path / "off_screen.xlsx"
+    out = tmp_path / "one_chart.xlsx"
     wb.save(out)
 
     with zipfile.ZipFile(out) as z:
+        names = z.namelist()
         drawing_xml = z.read("xl/drawings/drawing1.xml").decode("utf-8")
+    assert [n for n in names if n.startswith("xl/charts/chart")] == ["xl/charts/chart1.xml"]
+    assert drawing_xml.count("<c:chart ") == 1, drawing_xml
 
-    # Two anchors: primary at E2 (col=4 row=1) and shadow at A1048576
-    # (col=0 row=1048575). Both expressed zero-indexed in OOXML.
-    assert "<xdr:col>4</xdr:col>" in drawing_xml, "primary anchor lost"
-    assert "<xdr:col>0</xdr:col>" in drawing_xml, "shadow anchor missing column"
-    assert "<xdr:row>1048575</xdr:row>" in drawing_xml, (
-        "shadow secondary should park at Excel's last row (1048575 zero-indexed) "
-        f"to avoid overlapping the primary combo chart in Excel/LibreOffice. "
-        f"drawing1.xml:\n{drawing_xml}"
-    )
+    with wolfxl.load_workbook(out) as loaded:
+        charts = loaded.active._charts
+        assert [[type(f).__name__ for f in c._charts] for c in charts] == [
+            ["BarChart", "LineChart"]
+        ]

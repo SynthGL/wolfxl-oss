@@ -521,6 +521,14 @@ pub struct Gridlines {
     pub graphical_properties: Option<GraphicalProperties>,
 }
 
+/// `<c:upDownBars>` on a stock chart.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct UpDownBars {
+    pub gap_width: Option<u32>,
+    pub up_bars: Option<Gridlines>,
+    pub down_bars: Option<Gridlines>,
+}
+
 /// One run of rich text inside a title (or per-cell rich label).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TitleRun {
@@ -999,6 +1007,11 @@ pub struct Chart {
     /// per-series).
     pub smoothing: Option<bool>,
 
+    /// Stock chart-group decorations. `None` omits the element; an empty
+    /// shape retains default styling.
+    pub hi_low_lines: Option<Gridlines>,
+    pub up_down_bars: Option<UpDownBars>,
+
     /// 3D view parameters; only emitted when `kind.is_3d()`.
     pub view_3d: Option<View3D>,
 
@@ -1083,6 +1096,8 @@ impl Chart {
             show_neg_bubbles: None,
             style: None,
             smoothing: None,
+            hi_low_lines: None,
+            up_down_bars: None,
             view_3d: if matches!(
                 kind,
                 ChartKind::Bar3D

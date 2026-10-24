@@ -15,6 +15,7 @@ Covers the unified entry point wired up in
 xlsb / xls fixtures are produced by Pod-γ; tests gated on those skip
 when the fixture isn't yet committed.
 """
+
 from __future__ import annotations
 
 import io
@@ -296,9 +297,7 @@ def test_workbook_format_bytes_path_is_xlsx() -> None:
 
 
 @pytest.mark.parametrize("fmt", ["xls"])
-@pytest.mark.parametrize(
-    "attr", ["font", "fill", "border", "alignment", "number_format"]
-)
+@pytest.mark.parametrize("attr", ["font", "fill", "border", "alignment", "number_format"])
 def test_cell_style_accessor_raises_on_non_xlsx(fmt: str, attr: str) -> None:
     fix = _first_xlsx()
     wb = wolfxl.load_workbook(str(fix))
@@ -349,3 +348,38 @@ def test_is_date_returns_false_on_non_xlsx() -> None:
 def test_classify_path_python_handles_real_xlsx() -> None:
     fix = _first_xlsx()
     assert _classify_path_python(str(fix)) == "xlsx"
+
+
+@pytest.mark.parametrize("kind", ("str", "path", "bytes", "bytearray", "memoryview", "filelike"))
+def test_independent_native_xls_dispatch_source_forms(kind: str) -> None:
+    fixture = KAPPA_FIXTURES / "sprint_kappa_smoke.xls"
+    blob = fixture.read_bytes()
+    source = {
+        "str": str(fixture),
+        "path": fixture,
+        "bytes": blob,
+        "bytearray": bytearray(blob),
+        "memoryview": memoryview(blob),
+        "filelike": io.BytesIO(blob),
+    }[kind]
+    # Literal values belong to the committed smoke corpus, not a second call to
+    # the product parser masquerading as an independent oracle.
+    with wolfxl.load_workbook(source, data_only=True) as workbook:
+        assert type(workbook._rust_reader).__name__ == "NativeXlsBook"
+        assert workbook._format == "xls"
+        assert workbook.sheetnames == ["Sheet1"]
+        assert workbook.active["A1"].value == "name"
+        assert workbook.active["A2"].value == "alpha"
+        assert workbook.active["B2"].value == 1
+        with pytest.raises(NotImplementedError, match=r"\.xls"):
+            _ = workbook.active["A1"].font
+
+
+@pytest.mark.parametrize("kind", ("path", "bytes", "filelike"))
+def test_real_ods_remains_refused_by_community_python(kind: str) -> None:
+    fixture = KAPPA_FIXTURES / "sprint_kappa_smoke.ods"
+    source = fixture if kind == "path" else fixture.read_bytes()
+    if kind == "filelike":
+        source = io.BytesIO(source)
+    with pytest.raises(NotImplementedError, match="OpenDocument"):
+        wolfxl.load_workbook(source)

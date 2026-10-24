@@ -30,7 +30,7 @@ pub fn parse_cell_style_ids(xml: &str) -> Result<HashMap<(u32, u32), u32>> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.local_name().as_ref() == b"c" {
+                if e.local_name().as_ref() == "c" {
                     let a1 = attr_value(&e, b"r").unwrap_or_default();
                     if a1.is_empty() {
                         continue;

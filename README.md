@@ -149,7 +149,7 @@ Step-by-step guide: [openpyxl migration](https://wolfxl.com/openpyxl-migration).
 Install the current Community release:
 
 ```bash
-python -m pip install wolfxl==2.0.10
+python -m pip install wolfxl==2.0.11
 ```
 
 WolfXL Community supports Python 3.9 and newer CPython versions for which a
@@ -208,7 +208,7 @@ an empty-cell singleton. Dense timing is effectively unchanged. All 70 targeted
 streaming compatibility tests pass in the source-built lane.
 
 Baseline main `7b796d4dcc30` → candidate code `1d0927e623a3` (merged in PR #48).
-The [raw receipt](benchmarks/sparse-styled-source-built-20261009.json) records all
+The [raw receipt](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/benchmarks/sparse-styled-source-built-20261009.json) records all
 samples, source/module/native hashes, signatures, and untimed profiles; the
 [workflow](https://github.com/SynthGL/wolfxl-oss/actions/runs/37885386977) builds
 the standard candidate wheel and confirms native sources are unchanged from the
@@ -247,7 +247,7 @@ checked separately. This read signature does not certify every cell's value,
 type, or style meaning. Late-row verification streams the worksheet XML prefix
 and costs more than verification near the top.
 
-Separate untimed [styled-read validation](docs/performance/2026-10-08/cumulative/styled-read-validation.md)
+Separate untimed [styled-read validation](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/docs/performance/2026-10-08/cumulative/styled-read-validation.md)
 checks every coordinate, including sparse and merged placeholders. Coordinates,
 values, exact Python value types, Excel data types, geometry, merges, alignment,
 and number formats match openpyxl on these fixtures. Four baseline merged-border
@@ -282,20 +282,20 @@ divide openpyxl/final medians. Ratios below 1 mean the final variant is slower.
 Isolated PR gains are never multiplied, and the separate values/style-ID record
 API choice is excluded from cumulative engine gains. Five fresh-process trials
 follow one warmup, with serial, reproducibly shuffled variant order. Sample ranges and high-variance cases are
-in the [core evidence](docs/performance/2026-10-08/cumulative/core.md) and
-[guard evidence](docs/performance/2026-10-08/cumulative/guards.md), alongside raw
+in the [core evidence](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/docs/performance/2026-10-08/cumulative/core.md) and
+[guard evidence](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/docs/performance/2026-10-08/cumulative/guards.md), alongside raw
 JSON samples, fixture hashes, source/native/build identities, and validation
-boundaries. The [source bindings](docs/performance/2026-10-08/cumulative/source-bindings.json)
+boundaries. The [source bindings](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/docs/performance/2026-10-08/cumulative/source-bindings.json)
 map measured build inputs to the proposed PR trees. Sample ranges are descriptive
 rather than confidence intervals. The fixed-fixture headless checks are not
-Microsoft Excel certification. [Build and functional gates](docs/performance/2026-10-08/cumulative/build-gates.md)
+Microsoft Excel certification. [Build and functional gates](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/docs/performance/2026-10-08/cumulative/build-gates.md)
 are reported separately; their overlapping per-run test counts must not be added
 to imply distinct coverage.
 
 For ingestion that needs values and workbook-local style IDs, see the existing
-[bounded record recipe](docs/performance/style-id-records.md). It uses a different
+[bounded record recipe](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/docs/performance/style-id-records.md). It uses a different
 API and has explicit date, elapsed-duration, merge, and pending-style limits.
-The retained [intermediate top-regression experiment](docs/performance/2026-10-08/cumulative/intermediate-core.md)
+The retained [intermediate top-regression experiment](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/docs/performance/2026-10-08/cumulative/intermediate-core.md)
 record the earlier source stage separately and do not supply the final ratios.
 
 ### Historical published-wheel comparison: 2026-10-02
@@ -317,13 +317,13 @@ Bulk writes use a different API shape from openpyxl's per-row/per-cell calls.
 The historical large fixture also has five populated columns, despite its
 nominal eight-column configuration. Its edit total includes the historical
 openpyxl verification, so it is not an operation-only ratio. Read the
-[historical receipts and reproduction notes](benchmarks/results/2026-10-02-community-2.0.8-vs-openpyxl-3.1.5.md)
+[historical receipts and reproduction notes](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/benchmarks/results/2026-10-02-community-2.0.8-vs-openpyxl-3.1.5.md)
 for raw samples, environment identities, warmup policy, and memory measurements.
-Older runs remain under [benchmarks/results/](benchmarks/results/).
+Older runs remain under [benchmarks/results/](https://github.com/SynthGL/wolfxl-oss/tree/206bf4e1cdc62c8121569066362c1521d9b94a72/benchmarks/results/).
 
 ## Fidelity
 
-The [round-trip fidelity harness](fidelity-harness/README.md) compares workbook
+The [round-trip fidelity harness](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/fidelity-harness/README.md) compares workbook
 packages before and after a no-edit save. Run it on your own files, inspect the
 typed part and relationship differences, and add another engine through the
 documented adapter protocol.
@@ -369,8 +369,8 @@ pytest tests/test_community_distribution.py -q
 The distribution-boundary test verifies the Community version, compiled
 backends, and absence of Commercial-only Python modules.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and
-[SECURITY.md](SECURITY.md) for how to report a vulnerability.
+See the [contribution guidelines](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/CONTRIBUTING.md) and
+[security policy](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/SECURITY.md) for how to contribute or report a vulnerability.
 
 ## License
 

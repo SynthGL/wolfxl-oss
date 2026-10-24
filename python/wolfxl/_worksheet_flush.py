@@ -627,24 +627,15 @@ def _flush_pending_images(ws: Worksheet, writer: Any, sheet: str) -> None:
     ws._pending_images.clear()  # noqa: SLF001
 
 
-_COMBO_SHADOW_ANCHOR = "A1048576"
-
-
 def _flush_pending_charts(ws: Worksheet, writer: Any, sheet: str) -> None:
     """Flush queued write-mode charts.
 
     For combination charts (RFC-069 / G15), the primary chart's
     ``to_rust_dict()`` payload carries every sibling family under the
-    ``secondary_charts`` key — the Rust emitter consumes that list to
-    produce the multi-family ``<plotArea>`` (RFC-069 §6). To make the
-    saved file readable as a combo by openpyxl (whose reader collapses
-    a multi-family chartspace into a single returned chart object), we
-    *also* emit each secondary as its own standalone chartspace, but
-    parked at the bottom-left shadow anchor (``A1048576`` — Excel's
-    last valid row) so Excel/LibreOffice render only the real combo
-    from ``chart1.xml``. openpyxl's reader iterates every drawing
-    regardless of position, so its ``ws._charts`` still sees every
-    family as a typed instance.
+    ``secondary_charts`` key, and the Rust emitter writes them all into
+    one multi-family ``<plotArea>`` (RFC-069 §6). openpyxl and wolfxl
+    read that chartspace back as one chart whose ``_charts`` lists
+    every family, so each combo is written exactly once.
     """
     if not ws._pending_charts:  # noqa: SLF001
         return
@@ -657,10 +648,6 @@ def _flush_pending_charts(ws: Worksheet, writer: Any, sheet: str) -> None:
             if not isinstance(anchor, str):
                 anchor = "E15"
             writer.add_chart_native(sheet, primary_dict, anchor)
-            for secondary in chart._charts[1:]:  # noqa: SLF001
-                secondary_dict = secondary.to_rust_dict()
-                secondary_dict.pop("secondary_charts", None)
-                writer.add_chart_native(sheet, secondary_dict, _COMBO_SHADOW_ANCHOR)
     else:
         import warnings
 

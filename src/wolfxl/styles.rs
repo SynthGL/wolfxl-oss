@@ -109,14 +109,14 @@ pub fn parse_cellxfs(xml: &str) -> Vec<XfEntry> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 let tag = e.local_name();
-                if tag.as_ref() == b"cellXfs" {
+                if tag.as_ref() == "cellXfs" {
                     in_cellxfs = true;
-                } else if tag.as_ref() == b"xf" && in_cellxfs {
+                } else if tag.as_ref() == "xf" && in_cellxfs {
                     entries.push(parse_xf_entry(e));
                 }
             }
             Ok(Event::End(ref e)) => {
-                if e.local_name().as_ref() == b"cellXfs" {
+                if e.local_name().as_ref() == "cellXfs" {
                     in_cellxfs = false;
                 }
             }
@@ -181,7 +181,7 @@ pub fn count_section_elements(xml: &str, section_tag: &str) -> (u32, u64) {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
-                if e.local_name().as_ref() == section_bytes {
+                if e.local_name().as_ref().as_bytes() == section_bytes {
                     in_section = true;
                     // Try to read count from attribute first
                     if let Some(c) = attr_value(e, b"count") {
@@ -189,12 +189,12 @@ pub fn count_section_elements(xml: &str, section_tag: &str) -> (u32, u64) {
                             count = n;
                         }
                     }
-                } else if in_section && e.local_name().as_ref() == child_tag.as_slice() {
+                } else if in_section && e.local_name().as_ref().as_bytes() == child_tag.as_slice() {
                     // Count child elements if count attr wasn't present
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                if e.local_name().as_ref() == section_bytes {
+                if e.local_name().as_ref().as_bytes() == section_bytes {
                     // Self-closing section, empty
                     if let Some(c) = attr_value(e, b"count") {
                         if let Ok(n) = c.parse::<u32>() {
@@ -204,7 +204,7 @@ pub fn count_section_elements(xml: &str, section_tag: &str) -> (u32, u64) {
                 }
             }
             Ok(Event::End(ref e)) => {
-                if e.local_name().as_ref() == section_bytes {
+                if e.local_name().as_ref().as_bytes() == section_bytes {
                     in_section = false;
                     end_offset = reader.buffer_position();
                 }
@@ -428,7 +428,7 @@ pub fn find_or_create_num_fmt(xml: &str, format_code: &str) -> (String, u32) {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
-                if e.local_name().as_ref() == b"numFmt" {
+                if e.local_name().as_ref() == "numFmt" {
                     let id = attr_value(e, b"numFmtId")
                         .and_then(|s| s.parse::<u32>().ok())
                         .unwrap_or(0);
@@ -587,6 +587,14 @@ pub fn apply_format_spec(xml: &str, spec: &FormatSpec) -> (String, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_num_fmt_reuses_entity_encoded_format() {
+        let xml = r#"<styleSheet><numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;A&amp;&#x42;&quot;0"/></numFmts></styleSheet>"#;
+        let (out, id) = find_or_create_num_fmt(xml, "\"A&B\"0");
+        assert_eq!(id, 164);
+        assert_eq!(out, xml);
+    }
 
     const MINIMAL_STYLES: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">

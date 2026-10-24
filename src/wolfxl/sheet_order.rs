@@ -171,13 +171,13 @@ pub fn merge_sheet_renames(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.local_name().as_ref() == b"sheet" => {
+            Ok(Event::Start(e)) if e.local_name().as_ref() == "sheet" => {
                 let renamed = rename_sheet_event(&e, &rename_map)?;
                 writer
                     .write_event(Event::Start(renamed))
                     .map_err(|e| format!("workbook.xml write error: {e}"))?;
             }
-            Ok(Event::Empty(e)) if e.local_name().as_ref() == b"sheet" => {
+            Ok(Event::Empty(e)) if e.local_name().as_ref() == "sheet" => {
                 let renamed = rename_sheet_event(&e, &rename_map)?;
                 writer
                     .write_event(Event::Empty(renamed))
@@ -199,12 +199,11 @@ fn rename_sheet_event(
     event: &BytesStart<'_>,
     rename_map: &BTreeMap<&str, &str>,
 ) -> Result<BytesStart<'static>, String> {
-    let mut out = BytesStart::new(String::from_utf8_lossy(event.name().as_ref()).into_owned());
+    let mut out = BytesStart::new(event.name().as_ref().to_owned());
     for attr in event.attributes().with_checks(false) {
         let attr = attr.map_err(|e| format!("workbook.xml sheet attr error: {e}"))?;
-        if attr.key.as_ref() == b"name" {
-            let value = attr
-                .unescape_value()
+        if attr.key.as_ref() == "name" {
+            let value = quick_xml::escape::unescape(&attr.value)
                 .map_err(|e| format!("workbook.xml sheet name decode error: {e}"))?;
             if let Some(new_name) = rename_map.get(value.as_ref()) {
                 out.push_attribute(("name", *new_name));
@@ -338,17 +337,17 @@ fn scan_workbook_layout(xml: &[u8]) -> Result<WorkbookLayout, String> {
 
         match evt {
             Ok(Event::Start(ref e)) => {
-                if e.local_name().as_ref() == b"sheets" && sheets_inner_start.is_none() {
+                if e.local_name().as_ref() == "sheets" && sheets_inner_start.is_none() {
                     sheets_inner_start = Some(post + offset);
                     in_sheets = true;
-                } else if in_sheets && e.local_name().as_ref() == b"sheet" {
+                } else if in_sheets && e.local_name().as_ref() == "sheet" {
                     current_sheet_start = Some(pre + offset);
-                    current_sheet_name = Some(parse_sheet_name(e));
+                    current_sheet_name = Some(parse_sheet_name(e)?);
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                if in_sheets && e.local_name().as_ref() == b"sheet" {
-                    let name = parse_sheet_name(e);
+                if in_sheets && e.local_name().as_ref() == "sheet" {
+                    let name = parse_sheet_name(e)?;
                     entries.push(SheetEntry {
                         name,
                         original_pos: entries.len() as u32,
@@ -357,7 +356,7 @@ fn scan_workbook_layout(xml: &[u8]) -> Result<WorkbookLayout, String> {
                 }
             }
             Ok(Event::End(ref e)) => {
-                if in_sheets && e.local_name().as_ref() == b"sheet" {
+                if in_sheets && e.local_name().as_ref() == "sheet" {
                     if let (Some(start), Some(name)) =
                         (current_sheet_start.take(), current_sheet_name.take())
                     {
@@ -367,7 +366,7 @@ fn scan_workbook_layout(xml: &[u8]) -> Result<WorkbookLayout, String> {
                             raw: xml[start..post + offset].to_vec(),
                         });
                     }
-                } else if e.local_name().as_ref() == b"sheets" && in_sheets {
+                } else if e.local_name().as_ref() == "sheets" && in_sheets {
                     sheets_inner_end = Some(pre + offset);
                     in_sheets = false;
                 }
@@ -391,16 +390,16 @@ fn scan_workbook_layout(xml: &[u8]) -> Result<WorkbookLayout, String> {
     })
 }
 
-fn parse_sheet_name(e: &quick_xml::events::BytesStart<'_>) -> String {
-    for a in e.attributes().with_checks(false).flatten() {
-        if a.key.as_ref() == b"name" {
-            return a
-                .unescape_value()
+fn parse_sheet_name(e: &quick_xml::events::BytesStart<'_>) -> Result<String, String> {
+    for a in e.attributes().with_checks(false) {
+        let a = a.map_err(|e| format!("workbook.xml sheet attr error: {e}"))?;
+        if a.key.as_ref() == "name" {
+            return quick_xml::escape::unescape(&a.value)
                 .map(|v| v.into_owned())
-                .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned());
+                .map_err(|e| format!("workbook.xml sheet name decode error: {e}"));
         }
     }
-    String::new()
+    Ok(String::new())
 }
 
 fn splice_sheets_inner(
@@ -449,7 +448,7 @@ fn rewrite_local_sheet_ids(src: &[u8], remap: &BTreeMap<u32, u32>) -> Result<Vec
         let _post = reader.buffer_position() as usize;
         match evt {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
-                if e.local_name().as_ref() == b"definedName" {
+                if e.local_name().as_ref() == "definedName" {
                     if let Some((val_start, val_end, old)) =
                         find_local_sheet_id_value(src, pre + offset)
                     {
@@ -509,7 +508,7 @@ fn remove_defined_names_for_deleted_sheets(
         let evt = reader.read_event_into(&mut buf);
         let post = reader.buffer_position() as usize;
         match evt {
-            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"definedName" => {
+            Ok(Event::Empty(e)) if e.local_name().as_ref() == "definedName" => {
                 if let Some((_, _, old)) = find_local_sheet_id_value(src, pre + offset) {
                     if let Ok(parsed) = old.parse::<u32>() {
                         if deleted_positions.contains(&parsed) {
@@ -518,7 +517,7 @@ fn remove_defined_names_for_deleted_sheets(
                     }
                 }
             }
-            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"definedName" => {
+            Ok(Event::Start(e)) if e.local_name().as_ref() == "definedName" => {
                 if let Some((_, _, old)) = find_local_sheet_id_value(src, pre + offset) {
                     if let Ok(parsed) = old.parse::<u32>() {
                         if deleted_positions.contains(&parsed) {
@@ -527,7 +526,7 @@ fn remove_defined_names_for_deleted_sheets(
                     }
                 }
             }
-            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"definedName" => {
+            Ok(Event::End(e)) if e.local_name().as_ref() == "definedName" => {
                 if let Some((start, _)) = active_defined_name.take() {
                     removals.push((start, post + offset));
                 }
@@ -660,6 +659,27 @@ fn is_xml_attr_name_char(b: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sheet_rename_decodes_names_and_preserves_formula_references() {
+        let xml = br#"<workbook><sheets><sheet name="A&amp;&#x42;" sheetId="1"/></sheets><definedNames><definedName name="X"> A &amp; B &#38; C &custom; </definedName></definedNames></workbook>"#;
+        let out = merge_sheet_renames(xml, &[("A&B".into(), "C&\"D".into())]).unwrap();
+        let text = std::str::from_utf8(&out).unwrap();
+        assert!(text.contains(r#"name="C&amp;&quot;D""#));
+        assert!(text.contains("> A &amp; B &#38; C &custom; </definedName>"));
+        assert_eq!(
+            merge_sheet_moves(&out, &[]).unwrap().new_order,
+            vec!["C&\"D"]
+        );
+    }
+
+    #[test]
+    fn sheet_names_reject_unknown_entities() {
+        let xml =
+            br#"<workbook><sheets><sheet name="A&unknown;B" sheetId="1"/></sheets></workbook>"#;
+        assert!(merge_sheet_moves(xml, &[]).is_err());
+        assert!(merge_sheet_renames(xml, &[("A".into(), "B".into())]).is_err());
+    }
 
     fn workbook_with_four_sheets() -> &'static str {
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

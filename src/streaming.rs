@@ -62,7 +62,7 @@ fn load_sst(zip: &mut ZipArchive<File>) -> PyResult<Vec<String>> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
                 let name = e.local_name();
-                match name.as_ref() {
+                match name.as_ref().as_bytes() {
                     b"si" => {
                         in_si = true;
                         current.clear();
@@ -77,7 +77,7 @@ fn load_sst(zip: &mut ZipArchive<File>) -> PyResult<Vec<String>> {
             }
             Ok(Event::End(e)) => {
                 let name = e.local_name();
-                match name.as_ref() {
+                match name.as_ref().as_bytes() {
                     b"si" => {
                         out.push(std::mem::take(&mut current));
                         in_si = false;
@@ -90,11 +90,13 @@ fn load_sst(zip: &mut ZipArchive<File>) -> PyResult<Vec<String>> {
             }
             Ok(Event::Text(t)) => {
                 if in_si && in_t {
-                    let s = t
-                        .unescape()
-                        .map_err(|e| PyErr::new::<PyIOError, _>(format!("SST text decode: {e}")))?;
-                    current.push_str(&s);
+                    current.push_str(&t);
                 }
+            }
+            Ok(Event::GeneralRef(r)) if in_si && in_t => {
+                let text = ooxml_util::resolve_general_ref(&r)
+                    .map_err(|e| PyErr::new::<PyIOError, _>(format!("SST text decode: {e}")))?;
+                current.push_str(&text);
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -179,6 +181,17 @@ impl SheetXmlReader {
         match self {
             Self::Memory(reader) => reader.read_event_into(buf),
             Self::File(reader) => reader.read_event_into(buf),
+        }
+    }
+
+    fn read_text_into<'a>(
+        &mut self,
+        end: quick_xml::name::QName<'_>,
+        buf: &'a mut Vec<u8>,
+    ) -> quick_xml::Result<quick_xml::events::BytesText<'a>> {
+        match self {
+            Self::Memory(reader) => reader.read_text_into(end, buf),
+            Self::File(reader) => reader.read_text_into(end, buf),
         }
     }
 }
@@ -517,7 +530,7 @@ impl StreamingSheetReader {
                 .read_event_into(&mut self.event_buf)
                 .map_err(|e| PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}")))?;
             match event {
-                Event::Start(e) if e.local_name().as_ref() == b"row" => {
+                Event::Start(e) if e.local_name().as_ref() == "row" => {
                     let row_idx = parse_row_index_from_start(&e)?;
                     drop(e);
                     let cells = read_cells_until_row_end(
@@ -529,7 +542,7 @@ impl StreamingSheetReader {
                     )?;
                     return self.row_result(row_idx, cells);
                 }
-                Event::Empty(e) if e.local_name().as_ref() == b"row" => {
+                Event::Empty(e) if e.local_name().as_ref() == "row" => {
                     let row_idx = parse_row_index_from_start(&e)?;
                     return self.row_result(row_idx, Vec::new());
                 }
@@ -551,7 +564,7 @@ impl StreamingSheetReader {
                 .read_event_into(&mut self.event_buf)
                 .map_err(|e| PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}")))?;
             match event {
-                Event::Start(e) if e.local_name().as_ref() == b"row" => {
+                Event::Start(e) if e.local_name().as_ref() == "row" => {
                     let row_idx = parse_row_index_from_start(&e)?;
                     drop(e);
                     if let Some(min) = self.min_row {
@@ -577,7 +590,7 @@ impl StreamingSheetReader {
                     )?;
                     return Ok(ValueStepResult::Row(row_idx, values, needs_normalise));
                 }
-                Event::Empty(e) if e.local_name().as_ref() == b"row" => {
+                Event::Empty(e) if e.local_name().as_ref() == "row" => {
                     let row_idx = parse_row_index_from_start(&e)?;
                     return self.empty_value_row_result(py, row_idx);
                 }
@@ -649,7 +662,7 @@ fn read_cells_until_row_end(
             .read_event_into(buf)
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}")))?;
         match event {
-            Event::Start(e) if e.local_name().as_ref() == b"c" => {
+            Event::Start(e) if e.local_name().as_ref() == "c" => {
                 let (col, style_id, t_attr) = cell_attrs_from_start(&e, &cells)?;
                 drop(e);
                 let (value, cell_type) = read_cell_contents(reader, buf, py, &t_attr, sst)?;
@@ -660,7 +673,7 @@ fn read_cells_until_row_end(
                     cell_type,
                 });
             }
-            Event::Empty(e) if e.local_name().as_ref() == b"c" => {
+            Event::Empty(e) if e.local_name().as_ref() == "c" => {
                 let (col, style_id, _t_attr) = cell_attrs_from_start(&e, &cells)?;
                 cells.push(ParsedCell {
                     col,
@@ -669,7 +682,7 @@ fn read_cells_until_row_end(
                     cell_type: "blank",
                 });
             }
-            Event::End(e) if e.local_name().as_ref() == b"row" => return Ok(cells),
+            Event::End(e) if e.local_name().as_ref() == "row" => return Ok(cells),
             Event::Eof => {
                 return Err(PyErr::new::<PyIOError, _>(format!(
                     "Streaming reader: unterminated <row r=\"{row_idx}\">"
@@ -691,7 +704,7 @@ fn skip_row_until_end(
             .read_event_into(buf)
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}")))?;
         match event {
-            Event::End(e) if e.local_name().as_ref() == b"row" => return Ok(()),
+            Event::End(e) if e.local_name().as_ref() == "row" => return Ok(()),
             Event::Eof => {
                 return Err(PyErr::new::<PyIOError, _>(format!(
                     "Streaming reader: unterminated <row r=\"{row_idx}\">"
@@ -723,7 +736,7 @@ fn read_values_until_row_end<'py>(
             .read_event_into(buf)
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}")))?;
         match event {
-            Event::Start(e) if e.local_name().as_ref() == b"c" => {
+            Event::Start(e) if e.local_name().as_ref() == "c" => {
                 let (col, t_attr) = cell_value_attrs_from_start(&e, next_col)?;
                 next_col = col.saturating_add(1);
                 drop(e);
@@ -734,7 +747,7 @@ fn read_values_until_row_end<'py>(
                     needs_normalise = true;
                 }
             }
-            Event::Empty(e) if e.local_name().as_ref() == b"c" => {
+            Event::Empty(e) if e.local_name().as_ref() == "c" => {
                 let (col, _t_attr) = cell_value_attrs_from_start(&e, next_col)?;
                 next_col = col.saturating_add(1);
                 push_bounded_value(
@@ -747,7 +760,7 @@ fn read_values_until_row_end<'py>(
                     max_col,
                 );
             }
-            Event::End(e) if e.local_name().as_ref() == b"row" => {
+            Event::End(e) if e.local_name().as_ref() == "row" => {
                 return Ok((
                     finish_value_row(py, out, last_col, min_col, max_col)?,
                     needs_normalise,
@@ -826,7 +839,6 @@ fn read_cell_contents(
     let mut inline_text: Option<String> = None;
     let mut fast_number: Option<PyObjectOwned> = None;
     let mut fast_shared: Option<usize> = None;
-    let mut in_v = false;
     let mut in_f = false;
     let mut in_t = false;
 
@@ -836,13 +848,54 @@ fn read_cell_contents(
             .read_event_into(buf)
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}")))?;
         match event {
-            Event::Start(e) => match e.local_name().as_ref() {
-                b"v" => in_v = true,
+            Event::Start(e) => match e.local_name().as_ref().as_bytes() {
+                b"v" => {
+                    // Read the complete value before parsing: `1&#50;3` is
+                    // 123, not the first Text fragment (1). Reuse the XML
+                    // buffer so ordinary numeric values remain allocation-free.
+                    let end = if e.name().as_ref() == "v" {
+                        std::borrow::Cow::Borrowed("v")
+                    } else {
+                        std::borrow::Cow::Owned(e.name().as_ref().to_owned())
+                    };
+                    drop(e);
+                    buf.clear();
+                    let raw = reader
+                        .read_text_into(quick_xml::name::QName(&end), buf)
+                        .map_err(|e| {
+                            PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}"))
+                        })?;
+                    let text = quick_xml::escape::unescape(&raw).map_err(|e| {
+                        PyErr::new::<PyIOError, _>(format!("cell text decode: {e}"))
+                    })?;
+                    if matches!(t_attr, CellTypeAttr::Number)
+                        && f_text.is_none()
+                        && v_text.is_none()
+                        && fast_number.is_none()
+                    {
+                        if let Some(value) = number_text_to_py(py, text.as_bytes())? {
+                            fast_number = Some(value);
+                            continue;
+                        }
+                    }
+                    if matches!(t_attr, CellTypeAttr::Shared)
+                        && v_text.is_none()
+                        && fast_shared.is_none()
+                    {
+                        if let Some(idx) = parse_usize_bytes(text.as_bytes()) {
+                            fast_shared = Some(idx);
+                            continue;
+                        }
+                    }
+                    if !text.is_empty() {
+                        v_text.get_or_insert_with(String::new).push_str(&text);
+                    }
+                }
                 b"f" => in_f = true,
                 b"t" => in_t = true,
                 _ => {}
             },
-            Event::Empty(e) => match e.local_name().as_ref() {
+            Event::Empty(e) => match e.local_name().as_ref().as_bytes() {
                 b"v" => {
                     v_text.get_or_insert_with(String::new);
                 }
@@ -855,39 +908,22 @@ fn read_cell_contents(
                 _ => {}
             },
             Event::Text(t) => {
-                if in_v
-                    && matches!(t_attr, CellTypeAttr::Number)
-                    && f_text.is_none()
-                    && v_text.is_none()
-                    && fast_number.is_none()
-                {
-                    if let Some(value) = number_text_to_py(py, t.as_ref())? {
-                        fast_number = Some(value);
-                        continue;
-                    }
+                if in_f {
+                    f_text.get_or_insert_with(String::new).push_str(&t);
+                } else if in_t {
+                    inline_text.get_or_insert_with(String::new).push_str(&t);
                 }
-                if in_v
-                    && matches!(t_attr, CellTypeAttr::Shared)
-                    && v_text.is_none()
-                    && fast_shared.is_none()
-                {
-                    if let Some(idx) = parse_usize_bytes(t.as_ref()) {
-                        fast_shared = Some(idx);
-                        continue;
-                    }
-                }
-                let text = t
-                    .unescape()
+            }
+            Event::GeneralRef(r) => {
+                let text = ooxml_util::resolve_general_ref(&r)
                     .map_err(|e| PyErr::new::<PyIOError, _>(format!("cell text decode: {e}")))?;
-                if in_v {
-                    v_text.get_or_insert_with(String::new).push_str(&text);
-                } else if in_f {
+                if in_f {
                     f_text.get_or_insert_with(String::new).push_str(&text);
                 } else if in_t {
                     inline_text.get_or_insert_with(String::new).push_str(&text);
                 }
             }
-            Event::End(e) => match e.local_name().as_ref() {
+            Event::End(e) => match e.local_name().as_ref().as_bytes() {
                 b"c" => {
                     if f_text.is_none() {
                         if let Some(value) = fast_number {
@@ -904,7 +940,6 @@ fn read_cell_contents(
                     }
                     return build_cell_object(py, t_attr, f_text, v_text.or(inline_text), sst);
                 }
-                b"v" => in_v = false,
                 b"f" => in_f = false,
                 b"t" => in_t = false,
                 _ => {}
@@ -927,16 +962,17 @@ fn cell_attrs_from_start(
     let mut style_id = None;
     let mut cell_type = CellTypeAttr::Number;
     for attr in e.attributes().with_checks(false).flatten() {
-        let key = attr.key.as_ref();
+        let key = attr.key.as_ref().as_bytes();
         let local = key.rsplit(|b| *b == b':').next().unwrap_or(key);
         match local {
             b"r" => {
                 col = Some(
-                    parse_a1_column(attr.value.as_ref()).map_err(PyErr::new::<PyValueError, _>)?,
+                    parse_a1_column(attr.value.as_bytes())
+                        .map_err(PyErr::new::<PyValueError, _>)?,
                 );
             }
-            b"s" => style_id = parse_u32_bytes(attr.value.as_ref()),
-            b"t" => cell_type = cell_type_from_bytes(attr.value.as_ref()),
+            b"s" => style_id = parse_u32_bytes(attr.value.as_bytes()),
+            b"t" => cell_type = cell_type_from_bytes(attr.value.as_bytes()),
             _ => {}
         }
     }
@@ -951,15 +987,16 @@ fn cell_value_attrs_from_start(
     let mut col = None;
     let mut cell_type = CellTypeAttr::Number;
     for attr in e.attributes().with_checks(false).flatten() {
-        let key = attr.key.as_ref();
+        let key = attr.key.as_ref().as_bytes();
         let local = key.rsplit(|b| *b == b':').next().unwrap_or(key);
         match local {
             b"r" => {
                 col = Some(
-                    parse_a1_column(attr.value.as_ref()).map_err(PyErr::new::<PyValueError, _>)?,
+                    parse_a1_column(attr.value.as_bytes())
+                        .map_err(PyErr::new::<PyValueError, _>)?,
                 );
             }
-            b"t" => cell_type = cell_type_from_bytes(attr.value.as_ref()),
+            b"t" => cell_type = cell_type_from_bytes(attr.value.as_bytes()),
             _ => {}
         }
     }
@@ -977,10 +1014,10 @@ fn parse_row_index_from_start(e: &BytesStart<'_>) -> PyResult<u32> {
 
 fn attr_u32(e: &BytesStart<'_>, name: &[u8]) -> Option<u32> {
     for attr in e.attributes().with_checks(false).flatten() {
-        let key = attr.key.as_ref();
+        let key = attr.key.as_ref().as_bytes();
         let local = key.rsplit(|b| *b == b':').next().unwrap_or(key);
         if local == name {
-            return parse_u32_bytes(attr.value.as_ref());
+            return parse_u32_bytes(attr.value.as_bytes());
         }
     }
     None
@@ -1445,5 +1482,99 @@ mod tests {
     fn unescape_basic() {
         assert_eq!(unescape_xml(b"a &amp; b"), "a & b");
         assert_eq!(unescape_xml(b"plain"), "plain");
+    }
+
+    #[test]
+    fn streaming_split_references_are_complete_values() {
+        pyo3::Python::initialize();
+        Python::attach(|py| {
+            for use_file in [false, true] {
+                for (xml, kind, expected) in [
+                    ("<c><v>1&#50;3</v></c>", CellTypeAttr::Number, "123"),
+                    ("<c><v>&#49;0</v></c>", CellTypeAttr::Shared, "entry 10"),
+                    (
+                        "<x:c xmlns:x=\"urn:test\"><x:v>1&#x32;3</x:v></x:c>",
+                        CellTypeAttr::Number,
+                        "123",
+                    ),
+                    (
+                        "<c><is><t> A &amp; &#x1F600;&#10; B </t></is></c>",
+                        CellTypeAttr::InlineString,
+                        " A & 😀\n B ",
+                    ),
+                ] {
+                    let mut file = tempfile::tempfile().unwrap();
+                    let mut reader = if use_file {
+                        std::io::Write::write_all(&mut file, xml.as_bytes()).unwrap();
+                        file.rewind().unwrap();
+                        SheetXmlReader::File(XmlReader::from_reader(BufReader::new(file)))
+                    } else {
+                        SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(
+                            xml.as_bytes().to_vec(),
+                        )))
+                    };
+                    let mut buf = Vec::new();
+                    assert!(matches!(
+                        reader.read_event_into(&mut buf).unwrap(),
+                        Event::Start(_)
+                    ));
+                    let sst: Vec<_> = (0..11).map(|i| format!("entry {i}")).collect();
+                    let (value, _) =
+                        read_cell_contents(&mut reader, &mut buf, py, &kind, &sst).unwrap();
+                    if matches!(kind, CellTypeAttr::Number) {
+                        assert_eq!(value.extract::<i64>(py).unwrap().to_string(), expected);
+                    } else {
+                        assert_eq!(value.extract::<String>(py).unwrap(), expected);
+                    }
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn streaming_rejects_invalid_value_references() {
+        pyo3::Python::initialize();
+        Python::attach(|py| {
+            for body in [
+                "<v>1&unknown;2</v>",
+                "<is><t>before &unknown; after</t></is>",
+            ] {
+                let xml = format!("<c>{body}</c>");
+                let mut reader =
+                    SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(xml.into_bytes())));
+                let mut buf = Vec::new();
+                assert!(matches!(
+                    reader.read_event_into(&mut buf).unwrap(),
+                    Event::Start(_)
+                ));
+                assert!(
+                    read_cell_contents(&mut reader, &mut buf, py, &CellTypeAttr::Number, &[])
+                        .is_err()
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn streaming_formula_and_cache_aggregate_references() {
+        pyo3::Python::initialize();
+        Python::attach(|py| {
+            let xml = b"<c><f> A1 &amp; &quot; B &quot;&#10;</f><v>1&#50;3</v></c>";
+            let mut reader =
+                SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(xml.to_vec())));
+            let mut buf = Vec::new();
+            assert!(matches!(
+                reader.read_event_into(&mut buf).unwrap(),
+                Event::Start(_)
+            ));
+            let (value, kind) =
+                read_cell_contents(&mut reader, &mut buf, py, &CellTypeAttr::Number, &[]).unwrap();
+            assert_eq!(kind, "formula");
+            let fields = value
+                .extract::<std::collections::HashMap<String, String>>(py)
+                .unwrap();
+            assert_eq!(fields["formula"], "= A1 & \" B \"\n");
+            assert_eq!(fields["cached"], "123");
+        });
     }
 }

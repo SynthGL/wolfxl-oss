@@ -15,7 +15,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from wolfxl._compat import _openpyxl_name_fallback
-from wolfxl.utils.formulas import FORMULAE
 from wolfxl.utils.cell import (
     ABSOLUTE_RE,
     column_index_from_string,
@@ -47,7 +46,17 @@ __all__ = [
     "rows_from_range",
 ]
 
-__getattr__ = _openpyxl_name_fallback(globals())
+_name_fallback = _openpyxl_name_fallback(globals())
+
+
+def __getattr__(name: str):
+    if name == "FORMULAE":
+        from wolfxl.utils import formulas
+
+        value = formulas.FORMULAE
+        globals()[name] = value
+        return value
+    return _name_fallback(name)
 
 
 def absolute_coordinate(coord_string: str) -> str:

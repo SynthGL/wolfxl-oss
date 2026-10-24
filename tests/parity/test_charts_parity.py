@@ -484,3 +484,72 @@ def test_canonicalize_handles_axis_id_drift(tmp_path: Path) -> None:
         b'<c:axId val="456"/></c:chart>'
     )
     assert canonicalize_chart_xml(a) == canonicalize_chart_xml(b)
+
+
+# ---------------------------------------------------------------------------
+# Accepted divergences stay narrow and correct
+# ---------------------------------------------------------------------------
+
+_C = "http://schemas.openxmlformats.org/drawingml/2006/chart"
+_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+
+def _chart_doc(body: str) -> bytes:
+    return f'<c:chart xmlns:c="{_C}" xmlns:a="{_A}">{body}</c:chart>'.encode()
+
+
+def test_canonicalize_tolerates_only_empty_list_style_and_reference_caches() -> None:
+    """The accepted wolfxl-vs-openpyxl divergences are exactly these three."""
+    bare = _chart_doc(
+        "<c:tx><c:rich><a:bodyPr/><a:p/></c:rich></c:tx>"
+        "<c:ser><c:tx><c:strRef><c:f>S!B1</c:f></c:strRef></c:tx>"
+        "<c:cat><c:numRef><c:f>S!A2:A3</c:f></c:numRef></c:cat></c:ser>"
+    )
+    wolfxl_style = _chart_doc(
+        "<c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p/></c:rich></c:tx>"
+        "<c:ser><c:tx><c:strRef><c:f>S!B1</c:f><c:strCache><c:ptCount val=\"1\"/>"
+        "<c:pt idx=\"0\"><c:v>S1</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+        "<c:cat><c:strRef><c:f>S!A2:A3</c:f><c:strCache><c:ptCount val=\"2\"/>"
+        "</c:strCache></c:strRef></c:cat></c:ser>"
+    )
+    assert canonicalize_chart_xml(wolfxl_style) == canonicalize_chart_xml(bare)
+
+    # A populated list style, a changed formula, a series-title strRef turned
+    # numRef, and a cache outside a reference are all still real divergences.
+    populated = _chart_doc(
+        "<c:tx><c:rich><a:bodyPr/><a:lstStyle><a:lvl1pPr/></a:lstStyle><a:p/></c:rich></c:tx>"
+        "<c:ser><c:tx><c:strRef><c:f>S!B1</c:f></c:strRef></c:tx>"
+        "<c:cat><c:numRef><c:f>S!A2:A3</c:f></c:numRef></c:cat></c:ser>"
+    )
+    other_formula = bare.replace(b"S!A2:A3", b"S!A2:A4")
+    title_num_ref = bare.replace(
+        b"<c:tx><c:strRef><c:f>S!B1</c:f></c:strRef></c:tx>",
+        b"<c:tx><c:numRef><c:f>S!B1</c:f></c:numRef></c:tx>",
+    )
+    stray_cache = bare.replace(
+        b"</c:ser>", b"<c:strCache><c:ptCount val=\"0\"/></c:strCache></c:ser>"
+    )
+    for divergent in (populated, other_formula, title_num_ref, stray_cache):
+        assert canonicalize_chart_xml(divergent) != canonicalize_chart_xml(bare)
+
+
+def test_wolfxl_chart_reference_caches_match_hosting_cells(tmp_path: Path) -> None:
+    """The caches the structural compare ignores must hold the cell values."""
+    wpath, _ = _save_pair("bar", tmp_path, title="bar test")
+    root = lxml_etree.fromstring(first_chart_xml(wpath))
+    ns = {"c": _C}
+
+    def points(xpath: str) -> list[str]:
+        return [v.text or "" for v in root.xpath(xpath, namespaces=ns)]
+
+    assert points("//c:ser[1]/c:tx/c:strRef/c:strCache/c:pt/c:v") == ["S1"]
+    assert points("//c:ser[2]/c:tx/c:strRef/c:strCache/c:pt/c:v") == ["S2"]
+    assert points("//c:ser[1]/c:cat/c:strRef/c:strCache/c:pt/c:v") == [
+        f"r{i}" for i in range(1, 6)
+    ]
+    assert points("//c:ser[1]/c:val/c:numRef/c:numCache/c:pt/c:v") == [
+        str(i * 10) for i in range(1, 6)
+    ]
+    assert points("//c:ser[2]/c:val/c:numRef/c:numCache/c:pt/c:v") == [
+        str(i * 5) for i in range(1, 6)
+    ]

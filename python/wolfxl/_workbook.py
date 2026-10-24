@@ -261,7 +261,7 @@ class Workbook:
         data_only: bool = False,
         permissive: bool = False,
     ) -> Workbook:
-        """Open a legacy .xls workbook via ``CalamineXlsBook``.
+        """Open a legacy .xls workbook via ``NativeXlsBook``.
 
         Same shape as :meth:`_from_xlsb` — values + cached formula
         results only.

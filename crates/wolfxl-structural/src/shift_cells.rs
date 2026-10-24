@@ -30,28 +30,11 @@ use quick_xml::Writer as XmlWriter;
 use crate::axis::ShiftPlan;
 use crate::shift_anchors::{shift_anchor, shift_sqref};
 use crate::shift_formulas::shift_formula;
+use crate::xml_text::TextNode;
 
-/// Push an attribute (`key`: `&[u8]`, `val`: `&str`) onto a BytesStart.
-/// Wraps the `(key.as_bytes(), val.as_bytes())` form supported by
-/// quick-xml 0.37.
-fn push_attr<'a>(e: &mut BytesStart<'a>, key: &[u8], val: &str) {
-    let escaped = xml_attr_escape(val);
-    e.push_attribute((key, escaped.as_bytes()));
-}
-
-fn xml_attr_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for ch in s.chars() {
-        match ch {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&apos;"),
-            _ => out.push(ch),
-        }
-    }
-    out
+/// Push a resolved attribute value; quick-xml escapes the string tuple.
+fn push_attr<'a>(e: &mut BytesStart<'a>, key: &str, val: &str) {
+    e.push_attribute((key, val));
 }
 
 /// Streaming rewrite of a sheet XML. Returns the new bytes.
@@ -65,7 +48,6 @@ pub fn shift_sheet_cells(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
         Err(_) => return xml.to_vec(),
     };
     let mut reader = XmlReader::from_str(xml_str);
-    reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
     let mut buf: Vec<u8> = Vec::new();
 
@@ -76,18 +58,34 @@ pub fn shift_sheet_cells(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
     let mut in_formula1: bool = false;
     let mut in_formula2: bool = false;
     let mut in_sqref_text: bool = false;
+    // Entity references split a logical formula/sqref into several events.
+    let mut text = TextNode::default();
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event = reader.read_event_into(&mut buf);
+        if !text.is_empty() && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
+            if let Ok(value) = text.unescaped() {
+                let shifted = if in_sqref_text {
+                    shift_sqref(value, plan)
+                } else {
+                    shift_formula(value, plan)
+                };
+                let _ = writer.write_event(Event::Text(BytesText::new(&shifted)));
+            } else {
+                let _ = writer.write_event(Event::Text(BytesText::from_escaped(text.raw())));
+            }
+            text.clear();
+        }
+        match event {
             Ok(Event::Start(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name();
                 if skip_depth > 0 {
                     skip_depth += 1;
                     buf.clear();
                     continue;
                 }
 
-                match local.as_slice() {
+                match local.as_ref().as_bytes() {
                     b"row" => match handle_row_start(e, plan) {
                         RowAction::Keep(start) => {
                             let _ = writer.write_event(Event::Start(start));
@@ -121,7 +119,7 @@ pub fn shift_sheet_cells(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
                         let _ = writer.write_event(Event::Start(e.to_owned()));
                     }
                     b"dimension" | b"mergeCell" | b"hyperlink" => {
-                        let new_e = rewrite_ref_attr(e, plan, b"ref", true);
+                        let new_e = rewrite_ref_attr(e, plan, "ref", true);
                         match new_e {
                             Some(start) => {
                                 let _ = writer.write_event(Event::Start(start));
@@ -132,7 +130,7 @@ pub fn shift_sheet_cells(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
                         }
                     }
                     b"dataValidation" => {
-                        let new_e = rewrite_ref_attr(e, plan, b"sqref", false);
+                        let new_e = rewrite_ref_attr(e, plan, "sqref", false);
                         match new_e {
                             Some(start) => {
                                 let _ = writer.write_event(Event::Start(start));
@@ -143,7 +141,7 @@ pub fn shift_sheet_cells(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
                         }
                     }
                     b"conditionalFormatting" => {
-                        let new_e = rewrite_ref_attr(e, plan, b"sqref", false);
+                        let new_e = rewrite_ref_attr(e, plan, "sqref", false);
                         match new_e {
                             Some(start) => {
                                 let _ = writer.write_event(Event::Start(start));
@@ -159,12 +157,12 @@ pub fn shift_sheet_cells(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name();
                 if skip_depth > 0 {
                     buf.clear();
                     continue;
                 }
-                match local.as_slice() {
+                match local.as_ref().as_bytes() {
                     b"row" => match handle_row_start(e, plan) {
                         RowAction::Keep(start) => {
                             let _ = writer.write_event(Event::Empty(start));
@@ -178,19 +176,19 @@ pub fn shift_sheet_cells(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
                         CellAction::Drop => {}
                     },
                     b"dimension" | b"mergeCell" | b"hyperlink" => {
-                        let new_e = rewrite_ref_attr(e, plan, b"ref", true);
+                        let new_e = rewrite_ref_attr(e, plan, "ref", true);
                         if let Some(start) = new_e {
                             let _ = writer.write_event(Event::Empty(start));
                         }
                     }
                     b"dataValidation" => {
-                        let new_e = rewrite_ref_attr(e, plan, b"sqref", false);
+                        let new_e = rewrite_ref_attr(e, plan, "sqref", false);
                         if let Some(start) = new_e {
                             let _ = writer.write_event(Event::Empty(start));
                         }
                     }
                     b"conditionalFormatting" => {
-                        let new_e = rewrite_ref_attr(e, plan, b"sqref", false);
+                        let new_e = rewrite_ref_attr(e, plan, "sqref", false);
                         if let Some(start) = new_e {
                             let _ = writer.write_event(Event::Empty(start));
                         }
@@ -201,13 +199,13 @@ pub fn shift_sheet_cells(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
                 }
             }
             Ok(Event::End(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name();
                 if skip_depth > 0 {
                     skip_depth -= 1;
                     buf.clear();
                     continue;
                 }
-                match local.as_slice() {
+                match local.as_ref().as_bytes() {
                     b"f" => in_f = false,
                     b"formula1" => in_formula1 = false,
                     b"formula2" => in_formula2 = false,
@@ -216,30 +214,15 @@ pub fn shift_sheet_cells(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
                 }
                 let _ = writer.write_event(Event::End(e.to_owned()));
             }
-            Ok(Event::Text(ref t)) => {
-                if skip_depth > 0 {
-                    buf.clear();
-                    continue;
-                }
-                if in_f || in_formula1 || in_formula2 {
-                    let s = match t.unescape() {
-                        Ok(c) => c.into_owned(),
-                        Err(_) => String::from_utf8_lossy(t.as_ref()).into_owned(),
-                    };
-                    let new_s = shift_formula(&s, plan);
-                    let new_t = BytesText::new(&new_s);
-                    let _ = writer.write_event(Event::Text(new_t));
-                } else if in_sqref_text {
-                    let s = match t.unescape() {
-                        Ok(c) => c.into_owned(),
-                        Err(_) => String::from_utf8_lossy(t.as_ref()).into_owned(),
-                    };
-                    let new_s = shift_sqref(&s, plan);
-                    let new_t = BytesText::new(&new_s);
-                    let _ = writer.write_event(Event::Text(new_t));
-                } else {
-                    let _ = writer.write_event(Event::Text(t.to_owned()));
-                }
+            Ok(Event::Text(t))
+                if skip_depth == 0 && (in_f || in_formula1 || in_formula2 || in_sqref_text) =>
+            {
+                text.push_text(&t);
+            }
+            Ok(Event::GeneralRef(r))
+                if skip_depth == 0 && (in_f || in_formula1 || in_formula2 || in_sqref_text) =>
+            {
+                text.push_ref(&r);
             }
             Ok(Event::Eof) => break,
             Ok(other) => {
@@ -332,18 +315,18 @@ enum CellAction<'a> {
 /// on a col shift, leave `r` alone (but children's cell coords still
 /// need col-shifting, handled by `<c>`).
 fn handle_row_start<'a>(e: &BytesStart<'a>, plan: &ShiftPlan) -> RowAction<'a> {
-    let mut new_e = BytesStart::new(String::from_utf8_lossy(e.name().as_ref()).into_owned());
+    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
     let mut row_n: Option<u32> = None;
     let mut row_attr_kept = false;
 
     for attr_res in e.attributes().with_checks(false) {
         let Ok(attr) = attr_res else { continue };
         let key = attr.key.as_ref();
-        let val = match attr.unescape_value() {
+        let val = match quick_xml::escape::unescape(&attr.value) {
             Ok(v) => v.into_owned(),
             Err(_) => continue,
         };
-        if key == b"r" && plan.axis.is_row() {
+        if key == "r" && plan.axis.is_row() {
             let n: u32 = match val.parse() {
                 Ok(n) => n,
                 Err(_) => {
@@ -382,7 +365,7 @@ fn handle_row_start<'a>(e: &BytesStart<'a>, plan: &ShiftPlan) -> RowAction<'a> {
                 push_attr(&mut new_e, key, &(new_n as u32).to_string());
                 row_attr_kept = true;
             }
-        } else if key == b"spans" && plan.axis.is_col() {
+        } else if key == "spans" && plan.axis.is_col() {
             // spans is "min:max" col indices for the row. Not strictly
             // required for correctness — Excel re-derives — but keep
             // it consistent. We pass through unchanged for now; the
@@ -390,7 +373,7 @@ fn handle_row_start<'a>(e: &BytesStart<'a>, plan: &ShiftPlan) -> RowAction<'a> {
             push_attr(&mut new_e, key, &val);
         } else {
             push_attr(&mut new_e, key, &val);
-            if key == b"r" {
+            if key == "r" {
                 row_attr_kept = true;
             }
         }
@@ -402,15 +385,15 @@ fn handle_row_start<'a>(e: &BytesStart<'a>, plan: &ShiftPlan) -> RowAction<'a> {
 /// Rewrite a `<c r="...">` cell start. If row/col is inside a delete
 /// band, drop. Else shift the coordinate.
 fn handle_cell_start<'a>(e: &BytesStart<'a>, plan: &ShiftPlan) -> CellAction<'a> {
-    let mut new_e = BytesStart::new(String::from_utf8_lossy(e.name().as_ref()).into_owned());
+    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
     for attr_res in e.attributes().with_checks(false) {
         let Ok(attr) = attr_res else { continue };
         let key = attr.key.as_ref();
-        let val = match attr.unescape_value() {
+        let val = match quick_xml::escape::unescape(&attr.value) {
             Ok(v) => v.into_owned(),
             Err(_) => continue,
         };
-        if key == b"r" {
+        if key == "r" {
             let new_ref = shift_anchor(&val, plan);
             if new_ref == "#REF!" {
                 return CellAction::Drop;
@@ -430,16 +413,16 @@ fn handle_cell_start<'a>(e: &BytesStart<'a>, plan: &ShiftPlan) -> CellAction<'a>
 fn rewrite_ref_attr<'a>(
     e: &BytesStart<'a>,
     plan: &ShiftPlan,
-    attr_name: &[u8],
+    attr_name: &str,
     is_ref: bool,
 ) -> Option<BytesStart<'a>> {
-    let mut new_e = BytesStart::new(String::from_utf8_lossy(e.name().as_ref()).into_owned());
+    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
     let mut found_match = false;
     let mut keep = true;
     for attr_res in e.attributes().with_checks(false) {
         let Ok(attr) = attr_res else { continue };
         let key = attr.key.as_ref();
-        let val = match attr.unescape_value() {
+        let val = match quick_xml::escape::unescape(&attr.value) {
             Ok(v) => v.into_owned(),
             Err(_) => continue,
         };
@@ -477,6 +460,28 @@ mod tests {
 
     fn apply(xml: &str, plan: &ShiftPlan) -> String {
         String::from_utf8(shift_sheet_cells(xml.as_bytes(), plan)).unwrap()
+    }
+
+    #[test]
+    fn shifts_entity_split_formulas_and_sqrefs_without_touching_literal_text() {
+        let xml = r#"<worksheet><sheetData><row r="1"><c r="A1" note="A&amp;B"><f>A&#49;&amp;&quot;A1&quot;</f><is><t> &#65;&amp;&lt; </t></is></c></row></sheetData><dataValidations><dataValidation sqref="A1"><formula1>A&#49;</formula1><formula2>A&#x31;&lt;B1</formula2></dataValidation></dataValidations><ext><sqref>A&#49; B&#x31;</sqref></ext></worksheet>"#;
+        let out = apply(xml, &ShiftPlan::insert(crate::Axis::Row, 1, 1));
+        assert!(out.contains("<f>A2&amp;&quot;A1&quot;</f>"), "{out}");
+        assert!(out.contains("<formula1>A2</formula1>"), "{out}");
+        assert!(out.contains("<formula2>A2&lt;B2</formula2>"), "{out}");
+        assert!(out.contains("<sqref>A2 B2</sqref>"), "{out}");
+        assert!(out.contains(r#"note="A&amp;B""#), "{out}");
+        assert!(out.contains("<t> &#65;&amp;&lt; </t>"), "{out}");
+    }
+
+    #[test]
+    fn deleted_rows_do_not_leak_entity_references() {
+        let xml = r#"<sheetData><row r="1"><c r="A1"><f>&quot;gone&quot;&amp;A1</f></c></row><row r="2"><c r="A2"><f>A&#50;</f></c></row></sheetData>"#;
+        let out = apply(xml, &ShiftPlan::delete(crate::Axis::Row, 1, 1));
+        assert_eq!(
+            out,
+            r#"<sheetData><row r="1"><c r="A1"><f>A1</f></c></row></sheetData>"#
+        );
     }
 
     #[test]

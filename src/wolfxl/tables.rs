@@ -126,6 +126,9 @@ pub struct ExistingTablesInventory {
 /// the `id` and `name` attributes off the root `<table>` element, and
 /// return the aggregated inventory.
 ///
+/// ZIP entry access and filename decoding errors are propagated; only
+/// malformed table payloads are tolerated below.
+///
 /// Tolerant of missing or malformed parts: anything that fails to
 /// parse contributes its path to `paths` (and bumps `count`) but is
 /// otherwise skipped. The caller's `next_available_id` allocation
@@ -138,9 +141,11 @@ pub fn scan_existing_tables<R: std::io::Read + std::io::Seek>(
     let mut paths: Vec<String> = Vec::new();
     for i in 0..zip.len() {
         let entry = zip.by_index(i).map_err(|e| format!("zip index {i}: {e}"))?;
-        let name = entry.name().to_string();
+        let name = entry
+            .name()
+            .map_err(|e| format!("zip index {i} name: {e}"))?;
         if is_table_part_path(&name) {
-            paths.push(name);
+            paths.push(name.into_owned());
         }
     }
     paths.sort();
@@ -196,18 +201,20 @@ pub fn parse_table_root_attrs(xml: &[u8]) -> (Option<u32>, Option<String>) {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
-                if e.local_name().as_ref() == b"table" =>
+                if e.local_name().as_ref() == "table" =>
             {
                 let mut id: Option<u32> = None;
                 let mut name: Option<String> = None;
-                for a in e.attributes().with_checks(false).flatten() {
-                    let value = a
-                        .unescape_value()
-                        .map(|v| v.into_owned())
-                        .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned());
+                for a in e.attributes().with_checks(false) {
+                    let Ok(a) = a else {
+                        return (None, None);
+                    };
+                    let Ok(value) = quick_xml::escape::unescape(&a.value) else {
+                        return (None, None);
+                    };
                     match a.key.as_ref() {
-                        b"id" => id = value.parse::<u32>().ok(),
-                        b"name" => name = Some(value),
+                        "id" => id = value.parse::<u32>().ok(),
+                        "name" => name = Some(value.into_owned()),
                         _ => {}
                     }
                 }
@@ -287,7 +294,7 @@ pub fn patch_table_growth(xml: &[u8], patch: &TableGrowthPatch) -> Result<Vec<u8
         let post = reader.buffer_position() as usize;
         match event {
             Event::Start(element) if depth == 0 => {
-                if element.local_name().as_ref() != b"table" {
+                if element.local_name().as_ref() != "table" {
                     return Err("table root not found".to_string());
                 }
                 let (start, end) = attribute_value_range(&xml[pre..post], b"ref")?
@@ -305,23 +312,27 @@ pub fn patch_table_growth(xml: &[u8], patch: &TableGrowthPatch) -> Result<Vec<u8
             }
             Event::Start(element) => {
                 let local = element.local_name();
-                if depth == 1 && local.as_ref() == b"autoFilter" {
+                if depth == 1 && local.as_ref() == "autoFilter" {
                     replace_ref(&mut replacements, xml, pre, post, &patch.auto_filter_ref)?;
-                } else if depth == 1 && local.as_ref() == b"tableColumns" {
+                } else if depth == 1 && local.as_ref() == "tableColumns" {
                     let qualified = element.name();
                     let prefix_len = qualified.as_ref().len() - local.as_ref().len();
-                    columns_tag = Some((pre, post, qualified.as_ref()[..prefix_len].to_vec()));
+                    columns_tag = Some((
+                        pre,
+                        post,
+                        qualified.as_ref().as_bytes()[..prefix_len].to_vec(),
+                    ));
                     in_columns = true;
-                } else if depth == 2 && in_columns && local.as_ref() == b"tableColumn" {
+                } else if depth == 2 && in_columns && local.as_ref() == "tableColumn" {
                     record_table_column(&element, &mut existing_names, &mut max_id)?;
                 }
                 depth += 1;
             }
             Event::Empty(element) => {
                 let local = element.local_name();
-                if depth == 1 && local.as_ref() == b"autoFilter" {
+                if depth == 1 && local.as_ref() == "autoFilter" {
                     replace_ref(&mut replacements, xml, pre, post, &patch.auto_filter_ref)?;
-                } else if depth == 2 && in_columns && local.as_ref() == b"tableColumn" {
+                } else if depth == 2 && in_columns && local.as_ref() == "tableColumn" {
                     record_table_column(&element, &mut existing_names, &mut max_id)?;
                 }
             }
@@ -401,17 +412,19 @@ fn record_table_column(
     names: &mut Vec<String>,
     max_id: &mut u32,
 ) -> Result<(), String> {
-    for attr in element.attributes().with_checks(false).flatten() {
+    for attr in element.attributes().with_checks(false) {
+        let attr = attr.map_err(|error| format!("tableColumn attribute: {error}"))?;
         match attr.key.as_ref() {
-            b"id" => {
-                let id = std::str::from_utf8(attr.value.as_ref())
-                    .ok()
-                    .and_then(|value| value.trim().parse::<u32>().ok())
-                    .ok_or_else(|| "tableColumn has a non-numeric id".to_string())?;
+            "id" => {
+                let id = quick_xml::escape::unescape(&attr.value)
+                    .map_err(|error| format!("tableColumn id: {error}"))?
+                    .trim()
+                    .parse::<u32>()
+                    .map_err(|_| "tableColumn has a non-numeric id".to_string())?;
                 *max_id = (*max_id).max(id);
             }
-            b"name" => names.push(
-                attr.unescape_value()
+            "name" => names.push(
+                quick_xml::escape::unescape(&attr.value)
                     .map_err(|error| format!("tableColumn name: {error}"))?
                     .into_owned(),
             ),
@@ -929,6 +942,26 @@ mod tests {
     }
 
     #[test]
+    fn scan_preserves_tables_with_legacy_encoded_other_filename() {
+        let mut bytes = make_zip(&[
+            ("bad.txt", b""),
+            ("xl/tables/table1.xml", br#"<table id="7" name="T"/>"#),
+        ]);
+        let central = bytes.windows(4).position(|w| w == b"PK\x01\x02").unwrap();
+        // ZIP 9's documented CP437 fallback keeps this unrelated member readable.
+        bytes[7] |= 0x08;
+        bytes[30] = 0xff;
+        bytes[central + 9] |= 0x08;
+        bytes[central + 46] = 0xff;
+        let mut archive = open_zip(bytes);
+        assert_eq!(archive.by_index(0).unwrap().name().unwrap(), "\u{a0}ad.txt");
+        let inventory = scan_existing_tables(&mut archive).unwrap();
+        assert_eq!(inventory.count, 1);
+        assert!(inventory.ids.contains(&7));
+        assert!(inventory.names.contains("T"));
+    }
+
+    #[test]
     fn scan_two_tables_extracts_ids_and_names() {
         let t1 = br#"<?xml version="1.0"?>
 <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -997,5 +1030,29 @@ mod tests {
         let xml = br#"<table id="1" ref="A1:A2" name="T"><tableColumns count="1"><tableColumn id="1" name="Sales"/></tableColumns></table>"#;
         let err = patch_table_growth(xml, &growth("A1:B2", "A1:B2", &["sales"])).unwrap_err();
         assert!(err.contains("already has a column named"), "{err}");
+    }
+
+    #[test]
+    fn table_growth_preserves_formula_entities_and_decodes_column_names() {
+        let xml = br#"<table id="1" ref="A1:A2" name="T"><tableColumns count="1"><tableColumn id="&#49;" name="A&amp;&#x42;"><calculatedColumnFormula> A2 &amp; " &#38; &custom; " </calculatedColumnFormula></tableColumn></tableColumns></table>"#;
+        let duplicate = patch_table_growth(xml, &growth("A1:B2", "A1:B2", &["A&B"]));
+        assert!(duplicate
+            .unwrap_err()
+            .contains("already has a column named"));
+        let out = patch_table_growth(xml, &growth("A1:B2", "A1:B2", &["C&D"])).unwrap();
+        let text = std::str::from_utf8(&out).unwrap();
+        assert!(text.contains(r#"id="&#49;" name="A&amp;&#x42;""#));
+        assert!(text.contains(r#"> A2 &amp; " &#38; &custom; " </calculatedColumnFormula>"#));
+        assert!(text.contains(r#"<tableColumn id="2" name="C&amp;D"/>"#));
+    }
+
+    #[test]
+    fn table_attributes_reject_unknown_entities() {
+        assert_eq!(
+            parse_table_root_attrs(br#"<table id="1" name="A&unknown;"/>"#),
+            (None, None),
+        );
+        let xml = br#"<table id="1" ref="A1:A2" name="T"><tableColumns count="1"><tableColumn id="1" name="A&unknown;"/></tableColumns></table>"#;
+        assert!(patch_table_growth(xml, &growth("A1:B2", "A1:B2", &["B"])).is_err());
     }
 }

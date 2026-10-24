@@ -31,7 +31,10 @@ pub fn text<W: Write>(w: &mut W, sheet: &Sheet, _opts: &RenderOptions) -> std::i
     // when a header literal happens to be numeric.
     writeln!(w, "{}", sheet.headers().join("\t"))?;
     for row in sheet.rows().iter().skip(1) {
-        let cells: Vec<String> = row.iter().map(|c| display_cell(c, true)).collect();
+        let cells: Vec<String> = row
+            .iter()
+            .map(|c| display_sheet_cell(sheet, c, true))
+            .collect();
         writeln!(w, "{}", cells.join("\t"))?;
     }
     Ok(())
@@ -45,7 +48,7 @@ pub fn csv<W: Write>(w: &mut W, sheet: &Sheet, _opts: &RenderOptions) -> std::io
     for row in sheet.rows().iter().skip(1) {
         let cells: Vec<String> = row
             .iter()
-            .map(|c| csv_quote(&display_cell(c, true)))
+            .map(|c| csv_quote(&display_sheet_cell(sheet, c, true)))
             .collect();
         writeln!(w, "{}", cells.join(","))?;
     }
@@ -63,7 +66,7 @@ pub fn markdown<W: Write>(w: &mut W, sheet: &Sheet, _opts: &RenderOptions) -> st
     for row in sheet.rows().iter().skip(1) {
         let cells: Vec<String> = row
             .iter()
-            .map(|c| markdown_escape(&display_cell(c, true)))
+            .map(|c| markdown_escape(&display_sheet_cell(sheet, c, true)))
             .collect();
         writeln!(w, "| {} |", cells.join(" | "))?;
     }
@@ -109,7 +112,7 @@ pub fn json<W: Write>(w: &mut W, sheet: &Sheet, opts: &RenderOptions) -> std::io
         writeln!(w, "  \"data\": [")?;
         let n = body.len();
         for (i, row) in body.iter().enumerate() {
-            let inline = format_row_inline(&row[..row.len().min(returned_columns)]);
+            let inline = format_row_inline(sheet, &row[..row.len().min(returned_columns)]);
             let comma = if i + 1 == n { "" } else { "," };
             writeln!(w, "    {inline}{comma}")?;
         }
@@ -118,10 +121,17 @@ pub fn json<W: Write>(w: &mut W, sheet: &Sheet, opts: &RenderOptions) -> std::io
     writeln!(w, "}}")
 }
 
-fn format_row_inline(row: &[Cell]) -> String {
+fn format_row_inline(sheet: &Sheet, row: &[Cell]) -> String {
     let parts: Vec<String> = row
         .iter()
-        .map(|c| serde_json::to_string(&json_cell(c)).unwrap_or_else(|_| "null".to_string()))
+        .map(|c| {
+            let value = if let CellValue::Error(error) = &c.value {
+                Value::String(sheet.error_text(error).to_owned())
+            } else {
+                json_cell(c)
+            };
+            serde_json::to_string(&value).unwrap_or_else(|_| "null".to_string())
+        })
         .collect();
     format!("[{}]", parts.join(", "))
 }
@@ -150,7 +160,7 @@ pub fn boxed<W: Write>(w: &mut W, sheet: &Sheet, opts: &RenderOptions) -> std::i
         .take(cap_total)
         .map(|row| {
             row.iter()
-                .map(|c| truncate(&display_cell(c, true), opts.max_width))
+                .map(|c| truncate(&display_sheet_cell(sheet, c, true), opts.max_width))
                 .collect()
         })
         .collect();
@@ -311,6 +321,14 @@ fn markdown_escape(s: &str) -> String {
         .replace('\t', "\\t")
         .replace('\r', "\\n")
         .replace('\n', "\\n")
+}
+
+fn display_sheet_cell(sheet: &Sheet, cell: &Cell, group_ints: bool) -> String {
+    if let CellValue::Error(error) = &cell.value {
+        format!("ERROR: {}", sheet.error_text(error))
+    } else {
+        display_cell(cell, group_ints)
+    }
 }
 
 fn display_cell(cell: &Cell, group_ints: bool) -> String {

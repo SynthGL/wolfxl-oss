@@ -227,7 +227,10 @@ mod tests {
         };
         let bytes = package(&[a, b, c]).expect("package");
         let archive = zip::ZipArchive::new(Cursor::new(bytes)).expect("open");
-        let names: Vec<String> = archive.file_names().map(|s| s.to_string()).collect();
+        let names: Vec<String> = archive
+            .file_names()
+            .map(|s| s.expect("valid fixture entry name").into_owned())
+            .collect();
         assert_eq!(names, vec!["z.txt", "a.txt", "m.txt"]);
     }
 

@@ -92,42 +92,55 @@ def test_native_xlsb_book_open_from_bytes() -> None:
     assert isinstance(values, list)
 
 
-def test_calamine_xlsb_book_is_not_exported() -> None:
+@pytest.mark.parametrize("name", ("CalamineXlsBook", "CalamineXlsbBook", "CalamineOdsBook"))
+def test_legacy_reader_exports_are_absent(name: str) -> None:
     import wolfxl._rust as rust
 
-    assert not hasattr(rust, "CalamineXlsbBook")
+    assert not hasattr(rust, name)
 
 
 # ---------------------------------------------------------------------------
-# CalamineXlsBook
+# NativeXlsBook
 # ---------------------------------------------------------------------------
 
 
-def test_calamine_xls_book_open_path() -> None:
-    from wolfxl._rust import CalamineXlsBook
+def test_native_xls_book_open_path() -> None:
+    from wolfxl._rust import NativeXlsBook
 
-    book = CalamineXlsBook.open(str(XLS_FIXTURE))
+    book = NativeXlsBook.open(str(XLS_FIXTURE))
     names = book.sheet_names()
     assert names
     values = book.read_sheet_values(names[0])
     assert isinstance(values, list)
+    assert book.source_path() == str(XLS_FIXTURE)
+    assert book.opened_from_bytes() is False
+    assert book.read_cell_value("Sheet1", "A1") == {"type": "string", "value": "name"}
+    assert book.read_cell_value("Sheet1", "B2", True) == {"type": "number", "value": 1}
+    with pytest.raises(ValueError, match="Unknown sheet: Missing"):
+        book.read_sheet_bounds("Missing")
 
 
-def test_calamine_xls_book_open_from_bytes() -> None:
-    from wolfxl._rust import CalamineXlsBook
+def test_native_xls_book_open_from_bytes() -> None:
+    from wolfxl._rust import NativeXlsBook
 
-    book = CalamineXlsBook.open_from_bytes(XLS_FIXTURE.read_bytes())
+    book = NativeXlsBook.open_from_bytes(XLS_FIXTURE.read_bytes())
     names = book.sheet_names()
     assert names
     values = book.read_sheet_values(names[0])
     assert isinstance(values, list)
     assert book.opened_from_bytes() is True
+    assert book.source_path() is None
+    assert book.read_cell_value("Sheet1", "C2") == {
+        "type": "formula",
+        "formula": "=B2*2",
+        "value": "=B2*2",
+    }
 
 
-def test_calamine_xls_book_styles_raise() -> None:
-    from wolfxl._rust import CalamineXlsBook
+def test_native_xls_book_styles_raise() -> None:
+    from wolfxl._rust import NativeXlsBook
 
-    book = CalamineXlsBook.open(str(XLS_FIXTURE))
+    book = NativeXlsBook.open(str(XLS_FIXTURE))
     with pytest.raises(NotImplementedError, match="styles not supported"):
         book.read_cell_font(0, 0, "Sheet1")
     with pytest.raises(NotImplementedError, match="\\.xls"):
@@ -146,3 +159,11 @@ def test_native_xlsx_book_open_from_bytes() -> None:
     names = book.sheet_names()
     assert names
     assert book.opened_from_bytes() is True
+
+
+@pytest.mark.parametrize("value", (None, 42, bytearray(b"not a spreadsheet")))
+def test_binding_classifier_rejects_unsupported_source_types(value) -> None:
+    from wolfxl._rust import classify_file_format
+
+    with pytest.raises(ValueError, match="^classify_file_format: expected str path or bytes$"):
+        classify_file_format(value)

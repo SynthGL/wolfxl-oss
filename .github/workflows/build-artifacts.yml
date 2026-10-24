@@ -34,6 +34,16 @@ jobs:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.libc.compatibility }}
           args: --release --locked --compatibility pypi --out dist --find-interpreter
+      # Discovery compares only major/minor versions, so the patch-level
+      # Requires-Python exclusions also hide supported CPython 3.9 releases.
+      - name: Build CPython 3.9 wheel explicitly
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380
+        with:
+          maturin-version: v1.14.1
+          sccache: true
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.libc.compatibility }}
+          args: --release --locked --compatibility pypi --out dist --interpreter ${{ (matrix.target == 'x86_64' && matrix.libc.name == 'manylinux') && '/opt/python/cp39-cp39/bin/python' || 'python3.9' }}
       - name: Smoke CPython 3.12 wheel
         shell: bash
         run: |
@@ -80,6 +90,13 @@ jobs:
           sccache: true
           target: ${{ matrix.target }}
           args: --release --locked --compatibility pypi --out dist --find-interpreter
+      - name: Build CPython 3.9 wheel explicitly
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380
+        with:
+          maturin-version: v1.14.1
+          sccache: true
+          target: ${{ matrix.target }}
+          args: --release --locked --compatibility pypi --out dist --interpreter python3.9
       - name: Smoke CPython 3.12 wheel
         run: |
           python3.12 -m pip install dist/*cp312-cp312-macosx*.whl
@@ -116,6 +133,13 @@ jobs:
           sccache: true
           target: x86_64-pc-windows-msvc
           args: --release --locked --compatibility pypi --out dist --find-interpreter
+      - name: Build CPython 3.9 wheel explicitly
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380
+        with:
+          maturin-version: v1.14.1
+          sccache: true
+          target: x86_64-pc-windows-msvc
+          args: --release --locked --compatibility pypi --out dist --interpreter python3.9
       - name: Smoke CPython 3.12 wheel
         shell: pwsh
         run: |
@@ -153,3 +177,48 @@ jobs:
           name: source-distribution
           path: dist/*.tar.gz
           if-no-files-found: error
+
+  wheel-coverage:
+    name: Verify complete supported wheel matrix
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+      - name: Require declared interpreters and preserve published platforms
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from urllib.request import urlopen
+
+          def wheel_tag(filename):
+              return tuple(filename.removesuffix(".whl").rsplit("-", 3)[1:])
+
+          with urlopen("https://pypi.org/pypi/wolfxl/2.0.10/json", timeout=60) as response:
+              previous = json.load(response)
+          baseline = {
+              wheel_tag(entry["filename"])
+              for entry in previous["urls"]
+              if entry["packagetype"] == "bdist_wheel"
+          }
+          if not baseline:
+              raise SystemExit("published 2.0.10 wheel inventory is empty")
+          platforms = {tag[2] for tag in baseline}
+          declared = {
+              (tag, tag, platform)
+              for tag in ("cp39", "cp310", "cp311", "cp312", "cp313", "cp314")
+              for platform in platforms
+          }
+          actual = {wheel_tag(path.name) for path in Path("dist").rglob("*.whl")}
+          missing = sorted((baseline | declared) - actual)
+          if missing:
+              raise SystemExit(f"missing supported wheel tags: {missing}")
+          print(f"verified {len(actual)} wheel tags; all {len(baseline)} published tags retained")
+          PY

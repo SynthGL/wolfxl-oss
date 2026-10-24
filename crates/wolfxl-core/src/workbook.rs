@@ -2,8 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
-use calamine_styles::{open_workbook_auto, Reader, Sheets};
-use wolfxl_reader::NativeXlsbBook;
+use wolfxl_reader::{NativeOdsBook, NativeXlsBook, NativeXlsbBook, NativeXlsxBook};
 use zip::ZipArchive;
 
 use crate::csv_reader::CsvBackend;
@@ -13,7 +12,7 @@ use crate::ooxml::{
     join_and_normalize, parse_relationship_targets, parse_workbook_sheet_rids, zip_read_to_string,
     zip_read_to_string_opt,
 };
-use crate::sheet::{Sheet, SheetsReader};
+use crate::sheet::Sheet;
 use crate::styles::{parse_cellxfs, parse_num_fmts, XfEntry};
 use crate::worksheet_xml::parse_cell_style_ids;
 
@@ -51,13 +50,12 @@ impl SourceFormat {
     }
 }
 
-/// Internal backend dispatch. Xlsx/Xls/Ods flow through calamine's `Sheets`
-/// enum (which already abstracts them); XLSB uses WolfXL's native reader; CSV
-/// gets its own minimal value-only backend because it isn't a calamine-
-/// supported format.
+/// Community format dispatch uses the independently authored MIT readers.
 pub(crate) enum Backend {
-    Sheets(SheetsReader),
-    NativeXlsb(NativeXlsbBook),
+    NativeXlsx(Box<NativeXlsxBook>),
+    NativeXls(Box<NativeXlsBook>),
+    NativeOds(Box<NativeOdsBook>),
+    NativeXlsb(Box<NativeXlsbBook>),
     Csv(CsvBackend),
 }
 
@@ -176,11 +174,8 @@ pub struct Workbook {
 impl Workbook {
     /// Open a workbook, dispatching to the right backend by file extension.
     ///
-    /// Supported: `.xlsx` / `.xlsm` / `.xlam` (primary, full style resolution via
-    /// calamine fast-path + cellXfs walker), `.xlsb` (native BIFF12 values and
-    /// number-format metadata), `.xls` / `.xla` / `.ods` (values + defined names
-    /// via calamine; styles come back empty - calamine-styles doesn't parse
-    /// them for these formats yet), and
+    /// Supported: native `.xlsx` / `.xlsm` / `.xlam`, `.xlsb`,
+    /// `.xls` / `.xla`, `.ods`, and
     /// `.csv` / `.tsv` / `.txt` (single synthetic sheet, value-only, schema
     /// inference is the source of truth for column types).
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
@@ -189,16 +184,25 @@ impl Workbook {
 
         match format {
             SourceFormat::Xlsx | SourceFormat::Xls | SourceFormat::Ods => {
-                let mut inner: SheetsReader = open_workbook_auto(&path)
-                    .map_err(|e| Error::Xlsx(format!("failed to open workbook: {e}")))?;
-                // Tables only exist on xlsx; load_tables is xlsx-specific
-                // and panics later in `table_names_in_sheet` if skipped.
-                if let Sheets::Xlsx(ref mut x) = inner {
-                    let _ = x.load_tables();
+                let inner = match format {
+                    SourceFormat::Xlsx => NativeXlsxBook::open_path(&path)
+                        .map(|book| Backend::NativeXlsx(Box::new(book))),
+                    SourceFormat::Xls => NativeXlsBook::open_path(&path)
+                        .map(|book| Backend::NativeXls(Box::new(book))),
+                    SourceFormat::Ods => NativeOdsBook::open_path(&path)
+                        .map(|book| Backend::NativeOds(Box::new(book))),
+                    _ => unreachable!(),
                 }
-                let sheet_names = inner.sheet_names().to_vec();
+                .map_err(|e| Error::Xlsx(format!("failed to open workbook: {e}")))?;
+                let names = match &inner {
+                    Backend::NativeXlsx(book) => book.sheet_names(),
+                    Backend::NativeXls(book) => book.sheet_names(),
+                    Backend::NativeOds(book) => book.sheet_names(),
+                    _ => unreachable!(),
+                };
+                let sheet_names = names.into_iter().map(str::to_owned).collect();
                 Ok(Self {
-                    inner: Backend::Sheets(inner),
+                    inner,
                     sheet_names,
                     path,
                     format,
@@ -214,7 +218,7 @@ impl Workbook {
                     .map(str::to_string)
                     .collect();
                 Ok(Self {
-                    inner: Backend::NativeXlsb(inner),
+                    inner: Backend::NativeXlsb(Box::new(inner)),
                     sheet_names,
                     path,
                     format,
@@ -273,16 +277,28 @@ impl Workbook {
             return Err(Error::SheetNotFound(name.to_string()));
         }
         match &mut self.inner {
-            Backend::Sheets(sheets) => {
-                // Styles walker is xlsx-only; other formats skip the lazy
-                // load entirely so `styles` stays None and the fallback
-                // path in `Sheet::load` never fires.
-                if self.format == SourceFormat::Xlsx && self.styles.is_none() {
-                    self.styles = WorkbookStyles::load(&self.path).ok();
-                }
-                Sheet::load(sheets, name, self.styles.as_mut())
+            Backend::NativeXlsx(book) => {
+                Sheet::read_native(name, book.worksheet(name), book.date1904(), true, |style| {
+                    book.number_format_for_style_id(style)
+                })
             }
-            Backend::NativeXlsb(book) => Sheet::load_native_xlsb(book, name),
+            Backend::NativeXls(book) => {
+                Sheet::read_native(name, book.worksheet(name), book.date1904(), true, |style| {
+                    book.number_format_for_style_id(style)
+                })
+            }
+            Backend::NativeOds(book) => {
+                Sheet::read_native(name, book.worksheet(name), book.date1904(), true, |style| {
+                    book.number_format_for_style_id(style)
+                })
+            }
+            Backend::NativeXlsb(book) => Sheet::read_native(
+                name,
+                book.worksheet(name),
+                book.date1904(),
+                false,
+                |style| book.number_format_for_style_id(style),
+            ),
             Backend::Csv(csv) => csv.load_sheet(name),
         }
     }
@@ -300,26 +316,27 @@ impl Workbook {
     /// Workbook-level defined names as `(name, formula)` pairs. Empty for
     /// CSV (no concept of named ranges).
     pub fn named_ranges(&self) -> Vec<(String, String)> {
-        match &self.inner {
-            Backend::Sheets(s) => s.defined_names().to_vec(),
-            Backend::NativeXlsb(book) => book
-                .named_ranges()
-                .iter()
-                .map(|range| (range.name.clone(), range.refers_to.clone()))
-                .collect(),
-            Backend::Csv(_) => Vec::new(),
-        }
+        let ranges = match &self.inner {
+            Backend::NativeXlsx(book) => book.named_ranges(),
+            Backend::NativeXls(book) => book.named_ranges(),
+            Backend::NativeOds(book) => book.named_ranges(),
+            Backend::NativeXlsb(book) => book.named_ranges(),
+            Backend::Csv(_) => return Vec::new(),
+        };
+        ranges
+            .iter()
+            .map(|entry| (entry.name.clone(), entry.refers_to.clone()))
+            .collect()
     }
 
     /// Names of workbook tables anchored on the given sheet. Xlsx-only;
     /// returns empty on other formats since tables are an xlsx feature.
     pub fn table_names_in_sheet(&self, sheet_name: &str) -> Vec<String> {
         match &self.inner {
-            Backend::Sheets(Sheets::Xlsx(x)) => x
-                .table_names_in_sheet(sheet_name)
-                .into_iter()
-                .cloned()
-                .collect(),
+            Backend::NativeXlsx(book) => book
+                .worksheet(sheet_name)
+                .map(|sheet| sheet.tables.into_iter().map(|table| table.name).collect())
+                .unwrap_or_default(),
             _ => Vec::new(),
         }
     }
@@ -334,8 +351,8 @@ impl Workbook {
         let names = self.sheet_names.clone();
         let mut sheets = Vec::with_capacity(names.len());
         for name in &names {
-            let tables = self.table_names_in_sheet(name);
             let sheet = self.sheet(name)?;
+            let tables = sheet.table_names().to_vec();
             let (rows, cols) = sheet.dimensions();
             sheets.push(SheetMap {
                 name: name.clone(),

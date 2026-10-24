@@ -142,7 +142,7 @@ fn read_archive(bytes: &[u8]) -> HashMap<String, Vec<u8>> {
     let mut out = HashMap::new();
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).expect("zip entry");
-        let path = file.name().to_string();
+        let path = file.name().expect("valid fixture entry name").into_owned();
         let mut buf = Vec::new();
         file.read_to_end(&mut buf).expect("read entry");
         out.insert(path, buf);
@@ -177,17 +177,28 @@ fn parse_sst(bytes: &[u8]) -> Vec<String> {
     let mut current = String::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"t" => {
+            Ok(Event::Start(e)) if e.name().as_ref() == "t" => {
                 in_t = true;
                 current.clear();
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"t" => {
+            Ok(Event::End(e)) if e.name().as_ref() == "t" => {
                 in_t = false;
                 out.push(std::mem::take(&mut current));
             }
             Ok(Event::Text(t)) if in_t => {
-                let decoded = t.unescape().expect("unescape sst");
-                current.push_str(&decoded);
+                current.push_str(&t);
+            }
+            Ok(Event::GeneralRef(reference)) if in_t => {
+                if let Some(character) =
+                    reference.resolve_char_ref().expect("sst numeric reference")
+                {
+                    current.push(character);
+                } else {
+                    current.push_str(
+                        quick_xml::escape::resolve_xml_entity(reference.as_ref())
+                            .expect("sst predefined reference"),
+                    );
+                }
             }
             Ok(Event::Eof) => break,
             Err(e) => panic!("sst parse error: {e}"),
@@ -196,6 +207,13 @@ fn parse_sst(bytes: &[u8]) -> Vec<String> {
         buf.clear();
     }
     out
+}
+
+#[test]
+fn sst_parser_preserves_split_character_and_entity_references() {
+    let xml =
+        br#"<sst><si><t>before &amp; &lt; &gt; &quot; &apos; &#50; &#x33; after</t></si></sst>"#;
+    assert_eq!(parse_sst(xml), ["before & < > \" ' 2 3 after"]);
 }
 
 #[test]

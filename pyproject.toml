@@ -4,10 +4,10 @@ build-backend = "maturin"
 
 [project]
 name = "wolfxl"
-version = "2.0.10"
-description = "Edit Excel files without losing formatting; 3.0-17.3x faster than openpyxl on the committed read/write benchmark (small-file gains vary). Openpyxl-compatible API, Rust backend, MIT."
+version = "2.0.11"
+description = "Edit Excel files without losing formatting; WolfXL 2.0.8 measured 3.0-17.3x faster than openpyxl 3.1.5 on the committed read/write benchmark (small-file gains vary). Openpyxl-compatible API, Rust backend, MIT."
 readme = "PYPI.md"
-requires-python = ">=3.9"
+requires-python = ">=3.9,!=3.9.0,!=3.9.1"
 dependencies = ["defusedxml>=0.7.1,<1.0"]
 license = { text = "MIT" }
 authors = [{ name = "Wolfgang Schoenberger" }]
@@ -56,7 +56,9 @@ test = [
     "pytest>=7.4",
     "pytest-xdist>=3.3",
     "openpyxl>=3.1",
-    "Pillow>=10.0",
+    "Pillow>=11.3.0; python_version < '3.10'",
+    "Pillow>=12.3.0; python_version >= '3.10' and python_version < '3.11'",
+    "Pillow>=13.0.0; python_version >= '3.11'",
 ]
 
 [project.urls]

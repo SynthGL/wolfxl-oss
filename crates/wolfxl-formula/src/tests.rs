@@ -6,7 +6,7 @@
 #![cfg(test)]
 
 use crate::reference::{parse_ref, RefKind};
-use crate::tokenizer::{render, tokenize, TokenSubKind};
+use crate::tokenizer::{render, tokenize, TokenKind, TokenSubKind};
 use crate::translate::{
     move_range, rename_sheet, shift, translate, translate_with_meta, Axis, DeletedRange, Range,
     RefDelta, ShiftPlan,
@@ -728,7 +728,7 @@ fn collect_formulas(root: &std::path::Path) -> Vec<String> {
                 if let Ok(mut zip) = zip::ZipArchive::new(file) {
                     for i in 0..zip.len() {
                         if let Ok(mut entry) = zip.by_index(i) {
-                            let name = entry.name().to_string();
+                            let name = entry.name().expect("valid fixture entry name").into_owned();
                             if name.starts_with("xl/worksheets/sheet") && name.ends_with(".xml") {
                                 let mut s = String::new();
                                 if entry.read_to_string(&mut s).is_ok() {
@@ -862,4 +862,76 @@ fn t44_parse_ref_classification() {
 fn t45_string_token_subkind_is_text() {
     let toks = tokenize("=\"hello\"").unwrap();
     assert_eq!(toks[0].subkind, TokenSubKind::Text);
+}
+
+// ---------------- Line-break whitespace ------------------------------
+
+/// The delta wolfxl-reader applies to a shared-formula child one row
+/// below its master.
+fn shared_child_delta(rows: i32, cols: i32) -> RefDelta {
+    let mut delta = RefDelta::empty();
+    delta.rows = rows;
+    delta.cols = cols;
+    delta.anchor_row = 1;
+    delta.anchor_col = 1;
+    delta.respect_dollar = true;
+    delta
+}
+
+#[test]
+fn t46_line_break_ends_an_operand_token() {
+    for (formula, ws) in [
+        ("=B1\n+B2", "\n"),
+        ("=B1\r\n+B2", "\r\n"),
+        ("=B1\r+B2", "\r"),
+    ] {
+        let toks = tokenize(formula).unwrap();
+        let shape: Vec<_> = toks.iter().map(|t| (t.kind, t.value.as_str())).collect();
+        assert_eq!(
+            shape,
+            [
+                (TokenKind::Operand, "B1"),
+                (TokenKind::Wspace, ws),
+                (TokenKind::OpIn, "+"),
+                (TokenKind::Operand, "B2"),
+            ],
+            "{formula:?}"
+        );
+        assert_eq!(toks[0].subkind, TokenSubKind::Range);
+        assert_eq!(render(&toks), formula);
+    }
+}
+
+#[test]
+fn t47_shared_formula_child_keeps_line_breaks_in_place() {
+    let cases = [
+        ("=B1\n+B2", "=B2\n+B3"),
+        ("=B1\r\n+B2", "=B2\r\n+B3"),
+        ("=B1\r+B2", "=B2\r+B3"),
+        ("=SUM(\r\nB1,\r\nB2\r\n)", "=SUM(\r\nB2,\r\nB3\r\n)"),
+        ("=B1 \n +B2", "=B2 \n +B3"),
+        ("=$A$1\n*B1", "=$A$1\n*B2"),
+    ];
+    for (master, child) in cases {
+        assert_eq!(
+            translate(master, &shared_child_delta(1, 0)).unwrap(),
+            child,
+            "{master:?}"
+        );
+    }
+}
+
+#[test]
+fn t48_whitespace_runs_round_trip_byte_for_byte() {
+    let cases = [
+        "=A1  +  B1",
+        "=SUM(\r\n1,2\r\n)",
+        "=A1\n\nB1",
+        "=IF(A1,\r\n  B1,\r\n  C1)",
+    ];
+    for f in cases {
+        let toks = tokenize(f).unwrap();
+        assert_eq!(render(&toks), f, "{f:?}");
+        assert_eq!(translate(f, &RefDelta::empty()).unwrap(), f, "{f:?}");
+    }
 }

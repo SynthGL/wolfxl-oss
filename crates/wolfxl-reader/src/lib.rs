@@ -1,16 +1,22 @@
 //! Native workbook readers for WolfXL.
 //!
-//! This crate is the dependency-free-from-calamine reader foundation. The
-//! first production target is XLSX/XLSM because those files already use ZIP +
-//! OOXML helpers elsewhere in WolfXL. XLSB and XLS readers will grow beside
-//! this API while preserving the same value-only public contract they have
-//! today.
+//! XLSX/XLSM, XLSB, XLS, and ODS share the Community value-reader models.
+//! The legacy binary and OpenDocument readers are independently authored
+//! from public format specifications; no calamine parser is used here.
+//!
+//! XML readers collect quick-xml 0.42 literal text, CDATA, and general-reference
+//! chunks before interpreting node values (including OOXML line endings,
+//! header/footer control codes, numeric markers, and chart references).
 
 mod merge_metadata;
+mod native_ods;
+mod native_xls;
 mod xlsb;
 
 pub mod external_links;
 
+pub use native_ods::NativeOdsBook;
+pub use native_xls::NativeXlsBook;
 pub use xlsb::NativeXlsbBook;
 
 use std::collections::{HashMap, HashSet};
@@ -24,6 +30,39 @@ use quick_xml::Reader as XmlReader;
 use wolfxl_formula::{translate as translate_formula, RefDelta};
 use wolfxl_rels::{RelId, RelsGraph};
 use zip::ZipArchive;
+
+/// quick-xml 0.42 emits XML references separately from literal text. Resolve
+/// XML's predefined entities and character references without allocating.
+/// Keep the same unknown-entity error as `escape::unescape`.
+fn resolve_xml_reference<'a>(
+    reference: &quick_xml::events::BytesRef<'_>,
+    utf8: &'a mut [u8; 4],
+) -> Result<&'a str> {
+    if let Some(ch) = reference
+        .resolve_char_ref()
+        .map_err(|err| ReaderError::Xml(format!("XML reference: {err}")))?
+    {
+        return Ok(ch.encode_utf8(utf8));
+    }
+    let name: &str = reference;
+    quick_xml::escape::resolve_predefined_entity(name).ok_or_else(|| {
+        ReaderError::Xml(format!(
+            "XML reference: {}",
+            quick_xml::escape::EscapeError::UnrecognizedEntity(1..name.len() + 1, name.to_owned(),)
+        ))
+    })
+}
+
+/// Borrow literal text or resolve a split reference into caller-owned scratch.
+/// Consumers append all chunks before interpreting a complete element value.
+fn xml_event_text<'a>(event: &'a Event<'_>, utf8: &'a mut [u8; 4]) -> Result<Option<&'a str>> {
+    match event {
+        Event::Text(text) => Ok(Some(text.as_ref())),
+        Event::CData(text) => Ok(Some(text.as_ref())),
+        Event::GeneralRef(reference) => resolve_xml_reference(reference, utf8).map(Some),
+        _ => Ok(None),
+    }
+}
 
 const DEFAULT_MAX_ZIP_ENTRIES: usize = 200_000;
 const DEFAULT_MAX_ZIP_ENTRY_BYTES: u64 = 512 * 1024 * 1024;
@@ -215,8 +254,8 @@ pub enum CellDataType {
     Error,
 }
 
-/// Parsed worksheet data returned by the native XLSX reader.
-#[derive(Debug, Clone, PartialEq)]
+/// Parsed sparse worksheet data shared by the native workbook readers.
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct WorksheetData {
     pub dimension: Option<String>,
     pub merged_ranges: Vec<String>,
@@ -838,6 +877,23 @@ pub struct ChartInfo {
     pub vary_colors: Option<bool>,
     pub style: Option<u32>,
     pub anchor: ImageAnchorInfo,
+    pub series: Vec<ChartSeriesInfo>,
+    /// Every chart family in the plot area, in document order. `subcharts[0]` is
+    /// the primary family whose fields `ChartInfo` also carries; a combination
+    /// chart lists its other families after it.
+    pub subcharts: Vec<ChartSubchartInfo>,
+}
+
+/// One chart family of a plot area, with the axes it plots against.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ChartSubchartInfo {
+    pub kind: String,
+    pub bar_dir: Option<String>,
+    pub grouping: Option<String>,
+    pub scatter_style: Option<String>,
+    pub vary_colors: Option<bool>,
+    pub x_axis: Option<ChartAxisInfo>,
+    pub y_axis: Option<ChartAxisInfo>,
     pub series: Vec<ChartSeriesInfo>,
 }
 
@@ -1774,7 +1830,6 @@ fn parse_workbook(
     Vec<BookViewInfo>,
 )> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut sheets = Vec::new();
     let mut raw_names = Vec::new();
@@ -1795,7 +1850,7 @@ fn parse_workbook(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"workbookPr" => {
                     date1904 = attr_truthy(attr_value(&e, b"date1904").as_deref());
                     workbook_properties = Some(WorkbookPropertiesInfo::from_start(&e));
@@ -1850,14 +1905,21 @@ fn parse_workbook(
             },
             Ok(Event::Text(e)) => {
                 if in_defined_name {
-                    current_name_text
-                        .push_str(&e.unescape().map_err(|err| {
-                            ReaderError::Xml(format!("defined name text: {err}"))
-                        })?);
+                    current_name_text.push_str(&e);
+                }
+            }
+            Ok(Event::GeneralRef(e)) => {
+                if in_defined_name {
+                    current_name_text.push_str(resolve_xml_reference(&e, &mut [0; 4])?);
+                }
+            }
+            Ok(Event::CData(e)) => {
+                if in_defined_name {
+                    current_name_text.push_str(&e);
                 }
             }
             Ok(Event::End(e)) => {
-                if e.local_name().as_ref() == b"definedName" {
+                if e.local_name().as_ref() == "definedName" {
                     in_defined_name = false;
                     if let Some(name) = current_name.take() {
                         let refers_to = current_name_text.trim().to_string();
@@ -2213,7 +2275,6 @@ fn synthesize_sheet_refs_from_rels(rels: &RelsGraph) -> Vec<SheetRef> {
 
 fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut out = SharedStrings::default();
     let mut current = String::new();
@@ -2227,7 +2288,7 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+            Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"si" => {
                     in_si = true;
                     current.clear();
@@ -2256,7 +2317,7 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+            Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"si" => {
                     out.values.push(String::new());
                     out.rich_text.push(None);
@@ -2266,16 +2327,17 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
+            Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"si" => {
                     out.values.push(std::mem::take(&mut current));
                     out.rich_text.push(saw_r.then(|| std::mem::take(&mut runs)));
                     in_si = false;
                 }
                 b"t" => {
-                    current.push_str(&text_buf);
+                    let normalized = normalize_ooxml_text(&text_buf);
+                    current.push_str(&normalized);
                     if let Some(run) = current_run.as_mut() {
-                        run.text.push_str(&text_buf);
+                        run.text.push_str(&normalized);
                     }
                     text_buf.clear();
                     in_t = false;
@@ -2294,15 +2356,17 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
             },
             Ok(Event::Text(e)) => {
                 if in_si && in_t {
-                    let text = e
-                        .unescape()
-                        .map_err(|err| ReaderError::Xml(format!("shared string text: {err}")))?;
-                    text_buf.push_str(&normalize_ooxml_text(&text));
+                    text_buf.push_str(&e);
+                }
+            }
+            Ok(Event::GeneralRef(e)) => {
+                if in_si && in_t {
+                    text_buf.push_str(resolve_xml_reference(&e, &mut [0; 4])?);
                 }
             }
             Ok(Event::CData(e)) => {
                 if in_si && in_t {
-                    text_buf.push_str(&normalize_ooxml_text(&String::from_utf8_lossy(e.as_ref())));
+                    text_buf.push_str(&e);
                 }
             }
             Ok(Event::Eof) => break,
@@ -2328,8 +2392,8 @@ fn apply_rich_font_attr(
     for a in attrs.with_checks(false) {
         if let Ok(Attribute { key, value }) = a {
             all_attrs.push((
-                key.local_name().as_ref().to_vec(),
-                String::from_utf8_lossy(value.as_ref()).into_owned(),
+                key.local_name().as_ref().as_bytes().to_vec(),
+                value.into_owned(),
             ));
         }
     }
@@ -2383,7 +2447,6 @@ fn parse_rich_bool(value: Option<String>) -> bool {
 
 fn parse_style_tables(xml: &str) -> Result<StyleTables> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut styles = StyleTables::default();
     let mut in_num_fmts = false;
@@ -2400,7 +2463,7 @@ fn parse_style_tables(xml: &str) -> Result<StyleTables> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+            Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"numFmts" => in_num_fmts = true,
                 b"fonts" => in_fonts = true,
                 b"fills" => in_fills = true,
@@ -2480,7 +2543,7 @@ fn parse_style_tables(xml: &str) -> Result<StyleTables> {
                 b"cellStyle" => push_cell_style(&mut styles, &e),
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+            Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"numFmt" if in_num_fmts => push_num_fmt(&mut styles, &e),
                 b"xf" if in_cell_xfs => styles.cell_xfs.push(parse_xf_entry(&e)),
                 b"cellStyle" => push_cell_style(&mut styles, &e),
@@ -2534,7 +2597,7 @@ fn parse_style_tables(xml: &str) -> Result<StyleTables> {
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
+            Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"numFmts" => in_num_fmts = false,
                 b"fonts" => in_fonts = false,
                 b"fills" => in_fills = false,
@@ -2960,7 +3023,6 @@ fn parse_worksheet(
     tables: Vec<Table>,
 ) -> Result<WorksheetData> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut dimension = None;
     let mut merged_ranges = Vec::new();
@@ -2995,12 +3057,14 @@ fn parse_worksheet(
     let mut active_validation_text: Option<DataValidationFormula> = None;
     let mut current_header_footer: Option<HeaderFooterInfo> = None;
     let mut active_header_footer: Option<HeaderFooterPart> = None;
+    let mut header_footer_text = String::new();
+    let mut inline_text = String::new();
     let mut active_breaks: Option<BreakListKind> = None;
     let mut cells = Vec::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+            Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetPr" => {
                     sheet_properties = Some(SheetPropertiesInfo::from_start(&e));
                 }
@@ -3190,7 +3254,7 @@ fn parse_worksheet(
                     }
                 }
             },
-            Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+            Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetPr" => {
                     sheet_properties = Some(SheetPropertiesInfo::from_start(&e));
                 }
@@ -3339,7 +3403,7 @@ fn parse_worksheet(
                     }
                 }
             },
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
+            Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"c" => {
                     if let Some(builder) = current.take() {
                         cells.push(builder.finish(shared_strings)?);
@@ -3368,7 +3432,13 @@ fn parse_worksheet(
                 }
                 b"oddHeader" | b"oddFooter" | b"evenHeader" | b"evenFooter" | b"firstHeader"
                 | b"firstFooter" => {
-                    active_header_footer = None;
+                    if let (Some(part), Some(header_footer)) =
+                        (active_header_footer.take(), current_header_footer.as_mut())
+                    {
+                        header_footer
+                            .set_part(part, parse_header_footer_item_text(&header_footer_text));
+                    }
+                    header_footer_text.clear();
                 }
                 b"headerFooter" => {
                     header_footer = current_header_footer.take();
@@ -3406,7 +3476,16 @@ fn parse_worksheet(
                         }
                     }
                 }
-                b"v" | b"f" | b"t" => active_text = None,
+                b"v" | b"f" => active_text = None,
+                b"t" => {
+                    if matches!(active_text, Some(TextTarget::InlineString)) {
+                        if let Some(cell) = current.as_mut() {
+                            cell.push_text(TextTarget::InlineString, &inline_text);
+                        }
+                    }
+                    inline_text.clear();
+                    active_text = None;
+                }
                 b"rPr" => {
                     if let Some(cell) = current.as_mut() {
                         cell.end_inline_props();
@@ -3420,58 +3499,30 @@ fn parse_worksheet(
                 b"row" => row_index = None,
                 _ => {}
             },
-            Ok(Event::Text(e)) => {
-                if in_conditional_formula {
-                    if let Some(rule) = current_conditional_rule.as_mut() {
-                        let text = e
-                            .unescape()
-                            .map_err(|err| ReaderError::Xml(format!("worksheet text: {err}")))?;
-                        rule.push_formula_text(&text);
-                    }
-                } else if let (Some(target), Some(validation)) =
-                    (active_validation_text, current_validation.as_mut())
-                {
-                    let text = e
-                        .unescape()
-                        .map_err(|err| ReaderError::Xml(format!("worksheet text: {err}")))?;
-                    validation.push_text(target, &text);
-                } else if let (Some(part), Some(header_footer)) =
-                    (active_header_footer, current_header_footer.as_mut())
-                {
-                    let text = e
-                        .unescape()
-                        .map_err(|err| ReaderError::Xml(format!("worksheet text: {err}")))?;
-                    header_footer.set_part(part, parse_header_footer_item_text(&text));
-                } else if let (Some(target), Some(cell)) = (active_text, current.as_mut()) {
-                    let text = e
-                        .unescape()
-                        .map_err(|err| ReaderError::Xml(format!("worksheet text: {err}")))?;
-                    cell.push_text(target, &text);
-                }
-            }
-            Ok(Event::CData(e)) => {
-                if in_conditional_formula {
-                    if let Some(rule) = current_conditional_rule.as_mut() {
-                        rule.push_formula_text(&String::from_utf8_lossy(e.as_ref()));
-                    }
-                } else if let (Some(target), Some(validation)) =
-                    (active_validation_text, current_validation.as_mut())
-                {
-                    validation.push_text(target, &String::from_utf8_lossy(e.as_ref()));
-                } else if let (Some(part), Some(header_footer)) =
-                    (active_header_footer, current_header_footer.as_mut())
-                {
-                    header_footer.set_part(
-                        part,
-                        parse_header_footer_item_text(&String::from_utf8_lossy(e.as_ref())),
-                    );
-                } else if let (Some(target), Some(cell)) = (active_text, current.as_mut()) {
-                    cell.push_text(target, &String::from_utf8_lossy(e.as_ref()));
-                }
-            }
             Ok(Event::Eof) => break,
             Err(e) => return Err(ReaderError::Xml(format!("failed to parse worksheet: {e}"))),
-            _ => {}
+            Ok(event) => {
+                let mut utf8 = [0; 4];
+                if let Some(text) = xml_event_text(&event, &mut utf8)? {
+                    if in_conditional_formula {
+                        if let Some(rule) = current_conditional_rule.as_mut() {
+                            rule.push_formula_text(text);
+                        }
+                    } else if let (Some(target), Some(validation)) =
+                        (active_validation_text, current_validation.as_mut())
+                    {
+                        validation.push_text(target, text);
+                    } else if active_header_footer.is_some() {
+                        header_footer_text.push_str(text);
+                    } else if let (Some(target), Some(cell)) = (active_text, current.as_mut()) {
+                        if matches!(target, TextTarget::InlineString) {
+                            inline_text.push_str(text);
+                        } else {
+                            cell.push_text(target, text);
+                        }
+                    }
+                }
+            }
         }
         buf.clear();
     }
@@ -3542,17 +3593,17 @@ fn parse_worksheet_value_cells_bytes(
     shared_strings: &SharedStrings,
 ) -> Result<Vec<ValueCell>> {
     let mut reader = XmlReader::from_reader(xml);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut row_index: Option<u32> = None;
     let mut current: Option<ValueCellBuilder> = None;
     let mut active_text: Option<TextTarget> = None;
+    let mut inline_text = String::new();
     let mut in_sheet_data = false;
     let mut cells = Vec::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+            Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"dimension" if !in_sheet_data => reserve_value_cell_capacity(&mut cells, &e),
                 b"sheetData" => in_sheet_data = true,
                 b"row" if in_sheet_data => row_index = raw_attr_u32(&e, b"r"),
@@ -3568,7 +3619,7 @@ fn parse_worksheet_value_cells_bytes(
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+            Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"dimension" if !in_sheet_data => reserve_value_cell_capacity(&mut cells, &e),
                 b"sheetData" => break,
                 b"row" if in_sheet_data => {
@@ -3580,7 +3631,7 @@ fn parse_worksheet_value_cells_bytes(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
+            Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => break,
                 b"row" if in_sheet_data => row_index = None,
                 b"c" if in_sheet_data => {
@@ -3588,33 +3639,31 @@ fn parse_worksheet_value_cells_bytes(
                         cells.push(builder.finish(shared_strings)?);
                     }
                 }
-                b"v" | b"t" => active_text = None,
+                b"v" => active_text = None,
+                b"t" => {
+                    if matches!(active_text, Some(TextTarget::InlineString)) {
+                        if let Some(cell) = current.as_mut() {
+                            cell.push_text(TextTarget::InlineString, &inline_text);
+                        }
+                    }
+                    inline_text.clear();
+                    active_text = None;
+                }
                 _ => {}
             },
-            Ok(Event::Text(e)) => {
+            Ok(Event::Eof) => break,
+            Err(e) => return Err(ReaderError::Xml(format!("failed to parse worksheet: {e}"))),
+            Ok(event) => {
                 if let (Some(target), Some(cell)) = (active_text, current.as_mut()) {
-                    match target {
-                        TextTarget::InlineString => {
-                            push_inline_value_text(cell, e.as_ref(), || {
-                                e.unescape().map(|text| text.into_owned()).map_err(|err| {
-                                    ReaderError::Xml(format!("worksheet text: {err}"))
-                                })
-                            })?;
-                        }
-                        TextTarget::Value | TextTarget::Formula => {
-                            cell.push_raw_text(target, e.as_ref());
+                    if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
+                        if matches!(target, TextTarget::InlineString) {
+                            inline_text.push_str(text);
+                        } else {
+                            cell.push_raw_text(target, text.as_bytes());
                         }
                     }
                 }
             }
-            Ok(Event::CData(e)) => {
-                if let (Some(target), Some(cell)) = (active_text, current.as_mut()) {
-                    cell.push_text(target, &String::from_utf8_lossy(e.as_ref()));
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(ReaderError::Xml(format!("failed to parse worksheet: {e}"))),
-            _ => {}
         }
         buf.clear();
     }
@@ -3679,7 +3728,6 @@ fn read_first_sheet_formula_summary_source(source: &WorkbookSource) -> Result<Fo
 
 fn parse_worksheet_value_summary_bytes(xml: &[u8]) -> Result<ValueSheetSummary> {
     let mut reader = XmlReader::from_reader(xml);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut row_index: Option<u32> = None;
     let mut current: Option<FormulaSummaryCellBuilder> = None;
@@ -3692,7 +3740,7 @@ fn parse_worksheet_value_summary_bytes(xml: &[u8]) -> Result<ValueSheetSummary> 
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+            Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => in_sheet_data = true,
                 b"row" if in_sheet_data => row_index = raw_attr_u32(&e, b"r"),
                 b"c" if in_sheet_data => {
@@ -3701,7 +3749,7 @@ fn parse_worksheet_value_summary_bytes(xml: &[u8]) -> Result<ValueSheetSummary> 
                 b"v" if current.is_some() => active_value = true,
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+            Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => break,
                 b"row" if in_sheet_data => row_index = None,
                 b"c" if in_sheet_data => {
@@ -3710,7 +3758,7 @@ fn parse_worksheet_value_summary_bytes(xml: &[u8]) -> Result<ValueSheetSummary> 
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
+            Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => break,
                 b"row" if in_sheet_data => row_index = None,
                 b"c" if in_sheet_data => {
@@ -3724,14 +3772,23 @@ fn parse_worksheet_value_summary_bytes(xml: &[u8]) -> Result<ValueSheetSummary> 
             Ok(Event::Text(e)) => {
                 if active_value {
                     if let Some(cell) = current.as_mut() {
-                        cell.push_raw_value_text(e.as_ref());
+                        cell.push_raw_value_text(e.as_bytes());
                     }
                 }
             }
             Ok(Event::CData(e)) => {
                 if active_value {
                     if let Some(cell) = current.as_mut() {
-                        cell.push_raw_value_text(e.as_ref());
+                        cell.push_raw_value_text(e.as_bytes());
+                    }
+                }
+            }
+            Ok(Event::GeneralRef(e)) => {
+                if active_value {
+                    if let Some(cell) = current.as_mut() {
+                        cell.push_raw_value_text(
+                            resolve_xml_reference(&e, &mut [0; 4])?.as_bytes(),
+                        );
                     }
                 }
             }
@@ -3747,7 +3804,6 @@ fn parse_worksheet_value_summary_bytes(xml: &[u8]) -> Result<ValueSheetSummary> 
 
 fn parse_worksheet_formula_summary_bytes(xml: &[u8]) -> Result<FormulaSheetSummary> {
     let mut reader = XmlReader::from_reader(xml);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut row_index: Option<u32> = None;
     let mut current: Option<FormulaSummaryCellBuilder> = None;
@@ -3761,7 +3817,7 @@ fn parse_worksheet_formula_summary_bytes(xml: &[u8]) -> Result<FormulaSheetSumma
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+            Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => in_sheet_data = true,
                 b"row" if in_sheet_data => row_index = raw_attr_u32(&e, b"r"),
                 b"c" if in_sheet_data => {
@@ -3775,7 +3831,7 @@ fn parse_worksheet_formula_summary_bytes(xml: &[u8]) -> Result<FormulaSheetSumma
                 b"v" if current.is_some() => active_value = true,
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+            Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => break,
                 b"row" if in_sheet_data => row_index = None,
                 b"c" if in_sheet_data => {
@@ -3789,7 +3845,7 @@ fn parse_worksheet_formula_summary_bytes(xml: &[u8]) -> Result<FormulaSheetSumma
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
+            Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => break,
                 b"row" if in_sheet_data => row_index = None,
                 b"c" if in_sheet_data => {
@@ -3803,14 +3859,23 @@ fn parse_worksheet_formula_summary_bytes(xml: &[u8]) -> Result<FormulaSheetSumma
             Ok(Event::Text(e)) => {
                 if active_value {
                     if let Some(cell) = current.as_mut() {
-                        cell.push_raw_value_text(e.as_ref());
+                        cell.push_raw_value_text(e.as_bytes());
                     }
                 }
             }
             Ok(Event::CData(e)) => {
                 if active_value {
                     if let Some(cell) = current.as_mut() {
-                        cell.value_text.extend_from_slice(e.as_ref());
+                        cell.push_raw_value_text(e.as_bytes());
+                    }
+                }
+            }
+            Ok(Event::GeneralRef(e)) => {
+                if active_value {
+                    if let Some(cell) = current.as_mut() {
+                        cell.push_raw_value_text(
+                            resolve_xml_reference(&e, &mut [0; 4])?.as_bytes(),
+                        );
                     }
                 }
             }
@@ -3824,21 +3889,6 @@ fn parse_worksheet_formula_summary_bytes(xml: &[u8]) -> Result<FormulaSheetSumma
     Ok(summary)
 }
 
-fn push_inline_value_text<F>(cell: &mut ValueCellBuilder, raw: &[u8], unescape: F) -> Result<()>
-where
-    F: FnOnce() -> Result<String>,
-{
-    if !raw.iter().any(|byte| matches!(*byte, b'&' | b'\r')) {
-        let text = std::str::from_utf8(raw)
-            .map_err(|err| ReaderError::Xml(format!("worksheet text: {err}")))?;
-        cell.inline_text.push_str(text);
-        return Ok(());
-    }
-    cell.inline_text
-        .push_str(&normalize_ooxml_text(&unescape()?));
-    Ok(())
-}
-
 fn reserve_value_cell_capacity(cells: &mut Vec<ValueCell>, e: &BytesStart<'_>) {
     let Some(capacity) = value_cell_capacity_from_dimension(e) else {
         return;
@@ -3848,9 +3898,9 @@ fn reserve_value_cell_capacity(cells: &mut Vec<ValueCell>, e: &BytesStart<'_>) {
 
 fn value_cell_capacity_from_dimension(e: &BytesStart<'_>) -> Option<usize> {
     for attr in e.attributes().with_checks(false).flatten() {
-        if attr.key.as_ref() == b"ref" {
+        if attr.key.as_ref() == "ref" {
             let (min_row, min_col, max_row, max_col) =
-                parse_range_bounds_1based_bytes(attr.value.as_ref())?;
+                parse_range_bounds_1based_bytes(attr.value.as_bytes())?;
             let row_count = max_row.checked_sub(min_row)?.checked_add(1)? as usize;
             let col_count = max_col.checked_sub(min_col)?.checked_add(1)? as usize;
             let capacity = row_count.checked_mul(col_count)?;
@@ -4149,7 +4199,6 @@ fn parse_range_bounds_1based(range: &str) -> Option<(u32, u32, u32, u32)> {
 
 fn parse_auto_filter(xml: &str) -> Result<Option<AutoFilterInfo>> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut auto_filter: Option<AutoFilterInfo> = None;
     let mut current_col: Option<FilterColumnInfo> = None;
@@ -4160,7 +4209,7 @@ fn parse_auto_filter(xml: &str) -> Result<Option<AutoFilterInfo>> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+            Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"autoFilter" => {
                     in_auto_filter = true;
                     auto_filter = attr_value(&e, b"ref")
@@ -4185,7 +4234,7 @@ fn parse_auto_filter(xml: &str) -> Result<Option<AutoFilterInfo>> {
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+            Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"autoFilter" => {
                     auto_filter = attr_value(&e, b"ref")
                         .filter(|value| !value.trim().is_empty())
@@ -4267,7 +4316,7 @@ fn parse_auto_filter(xml: &str) -> Result<Option<AutoFilterInfo>> {
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
+            Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"autoFilter" => {
                     if let Some(pending_sort_state) = sort_state.take() {
                         if let Some(auto_filter) = auto_filter.as_mut() {
@@ -4709,14 +4758,13 @@ fn person_list_target(rels: &RelsGraph) -> Option<String> {
 /// round-trips byte-stable through wolfxl's writer.
 fn parse_person_list(xml: &str) -> Result<Vec<Person>> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut persons = Vec::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.local_name().as_ref() == b"person" {
+                if e.local_name().as_ref() == "person" {
                     let display_name = attr_value(&e, b"displayName").unwrap_or_default();
                     let id = attr_value(&e, b"id").unwrap_or_default();
                     if id.is_empty() {
@@ -4752,7 +4800,6 @@ fn parse_person_list(xml: &str) -> Result<Vec<Person>> {
 /// Caller reassembles into a tree by matching `parent_id` against `id`.
 fn parse_threaded_comments(xml: &str) -> Result<Vec<ParsedThreadedComment>> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut out: Vec<ParsedThreadedComment> = Vec::new();
 
@@ -4762,7 +4809,7 @@ fn parse_threaded_comments(xml: &str) -> Result<Vec<ParsedThreadedComment>> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+            Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"threadedComment" => {
                     let id = attr_value(&e, b"id").unwrap_or_default();
                     let cell = attr_value(&e, b"ref").unwrap_or_default();
@@ -4791,7 +4838,7 @@ fn parse_threaded_comments(xml: &str) -> Result<Vec<ParsedThreadedComment>> {
             },
             Ok(Event::Empty(e)) => {
                 // Self-closing `<threadedComment ... />` — empty body is valid.
-                if e.local_name().as_ref() == b"threadedComment" {
+                if e.local_name().as_ref() == "threadedComment" {
                     let id = attr_value(&e, b"id").unwrap_or_default();
                     let cell = attr_value(&e, b"ref").unwrap_or_default();
                     let person_id = attr_value(&e, b"personId").unwrap_or_default();
@@ -4811,7 +4858,7 @@ fn parse_threaded_comments(xml: &str) -> Result<Vec<ParsedThreadedComment>> {
                     });
                 }
             }
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
+            Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"threadedComment" => {
                     if let Some(mut tc) = current.take() {
                         tc.text = std::mem::take(&mut text_buf);
@@ -4823,26 +4870,19 @@ fn parse_threaded_comments(xml: &str) -> Result<Vec<ParsedThreadedComment>> {
                 }
                 _ => {}
             },
-            Ok(Event::Text(e)) => {
-                if in_text {
-                    let s = e
-                        .unescape()
-                        .map_err(|err| ReaderError::Xml(format!("threadedComments text: {err}")))?;
-                    text_buf.push_str(&s);
-                }
-            }
-            Ok(Event::CData(e)) => {
-                if in_text {
-                    text_buf.push_str(&String::from_utf8_lossy(e.as_ref()));
-                }
-            }
             Ok(Event::Eof) => break,
             Err(e) => {
                 return Err(ReaderError::Xml(format!(
                     "failed to parse threadedComments XML: {e}"
                 )));
             }
-            _ => {}
+            Ok(event) => {
+                if in_text {
+                    if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
+                        text_buf.push_str(text);
+                    }
+                }
+            }
         }
         buf.clear();
     }
@@ -4852,11 +4892,11 @@ fn parse_threaded_comments(xml: &str) -> Result<Vec<ParsedThreadedComment>> {
 
 fn parse_comments(xml: &str) -> Result<Vec<Comment>> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut authors = Vec::new();
     let mut comments = Vec::new();
     let mut in_author = false;
+    let mut current_author = String::new();
     let mut in_comment = false;
     let mut in_t = false;
     let mut current_cell = String::new();
@@ -4865,8 +4905,11 @@ fn parse_comments(xml: &str) -> Result<Vec<Comment>> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
-                b"author" => in_author = true,
+            Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
+                b"author" => {
+                    in_author = true;
+                    current_author.clear();
+                }
                 b"comment" => {
                     in_comment = true;
                     current_text.clear();
@@ -4878,8 +4921,14 @@ fn parse_comments(xml: &str) -> Result<Vec<Comment>> {
                 b"t" => in_t = true,
                 _ => {}
             },
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
-                b"author" => in_author = false,
+            Ok(Event::Empty(e)) if e.local_name().as_ref() == "author" => {
+                authors.push(String::new());
+            }
+            Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
+                b"author" => {
+                    in_author = false;
+                    authors.push(std::mem::take(&mut current_author));
+                }
                 b"comment" => {
                     in_comment = false;
                     comments.push(Comment {
@@ -4892,29 +4941,21 @@ fn parse_comments(xml: &str) -> Result<Vec<Comment>> {
                 b"t" => in_t = false,
                 _ => {}
             },
-            Ok(Event::Text(e)) => {
-                let text = e
-                    .unescape()
-                    .map_err(|err| ReaderError::Xml(format!("comments text: {err}")))?
-                    .to_string();
-                if in_author {
-                    authors.push(text);
-                } else if in_comment && in_t {
-                    current_text.push_str(&text);
-                }
-            }
-            Ok(Event::CData(e)) => {
-                if in_comment && in_t {
-                    current_text.push_str(&String::from_utf8_lossy(e.as_ref()));
-                }
-            }
             Ok(Event::Eof) => break,
             Err(e) => {
                 return Err(ReaderError::Xml(format!(
                     "failed to parse comments XML: {e}"
                 )));
             }
-            _ => {}
+            Ok(event) => {
+                if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
+                    if in_author {
+                        current_author.push_str(text);
+                    } else if in_comment && in_t {
+                        current_text.push_str(text);
+                    }
+                }
+            }
         }
         buf.clear();
     }
@@ -4928,7 +4969,6 @@ fn parse_doc_properties_into(
     key_for_tag: fn(&[u8]) -> Option<&'static str>,
 ) {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut current_tag: Option<Vec<u8>> = None;
     let mut current_text = String::new();
@@ -4936,17 +4976,12 @@ fn parse_doc_properties_into(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                current_tag = Some(e.local_name().as_ref().to_vec());
+                current_tag = Some(e.local_name().as_ref().as_bytes().to_vec());
                 current_text.clear();
-            }
-            Ok(Event::Text(e)) => {
-                if current_tag.is_some() {
-                    current_text.push_str(&e.unescape().unwrap_or_default());
-                }
             }
             Ok(Event::End(e)) => {
                 let name = e.local_name();
-                let name = name.as_ref();
+                let name = name.as_ref().as_bytes();
                 if current_tag.as_deref() == Some(name) {
                     if let Some(key) = key_for_tag(name) {
                         let value = current_text.trim();
@@ -4961,7 +4996,20 @@ fn parse_doc_properties_into(
             }
             Ok(Event::Eof) => break,
             Err(_) => break,
-            _ => {}
+            Ok(event) => {
+                if current_tag.is_some() {
+                    match xml_event_text(&event, &mut [0; 4]) {
+                        Ok(Some(text)) => current_text.push_str(text),
+                        // This best-effort API omits an invalid property rather
+                        // than publishing the chunks surrounding a bad entity.
+                        Err(_) => {
+                            current_tag = None;
+                            current_text.clear();
+                        }
+                        Ok(None) => {}
+                    }
+                }
+            }
         }
         buf.clear();
     }
@@ -4998,7 +5046,6 @@ fn doc_property_app_key(name: &[u8]) -> Option<&'static str> {
 
 fn parse_custom_doc_properties(xml: &str) -> Result<Vec<CustomPropertyInfo>> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut properties = Vec::new();
     let mut current_name: Option<String> = None;
@@ -5009,7 +5056,7 @@ fn parse_custom_doc_properties(xml: &str) -> Result<Vec<CustomPropertyInfo>> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+            Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"property" => {
                     current_name = attr_value(&e, b"name");
                     current_link_target = attr_value(&e, b"linkTarget");
@@ -5025,7 +5072,7 @@ fn parse_custom_doc_properties(xml: &str) -> Result<Vec<CustomPropertyInfo>> {
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+            Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"property" => {
                     if let Some(name) = attr_value(&e, b"name") {
                         if let Some(link) = attr_value(&e, b"linkTarget") {
@@ -5044,21 +5091,7 @@ fn parse_custom_doc_properties(xml: &str) -> Result<Vec<CustomPropertyInfo>> {
                 }
                 _ => {}
             },
-            Ok(Event::Text(e)) => {
-                if active_value_tag.is_some() {
-                    current_value.push_str(
-                        &e.unescape().map_err(|err| {
-                            ReaderError::Xml(format!("custom property text: {err}"))
-                        })?,
-                    );
-                }
-            }
-            Ok(Event::CData(e)) => {
-                if active_value_tag.is_some() {
-                    current_value.push_str(&String::from_utf8_lossy(e.as_ref()));
-                }
-            }
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
+            Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"property" => {
                     if let Some(name) = current_name.take() {
                         let kind = current_kind.take().unwrap_or_else(|| "string".to_string());
@@ -5082,7 +5115,13 @@ fn parse_custom_doc_properties(xml: &str) -> Result<Vec<CustomPropertyInfo>> {
                     "failed to parse docProps/custom.xml: {e}"
                 )));
             }
-            _ => {}
+            Ok(event) => {
+                if active_value_tag.is_some() {
+                    if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
+                        current_value.push_str(text);
+                    }
+                }
+            }
         }
         buf.clear();
     }
@@ -5332,17 +5371,17 @@ fn parse_drawing_objects(
     object_kind: DrawingObjectKind,
 ) -> Result<Vec<DrawingObjectRef>> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut out = Vec::new();
     let mut current: Option<DrawingObjectBuilder> = None;
     let mut marker_slot: Option<MarkerSlot> = None;
     let mut marker_text: Option<MarkerTextTarget> = None;
+    let mut marker_value = String::new();
     let mut in_target_frame = false;
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+            Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"oneCellAnchor" => {
                     current = Some(DrawingObjectBuilder::new(DrawingAnchorKind::OneCell, &e));
                 }
@@ -5378,7 +5417,7 @@ fn parse_drawing_objects(
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+            Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"pos" => apply_anchor_pos(&mut current, &e),
                 b"ext" if !in_target_frame => apply_anchor_ext(&mut current, &e),
                 b"blip" if object_kind == DrawingObjectKind::Image => {
@@ -5389,20 +5428,17 @@ fn parse_drawing_objects(
                 }
                 _ => {}
             },
-            Ok(Event::Text(e)) => {
-                if let (Some(slot), Some(target), Some(builder)) =
-                    (marker_slot, marker_text, current.as_mut())
-                {
-                    let text = e
-                        .unescape()
-                        .map_err(|err| ReaderError::Xml(format!("drawing text: {err}")))?;
-                    if let Ok(value) = text.parse::<i64>() {
-                        apply_marker_value(builder, slot, target, value);
+            Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
+                b"col" | b"row" | b"colOff" | b"rowOff" => {
+                    if let (Some(slot), Some(target), Some(builder)) =
+                        (marker_slot, marker_text.take(), current.as_mut())
+                    {
+                        if let Ok(value) = marker_value.trim().parse::<i64>() {
+                            apply_marker_value(builder, slot, target, value);
+                        }
                     }
+                    marker_value.clear();
                 }
-            }
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
-                b"col" | b"row" | b"colOff" | b"rowOff" => marker_text = None,
                 b"from" | b"to" => {
                     marker_slot = None;
                     marker_text = None;
@@ -5423,7 +5459,13 @@ fn parse_drawing_objects(
             },
             Ok(Event::Eof) => break,
             Err(e) => return Err(ReaderError::Xml(format!("failed to parse drawing: {e}"))),
-            _ => {}
+            Ok(event) => {
+                if marker_text.is_some() {
+                    if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
+                        marker_value.push_str(text);
+                    }
+                }
+            }
         }
         buf.clear();
     }
@@ -5450,7 +5492,6 @@ fn apply_chart_rid(builder: &mut Option<DrawingObjectBuilder>, e: &BytesStart<'_
 
 fn parse_chart_xml(xml: &str, anchor: ImageAnchorInfo) -> Result<Option<ChartInfo>> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut stack: Vec<Vec<u8>> = Vec::new();
     let mut kind: Option<String> = None;
@@ -5472,11 +5513,14 @@ fn parse_chart_xml(xml: &str, anchor: ImageAnchorInfo) -> Result<Option<ChartInf
     let mut style: Option<u32> = None;
     let mut current_series: Option<ChartSeriesInfo> = None;
     let mut series = Vec::new();
+    let mut all_axes: Vec<ChartAxisInfo> = Vec::new();
+    let mut text_buf = String::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                text_buf.clear();
+                let local = e.local_name().as_ref().as_bytes().to_vec();
                 apply_chart_start(
                     &stack,
                     &local,
@@ -5501,7 +5545,7 @@ fn parse_chart_xml(xml: &str, anchor: ImageAnchorInfo) -> Result<Option<ChartInf
                 stack.push(local);
             }
             Ok(Event::Empty(e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name().as_ref().as_bytes().to_vec();
                 apply_chart_start(
                     &stack,
                     &local,
@@ -5520,29 +5564,27 @@ fn parse_chart_xml(xml: &str, anchor: ImageAnchorInfo) -> Result<Option<ChartInf
                     apply_chart_axis_start(axis, &local, &e);
                 }
             }
-            Ok(Event::Text(e)) => {
-                let text = e
-                    .unescape()
-                    .map_err(|err| ReaderError::Xml(format!("chart text: {err}")))?
-                    .to_string();
+            Ok(Event::End(e)) => {
                 apply_chart_text(
                     &stack,
-                    text.trim(),
+                    text_buf.trim(),
                     &mut title_parts,
                     current_axis.as_deref(),
                     &mut current_axis_title_parts,
                     &mut current_series,
                 );
-            }
-            Ok(Event::End(e)) => {
+                text_buf.clear();
                 let local_name = e.local_name();
-                let local = local_name.as_ref();
+                let local = local_name.as_ref().as_bytes();
                 if local == b"ser" {
                     if let Some(ser) = current_series.take() {
                         series.push(ser);
                     }
                 } else if chart_axis_name(local).is_some() {
                     let axis_info = current_axis_info.take();
+                    if let Some(axis) = axis_info.as_ref() {
+                        all_axes.push(axis.clone());
+                    }
                     apply_chart_axis_title(
                         local,
                         &kind,
@@ -5561,7 +5603,11 @@ fn parse_chart_xml(xml: &str, anchor: ImageAnchorInfo) -> Result<Option<ChartInf
             }
             Ok(Event::Eof) => break,
             Err(e) => return Err(ReaderError::Xml(format!("failed to parse chart: {e}"))),
-            _ => {}
+            Ok(event) => {
+                if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
+                    text_buf.push_str(text);
+                }
+            }
         }
         buf.clear();
     }
@@ -5574,6 +5620,14 @@ fn parse_chart_xml(xml: &str, anchor: ImageAnchorInfo) -> Result<Option<ChartInf
     } else {
         Some(title_parts.join(""))
     };
+    let subcharts = parse_chart_subcharts(xml, &all_axes)?;
+    if let Some(primary) = subcharts.first() {
+        series = primary.series.clone();
+        bar_dir = primary.bar_dir.clone();
+        grouping = primary.grouping.clone();
+        scatter_style = primary.scatter_style.clone();
+        vary_colors = primary.vary_colors;
+    }
     Ok(Some(ChartInfo {
         source_drawing_path: None,
         source_chart_rid: None,
@@ -5593,7 +5647,131 @@ fn parse_chart_xml(xml: &str, anchor: ImageAnchorInfo) -> Result<Option<ChartInf
         style,
         anchor,
         series,
+        subcharts,
     }))
+}
+
+/// Splits a plot area into its chart families. Each family keeps its own
+/// series, group options and the axes its `c:axId` children name.
+fn parse_chart_subcharts(xml: &str, axes: &[ChartAxisInfo]) -> Result<Vec<ChartSubchartInfo>> {
+    #[derive(Default)]
+    struct Working {
+        chart: ChartSubchartInfo,
+        axis_ids: Vec<u32>,
+        current_series: Option<ChartSeriesInfo>,
+    }
+    /// Fills one family's group options and series from a start or empty tag;
+    /// the chart-level slots (legend, data labels, style) belong to `ChartInfo`.
+    fn apply_group_start(stack: &[Vec<u8>], local: &[u8], e: &BytesStart<'_>, group: &mut Working) {
+        apply_chart_start(
+            stack,
+            local,
+            e,
+            &mut Some(group.chart.kind.clone()),
+            &mut None,
+            &mut group.chart.bar_dir,
+            &mut group.chart.grouping,
+            &mut group.chart.scatter_style,
+            &mut group.chart.vary_colors,
+            &mut None,
+            &mut None,
+            &mut group.current_series,
+        );
+    }
+    let mut reader = XmlReader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut stack: Vec<Vec<u8>> = Vec::new();
+    let mut current: Option<Working> = None;
+    let mut groups = Vec::new();
+    let mut text_buf = String::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) => {
+                text_buf.clear();
+                let local = e.local_name().as_ref().as_bytes().to_vec();
+                if stack.last().is_some_and(|parent| parent == b"plotArea") {
+                    if let Some(kind) = chart_kind(&local) {
+                        current = Some(Working {
+                            chart: ChartSubchartInfo {
+                                kind: kind.to_string(),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        });
+                    }
+                }
+                if let Some(group) = current.as_mut() {
+                    apply_group_start(&stack, &local, &e, group);
+                }
+                stack.push(local);
+            }
+            Ok(Event::Empty(e)) => {
+                let local = e.local_name().as_ref().as_bytes().to_vec();
+                if let Some(group) = current.as_mut() {
+                    if local == b"axId" {
+                        if let Some(id) = attr_u32(&e, b"val") {
+                            group.axis_ids.push(id);
+                        }
+                    }
+                    apply_group_start(&stack, &local, &e, group);
+                }
+            }
+            Ok(Event::End(e)) => {
+                if let Some(group) = current.as_mut() {
+                    apply_chart_text(
+                        &stack,
+                        text_buf.trim(),
+                        &mut Vec::new(),
+                        None,
+                        &mut Vec::new(),
+                        &mut group.current_series,
+                    );
+                }
+                text_buf.clear();
+                let local_name = e.local_name();
+                let local = local_name.as_ref().as_bytes();
+                if let Some(group) = current.as_mut() {
+                    if local == b"ser" {
+                        if let Some(series) = group.current_series.take() {
+                            group.chart.series.push(series);
+                        }
+                    }
+                }
+                if chart_kind(local).is_some()
+                    && stack.len() >= 2
+                    && stack[stack.len() - 2] == b"plotArea"
+                {
+                    if let Some(group) = current.take() {
+                        let mut matched = group
+                            .axis_ids
+                            .iter()
+                            .filter_map(|id| axes.iter().find(|axis| axis.ax_id == Some(*id)))
+                            .cloned();
+                        let mut chart = group.chart;
+                        chart.x_axis = matched.next();
+                        chart.y_axis = matched.next();
+                        groups.push(chart);
+                    }
+                }
+                stack.pop();
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => {
+                return Err(ReaderError::Xml(format!(
+                    "failed to parse chart groups: {e}"
+                )))
+            }
+            Ok(event) => {
+                if current.is_some() {
+                    if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
+                        text_buf.push_str(text);
+                    }
+                }
+            }
+        }
+        buf.clear();
+    }
+    Ok(groups)
 }
 
 fn apply_chart_start(
@@ -6083,14 +6261,13 @@ fn image_ext_from_path(path: &str) -> String {
 
 fn parse_table_rids(xml: &str) -> Result<Vec<String>> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut out = Vec::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.local_name().as_ref() == b"tablePart" {
+                if e.local_name().as_ref() == "tablePart" {
                     if let Some(rid) = attr_value(&e, b"r:id").filter(|value| !value.is_empty()) {
                         out.push(rid);
                     }
@@ -6112,7 +6289,6 @@ fn parse_table_rids(xml: &str) -> Result<Vec<String>> {
 
 fn parse_table_xml(xml: &str) -> Result<Table> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut name = String::new();
     let mut ref_range = String::new();
@@ -6131,7 +6307,7 @@ fn parse_table_xml(xml: &str) -> Result<Table> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"table" => {
                     name = attr_value(&e, b"name")
                         .or_else(|| attr_value(&e, b"displayName"))
@@ -6347,10 +6523,10 @@ impl ValueCellBuilder {
         let mut row_col: Option<(u32, u32)> = None;
         let mut data_type = CellDataType::Number;
         for attr in e.attributes().with_checks(false).flatten() {
-            match attr.key.as_ref() {
-                b"r" => row_col = a1_bytes_to_row_col(attr.value.as_ref()),
+            match attr.key.as_ref().as_bytes() {
+                b"r" => row_col = a1_bytes_to_row_col(attr.value.as_bytes()),
                 b"t" => {
-                    data_type = match attr.value.as_ref() {
+                    data_type = match attr.value.as_bytes() {
                         b"s" => CellDataType::SharedString,
                         b"inlineStr" => CellDataType::InlineString,
                         b"str" => CellDataType::FormulaString,
@@ -6385,7 +6561,13 @@ impl ValueCellBuilder {
             TextTarget::Value | TextTarget::Formula => {
                 self.value_text.extend_from_slice(text.as_bytes())
             }
-            TextTarget::InlineString => self.inline_text.push_str(&normalize_ooxml_text(text)),
+            TextTarget::InlineString => {
+                if text.contains('\r') {
+                    self.inline_text.push_str(&normalize_ooxml_text(text));
+                } else {
+                    self.inline_text.push_str(text);
+                }
+            }
         }
     }
 
@@ -6739,7 +6921,7 @@ fn validate_zip_archive<R: Read + Seek>(zip: &mut ZipArchive<R>) -> Result<()> {
     let mut total: u64 = 0;
     for i in 0..zip.len() {
         let file = zip.by_index(i)?;
-        let name = file.name().to_string();
+        let name = file.name()?.into_owned();
         validate_zip_part_name(&name)?;
         if !names.insert(name.clone()) {
             return Err(ReaderError::Unsupported(format!(
@@ -6832,7 +7014,7 @@ fn read_part_optional<R: Read + std::io::Seek>(
         Err(zip::result::ZipError::FileNotFound) => {}
         Err(e) => return Err(ReaderError::Zip(e)),
     }
-    let Some(actual_name) = resolve_zip_part_name(zip, name) else {
+    let Some(actual_name) = resolve_zip_part_name(zip, name)? else {
         return Ok(None);
     };
     match zip.by_name(&actual_name) {
@@ -6860,7 +7042,7 @@ fn read_part_optional_bytes<R: Read + std::io::Seek>(
         Err(zip::result::ZipError::FileNotFound) => {}
         Err(e) => return Err(ReaderError::Zip(e)),
     }
-    let Some(actual_name) = resolve_zip_part_name(zip, name) else {
+    let Some(actual_name) = resolve_zip_part_name(zip, name)? else {
         return Ok(None);
     };
     match zip.by_name(&actual_name) {
@@ -6877,19 +7059,23 @@ fn read_part_optional_bytes<R: Read + std::io::Seek>(
 fn resolve_zip_part_name<R: Read + std::io::Seek>(
     zip: &ZipArchive<R>,
     name: &str,
-) -> Option<String> {
-    zip.file_names()
-        .find(|candidate| candidate.eq_ignore_ascii_case(name))
-        .map(str::to_string)
+) -> Result<Option<String>> {
+    for candidate in zip.file_names() {
+        let candidate = candidate?;
+        if candidate.eq_ignore_ascii_case(name) {
+            return Ok(Some(candidate.into_owned()));
+        }
+    }
+    Ok(None)
 }
 
 fn attr_value(e: &BytesStart<'_>, key: &[u8]) -> Option<String> {
     for a in e.attributes().with_checks(false).flatten() {
-        if a.key.as_ref() == key {
-            if let Ok(v) = a.unescape_value() {
-                return Some(v.to_string());
+        if a.key.as_ref().as_bytes() == key {
+            if let Ok(v) = quick_xml::escape::unescape(&a.value) {
+                return Some(v.into_owned());
             }
-            return Some(String::from_utf8_lossy(a.value.as_ref()).into_owned());
+            return Some(a.value.into_owned());
         }
     }
     None
@@ -6901,11 +7087,11 @@ fn relationship_id_attr(e: &BytesStart<'_>) -> Option<String> {
 
 fn attr_value_by_suffix(e: &BytesStart<'_>, suffix: &[u8]) -> Option<String> {
     for a in e.attributes().with_checks(false).flatten() {
-        if a.key.as_ref().ends_with(suffix) {
-            if let Ok(v) = a.unescape_value() {
-                return Some(v.to_string());
+        if a.key.as_ref().as_bytes().ends_with(suffix) {
+            if let Ok(v) = quick_xml::escape::unescape(&a.value) {
+                return Some(v.into_owned());
             }
-            return Some(String::from_utf8_lossy(a.value.as_ref()).into_owned());
+            return Some(a.value.into_owned());
         }
     }
     None
@@ -6933,9 +7119,9 @@ fn attr_u32(e: &BytesStart<'_>, key: &[u8]) -> Option<u32> {
 
 fn raw_attr_u32(e: &BytesStart<'_>, key: &[u8]) -> Option<u32> {
     for attr in e.attributes().with_checks(false).flatten() {
-        if attr.key.as_ref() == key {
+        if attr.key.as_ref().as_bytes() == key {
             let mut value = 0u32;
-            for byte in attr.value.as_ref() {
+            for byte in attr.value.as_bytes() {
                 if !byte.is_ascii_digit() {
                     return None;
                 }
@@ -7923,6 +8109,68 @@ mod tests {
     }
 
     #[test]
+    fn splits_combination_plot_area_into_families() {
+        let xml = r#"<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+            <c:chart><c:plotArea>
+                <c:barChart>
+                    <c:barDir val="col"/><c:grouping val="clustered"/>
+                    <c:ser><c:idx val="0"/><c:order val="0"/>
+                        <c:val><c:numRef><c:f>Sheet!$B$2:$B$4</c:f></c:numRef></c:val></c:ser>
+                    <c:axId val="10"/><c:axId val="100"/>
+                </c:barChart>
+                <c:lineChart>
+                    <c:grouping val="standard"/>
+                    <c:ser><c:idx val="1"/><c:order val="1"/>
+                        <c:val><c:numRef><c:f>Sheet!$C$2:$C$4</c:f></c:numRef></c:val></c:ser>
+                    <c:axId val="10"/><c:axId val="200"/>
+                </c:lineChart>
+                <c:areaChart>
+                    <c:grouping val="standard"/>
+                    <c:ser><c:idx val="2"/><c:order val="2"/>
+                        <c:val><c:numRef><c:f>Sheet!$D$2:$D$4</c:f></c:numRef></c:val></c:ser>
+                    <c:axId val="10"/><c:axId val="100"/>
+                </c:areaChart>
+                <c:catAx><c:axId val="10"/><c:axPos val="b"/><c:crossAx val="100"/></c:catAx>
+                <c:valAx><c:axId val="100"/><c:axPos val="l"/><c:crossAx val="10"/></c:valAx>
+                <c:valAx><c:axId val="200"/><c:axPos val="r"/><c:crosses val="max"/><c:crossAx val="10"/></c:valAx>
+            </c:plotArea></c:chart>
+        </c:chartSpace>"#;
+        let anchor = ImageAnchorInfo::Absolute {
+            pos: AnchorPositionInfo::default(),
+            ext: AnchorExtentInfo::default(),
+        };
+
+        let chart = parse_chart_xml(xml, anchor)
+            .expect("parse chart")
+            .expect("chart info");
+
+        let kinds: Vec<&str> = chart.subcharts.iter().map(|c| c.kind.as_str()).collect();
+        assert_eq!(kinds, ["bar", "line", "area"]);
+        // The primary family keeps its own series and options; the later
+        // families' grouping does not overwrite the bar chart's.
+        assert_eq!(chart.kind, "bar");
+        assert_eq!(chart.grouping.as_deref(), Some("clustered"));
+        let refs = |series: &[ChartSeriesInfo]| -> Vec<Option<String>> {
+            series.iter().map(|s| s.val_ref.clone()).collect()
+        };
+        assert_eq!(refs(&chart.series), [Some("Sheet!$B$2:$B$4".to_string())]);
+        let line = &chart.subcharts[1];
+        assert_eq!(refs(&line.series), [Some("Sheet!$C$2:$C$4".to_string())]);
+        assert_eq!(line.grouping.as_deref(), Some("standard"));
+        let line_y = line.y_axis.as_ref().expect("line value axis");
+        assert_eq!(line_y.ax_id, Some(200));
+        assert_eq!(line_y.crosses.as_deref(), Some("max"));
+        assert_eq!(
+            chart.subcharts[2].y_axis.as_ref().and_then(|a| a.ax_id),
+            Some(100)
+        );
+        assert_eq!(
+            chart.subcharts[2].x_axis.as_ref().and_then(|a| a.ax_id),
+            Some(10)
+        );
+    }
+
+    #[test]
     fn parses_document_properties() {
         let mut props = HashMap::new();
         parse_doc_properties_into(
@@ -8031,5 +8279,177 @@ mod tests {
         let entries = parse_threaded_comments(xml).expect("parses");
         assert_eq!(entries[0].done, true);
         assert_eq!(entries[1].done, false);
+    }
+
+    #[test]
+    fn shared_strings_preserve_split_entities_and_rich_line_endings() {
+        let strings = parse_shared_strings(
+            r#"<sst>
+              <si><t> left &amp; right &#x1D11E; &amp;lt; </t></si>
+              <si><r><rPr><b/></rPr><t>A&#13;&#10;&amp;</t></r><r><t>B</t></r></si>
+            </sst>"#,
+        )
+        .unwrap();
+        assert_eq!(strings.values, [" left & right \u{1D11E} &lt; ", "A\n&B"]);
+        let runs = strings.rich_text[1].as_ref().unwrap();
+        assert_eq!(runs[0].text, "A\n&");
+        assert_eq!(runs[0].font.as_ref().unwrap().bold, Some(true));
+        assert_eq!(runs[1].text, "B");
+        assert!(parse_shared_strings("<sst><si><t>&unknown;</t></si></sst>").is_err());
+    }
+
+    #[test]
+    fn worksheet_text_nodes_resolve_before_interpretation() {
+        let xml = r#"<worksheet><sheetData><row r="1">
+          <c r="A1" t="inlineStr"><is><r><rPr><i/></rPr><t>A&#13;&#10;&amp;</t></r><r><t>B</t></r></is></c>
+          <c r="B1" t="str"><f>IF(A1&lt;2,&quot;A &amp; B&quot;,&quot;&quot;)</f><v> A &amp; B &amp;lt; </v></c>
+          <c r="C1" t="e"><v>#N&#x2F;A</v></c>
+          <c r="D1" t="b"><v>&#49;</v></c>
+        </row></sheetData>
+        <dataValidations><dataValidation sqref="A1" type="custom"><formula1>A1&lt;2</formula1></dataValidation></dataValidations>
+        <conditionalFormatting sqref="A1"><cfRule type="expression" priority="1"><formula>A1&gt;0</formula></cfRule></conditionalFormatting>
+        <headerFooter><oddHeader>&amp;LLeft&amp;CCenter &amp;&amp; text&amp;RRight</oddHeader></headerFooter>
+        </worksheet>"#;
+        let shared = SharedStrings::default();
+        let sheet = parse_worksheet(xml, &shared, None, Vec::new(), Vec::new()).unwrap();
+        assert_eq!(sheet.cells[0].value, CellValue::String("A\n&B".into()));
+        let runs = sheet.cells[0].rich_text.as_ref().unwrap();
+        assert_eq!(runs[0].text, "A\n&");
+        assert_eq!(runs[0].font.as_ref().unwrap().italic, Some(true));
+        assert_eq!(
+            sheet.cells[1].formula.as_deref(),
+            Some("IF(A1<2,\"A & B\",\"\")")
+        );
+        assert_eq!(
+            sheet.cells[1].value,
+            CellValue::String(" A & B &lt; ".into())
+        );
+        assert_eq!(sheet.cells[2].value, CellValue::Error("#N/A".into()));
+        assert_eq!(sheet.cells[3].value, CellValue::Bool(true));
+        assert_eq!(sheet.data_validations[0].formula1.as_deref(), Some("A1<2"));
+        assert_eq!(
+            sheet.conditional_formats[0].formula.as_deref(),
+            Some("A1>0")
+        );
+        let header = &sheet.header_footer.as_ref().unwrap().odd_header;
+        assert_eq!(header.left.as_deref(), Some("Left"));
+        assert_eq!(header.center.as_deref(), Some("Center && text"));
+        assert_eq!(header.right.as_deref(), Some("Right"));
+        let values = parse_worksheet_value_cells(xml, &shared).unwrap();
+        for (value, full) in values.iter().zip(&sheet.cells) {
+            assert_eq!(value.value, full.value);
+        }
+        assert_eq!(values.len(), sheet.cells.len());
+        let invalid = "<worksheet><sheetData><row r='1'><c r='A1' t='inlineStr'><is><t>&unknown;</t></is></c></row></sheetData></worksheet>";
+        assert!(parse_worksheet(invalid, &shared, None, Vec::new(), Vec::new()).is_err());
+        assert!(parse_worksheet_value_cells(invalid, &shared).is_err());
+    }
+
+    #[test]
+    fn numeric_fast_paths_accumulate_references_and_cdata() {
+        let xml = r#"<worksheet><sheetData><row r="1">
+          <c r="A1"><v>1&#50;3<![CDATA[.]]>&#53;</v></c>
+          <c r="B1"><f>40+2</f><v>4&#50;</v></c>
+        </row></sheetData></worksheet>"#;
+        let cells = parse_worksheet_value_cells(xml, &SharedStrings::default()).unwrap();
+        assert_eq!(cells[0].value, CellValue::Number(123.5));
+        assert_eq!(cells[1].value, CellValue::Number(42.0));
+        let values = parse_worksheet_value_summary_bytes(xml.as_bytes()).unwrap();
+        assert_eq!(values.numeric_checksum, 165.5);
+        let formulas = parse_worksheet_formula_summary_bytes(xml.as_bytes()).unwrap();
+        assert_eq!(formulas.first_col_numeric_checksum, 123.5);
+        assert_eq!(formulas.formula_cells, 1);
+        let invalid = b"<worksheet><sheetData><row><c r='A1'><v>1&unknown;2</v></c></row></sheetData></worksheet>";
+        assert!(parse_worksheet_value_summary_bytes(invalid).is_err());
+        assert!(parse_worksheet_formula_summary_bytes(invalid).is_err());
+    }
+
+    #[test]
+    fn comment_authors_are_nodes_not_text_chunks() {
+        let comments = parse_comments(
+            r#"<comments><authors><author>A &amp; B&#x1D11E;<![CDATA[ C]]></author><author/><author>Third</author></authors>
+            <commentList>
+              <comment ref="A1" authorId="0"><text><r><t> left &amp; </t></r><r><t>right &amp;lt;</t></r></text></comment>
+              <comment ref="A2" authorId="1"><text><t>empty author</t></text></comment>
+              <comment ref="A3" authorId="2"><text><t>third author</t></text></comment>
+            </commentList></comments>"#,
+        )
+        .unwrap();
+        assert_eq!(comments[0].author, "A & B\u{1D11E} C");
+        assert_eq!(comments[0].text, " left & right &lt;");
+        assert_eq!(comments[1].author, "");
+        assert_eq!(comments[2].author, "Third");
+        assert!(parse_comments(
+            "<comments><authors><author>&unknown;</author></authors></comments>"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn names_and_properties_preserve_entity_boundaries() {
+        let (_, _, names, _, _, _, _, _, _) = parse_workbook(
+            r#"<workbook><definedNames><definedName name="A&amp;B">IF(1&lt;2,"A &amp; B","")</definedName></definedNames></workbook>"#,
+        )
+        .unwrap();
+        assert_eq!(names[0].name, "A&B");
+        assert_eq!(names[0].refers_to, "IF(1<2,\"A & B\",\"\")");
+        let mut properties = HashMap::new();
+        parse_doc_properties_into(
+            "<properties><title>A &amp; B</title></properties>",
+            &mut properties,
+            doc_property_core_key,
+        );
+        assert_eq!(properties.get("title").map(String::as_str), Some("A & B"));
+        let custom = parse_custom_doc_properties(
+            r#"<Properties><property name="Label"><lpwstr>A &amp; B &amp;lt;</lpwstr></property><property name="Count"><i4>1&#50;3</i4></property></Properties>"#,
+        )
+        .unwrap();
+        assert_eq!(custom[0].value, "A & B &lt;");
+        assert_eq!(custom[1].value, "123");
+    }
+
+    #[test]
+    fn chart_and_drawing_nodes_are_interpreted_after_references() {
+        let xml = r#"<chartSpace><chart>
+          <title><tx><rich><p><r><t>A &amp; B</t></r></p></rich></tx></title>
+          <plotArea><barChart><ser>
+            <tx><v>Series &amp; name</v></tx>
+            <cat><strRef><f>'A &amp; B'!$A$1:$A$3</f></strRef></cat>
+            <val><numRef><f>'A &amp; B'!$B$1:$B$3</f></numRef></val>
+          </ser></barChart></plotArea>
+        </chart></chartSpace>"#;
+        let anchor = ImageAnchorInfo::Absolute {
+            pos: AnchorPositionInfo::default(),
+            ext: AnchorExtentInfo::default(),
+        };
+        let chart = parse_chart_xml(xml, anchor).unwrap().unwrap();
+        assert_eq!(chart.title.as_deref(), Some("A & B"));
+        assert_eq!(
+            chart.series[0].title_value.as_deref(),
+            Some("Series & name")
+        );
+        assert_eq!(
+            chart.series[0].cat_ref.as_deref(),
+            Some("'A & B'!$A$1:$A$3")
+        );
+        assert_eq!(
+            chart.series[0].val_ref.as_deref(),
+            Some("'A & B'!$B$1:$B$3")
+        );
+        assert_eq!(chart.subcharts[0].series, chart.series);
+        let drawings = parse_drawing_objects(
+            r#"<wsDr xmlns:r="urn:rels"><oneCellAnchor><from><col>1&#50;</col><row>3&#52;</row><colOff>5&#54;</colOff><rowOff>7&#56;</rowOff></from><pic><blip r:embed="rId1"/></pic></oneCellAnchor></wsDr>"#,
+            DrawingObjectKind::Image,
+        )
+        .unwrap();
+        match &drawings[0].anchor {
+            ImageAnchorInfo::OneCell { from, .. } => {
+                assert_eq!(from.col, 12);
+                assert_eq!(from.row, 34);
+                assert_eq!(from.col_off, 56);
+                assert_eq!(from.row_off, 78);
+            }
+            other => panic!("unexpected anchor: {other:?}"),
+        }
     }
 }

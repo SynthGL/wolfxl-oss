@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 _A1_RE = re.compile(r"^([A-Z]+)(\d+)$")
 
@@ -11,6 +12,17 @@ def column_letter(col_idx: int) -> str:
     """Convert a 1-based column index to a letter (1 -> 'A', 27 -> 'AA')."""
     if col_idx < 1:
         raise ValueError(f"Column index must be >= 1, got {col_idx}")
+    if type(col_idx) is int and col_idx <= 16384:
+        return _cached_column_letter(col_idx)
+    return _uncached_column_letter(col_idx)
+
+
+@lru_cache(maxsize=16384)
+def _cached_column_letter(col_idx: int) -> str:
+    return _uncached_column_letter(col_idx)
+
+
+def _uncached_column_letter(col_idx: int) -> str:
     result = []
     while col_idx > 0:
         col_idx, remainder = divmod(col_idx - 1, 26)

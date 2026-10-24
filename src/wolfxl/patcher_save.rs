@@ -40,7 +40,10 @@ impl SaveWorkspace {
     ) -> Self {
         let part_id_allocator = if seed_part_id_allocator {
             let names: Vec<String> = (0..zip.len())
-                .filter_map(|i| zip.by_index(i).ok().map(|e| e.name().to_string()))
+                .filter_map(|i| {
+                    let entry = zip.by_index(i).ok()?;
+                    entry.name().ok().map(|name| name.into_owned())
+                })
                 .collect();
             wolfxl_rels::PartIdAllocator::from_zip_parts(names.iter().map(|s| s.as_str()))
         } else {

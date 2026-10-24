@@ -28,6 +28,25 @@ site, kept here for reference):
 * **Namespace prefix** — openpyxl sometimes emits ``a:noFill``, wolfxl
   may emit ``noFill`` with the default DrawingML namespace. The
   comparator collapses prefixes to the namespace URI.
+* **Empty ``<a:lstStyle/>``** — ``a:lstStyle`` is optional in
+  ``CT_TextBody`` (``minOccurs=0``). wolfxl writes the empty element
+  Excel always emits (locked by ``wolfxl-writer`` tests/charts.rs,
+  commit 5549defbde); openpyxl omits it. An empty, attribute-free
+  ``a:lstStyle`` is semantically identical to an absent one, so it is
+  dropped before comparing. A populated ``a:lstStyle`` still compares.
+* **Reference caches** — wolfxl saves ``<c:numCache>`` / ``<c:strCache>``
+  beside series references from the hosting cells (item
+  ``p4-child-xl-chart-host-cache-refresh``, commit b2ae6a2553: Excel-style
+  caches that stay current across edits); openpyxl writes bare references.
+  Only the cache child of a ``c:numRef`` / ``c:strRef`` is dropped before
+  comparing, so the reference formula and every other element still compare.
+  Cache correctness is asserted separately against the seeded cell values.
+* **Category reference kind** — openpyxl's ``Reference`` always writes
+  ``<c:cat><c:numRef>``; wolfxl writes ``<c:strRef>`` when the hosting
+  cells are text, as Excel does (``emit_ax_ref``: a string cache selects
+  ``strRef``). Only a ``strRef`` directly under ``c:cat`` / ``c:xVal`` is
+  renamed to ``numRef`` before comparing; the formula still compares and a
+  series-title ``strRef`` is untouched.
 * **Attribute order** — c14n already normalises this lexicographically.
 * **Whitespace inside text runs** — preserved (matters for rich-text
   fidelity); whitespace between sibling elements is collapsed.
@@ -66,7 +85,10 @@ def canonicalize_chart_xml(xml_bytes: bytes) -> bytes:
 
     1. Parse with lxml's strict XML parser.
     2. Walk the tree, zeroing axis ID / cross-axis values.
-    3. Serialise via ``etree.canonicalize(..., rewrite_prefixes=True)`` which
+    3. Drop empty, attribute-free ``a:lstStyle`` elements.
+    4. Drop ``numCache`` / ``strCache`` children of ``numRef`` / ``strRef``.
+    5. Treat ``strRef`` under ``cat`` / ``xVal`` as ``numRef``.
+    6. Serialise via ``etree.canonicalize(..., rewrite_prefixes=True)`` which
        handles attribute ordering, namespace declaration shuffling, and
        default-vs-prefixed namespace spelling differences.
 
@@ -76,6 +98,9 @@ def canonicalize_chart_xml(xml_bytes: bytes) -> bytes:
     parser = etree.XMLParser(remove_blank_text=False, resolve_entities=False)
     tree = etree.fromstring(xml_bytes, parser=parser)
     _normalise_axis_ids(tree)
+    _drop_empty_list_styles(tree)
+    _drop_reference_caches(tree)
+    _normalise_axis_reference_kind(tree)
     out: str = etree.canonicalize(tree, rewrite_prefixes=True)
     return out.encode("utf-8")
 
@@ -92,6 +117,46 @@ def _normalise_axis_ids(root: etree._Element) -> None:
             local = tag if isinstance(tag, str) else ""
         if local in _AX_ID_LOCALNAMES and "val" in el.attrib:
             el.set("val", "0")
+
+
+def _drop_empty_list_styles(root: etree._Element) -> None:
+    """Remove empty, attribute-free ``<a:lstStyle/>`` elements in-place.
+
+    The element is optional in ``CT_TextBody``; Excel always writes it
+    empty and wolfxl follows, while openpyxl omits it. Anything with
+    children, attributes, or text is left untouched so real list-style
+    divergences still fail the comparison.
+    """
+    list_style = f"{{{A_NS}}}lstStyle"
+    for el in list(root.iter(list_style)):
+        if len(el) == 0 and not el.attrib and not (el.text or "").strip():
+            parent = el.getparent()
+            if parent is not None:
+                parent.remove(el)
+
+
+def _drop_reference_caches(root: etree._Element) -> None:
+    """Remove ``numCache`` / ``strCache`` directly under ``numRef`` / ``strRef``.
+
+    wolfxl writes Excel-style value caches; openpyxl writes bare
+    references. Caches under any other parent are left in place.
+    """
+    cache_tags = {f"{{{C_NS}}}numCache", f"{{{C_NS}}}strCache"}
+    ref_tags = {f"{{{C_NS}}}numRef", f"{{{C_NS}}}strRef"}
+    for ref in list(root.iter(*ref_tags)):
+        for child in list(ref):
+            if child.tag in cache_tags:
+                ref.remove(child)
+
+
+def _normalise_axis_reference_kind(root: etree._Element) -> None:
+    """Rename ``c:strRef`` directly under ``c:cat`` / ``c:xVal`` to ``c:numRef``."""
+    str_ref = f"{{{C_NS}}}strRef"
+    num_ref = f"{{{C_NS}}}numRef"
+    for axis_source in list(root.iter(f"{{{C_NS}}}cat", f"{{{C_NS}}}xVal")):
+        for child in axis_source:
+            if child.tag == str_ref:
+                child.tag = num_ref
 
 
 def structurally_equivalent(left: bytes, right: bytes) -> tuple[bool, str]:

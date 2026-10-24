@@ -213,35 +213,35 @@ def test_stock_chart_requires_exactly_4_series_two() -> None:
         chart.to_rust_dict()
 
 
-def test_stock_chart_emits_hi_low_lines_and_up_down_bars() -> None:
-    """StockChart with exactly 4 series emits hi_low_lines + up_down_bars."""
+def _saved_stock_chart_xml(tmp_path: Path, **kwargs: Any) -> str:
     wb = wolfxl.Workbook()
     ws = wb.active
     _seed_data(ws, n_cols=4)
-    chart = StockChart()
+    chart = StockChart(**kwargs)
     chart.add_data(
         Reference(ws, min_col=2, min_row=1, max_col=5, max_row=6),
         titles_from_data=True,
     )
-    d = chart.to_rust_dict()
-    assert d["kind"] == "stock"
-    assert d["hi_low_lines"] is True
-    assert d["up_down_bars"] is True
-    assert len(d["series"]) == 4
+    ws.add_chart(chart, "F2")
+    path = tmp_path / "stock.xlsx"
+    wb.save(path)
+    return _zip_read(path, "xl/charts/chart1.xml").decode()
 
 
-def test_stock_chart_can_disable_decorators() -> None:
-    wb = wolfxl.Workbook()
-    ws = wb.active
-    _seed_data(ws, n_cols=4)
-    chart = StockChart(hi_low_lines=False, up_down_bars=False)
-    chart.add_data(
-        Reference(ws, min_col=2, min_row=1, max_col=5, max_row=6),
-        titles_from_data=True,
-    )
-    d = chart.to_rust_dict()
-    assert d["hi_low_lines"] is False
-    assert d["up_down_bars"] is False
+def test_stock_chart_writes_hi_low_lines_and_up_down_bars_by_default(
+    tmp_path: Path,
+) -> None:
+    xml = _saved_stock_chart_xml(tmp_path)
+    assert "<c:stockChart>" in xml
+    assert "<c:hiLowLines>" in xml
+    assert '<c:upDownBars><c:gapWidth val="150"/>' in xml
+
+
+def test_stock_chart_can_disable_decorators(tmp_path: Path) -> None:
+    xml = _saved_stock_chart_xml(tmp_path, hi_low_lines=False, up_down_bars=False)
+    assert "<c:stockChart>" in xml
+    assert "hiLowLines" not in xml
+    assert "upDownBars" not in xml
 
 
 # ---------------------------------------------------------------------------

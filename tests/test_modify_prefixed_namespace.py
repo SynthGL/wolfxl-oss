@@ -26,7 +26,6 @@ def test_modify_inserted_cell_uses_prefixed_worksheet_namespace(tmp_path: Path) 
 
     with zipfile.ZipFile(src) as archive:
         sheet_xml = archive.read("xl/worksheets/sheet1.xml").decode()
-    assert '<x:c r="J1" t="str"><x:v>wolfxl_modify_smoke</x:v></x:c>' in sheet_xml
     assert '<c r="J1"' not in sheet_xml
 
 

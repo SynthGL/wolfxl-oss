@@ -250,7 +250,7 @@ fn read_rels(zip: &mut ZipArchive<Cursor<Vec<u8>>>, path: &str) -> Result<RelsGr
 }
 
 fn read_zip_part(zip: &mut ZipArchive<Cursor<Vec<u8>>>, path: &str) -> Result<Vec<u8>> {
-    let name = zip_part_name(zip, path).unwrap_or_else(|| path.to_string());
+    let name = zip_part_name(zip, path)?.unwrap_or_else(|| path.to_string());
     let mut file = zip.by_name(&name)?;
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)?;
@@ -261,7 +261,7 @@ fn read_zip_part_optional(
     zip: &mut ZipArchive<Cursor<Vec<u8>>>,
     path: &str,
 ) -> Result<Option<Vec<u8>>> {
-    let Some(name) = zip_part_name(zip, path) else {
+    let Some(name) = zip_part_name(zip, path)? else {
         return Ok(None);
     };
     match zip.by_name(&name) {
@@ -275,14 +275,17 @@ fn read_zip_part_optional(
     }
 }
 
-fn zip_part_name(zip: &mut ZipArchive<Cursor<Vec<u8>>>, path: &str) -> Option<String> {
+fn zip_part_name(zip: &mut ZipArchive<Cursor<Vec<u8>>>, path: &str) -> Result<Option<String>> {
     if zip.by_name(path).is_ok() {
-        return Some(path.to_string());
+        return Ok(Some(path.to_string()));
     }
-    let needle = path.to_ascii_lowercase();
-    zip.file_names()
-        .find(|name| name.to_ascii_lowercase() == needle)
-        .map(str::to_string)
+    for name in zip.file_names() {
+        let name = name?;
+        if name.eq_ignore_ascii_case(path) {
+            return Ok(Some(name.into_owned()));
+        }
+    }
+    Ok(None)
 }
 
 fn sheet_rels_path(sheet_path: &str) -> String {

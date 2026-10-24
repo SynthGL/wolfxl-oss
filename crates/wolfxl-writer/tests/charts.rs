@@ -15,7 +15,7 @@ use wolfxl_writer::model::chart::{
     DataLabels, DataPoint, DateAxis, DisplayBlanksAs, DisplayUnits, ErrorBarType, ErrorBarValType,
     ErrorBars, GraphicalProperties, Gridlines, Layout, LayoutTarget, Legend, LegendPosition,
     Marker, MarkerSymbol, RadarStyle, Reference, Series, SeriesAxis, SeriesTitle, TickMark, Title,
-    TitleRun, Trendline, TrendlineKind, ValueAxis, View3D,
+    TitleRun, Trendline, TrendlineKind, UpDownBars, ValueAxis, View3D,
 };
 use wolfxl_writer::model::image::ImageAnchor;
 
@@ -849,7 +849,10 @@ fn end_to_end_emits_chart_part_via_emit_xlsx() {
 
     // Crack open the ZIP and verify the chart part exists.
     let archive = ::zip::ZipArchive::new(Cursor::new(bytes)).expect("open archive");
-    let names: Vec<String> = archive.file_names().map(|s| s.to_string()).collect();
+    let names: Vec<String> = archive
+        .file_names()
+        .map(|s| s.expect("valid fixture entry name").into_owned())
+        .collect();
     assert!(
         names.iter().any(|n| n == "xl/charts/chart1.xml"),
         "archive missing chart part; entries:\n{names:#?}"
@@ -957,7 +960,7 @@ fn surface3d_chart_round_trips() {
 }
 
 #[test]
-fn stock_chart_emits_hilow_and_updown_bars() {
+fn stock_chart_emits_only_the_decorations_it_models() {
     let mut c = Chart::new(ChartKind::Stock, anchor_at(0, 0));
     // 4 series typical (Open, High, Low, Close), but emit accepts any
     // count; semantic validation lives in the Python API tests.
@@ -969,11 +972,21 @@ fn stock_chart_emits_hilow_and_updown_bars() {
     let (x, y) = cat_value_pair();
     c.x_axis = Some(x);
     c.y_axis = Some(y);
-    let bytes = emit_chart_xml(&c);
-    parse_ok(&bytes);
-    assert_contains(&bytes, "<c:stockChart>");
-    assert_contains(&bytes, "<c:hiLowLines/>");
-    assert_contains(&bytes, "<c:upDownBars>");
+    let bare = emit_chart_xml(&c);
+    parse_ok(&bare);
+    assert_contains(&bare, "<c:stockChart>");
+    assert_not_contains(&bare, "hiLowLines");
+    assert_not_contains(&bare, "upDownBars");
+
+    c.hi_low_lines = Some(Gridlines::default());
+    c.up_down_bars = Some(UpDownBars {
+        gap_width: Some(150),
+        ..UpDownBars::default()
+    });
+    let decorated = emit_chart_xml(&c);
+    parse_ok(&decorated);
+    assert_contains(&decorated, "<c:hiLowLines>");
+    assert_contains(&decorated, "<c:upDownBars><c:gapWidth val=\"150\"/>");
 }
 
 #[test]

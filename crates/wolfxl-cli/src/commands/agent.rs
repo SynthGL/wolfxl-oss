@@ -267,7 +267,7 @@ fn emit_stratified_middle(
         return;
     }
     for idx in picks {
-        let line = format!("  {}\n", row_as_tsv(&sheet.rows()[idx]));
+        let line = format!("  {}\n", row_as_tsv(sheet, &sheet.rows()[idx]));
         if !try_append(buf, budget, &line) {
             break;
         }
@@ -280,7 +280,7 @@ fn render_section(sheet: &Sheet, lo: usize, hi: usize, label: &str) -> String {
     out.push('\n');
     for row in &sheet.rows()[lo..hi] {
         out.push_str("  ");
-        out.push_str(&row_as_tsv(row));
+        out.push_str(&row_as_tsv(sheet, row));
         out.push('\n');
     }
     out
@@ -306,9 +306,15 @@ fn try_append(buf: &mut String, budget: &Budget, section: &str) -> bool {
     true
 }
 
-fn row_as_tsv(row: &[Cell]) -> String {
+fn row_as_tsv(sheet: &Sheet, row: &[Cell]) -> String {
     row.iter()
-        .map(|c| display_cell(c))
+        .map(|cell| {
+            if let CellValue::Error(error) = &cell.value {
+                format!("ERR:{}", sheet.error_text(error))
+            } else {
+                display_cell(cell)
+            }
+        })
         .collect::<Vec<_>>()
         .join("\t")
 }

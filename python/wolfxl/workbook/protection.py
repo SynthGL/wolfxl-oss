@@ -344,24 +344,16 @@ class WorkbookProtection:
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, object]:
-        """Return the patcher/writer-side flat dict (RFC-058 §10)."""
-        return {
-            "lock_structure": bool(self.lock_structure),
-            "lock_windows": bool(self.lock_windows),
-            "lock_revision": bool(self.lock_revision),
-            "workbook_password": self.workbook_password,
-            "workbook_password_character_set": self.workbook_password_character_set,
-            "workbook_algorithm_name": self.workbook_algorithm_name,
-            "workbook_hash_value": self.workbook_hash_value,
-            "workbook_salt_value": self.workbook_salt_value,
-            "workbook_spin_count": self.workbook_spin_count,
-            "revisions_password": self.revisions_password,
-            "revisions_password_character_set": self.revisions_password_character_set,
-            "revisions_algorithm_name": self.revisions_algorithm_name,
-            "revisions_hash_value": self.revisions_hash_value,
-            "revisions_salt_value": self.revisions_salt_value,
-            "revisions_spin_count": self.revisions_spin_count,
+        """Return the patcher/writer-side flat dict (RFC-058 §10).
+
+        Every slot in declaration order, the three lock flags as booleans.
+        """
+        flat: dict[str, object] = {
+            name: getattr(self, name) for name in WorkbookProtection.__slots__
         }
+        for lock in ("lock_structure", "lock_windows", "lock_revision"):
+            flat[lock] = bool(flat[lock])
+        return flat
 
     def __iter__(self):
         yield from _iter_openpyxl_attrs(self, self.__attrs__)
@@ -648,16 +640,15 @@ class FileSharing:
         return check_legacy_password(plaintext, self.reservation_password)
 
     def to_dict(self) -> dict[str, object]:
-        """Return the patcher/writer-side flat dict (RFC-058 §10)."""
-        return {
-            "read_only_recommended": bool(self.read_only_recommended),
-            "user_name": self.user_name,
-            "reservation_password": self.reservation_password,
-            "algorithm_name": self.algorithm_name,
-            "hash_value": self.hash_value,
-            "salt_value": self.salt_value,
-            "spin_count": self.spin_count,
+        """Return the patcher/writer-side flat dict (RFC-058 §10).
+
+        Every slot in declaration order, ``read_only_recommended`` as a boolean.
+        """
+        flat: dict[str, object] = {
+            name: getattr(self, name) for name in FileSharing.__slots__
         }
+        flat["read_only_recommended"] = bool(flat["read_only_recommended"])
+        return flat
 
     def __iter__(self):
         yield from _iter_openpyxl_attrs(self, self.__attrs__)

@@ -119,6 +119,7 @@ pub fn extract_threaded_comments(xml: &[u8]) -> Vec<ExistingThreadedComment> {
     let mut current: Option<ExistingThreadedComment> = None;
     let mut in_text = false;
     let mut text_buf = String::new();
+    let mut node = crate::ooxml_util::XmlTextNode::default();
 
     fn build_from_attrs(e: &quick_xml::events::BytesStart<'_>) -> ExistingThreadedComment {
         let id = attr(e, b"id").unwrap_or_default();
@@ -141,8 +142,17 @@ pub fn extract_threaded_comments(xml: &[u8]) -> Vec<ExistingThreadedComment> {
     }
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+        let event = reader.read_event_into(&mut buf);
+        if !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
+            if in_text {
+                if let Ok(text) = quick_xml::escape::unescape(node.raw()) {
+                    text_buf.push_str(&text);
+                }
+            }
+            node.clear();
+        }
+        match event {
+            Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"threadedComment" => {
                     current = Some(build_from_attrs(&e));
                     text_buf.clear();
@@ -154,11 +164,11 @@ pub fn extract_threaded_comments(xml: &[u8]) -> Vec<ExistingThreadedComment> {
                 _ => {}
             },
             Ok(Event::Empty(e)) => {
-                if e.local_name().as_ref() == b"threadedComment" {
+                if e.local_name().as_ref() == "threadedComment" {
                     out.push(build_from_attrs(&e));
                 }
             }
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
+            Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"threadedComment" => {
                     if let Some(mut tc) = current.take() {
                         tc.text = std::mem::take(&mut text_buf);
@@ -170,16 +180,11 @@ pub fn extract_threaded_comments(xml: &[u8]) -> Vec<ExistingThreadedComment> {
                 }
                 _ => {}
             },
-            Ok(Event::Text(e)) => {
-                if in_text {
-                    if let Ok(s) = e.unescape() {
-                        text_buf.push_str(&s);
-                    }
-                }
-            }
+            Ok(Event::Text(e)) if in_text => node.push_text(&e),
+            Ok(Event::GeneralRef(e)) if in_text => node.push_ref(&e),
             Ok(Event::CData(e)) => {
                 if in_text {
-                    text_buf.push_str(&String::from_utf8_lossy(e.as_ref()));
+                    text_buf.push_str(&e);
                 }
             }
             Ok(Event::Eof) | Err(_) => break,
@@ -200,14 +205,13 @@ pub fn extract_persons(xml: &[u8]) -> Vec<PersonPatch> {
         Err(_) => return Vec::new(),
     };
     let mut reader = XmlReader::from_str(text);
-    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut out = Vec::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.local_name().as_ref() == b"person" {
+                if e.local_name().as_ref() == "person" {
                     let id = attr(&e, b"id").unwrap_or_default();
                     if id.is_empty() {
                         continue;
@@ -230,11 +234,11 @@ pub fn extract_persons(xml: &[u8]) -> Vec<PersonPatch> {
 
 fn attr(e: &quick_xml::events::BytesStart<'_>, name: &[u8]) -> Option<String> {
     for raw in e.attributes().with_checks(false).flatten() {
-        if raw.key.as_ref() == name {
-            // The value bytes are already UTF-8 in any well-formed OOXML
-            // document; we still call `unescape_value` to resolve XML
-            // entities like `&amp;` and `&quot;`.
-            return raw.unescape_value().ok().map(|cow| cow.into_owned());
+        if raw.key.as_ref().as_bytes() == name {
+            // Unescape without normalizing literal attribute whitespace.
+            return quick_xml::escape::unescape(&raw.value)
+                .ok()
+                .map(|cow| cow.into_owned());
         }
     }
     None
@@ -658,5 +662,34 @@ mod tests {
         let bytes = build_persons_xml(&merged);
         let text = String::from_utf8(bytes).unwrap();
         assert!(text.contains("displayName=\"R&amp;D &quot;Team&quot;\""));
+    }
+
+    #[test]
+    fn split_references_preserve_text_and_cdata_boundaries() {
+        let xml = b"<ThreadedComments><threadedComment id=\"T\" ref=\"A1\">\
+                    <text> A &amp; B&#10; <![CDATA[<&raw>]]>&#13; tail </text>\
+                    </threadedComment></ThreadedComments>";
+        let comments = extract_threaded_comments(xml);
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].text, " A & B\n <&raw>\r tail ");
+    }
+
+    #[test]
+    fn invalid_reference_omits_whole_text_node_not_adjacent_cdata() {
+        let xml = b"<ThreadedComments><threadedComment id=\"T\" ref=\"A1\">\
+                    <text>before &unknown; after<![CDATA[kept]]></text>\
+                    </threadedComment></ThreadedComments>";
+        let comments = extract_threaded_comments(xml);
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].text, "kept");
+    }
+
+    #[test]
+    fn person_attributes_preserve_literal_whitespace_and_references() {
+        let persons = extract_persons(
+            b"<personList><person id=\"P\" displayName=\" A\t&amp;\r\nB&#10; \" /></personList>",
+        );
+        assert_eq!(persons.len(), 1);
+        assert_eq!(persons[0].display_name, " A\t&\r\nB\n ");
     }
 }

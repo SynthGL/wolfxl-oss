@@ -361,10 +361,7 @@ fn emit_sort_condition(out: &mut String, sc: &SortCondition) {
     }
     // sort_by default "value"; emit only when not the default.
     if !matches!(sc.sort_by, crate::model::SortBy::Value) {
-        out.push_str(" sortMethod=\"");
-        // Note: openpyxl uses sortBy="..."; ECMA uses sortMethod for
-        // the stroke/pinYin variant. Wolfxl matches openpyxl: sortBy.
-        // (Renaming to be safe; tests pin.)
+        out.push_str(" sortBy=\"");
         out.push_str(sc.sort_by.as_xml());
         out.push('"');
     }
@@ -687,6 +684,31 @@ mod tests {
         let s = String::from_utf8(emit(&af)).unwrap();
         assert!(s.contains(r#"<sortState ref="A2:A100">"#));
         assert!(s.contains(r#"<sortCondition ref="A2:A100" descending="1"/>"#));
+    }
+
+    #[test]
+    fn non_value_sort_conditions_use_sort_by() {
+        for (sort_by, key) in [
+            (SortBy::CellColor, "cellColor"),
+            (SortBy::FontColor, "fontColor"),
+            (SortBy::Icon, "icon"),
+        ] {
+            let condition = SortCondition {
+                ref_: "A2:A100".into(),
+                descending: false,
+                sort_by,
+                custom_list: None,
+                dxf_id: None,
+                icon_set: None,
+                icon_id: None,
+            };
+            let mut xml = String::new();
+            emit_sort_condition(&mut xml, &condition);
+            assert_eq!(
+                xml,
+                format!(r#"<sortCondition ref="A2:A100" sortBy="{key}"/>"#)
+            );
+        }
     }
 
     #[test]
