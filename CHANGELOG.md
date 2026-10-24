@@ -30,6 +30,10 @@
   source-export regression tests.
 - Complete the isolated native-reader qualification dependency closure.
 - Pin historical evidence and contribution links to the public source snapshot.
+- Keep shared-string reference parsing compatible with the XML dependency
+  update in the Rust round-trip regression fixture.
+- Preserve existing-cell XML byte splicing and its regression coverage in
+  modify mode while updating the XML dependency.
 
 ## 2.0.10 - 2026-10-20
 

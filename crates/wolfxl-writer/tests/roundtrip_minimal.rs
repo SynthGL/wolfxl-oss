@@ -188,10 +188,17 @@ fn parse_sst(bytes: &[u8]) -> Vec<String> {
             Ok(Event::Text(t)) if in_t => {
                 current.push_str(&t);
             }
-            Ok(Event::GeneralRef(r)) if in_t => {
-                let decoded =
-                    quick_xml::escape::unescape(&format!("&{};", &*r)).expect("unescape sst");
-                current.push_str(&decoded);
+            Ok(Event::GeneralRef(reference)) if in_t => {
+                if let Some(character) =
+                    reference.resolve_char_ref().expect("sst numeric reference")
+                {
+                    current.push(character);
+                } else {
+                    current.push_str(
+                        quick_xml::escape::resolve_xml_entity(reference.as_ref())
+                            .expect("sst predefined reference"),
+                    );
+                }
             }
             Ok(Event::Eof) => break,
             Err(e) => panic!("sst parse error: {e}"),
@@ -200,6 +207,13 @@ fn parse_sst(bytes: &[u8]) -> Vec<String> {
         buf.clear();
     }
     out
+}
+
+#[test]
+fn sst_parser_preserves_split_character_and_entity_references() {
+    let xml =
+        br#"<sst><si><t>before &amp; &lt; &gt; &quot; &apos; &#50; &#x33; after</t></si></sst>"#;
+    assert_eq!(parse_sst(xml), ["before & < > \" ' 2 3 after"]);
 }
 
 #[test]
