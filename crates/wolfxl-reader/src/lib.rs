@@ -48,20 +48,14 @@ fn resolve_xml_reference<'a>(
     quick_xml::escape::resolve_predefined_entity(name).ok_or_else(|| {
         ReaderError::Xml(format!(
             "XML reference: {}",
-            quick_xml::escape::EscapeError::UnrecognizedEntity(
-                1..name.len() + 1,
-                name.to_owned(),
-            )
+            quick_xml::escape::EscapeError::UnrecognizedEntity(1..name.len() + 1, name.to_owned(),)
         ))
     })
 }
 
 /// Borrow literal text or resolve a split reference into caller-owned scratch.
 /// Consumers append all chunks before interpreting a complete element value.
-fn xml_event_text<'a>(
-    event: &'a Event<'_>,
-    utf8: &'a mut [u8; 4],
-) -> Result<Option<&'a str>> {
+fn xml_event_text<'a>(event: &'a Event<'_>, utf8: &'a mut [u8; 4]) -> Result<Option<&'a str>> {
     match event {
         Event::Text(text) => Ok(Some(text.as_ref())),
         Event::CData(text) => Ok(Some(text.as_ref())),
@@ -3441,7 +3435,8 @@ fn parse_worksheet(
                     if let (Some(part), Some(header_footer)) =
                         (active_header_footer.take(), current_header_footer.as_mut())
                     {
-                        header_footer.set_part(part, parse_header_footer_item_text(&header_footer_text));
+                        header_footer
+                            .set_part(part, parse_header_footer_item_text(&header_footer_text));
                     }
                     header_footer_text.clear();
                 }
@@ -3893,7 +3888,6 @@ fn parse_worksheet_formula_summary_bytes(xml: &[u8]) -> Result<FormulaSheetSumma
 
     Ok(summary)
 }
-
 
 fn reserve_value_cell_capacity(cells: &mut Vec<ValueCell>, e: &BytesStart<'_>) {
     let Some(capacity) = value_cell_capacity_from_dimension(e) else {
@@ -8322,12 +8316,21 @@ mod tests {
         let runs = sheet.cells[0].rich_text.as_ref().unwrap();
         assert_eq!(runs[0].text, "A\n&");
         assert_eq!(runs[0].font.as_ref().unwrap().italic, Some(true));
-        assert_eq!(sheet.cells[1].formula.as_deref(), Some("IF(A1<2,\"A & B\",\"\")"));
-        assert_eq!(sheet.cells[1].value, CellValue::String(" A & B &lt; ".into()));
+        assert_eq!(
+            sheet.cells[1].formula.as_deref(),
+            Some("IF(A1<2,\"A & B\",\"\")")
+        );
+        assert_eq!(
+            sheet.cells[1].value,
+            CellValue::String(" A & B &lt; ".into())
+        );
         assert_eq!(sheet.cells[2].value, CellValue::Error("#N/A".into()));
         assert_eq!(sheet.cells[3].value, CellValue::Bool(true));
         assert_eq!(sheet.data_validations[0].formula1.as_deref(), Some("A1<2"));
-        assert_eq!(sheet.conditional_formats[0].formula.as_deref(), Some("A1>0"));
+        assert_eq!(
+            sheet.conditional_formats[0].formula.as_deref(),
+            Some("A1>0")
+        );
         let header = &sheet.header_footer.as_ref().unwrap().odd_header;
         assert_eq!(header.left.as_deref(), Some("Left"));
         assert_eq!(header.center.as_deref(), Some("Center && text"));
@@ -8376,7 +8379,10 @@ mod tests {
         assert_eq!(comments[0].text, " left & right &lt;");
         assert_eq!(comments[1].author, "");
         assert_eq!(comments[2].author, "Third");
-        assert!(parse_comments("<comments><authors><author>&unknown;</author></authors></comments>").is_err());
+        assert!(parse_comments(
+            "<comments><authors><author>&unknown;</author></authors></comments>"
+        )
+        .is_err());
     }
 
     #[test]
@@ -8418,9 +8424,18 @@ mod tests {
         };
         let chart = parse_chart_xml(xml, anchor).unwrap().unwrap();
         assert_eq!(chart.title.as_deref(), Some("A & B"));
-        assert_eq!(chart.series[0].title_value.as_deref(), Some("Series & name"));
-        assert_eq!(chart.series[0].cat_ref.as_deref(), Some("'A & B'!$A$1:$A$3"));
-        assert_eq!(chart.series[0].val_ref.as_deref(), Some("'A & B'!$B$1:$B$3"));
+        assert_eq!(
+            chart.series[0].title_value.as_deref(),
+            Some("Series & name")
+        );
+        assert_eq!(
+            chart.series[0].cat_ref.as_deref(),
+            Some("'A & B'!$A$1:$A$3")
+        );
+        assert_eq!(
+            chart.series[0].val_ref.as_deref(),
+            Some("'A & B'!$B$1:$B$3")
+        );
         assert_eq!(chart.subcharts[0].series, chart.series);
         let drawings = parse_drawing_objects(
             r#"<wsDr xmlns:r="urn:rels"><oneCellAnchor><from><col>1&#50;</col><row>3&#52;</row><colOff>5&#54;</colOff><rowOff>7&#56;</rowOff></from><pic><blip r:embed="rId1"/></pic></oneCellAnchor></wsDr>"#,

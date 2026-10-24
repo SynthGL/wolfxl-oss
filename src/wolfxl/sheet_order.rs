@@ -667,12 +667,16 @@ mod tests {
         let text = std::str::from_utf8(&out).unwrap();
         assert!(text.contains(r#"name="C&amp;&quot;D""#));
         assert!(text.contains("> A &amp; B &#38; C &custom; </definedName>"));
-        assert_eq!(merge_sheet_moves(&out, &[]).unwrap().new_order, vec!["C&\"D"]);
+        assert_eq!(
+            merge_sheet_moves(&out, &[]).unwrap().new_order,
+            vec!["C&\"D"]
+        );
     }
 
     #[test]
     fn sheet_names_reject_unknown_entities() {
-        let xml = br#"<workbook><sheets><sheet name="A&unknown;B" sheetId="1"/></sheets></workbook>"#;
+        let xml =
+            br#"<workbook><sheets><sheet name="A&unknown;B" sheetId="1"/></sheets></workbook>"#;
         assert!(merge_sheet_moves(xml, &[]).is_err());
         assert!(merge_sheet_renames(xml, &[("A".into(), "B".into())]).is_err());
     }

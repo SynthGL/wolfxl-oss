@@ -29,9 +29,7 @@ pub fn shift_drawing_xml(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
 
     loop {
         let event = reader.read_event_into(&mut buf);
-        if !coord.is_empty()
-            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
-        {
+        if !coord.is_empty() && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
             let shifted = coord
                 .unescaped()
                 .ok()

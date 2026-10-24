@@ -862,9 +862,12 @@ fn read_cell_contents(
                     buf.clear();
                     let raw = reader
                         .read_text_into(quick_xml::name::QName(&end), buf)
-                        .map_err(|e| PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}")))?;
-                    let text = quick_xml::escape::unescape(&raw)
-                        .map_err(|e| PyErr::new::<PyIOError, _>(format!("cell text decode: {e}")))?;
+                        .map_err(|e| {
+                            PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}"))
+                        })?;
+                    let text = quick_xml::escape::unescape(&raw).map_err(|e| {
+                        PyErr::new::<PyIOError, _>(format!("cell text decode: {e}"))
+                    })?;
                     if matches!(t_attr, CellTypeAttr::Number)
                         && f_text.is_none()
                         && v_text.is_none()
@@ -964,7 +967,8 @@ fn cell_attrs_from_start(
         match local {
             b"r" => {
                 col = Some(
-                    parse_a1_column(attr.value.as_bytes()).map_err(PyErr::new::<PyValueError, _>)?,
+                    parse_a1_column(attr.value.as_bytes())
+                        .map_err(PyErr::new::<PyValueError, _>)?,
                 );
             }
             b"s" => style_id = parse_u32_bytes(attr.value.as_bytes()),
@@ -988,7 +992,8 @@ fn cell_value_attrs_from_start(
         match local {
             b"r" => {
                 col = Some(
-                    parse_a1_column(attr.value.as_bytes()).map_err(PyErr::new::<PyValueError, _>)?,
+                    parse_a1_column(attr.value.as_bytes())
+                        .map_err(PyErr::new::<PyValueError, _>)?,
                 );
             }
             b"t" => cell_type = cell_type_from_bytes(attr.value.as_bytes()),
@@ -1487,10 +1492,16 @@ mod tests {
                 for (xml, kind, expected) in [
                     ("<c><v>1&#50;3</v></c>", CellTypeAttr::Number, "123"),
                     ("<c><v>&#49;0</v></c>", CellTypeAttr::Shared, "entry 10"),
-                    ("<x:c xmlns:x=\"urn:test\"><x:v>1&#x32;3</x:v></x:c>",
-                     CellTypeAttr::Number, "123"),
-                    ("<c><is><t> A &amp; &#x1F600;&#10; B </t></is></c>",
-                     CellTypeAttr::InlineString, " A & 😀\n B "),
+                    (
+                        "<x:c xmlns:x=\"urn:test\"><x:v>1&#x32;3</x:v></x:c>",
+                        CellTypeAttr::Number,
+                        "123",
+                    ),
+                    (
+                        "<c><is><t> A &amp; &#x1F600;&#10; B </t></is></c>",
+                        CellTypeAttr::InlineString,
+                        " A & 😀\n B ",
+                    ),
                 ] {
                     let mut file = tempfile::tempfile().unwrap();
                     let mut reader = if use_file {
@@ -1498,12 +1509,18 @@ mod tests {
                         file.rewind().unwrap();
                         SheetXmlReader::File(XmlReader::from_reader(BufReader::new(file)))
                     } else {
-                        SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(xml.as_bytes().to_vec())))
+                        SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(
+                            xml.as_bytes().to_vec(),
+                        )))
                     };
                     let mut buf = Vec::new();
-                    assert!(matches!(reader.read_event_into(&mut buf).unwrap(), Event::Start(_)));
+                    assert!(matches!(
+                        reader.read_event_into(&mut buf).unwrap(),
+                        Event::Start(_)
+                    ));
                     let sst: Vec<_> = (0..11).map(|i| format!("entry {i}")).collect();
-                    let (value, _) = read_cell_contents(&mut reader, &mut buf, py, &kind, &sst).unwrap();
+                    let (value, _) =
+                        read_cell_contents(&mut reader, &mut buf, py, &kind, &sst).unwrap();
                     if matches!(kind, CellTypeAttr::Number) {
                         assert_eq!(value.extract::<i64>(py).unwrap().to_string(), expected);
                     } else {
@@ -1518,12 +1535,22 @@ mod tests {
     fn streaming_rejects_invalid_value_references() {
         pyo3::Python::initialize();
         Python::attach(|py| {
-            for body in ["<v>1&unknown;2</v>", "<is><t>before &unknown; after</t></is>"] {
+            for body in [
+                "<v>1&unknown;2</v>",
+                "<is><t>before &unknown; after</t></is>",
+            ] {
                 let xml = format!("<c>{body}</c>");
-                let mut reader = SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(xml.into_bytes())));
+                let mut reader =
+                    SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(xml.into_bytes())));
                 let mut buf = Vec::new();
-                assert!(matches!(reader.read_event_into(&mut buf).unwrap(), Event::Start(_)));
-                assert!(read_cell_contents(&mut reader, &mut buf, py, &CellTypeAttr::Number, &[]).is_err());
+                assert!(matches!(
+                    reader.read_event_into(&mut buf).unwrap(),
+                    Event::Start(_)
+                ));
+                assert!(
+                    read_cell_contents(&mut reader, &mut buf, py, &CellTypeAttr::Number, &[])
+                        .is_err()
+                );
             }
         });
     }
@@ -1533,12 +1560,19 @@ mod tests {
         pyo3::Python::initialize();
         Python::attach(|py| {
             let xml = b"<c><f> A1 &amp; &quot; B &quot;&#10;</f><v>1&#50;3</v></c>";
-            let mut reader = SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(xml.to_vec())));
+            let mut reader =
+                SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(xml.to_vec())));
             let mut buf = Vec::new();
-            assert!(matches!(reader.read_event_into(&mut buf).unwrap(), Event::Start(_)));
-            let (value, kind) = read_cell_contents(&mut reader, &mut buf, py, &CellTypeAttr::Number, &[]).unwrap();
+            assert!(matches!(
+                reader.read_event_into(&mut buf).unwrap(),
+                Event::Start(_)
+            ));
+            let (value, kind) =
+                read_cell_contents(&mut reader, &mut buf, py, &CellTypeAttr::Number, &[]).unwrap();
             assert_eq!(kind, "formula");
-            let fields = value.extract::<std::collections::HashMap<String, String>>(py).unwrap();
+            let fields = value
+                .extract::<std::collections::HashMap<String, String>>(py)
+                .unwrap();
             assert_eq!(fields["formula"], "= A1 & \" B \"\n");
             assert_eq!(fields["cached"], "123");
         });

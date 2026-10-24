@@ -66,9 +66,7 @@ fn parse_ranges<R: BufRead>(source: R) -> Result<Vec<String>> {
             .read_event_into(&mut buf)
             .map_err(|e| ReaderError::Xml(e.to_string()))?
         {
-            Event::Start(ref e) | Event::Empty(ref e)
-                if e.local_name().as_ref() == "mergeCell" =>
-            {
+            Event::Start(ref e) | Event::Empty(ref e) if e.local_name().as_ref() == "mergeCell" => {
                 if let Some(range) = attr_value(e, b"ref") {
                     ranges.push(range);
                 }

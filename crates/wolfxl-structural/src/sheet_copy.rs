@@ -1083,9 +1083,7 @@ fn populate_defined_name_formulas(
 
     loop {
         let event = reader.read_event_into(&mut buf);
-        if !formula.is_empty()
-            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
-        {
+        if !formula.is_empty() && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
             let text = formula
                 .unescaped()
                 .map_err(|e| SheetCopyError::Xml(format!("dn formula: {e}")))?;
@@ -1963,7 +1961,9 @@ fn first_attr_on_local_element(src_bytes: &[u8], element: &[u8], attr: &[u8]) ->
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.local_name().as_ref().as_bytes() == element => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                if e.local_name().as_ref().as_bytes() == element =>
+            {
                 return attr_value(&e, attr);
             }
             Ok(Event::Eof) => return None,
@@ -2238,9 +2238,7 @@ pub(crate) fn rewrite_sheet_formula_refs(
     let mut formula = TextNode::default();
     loop {
         let event = reader.read_event_into(&mut buf);
-        if !formula.is_empty()
-            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
-        {
+        if !formula.is_empty() && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
             if let Ok(text) = formula.unescaped() {
                 // OOXML formula bodies omit the tokenizer's leading `=`.
                 let prefixed = format!("={text}");
@@ -2386,9 +2384,7 @@ pub(crate) fn rewrite_chart_sheet_refs(
     let mut formula = TextNode::default();
     loop {
         let event = reader.read_event_into(&mut buf);
-        if !formula.is_empty()
-            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
-        {
+        if !formula.is_empty() && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
             if let Ok(text) = formula.unescaped() {
                 // Resolve the entire chart reference before renaming its sheet.
                 let prefixed = format!("={text}");
@@ -2603,19 +2599,28 @@ mod tests {
         assert_eq!(meta.defined_names[1].formula, "'A&B'!A1&\"A1\"");
         assert_eq!(meta.defined_names[2].formula, "A");
         let bad = br#"<workbook><definedNames><definedName name="bad">&unknown;</definedName></definedNames></workbook>"#;
-        assert!(matches!(parse_workbook_metadata(bad), Err(SheetCopyError::Xml(_))));
+        assert!(matches!(
+            parse_workbook_metadata(bad),
+            Err(SheetCopyError::Xml(_))
+        ));
     }
 
     #[test]
     fn sheet_and_chart_renames_resolve_complete_formula_nodes() {
         let sheet = br#"<worksheet><sheetData><row r="1"><c r="A1"><f>'A&amp;B'!A&#49;&amp;&quot;A&amp;B!A1&quot;</f><is><t> &#65;&amp;&lt; </t></is></c></row></sheetData></worksheet>"#;
         let out = String::from_utf8(rewrite_sheet_formula_refs(sheet, "A&B", "C&D")).unwrap();
-        assert!(out.contains("<f>&apos;C&amp;D&apos;!A1&amp;&quot;A&amp;B!A1&quot;</f>"), "{out}");
+        assert!(
+            out.contains("<f>&apos;C&amp;D&apos;!A1&amp;&quot;A&amp;B!A1&quot;</f>"),
+            "{out}"
+        );
         assert!(out.contains("<t> &#65;&amp;&lt; </t>"), "{out}");
 
         let chart = br#"<c:chart xmlns:c="urn:chart"><c:f>'A&amp;B'!$A$&#49;:$A$2</c:f><c:v> &#65;&amp;&lt; </c:v></c:chart>"#;
         let out = String::from_utf8(rewrite_chart_sheet_refs(chart, "A&B", "C&D")).unwrap();
-        assert!(out.contains("<c:f>&apos;C&amp;D&apos;!$A$1:$A$2</c:f>"), "{out}");
+        assert!(
+            out.contains("<c:f>&apos;C&amp;D&apos;!$A$1:$A$2</c:f>"),
+            "{out}"
+        );
         assert!(out.contains("<c:v> &#65;&amp;&lt; </c:v>"), "{out}");
     }
 
@@ -2628,10 +2633,14 @@ mod tests {
 
     #[test]
     fn drawing_rid_rewrite_preserves_text_and_escapes_attributes_once() {
-        let xml = br#"<drawing><chart r:id="old" note="A&amp;B"/><t> &#65;&amp;&lt; </t></drawing>"#;
+        let xml =
+            br#"<drawing><chart r:id="old" note="A&amp;B"/><t> &#65;&amp;&lt; </t></drawing>"#;
         let remap = HashMap::from([("old".to_string(), "new&rid".to_string())]);
         let out = String::from_utf8(rewrite_drawing_chart_rids(xml, &remap)).unwrap();
-        assert!(out.contains(r#"r:id="new&amp;rid" note="A&amp;B""#), "{out}");
+        assert!(
+            out.contains(r#"r:id="new&amp;rid" note="A&amp;B""#),
+            "{out}"
+        );
         assert!(out.contains("<t> &#65;&amp;&lt; </t>"), "{out}");
     }
 

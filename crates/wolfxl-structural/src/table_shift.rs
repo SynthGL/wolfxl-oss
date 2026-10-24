@@ -77,9 +77,7 @@ fn shift_table_xml_inner(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
 
     loop {
         let event = reader.read_event_into(&mut buf);
-        if !formula.is_empty()
-            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
-        {
+        if !formula.is_empty() && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
             let s = formula.unescaped().unwrap_or_else(|_| formula.raw());
             let new_s = shift_formula(s, plan);
             let _ = writer.write_event(Event::Text(BytesText::new(&new_s)));

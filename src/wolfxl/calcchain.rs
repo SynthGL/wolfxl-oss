@@ -81,7 +81,9 @@ pub fn scan_sheet_for_formulas(sheet_xml: &[u8], sheet_index_1based: u32) -> Vec
                         // Pull r="..." attribute.
                         for attr in e.attributes().flatten() {
                             if attr.key.local_name().as_ref() == "r" {
-                                if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
+                                if let Ok(v) =
+                                    attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                {
                                     current_c_ref = Some(v.into_owned());
                                 }
                             }
@@ -251,7 +253,10 @@ mod tests {
     fn extract_ext_lst_preserves_entity_spelling() {
         let xml = br#"<calcChain><extLst><ext uri="A&amp;B"><value> A&amp;B&#32;&custom; </value></ext></extLst></calcChain>"#;
         let ext = extract_ext_lst(xml).unwrap();
-        assert_eq!(ext, br#"<extLst><ext uri="A&amp;B"><value> A&amp;B&#32;&custom; </value></ext></extLst>"#);
+        assert_eq!(
+            ext,
+            br#"<extLst><ext uri="A&amp;B"><value> A&amp;B&#32;&custom; </value></ext></extLst>"#
+        );
     }
 
     #[test]

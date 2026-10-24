@@ -136,8 +136,9 @@ pub fn extract_cell_grid(
             // quick-xml 0.42 emits references separately from adjacent text.
             Event::GeneralRef(reference) => {
                 if (in_v || in_t) && in_target_cell {
-                    let value = resolve_general_ref(&reference)
-                        .map_err(|e| PyErr::new::<PyIOError, _>(format!("autofilter reference: {e}")))?;
+                    let value = resolve_general_ref(&reference).map_err(|e| {
+                        PyErr::new::<PyIOError, _>(format!("autofilter reference: {e}"))
+                    })?;
                     text_acc.push_str(&value);
                 }
             }
@@ -476,7 +477,8 @@ mod tests {
 
     #[test]
     fn extract_cell_grid_rejects_unknown_references() {
-        let xml = br#"<sheetData><row r="1"><c r="A1" t="str"><v>A&unknown;B</v></c></row></sheetData>"#;
+        let xml =
+            br#"<sheetData><row r="1"><c r="A1" t="str"><v>A&unknown;B</v></c></row></sheetData>"#;
         assert!(extract_cell_grid(xml, 1, 1, 1, 1).is_err());
     }
 

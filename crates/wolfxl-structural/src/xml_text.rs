@@ -13,7 +13,9 @@ use quick_xml::events::{BytesRef, BytesText};
 /// Recognises the same references as `quick_xml::escape::unescape`:
 /// character references and the predefined XML entities; anything else is
 /// an unrecognised-entity error.
-pub(crate) fn resolve_general_ref(r: &BytesRef<'_>) -> quick_xml::Result<std::borrow::Cow<'static, str>> {
+pub(crate) fn resolve_general_ref(
+    r: &BytesRef<'_>,
+) -> quick_xml::Result<std::borrow::Cow<'static, str>> {
     if let Some(ch) = r.resolve_char_ref()? {
         return Ok(std::borrow::Cow::Owned(ch.to_string()));
     }

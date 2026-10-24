@@ -477,9 +477,7 @@ pub fn shift_defined_names(
 
     loop {
         let event = reader.read_event_into(&mut buf);
-        if !formula.is_empty()
-            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
-        {
+        if !formula.is_empty() && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
             let applies = match (current_local_sheet_id, op_sheet_position) {
                 (Some(sid), Some(pos)) => sid == pos,
                 (None, _) => true,
@@ -546,8 +544,14 @@ mod tests {
         let xml = br#"<workbook><definedNames><definedName name="global">'A&amp;B'!A&#49;&amp;&quot;A1&quot;</definedName><definedName name="other" localSheetId="1">'A&amp;B'!A&#49;</definedName></definedNames></workbook>"#;
         let out = shift_defined_names(xml, &ShiftPlan::insert(Axis::Row, 1, 1), "A&B", Some(0));
         let text = String::from_utf8(out).unwrap();
-        assert!(text.contains("&apos;A&amp;B&apos;!A2&amp;&quot;A1&quot;"), "{text}");
-        assert!(text.contains(r#"localSheetId="1">'A&amp;B'!A&#49;</definedName>"#), "{text}");
+        assert!(
+            text.contains("&apos;A&amp;B&apos;!A2&amp;&quot;A1&quot;"),
+            "{text}"
+        );
+        assert!(
+            text.contains(r#"localSheetId="1">'A&amp;B'!A&#49;</definedName>"#),
+            "{text}"
+        );
     }
 
     #[test]

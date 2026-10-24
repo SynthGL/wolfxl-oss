@@ -257,7 +257,10 @@ mod tests {
         let part = parse_part(xml).unwrap();
         assert_eq!(part.book_rid.as_deref(), Some("r&1"));
         assert_eq!(part.sheet_names, ["A & B"]);
-        assert_eq!(part.cached_data[0].1[0].value, " left & right \u{1D11E} &lt; <raw>");
+        assert_eq!(
+            part.cached_data[0].1[0].value,
+            " left & right \u{1D11E} &lt; <raw>"
+        );
         assert!(parse_part(b"<externalLink><v>&unknown;</v></externalLink>").is_err());
     }
 

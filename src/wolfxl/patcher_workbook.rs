@@ -159,7 +159,8 @@ pub(crate) fn splice_into_sheets_block(
                     let name = e.name();
                     let event_name = sheets_element_name.as_deref().unwrap_or(name.as_ref());
                     splice_pos =
-                        find_end_event_start(workbook_xml, pre, post, event_name.as_bytes()).or(Some(pre));
+                        find_end_event_start(workbook_xml, pre, post, event_name.as_bytes())
+                            .or(Some(pre));
                     break;
                 }
             }
@@ -508,7 +509,8 @@ fn xml_attr_values_by_local_name(xml: &[u8], attr_name: &[u8]) -> Vec<String> {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 for attr in e.attributes().with_checks(false).flatten() {
                     if attr.key.local_name().as_ref().as_bytes() == attr_name {
-                        if let Ok(value) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
+                        if let Ok(value) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                        {
                             out.push(value.into_owned());
                         }
                     }
@@ -2246,15 +2248,20 @@ mod tests {
         let source = " 'A&amp;B'!A1&amp;&quot;A&amp;B!A1&quot; ";
         let decoded = " 'A&B'!A1&\"A&B!A1\" ";
         let expected = quick_xml::escape::escape(rename_formula_sheet_refs(decoded, &renames));
-        let workbook = format!("<workbook><definedName>{source}</definedName><other>&custom;&#32;</other></workbook>");
-        let output = rewrite_workbook_defined_name_sheet_renames(workbook.as_bytes(), &renames).unwrap();
+        let workbook = format!(
+            "<workbook><definedName>{source}</definedName><other>&custom;&#32;</other></workbook>"
+        );
+        let output =
+            rewrite_workbook_defined_name_sheet_renames(workbook.as_bytes(), &renames).unwrap();
         let output = String::from_utf8(output).unwrap();
         assert!(output.contains(&format!("<definedName>{expected}</definedName>")));
         assert!(output.contains("<other>&custom;&#32;</other>"));
 
         for tag in ["f", "formula", "formula1", "formula2"] {
-            let worksheet = format!("<worksheet><{tag}>{source}</{tag}><t>&custom;&#32;</t></worksheet>");
-            let output = rewrite_worksheet_formula_sheet_renames(worksheet.as_bytes(), &renames).unwrap();
+            let worksheet =
+                format!("<worksheet><{tag}>{source}</{tag}><t>&custom;&#32;</t></worksheet>");
+            let output =
+                rewrite_worksheet_formula_sheet_renames(worksheet.as_bytes(), &renames).unwrap();
             let output = String::from_utf8(output).unwrap();
             assert!(output.contains(&format!("<{tag}>{expected}</{tag}>")));
             assert!(output.contains("<t>&custom;&#32;</t>"));
@@ -2274,19 +2281,26 @@ mod tests {
         let output = rewrite_worksheet_formula_sheet_renames(
             b"<worksheet><f>&#79;ld!A1</f><f> &#32; </f></worksheet>",
             &renames,
-        ).unwrap();
+        )
+        .unwrap();
         let output = String::from_utf8(output).unwrap();
         assert!(output.contains("<f>New!A1</f>"));
         assert!(output.contains("<f>   </f>"));
         assert!(rewrite_workbook_defined_name_sheet_renames(
-            b"<workbook><definedName>Old&unknown;!A1</definedName></workbook>", &renames,
-        ).is_err());
+            b"<workbook><definedName>Old&unknown;!A1</definedName></workbook>",
+            &renames,
+        )
+        .is_err());
         assert!(rewrite_worksheet_formula_sheet_renames(
-            b"<worksheet><f>Old&unknown;!A1</f></worksheet>", &renames,
-        ).is_err());
+            b"<worksheet><f>Old&unknown;!A1</f></worksheet>",
+            &renames,
+        )
+        .is_err());
         assert!(rewrite_chart_formula_sheet_renames(
-            b"<chart><pivotSource><name>Old&unknown;!Pivot</name></pivotSource></chart>", &renames,
-        ).is_err());
+            b"<chart><pivotSource><name>Old&unknown;!Pivot</name></pivotSource></chart>",
+            &renames,
+        )
+        .is_err());
     }
 
     #[test]

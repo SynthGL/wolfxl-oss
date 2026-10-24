@@ -551,7 +551,8 @@ fn rewrite_dimension(
     patch_bounds: Option<(u32, u32, u32, u32)>,
     prefix: Option<&str>,
 ) -> Result<BytesStart<'static>, String> {
-    let dimension_name = qname_for_original(original.name().as_ref().as_bytes(), "dimension", prefix);
+    let dimension_name =
+        qname_for_original(original.name().as_ref().as_bytes(), "dimension", prefix);
     let mut elem = BytesStart::new(dimension_name);
     let original_ref = attr_value(original, b"ref");
     let merged_ref = original_ref
@@ -1128,12 +1129,16 @@ mod tests {
     #[test]
     fn style_patch_preserves_references_whitespace_and_escaped_attributes() {
         let xml = r#"<x:worksheet xmlns:x="urn:x"><x:dimension ref="A1" note="A&amp;B"/><x:sheetData><x:row r="1" note="C&#38;D"><x:c r="A1" t="str" note="E&quot;F"><x:v> A &amp; B &#x26; C &#38; D &custom; </x:v></x:c></x:row></x:sheetData></x:worksheet>"#;
-        let out = patch_worksheet(xml, &[CellPatch {
-            row: 1,
-            col: 1,
-            value: None,
-            style_index: Some(2),
-        }]).unwrap();
+        let out = patch_worksheet(
+            xml,
+            &[CellPatch {
+                row: 1,
+                col: 1,
+                value: None,
+                style_index: Some(2),
+            }],
+        )
+        .unwrap();
         assert!(out.contains(r#"note="A&amp;B""#));
         assert!(out.contains(r#"note="C&#38;D""#));
         assert!(out.contains(r#"note="E&quot;F""#));
@@ -1144,12 +1149,17 @@ mod tests {
     #[test]
     fn value_patch_preserves_other_references_and_escapes_new_text() {
         let xml = r#"<worksheet><sheetData><row r="1"><c r="A1" t="str"><v> A &amp; &#x26; &#38; B </v></c><c r="B1" t="str"><v> old &amp; text </v></c><c r="C1"><v>&custom;</v></c></row></sheetData></worksheet>"#;
-        let out = patch_existing_value_cells_prefix(xml, &[CellPatch {
-            row: 1,
-            col: 2,
-            value: Some(CellValue::String(" <new> & value ".to_string())),
-            style_index: None,
-        }]).unwrap().unwrap();
+        let out = patch_existing_value_cells_prefix(
+            xml,
+            &[CellPatch {
+                row: 1,
+                col: 2,
+                value: Some(CellValue::String(" <new> & value ".to_string())),
+                style_index: None,
+            }],
+        )
+        .unwrap()
+        .unwrap();
         assert!(out.contains("<v> A &amp; &#x26; &#38; B </v>"));
         assert!(out.contains("<v> &lt;new&gt; &amp; value </v>"));
         assert!(out.contains("<v>&custom;</v>"));

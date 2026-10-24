@@ -16,10 +16,12 @@ from wolfxl._cell_payloads import (
     format_to_fill,
     format_to_font,
 )
-from wolfxl._styles import Alignment, Border, Font, PatternFill, Side
+from wolfxl._styles import Alignment, Border, Font, PatternFill
 from wolfxl.styles.fills import GradientFill
 from wolfxl.styles.numbers import BUILTIN_FORMATS, BUILTIN_FORMATS_MAX_SIZE, is_timedelta_format
-from wolfxl.utils.cell import get_column_letter, range_boundaries
+from wolfxl._worksheet_collections import _loaded_merged_range_refs, _merged_border_for_cell
+from wolfxl._worksheet_merged_index import MergedRangeIndex
+from wolfxl.utils.cell import range_boundaries
 from wolfxl.utils.numbers import is_date_format
 
 
@@ -37,25 +39,24 @@ _DEFAULT_STYLE = StyleComponents(
     format_to_font({}), format_to_fill({}), Border(), Alignment(), "General", False, False
 )
 
+# A short tuple scan is cheaper for ordinary headers with a few merges.
+_MERGED_INDEX_THRESHOLD = 8
+
 
 class StreamingStyleCache:
     """Cache source styles and merge metadata without retaining a native reader."""
 
     __slots__ = (
-        "reader_identity",
-        "styles",
-        "merged_bounds",
-        "merged_state",
-        "source_borders",
-        "source_gradients",
-        "date_ids",
+        "reader_identity", "styles", "merged_bounds", "merged_indexes", "merged_priorities",
+        "source_borders", "source_gradients", "date_ids",
     )
 
     def __init__(self, reader: Any) -> None:
         self.reader_identity = id(reader)
         self.styles: dict[int, StyleComponents] = {}
         self.merged_bounds: dict[str, tuple[tuple[int, int, int, int], ...]] = {}
-        self.merged_state: dict[str, tuple[set[str], ...]] = {}
+        self.merged_indexes: dict[str, MergedRangeIndex] = {}
+        self.merged_priorities: dict[str, dict[tuple[int, int, int, int], int]] = {}
         self.source_borders: dict[int, Border] = {}
         self.source_gradients: dict[int, GradientFill] = {}
         self.date_ids: tuple[Any, frozenset[int]] | None = None
@@ -133,21 +134,12 @@ class StreamingStyleCache:
         return cached
 
     def merge_bounds(self, worksheet: Any) -> tuple[tuple[int, int, int, int], ...]:
-        state = (
-            worksheet._merged_ranges,
-            worksheet._collection_merged_ranges,
-            worksheet._pending_unmerged_ranges,
-        )
         cached = self.merged_bounds.get(worksheet.title)
-        if cached is not None and self.merged_state[worksheet.title] == state:
+        if cached is not None:
             return cached
-        # Collection and worksheet merge mutations must both invalidate retained
-        # cells' view, including remove/add operations that keep the same size.
-        reader = worksheet._workbook._rust_reader
-        refs = set(reader.read_merged_ranges(worksheet.title)) if reader is not None else set()
-        refs.update(worksheet._merged_ranges)
-        refs.update(worksheet._collection_merged_ranges)
-        refs.difference_update(getattr(worksheet, "_pending_unmerged_ranges", ()))
+        # Worksheet merge bookkeeping includes pending merge/unmerge changes.
+        # Its source lookup is a native metadata-only read, cached per sheet.
+        refs = _loaded_merged_range_refs(worksheet)
         bounds = []
         for ref in refs:
             try:
@@ -158,13 +150,21 @@ class StreamingStyleCache:
                 bounds.append((min_row, min_col, max_row, max_col))
         cached = tuple(bounds)
         self.merged_bounds[worksheet.title] = cached
-        self.merged_state[worksheet.title] = tuple(part.copy() for part in state)
+        if len(cached) > _MERGED_INDEX_THRESHOLD:
+            self.merged_indexes[worksheet.title] = MergedRangeIndex(refs)
+            priorities = {}
+            for rank, bound in enumerate(cached):
+                priorities.setdefault(bound, rank)
+            self.merged_priorities[worksheet.title] = priorities
         return cached
 
     def merge_at(self, worksheet: Any, row: int, col: int) -> tuple[int, int, int, int] | None:
         merged_bounds = self.merge_bounds(worksheet)
         if not merged_bounds:
             return None
+        index = self.merged_indexes.get(worksheet.title)
+        if index is not None:
+            return index.bounds_for_cell(row, col, self.merged_priorities[worksheet.title])
         for bounds in merged_bounds:
             min_row, min_col, max_row, max_col = bounds
             if min_row <= row <= max_row and min_col <= col <= max_col:
@@ -204,46 +204,18 @@ def cell_border(cell: Any) -> Border:
     if reader is None:
         return _DEFAULT_STYLE.border
     cache = workbook_style_cache(workbook)
-    merged = cache.merge_at(cell._ws, cell._row, cell._col)
-    if merged is not None:
-        min_row, min_col, max_row, max_col = merged
-        start = border_payload_to_border(
-            reader.read_cell_border(cell._ws.title, f"{get_column_letter(min_col)}{min_row}")
-        )
-        end = border_payload_to_border(
-            reader.read_cell_border(cell._ws.title, f"{get_column_letter(max_col)}{max_row}")
-        )
-        anchor = cell._ws._cells.get((min_row, min_col))
-        local_border = getattr(anchor, "_border", None)
-        if isinstance(local_border, Border):
-            start = local_border
-        right = end.right if end.right is not None and end.right != Side() else start.right
-        bottom = end.bottom if end.bottom is not None and end.bottom != Side() else start.bottom
-        if (cell._row, cell._col) == (min_row, min_col):
-            return deepcopy(
-                Border(
-                    left=start.left,
-                    right=right,
-                    top=start.top,
-                    bottom=bottom,
-                    diagonal=start.diagonal,
-                    diagonalUp=start.diagonalUp,
-                    diagonalDown=start.diagonalDown,
-                    outline=start.outline,
-                    vertical=start.vertical,
-                    horizontal=start.horizontal,
-                    start=start.start,
-                    end=start.end,
-                )
-            )
-        return deepcopy(
-            Border(
-                left=start.left if cell._col == min_col else None,
-                right=right if cell._col == max_col else None,
-                top=start.top if cell._row == min_row else None,
-                bottom=bottom if cell._row == max_row else None,
-            )
-        )
+    if cache.merge_at(cell._ws, cell._row, cell._col) is not None:
+        border = _merged_border_for_cell(cell._ws, cell._row, cell._col)
+        if border is not None:
+            # The merge helper already returns detached nested Color values.
+            return border
+        read_merged_border = getattr(reader, "read_merged_cell_border", None)
+        if read_merged_border is not None:
+            payload = read_merged_border(cell._ws.title, cell._row, cell._col)
+        else:
+            # Older extension modules preserve their coordinate border path.
+            payload = reader.read_cell_border(cell._ws.title, cell.coordinate)
+        return border_payload_to_border(payload)
     return cache.components(workbook, cell._style_id).border
 
 

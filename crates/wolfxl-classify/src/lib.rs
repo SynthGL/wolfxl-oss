@@ -241,7 +241,10 @@ mod tests {
         bytes[central + 9] |= 0x08;
         bytes[central + 46] = 0xff;
         let mut archive = zip::ZipArchive::new(Cursor::new(&bytes)).unwrap();
-        assert_eq!(archive.by_index_raw(0).unwrap().name().unwrap(), "\u{a0}ad.txt");
+        assert_eq!(
+            archive.by_index_raw(0).unwrap().name().unwrap(),
+            "\u{a0}ad.txt"
+        );
         assert_eq!(classify_file_format_bytes(&bytes), FileFormat::Xlsx);
     }
 

@@ -12,12 +12,24 @@
   resolution for the encrypted extra. Python 3.9.2 and later remain supported.
 - Keep Community Python ODS refusal and existing binary-format read, style, and
   modification boundaries.
+- The optional `test` extra on Python 3.9 and 3.10 still resolves Pillow releases
+  affected by CVE-2026-96639 and GHSA-78g4-xqwv-q3g8, because fixed Pillow 13
+  requires Python 3.11. Runtime installs do not depend on Pillow.
 
 ### Fixed
 
 - Calling `calculate()` on a workbook opened with `data_only=True` preserves
   its existing formula caches when saving, and writes caches only for formulas
   actually computed by that call.
+- Preserve indexed streaming merge lookup and merged endpoint borders without
+  materializing worksheet cells.
+- Match openpyxl's inline-font boolean defaults and XML serialization.
+- Build supported CPython 3.9 wheels explicitly and require the complete
+  CPython 3.9 through 3.14 wheel matrix without dropping published platforms.
+- Keep existing public benchmark test helpers available to the Community
+  source-export regression tests.
+- Complete the isolated native-reader qualification dependency closure.
+- Pin historical evidence and contribution links to the public source snapshot.
 
 ## 2.0.10 - 2026-10-20
 

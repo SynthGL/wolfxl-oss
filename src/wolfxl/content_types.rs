@@ -297,8 +297,14 @@ mod tests {
     fn entity_encoded_attributes_roundtrip() {
         let xml = br#"<Types><Default Extension="x&#109;l" ContentType="type/a&amp;b"/><Override PartName="/a&#38;b.xml" ContentType="type/&quot;quoted&quot;"/></Types>"#;
         let graph = ContentTypesGraph::parse(xml).unwrap();
-        assert_eq!(graph.defaults(), &[("xml".to_string(), "type/a&b".to_string())]);
-        assert_eq!(graph.overrides(), &[("/a&b.xml".to_string(), "type/\"quoted\"".to_string())]);
+        assert_eq!(
+            graph.defaults(),
+            &[("xml".to_string(), "type/a&b".to_string())]
+        );
+        assert_eq!(
+            graph.overrides(),
+            &[("/a&b.xml".to_string(), "type/\"quoted\"".to_string())]
+        );
         assert_eq!(ContentTypesGraph::parse(&graph.serialize()).unwrap(), graph);
     }
 

@@ -783,9 +783,7 @@ fn rewrite_anchors_and_dimension(xml: &[u8], plan: &RangeMovePlan) -> Vec<u8> {
 
     loop {
         let event = reader.read_event_into(&mut buf);
-        if !formula.is_empty()
-            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
-        {
+        if !formula.is_empty() && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
             if let Ok(text) = formula.unescaped() {
                 let translated = formula_translator.translate_text(text);
                 let _ = writer.write_event(Event::Text(BytesText::new(&translated)));
@@ -859,7 +857,9 @@ fn rewrite_anchors_and_dimension(xml: &[u8], plan: &RangeMovePlan) -> Vec<u8> {
             Ok(Event::Text(t)) if plan.translate && (in_dv_formula > 0 || in_cf_formula > 0) => {
                 formula.push_text(&t);
             }
-            Ok(Event::GeneralRef(r)) if plan.translate && (in_dv_formula > 0 || in_cf_formula > 0) => {
+            Ok(Event::GeneralRef(r))
+                if plan.translate && (in_dv_formula > 0 || in_cf_formula > 0) =>
+            {
                 formula.push_ref(&r);
             }
             Ok(Event::Eof) => break,

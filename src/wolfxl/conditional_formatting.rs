@@ -311,7 +311,8 @@ pub fn scan_max_cf_priority(sheet_xml: &str) -> u32 {
                 if e.local_name().as_ref() == "cfRule" {
                     for attr in e.attributes().with_checks(false).flatten() {
                         if attr.key.local_name().as_ref() == "priority" {
-                            if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
+                            if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                            {
                                 if let Ok(p) = v.parse::<u32>() {
                                     if p > max_priority {
                                         max_priority = p;
@@ -1053,7 +1054,10 @@ mod tests {
         let block = r#"<conditionalFormatting sqref="A1"><cfRule type="expression" priority="&#55;"><formula>A1&lt;&#50;&amp;B1</formula></cfRule></conditionalFormatting>"#;
         let xml = format!("<worksheet>{block}</worksheet>");
         assert_eq!(scan_max_cf_priority(&xml), 7);
-        assert_eq!(extract_existing_cf_blocks(&xml), vec![block.as_bytes().to_vec()]);
+        assert_eq!(
+            extract_existing_cf_blocks(&xml),
+            vec![block.as_bytes().to_vec()]
+        );
     }
 
     fn cellis_gt5() -> CfRulePatch {

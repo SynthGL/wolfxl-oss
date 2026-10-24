@@ -141,7 +141,9 @@ pub fn scan_existing_tables<R: std::io::Read + std::io::Seek>(
     let mut paths: Vec<String> = Vec::new();
     for i in 0..zip.len() {
         let entry = zip.by_index(i).map_err(|e| format!("zip index {i}: {e}"))?;
-        let name = entry.name().map_err(|e| format!("zip index {i} name: {e}"))?;
+        let name = entry
+            .name()
+            .map_err(|e| format!("zip index {i} name: {e}"))?;
         if is_table_part_path(&name) {
             paths.push(name.into_owned());
         }
@@ -315,7 +317,11 @@ pub fn patch_table_growth(xml: &[u8], patch: &TableGrowthPatch) -> Result<Vec<u8
                 } else if depth == 1 && local.as_ref() == "tableColumns" {
                     let qualified = element.name();
                     let prefix_len = qualified.as_ref().len() - local.as_ref().len();
-                    columns_tag = Some((pre, post, qualified.as_ref().as_bytes()[..prefix_len].to_vec()));
+                    columns_tag = Some((
+                        pre,
+                        post,
+                        qualified.as_ref().as_bytes()[..prefix_len].to_vec(),
+                    ));
                     in_columns = true;
                 } else if depth == 2 && in_columns && local.as_ref() == "tableColumn" {
                     record_table_column(&element, &mut existing_names, &mut max_id)?;
@@ -1030,7 +1036,9 @@ mod tests {
     fn table_growth_preserves_formula_entities_and_decodes_column_names() {
         let xml = br#"<table id="1" ref="A1:A2" name="T"><tableColumns count="1"><tableColumn id="&#49;" name="A&amp;&#x42;"><calculatedColumnFormula> A2 &amp; " &#38; &custom; " </calculatedColumnFormula></tableColumn></tableColumns></table>"#;
         let duplicate = patch_table_growth(xml, &growth("A1:B2", "A1:B2", &["A&B"]));
-        assert!(duplicate.unwrap_err().contains("already has a column named"));
+        assert!(duplicate
+            .unwrap_err()
+            .contains("already has a column named"));
         let out = patch_table_growth(xml, &growth("A1:B2", "A1:B2", &["C&D"])).unwrap();
         let text = std::str::from_utf8(&out).unwrap();
         assert!(text.contains(r#"id="&#49;" name="A&amp;&#x42;""#));

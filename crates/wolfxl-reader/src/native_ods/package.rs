@@ -106,4 +106,3 @@ pub(super) fn read<R: Read + Seek>(input: R, limits: Limits) -> Result<HashMap<S
     }
     Ok(parts)
 }
-

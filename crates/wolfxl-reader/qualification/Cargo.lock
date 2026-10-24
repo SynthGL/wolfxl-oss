@@ -145,6 +145,7 @@ version = "0.1.0"
 dependencies = [
  "codepage",
  "encoding_rs",
+ "memchr",
  "quick-xml",
  "wolfxl-formula",
  "wolfxl-rels",

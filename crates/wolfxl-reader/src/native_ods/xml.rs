@@ -383,13 +383,19 @@ mod tests {
         }
         assert!(walk(
             b"<a>&#x1D11E;</a>",
-            Limits { text: 3, ..Limits::default() },
+            Limits {
+                text: 3,
+                ..Limits::default()
+            },
             |_, _| Ok(()),
         )
         .is_err());
         assert!(walk(
             b"<a>&amp;&amp;&amp;</a>",
-            Limits { events: 4, ..Limits::default() },
+            Limits {
+                events: 4,
+                ..Limits::default()
+            },
             |_, _| Ok(()),
         )
         .is_err());

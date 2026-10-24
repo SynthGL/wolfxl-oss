@@ -236,7 +236,9 @@ fn attr(e: &quick_xml::events::BytesStart<'_>, name: &[u8]) -> Option<String> {
     for raw in e.attributes().with_checks(false).flatten() {
         if raw.key.as_ref().as_bytes() == name {
             // Unescape without normalizing literal attribute whitespace.
-            return quick_xml::escape::unescape(&raw.value).ok().map(|cow| cow.into_owned());
+            return quick_xml::escape::unescape(&raw.value)
+                .ok()
+                .map(|cow| cow.into_owned());
         }
     }
     None

@@ -284,7 +284,10 @@ pub fn zip_read_to_string_opt(zip: &mut ZipArchive<File>, name: &str) -> PyResul
     }
 }
 
-fn resolve_zip_name_case_insensitive(zip: &ZipArchive<File>, name: &str) -> PyResult<Option<String>> {
+fn resolve_zip_name_case_insensitive(
+    zip: &ZipArchive<File>,
+    name: &str,
+) -> PyResult<Option<String>> {
     for candidate in zip.file_names() {
         let candidate =
             candidate.map_err(|e| PyIOError::new_err(format!("ZIP entry name error: {e}")))?;
@@ -353,11 +356,19 @@ mod tests {
     fn references_resolve_without_normalizing_referenced_whitespace() {
         use quick_xml::events::BytesRef;
         for (reference, expected) in [
-            ("amp", "&"), ("lt", "<"), ("gt", ">"),
-            ("apos", "'"), ("quot", "\""), ("#10", "\n"),
-            ("#13", "\r"), ("#x1F600", "😀"),
+            ("amp", "&"),
+            ("lt", "<"),
+            ("gt", ">"),
+            ("apos", "'"),
+            ("quot", "\""),
+            ("#10", "\n"),
+            ("#13", "\r"),
+            ("#x1F600", "😀"),
         ] {
-            assert_eq!(super::resolve_general_ref(&BytesRef::new(reference)).unwrap(), expected);
+            assert_eq!(
+                super::resolve_general_ref(&BytesRef::new(reference)).unwrap(),
+                expected
+            );
         }
         for reference in ["unknown", "#0", "#xD800", "#x110000"] {
             assert!(super::resolve_general_ref(&BytesRef::new(reference)).is_err());
@@ -369,6 +380,9 @@ mod tests {
         let xml = "<workbook><sheets><sheet name=\" A\t&amp;\r\nB&#10; \" \
                    r:id=\"rId&#49;\"/></sheets></workbook>";
         let sheets = super::parse_workbook_sheet_rids(xml).unwrap();
-        assert_eq!(sheets, vec![(" A\t&\r\nB\n ".to_owned(), "rId1".to_owned())]);
+        assert_eq!(
+            sheets,
+            vec![(" A\t&\r\nB\n ".to_owned(), "rId1".to_owned())]
+        );
     }
 }

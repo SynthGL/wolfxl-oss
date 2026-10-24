@@ -63,9 +63,7 @@ pub fn shift_sheet_cells(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
 
     loop {
         let event = reader.read_event_into(&mut buf);
-        if !text.is_empty()
-            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
-        {
+        if !text.is_empty() && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_))) {
             if let Ok(value) = text.unescaped() {
                 let shifted = if in_sqref_text {
                     shift_sqref(value, plan)
@@ -480,7 +478,10 @@ mod tests {
     fn deleted_rows_do_not_leak_entity_references() {
         let xml = r#"<sheetData><row r="1"><c r="A1"><f>&quot;gone&quot;&amp;A1</f></c></row><row r="2"><c r="A2"><f>A&#50;</f></c></row></sheetData>"#;
         let out = apply(xml, &ShiftPlan::delete(crate::Axis::Row, 1, 1));
-        assert_eq!(out, r#"<sheetData><row r="1"><c r="A1"><f>A1</f></c></row></sheetData>"#);
+        assert_eq!(
+            out,
+            r#"<sheetData><row r="1"><c r="A1"><f>A1</f></c></row></sheetData>"#
+        );
     }
 
     #[test]
