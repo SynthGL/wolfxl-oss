@@ -1,6 +1,6 @@
 """Pytest fixtures for the differential writer harness.
 
-The session-scoped autouse fixture below forces ``WOLFXL_TEST_EPOCH=0`` so
+The function-scoped autouse fixture below forces ``WOLFXL_TEST_EPOCH=0`` so
 ZIP entry mtimes are deterministic — without this, byte-level fixture
 comparison is impossible (mtimes drift second-to-second).
 
@@ -12,6 +12,7 @@ path stem; the test populates the workbook, calls ``save()``, and the
 written xlsx feeds into single-file structural and semantic checks
 (openpyxl serves as the soft secondary oracle).
 """
+
 from __future__ import annotations
 
 import os
@@ -21,12 +22,12 @@ from typing import Iterator
 import pytest
 
 
-@pytest.fixture(autouse=True, scope="session")
+@pytest.fixture(autouse=True)
 def _force_test_epoch() -> Iterator[None]:
     """Force ``WOLFXL_TEST_EPOCH=0`` so ZIP mtimes are deterministic.
 
-    Restores the previous value (or unsets) on teardown so non-harness
-    tests that import this conftest indirectly are unaffected.
+    Restore the previous value (or unset it) after each harness test so
+    sibling calculation tests retain their own clock.
     """
     prev = os.environ.get("WOLFXL_TEST_EPOCH")
     os.environ["WOLFXL_TEST_EPOCH"] = "0"

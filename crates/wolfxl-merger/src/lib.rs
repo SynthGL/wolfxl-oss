@@ -359,7 +359,7 @@ pub fn merge_blocks(sheet_xml: &[u8], blocks: Vec<SheetBlock>) -> Result<Vec<u8>
 
         match event {
             Event::Start(e) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name().as_ref().as_bytes().to_vec();
                 let current_depth = depth;
 
                 // (a) Worksheet root: the only place we ever rewrite a
@@ -420,7 +420,7 @@ pub fn merge_blocks(sheet_xml: &[u8], blocks: Vec<SheetBlock>) -> Result<Vec<u8>
             }
 
             Event::Empty(e) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name().as_ref().as_bytes().to_vec();
                 let current_depth = depth;
 
                 // Self-closing <worksheet/> — RFC-011 §8 risk #3. Expand
@@ -475,7 +475,7 @@ pub fn merge_blocks(sheet_xml: &[u8], blocks: Vec<SheetBlock>) -> Result<Vec<u8>
             }
 
             Event::End(e) => {
-                if depth == 1 && e.local_name().as_ref() == b"worksheet" {
+                if depth == 1 && e.local_name().as_ref() == "worksheet" {
                     flush_all_pending(&mut writer, &mut pending)?;
                 }
                 writer
@@ -568,10 +568,10 @@ fn consume_until_matching_end<R: std::io::BufRead>(
             .read_event_into(&mut buf)
             .map_err(|e| format!("wolfxl-merger: XML parse error during skip: {e}"))?;
         match event {
-            Event::Start(e) if e.local_name().as_ref() == local => {
+            Event::Start(e) if e.local_name().as_ref().as_bytes() == local => {
                 depth += 1;
             }
-            Event::End(e) if e.local_name().as_ref() == local => {
+            Event::End(e) if e.local_name().as_ref().as_bytes() == local => {
                 depth -= 1;
             }
             Event::Eof => {
@@ -602,21 +602,17 @@ fn ensure_rel_namespace(start: &BytesStart<'_>, needs_rel_ns: bool) -> Option<By
     }
     // Already declares the relationships namespace under some prefix — no-op.
     for attr in start.attributes().with_checks(false).flatten() {
-        if attr.value.as_ref() == REL_NS {
+        if attr.value.as_bytes() == REL_NS {
             return None;
         }
     }
     // Build an owned BytesStart with the same name, copy each existing
-    // attribute through `push_attribute((&[u8], &[u8]))` (quick-xml clones
-    // into the BytesStart's owned buffer), then append `xmlns:r="…"`.
-    let name_bytes = start.name().as_ref().to_vec();
-    let mut new_start = BytesStart::new(String::from_utf8_lossy(&name_bytes).into_owned());
+    // attribute through verbatim (its value stays in the source's escaped
+    // form; `push_attribute` copies it into the owned buffer), then append
+    // `xmlns:r="…"`.
+    let mut new_start = BytesStart::new(start.name().as_ref().to_owned());
     for attr in start.attributes().with_checks(false).flatten() {
-        // We need to materialize the key+value as owned bytes so the
-        // tuple borrow lives long enough for push_attribute.
-        let key_owned: Vec<u8> = attr.key.as_ref().to_vec();
-        let value_owned: Vec<u8> = attr.value.as_ref().to_vec();
-        new_start.push_attribute((key_owned.as_slice(), value_owned.as_slice()));
+        new_start.push_attribute(attr);
     }
     new_start.push_attribute(("xmlns:r", std::str::from_utf8(REL_NS).unwrap()));
     Some(new_start)

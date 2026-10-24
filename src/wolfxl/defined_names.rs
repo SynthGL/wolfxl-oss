@@ -268,22 +268,22 @@ fn scan_workbook_layout(xml: &[u8]) -> Result<WorkbookLayout, String> {
 
         match evt {
             Ok(Event::Start(ref e)) => {
-                if e.local_name().as_ref() == b"definedNames" && dn_start.is_none() {
-                    let name = e.name().as_ref().to_vec();
+                if e.local_name().as_ref() == "definedNames" && dn_start.is_none() {
+                    let name = e.name().as_ref().as_bytes().to_vec();
                     let start = find_start_event_start(xml, pre, post, &name).unwrap_or(pre);
                     let end = find_tag_end(xml, start, post).unwrap_or(post);
                     dn_name = Some(String::from_utf8_lossy(&name).into_owned());
                     dn_start = Some(start);
                     dn_inner_start = Some(end);
                     dn_depth = 1;
-                } else if dn_start.is_some() && e.local_name().as_ref() == b"definedNames" {
+                } else if dn_start.is_some() && e.local_name().as_ref() == "definedNames" {
                     dn_depth += 1;
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                if e.local_name().as_ref() == b"definedNames" && dn_start.is_none() {
+                if e.local_name().as_ref() == "definedNames" && dn_start.is_none() {
                     // `<definedNames/>` self-closing — empty existing block.
-                    let name = e.name().as_ref().to_vec();
+                    let name = e.name().as_ref().as_bytes().to_vec();
                     let start = find_start_event_start(xml, pre, post, &name).unwrap_or(pre);
                     let end = find_tag_end(xml, start, post).unwrap_or(post);
                     dn_name = Some(String::from_utf8_lossy(&name).into_owned());
@@ -295,12 +295,12 @@ fn scan_workbook_layout(xml: &[u8]) -> Result<WorkbookLayout, String> {
             }
             Ok(Event::End(ref e)) => {
                 let local = e.local_name();
-                if local.as_ref() == b"sheets" && sheets_end.is_none() {
-                    let name = e.name().as_ref().to_vec();
+                if local.as_ref() == "sheets" && sheets_end.is_none() {
+                    let name = e.name().as_ref().as_bytes().to_vec();
                     sheets_end = find_end_event_start(xml, pre, post, &name)
                         .and_then(|start| find_tag_end(xml, start, post))
                         .or(Some(post));
-                } else if local.as_ref() == b"definedNames" && dn_start.is_some() {
+                } else if local.as_ref() == "definedNames" && dn_start.is_some() {
                     if dn_depth > 0 {
                         dn_depth -= 1;
                     }
@@ -308,7 +308,7 @@ fn scan_workbook_layout(xml: &[u8]) -> Result<WorkbookLayout, String> {
                         let name = dn_name
                             .as_ref()
                             .map(|n| n.as_bytes().to_vec())
-                            .unwrap_or_else(|| e.name().as_ref().to_vec());
+                            .unwrap_or_else(|| e.name().as_ref().as_bytes().to_vec());
                         let start = find_end_event_start(xml, pre, post, &name).unwrap_or(pre);
                         let end = find_tag_end(xml, start, post).unwrap_or(post);
                         dn_inner_end = Some(start);
@@ -422,14 +422,14 @@ pub(crate) fn extract_defined_name_children(inner: &[u8]) -> Vec<ExistingDefined
         let evt = reader.read_event_into(&mut buf);
         let post = reader.buffer_position() as usize;
 
-        match evt {
-            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"definedName" => {
+        match &evt {
+            Ok(Event::Start(e)) if e.local_name().as_ref() == "definedName" => {
                 child_start = Some(pre);
                 let (name, local_id) = parse_defined_name_attrs(e);
                 current_name = name;
                 current_local_id = local_id;
             }
-            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"definedName" => {
+            Ok(Event::Empty(e)) if e.local_name().as_ref() == "definedName" => {
                 let (name, local_id) = parse_defined_name_attrs(e);
                 out.push(ExistingDefinedName {
                     name,
@@ -437,7 +437,7 @@ pub(crate) fn extract_defined_name_children(inner: &[u8]) -> Vec<ExistingDefined
                     raw: inner[pre..post].to_vec(),
                 });
             }
-            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"definedName" => {
+            Ok(Event::End(e)) if e.local_name().as_ref() == "definedName" => {
                 if let Some(start) = child_start.take() {
                     out.push(ExistingDefinedName {
                         name: std::mem::take(&mut current_name),
@@ -459,11 +459,10 @@ fn parse_defined_name_attrs(e: &quick_xml::events::BytesStart<'_>) -> (String, O
     let mut name = String::new();
     let mut local_id: Option<u32> = None;
     for a in e.attributes().with_checks(false).flatten() {
-        let key = a.key.as_ref();
-        let val = a
-            .unescape_value()
+        let key = a.key.as_ref().as_bytes();
+        let val = quick_xml::escape::unescape(&a.value)
             .map(|v| v.into_owned())
-            .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned());
+            .unwrap_or_else(|_| a.value.to_string());
         match key {
             b"name" => name = val,
             b"localSheetId" => local_id = val.parse::<u32>().ok(),
@@ -557,16 +556,15 @@ fn serialize_upsert_over_existing(raw: &[u8], upsert: &DefinedNameMut) -> Vec<u8
     let mut element_name: Vec<u8> = b"definedName".to_vec();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
-                if e.local_name().as_ref() == b"definedName" =>
+            Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                if e.local_name().as_ref() == "definedName" =>
             {
-                element_name = e.name().as_ref().to_vec();
+                element_name = e.name().as_ref().as_bytes().to_vec();
                 for a in e.attributes().with_checks(false).flatten() {
-                    let key = a.key.as_ref().to_vec();
-                    let val = a
-                        .unescape_value()
+                    let key = a.key.as_ref().as_bytes().to_vec();
+                    let val = quick_xml::escape::unescape(&a.value)
                         .map(|v| v.into_owned())
-                        .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned());
+                        .unwrap_or_else(|_| a.value.to_string());
                     existing_attrs.push((key, val));
                 }
                 break;
@@ -991,6 +989,34 @@ mod tests {
         assert_eq!(kids[0].local_sheet_id, None);
         assert_eq!(kids[1].name, "B");
         assert_eq!(kids[1].local_sheet_id, Some(2));
+    }
+
+    #[test]
+    fn split_references_preserve_raw_defined_name_children() {
+        let raw = br#"<definedName name="R&amp;D" localSheetId="&#50;"> 'A &amp; B'!$A$1 &amp; "&#x1F600;" </definedName>"#;
+        let children = extract_defined_name_children(raw);
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0].name, "R&D");
+        assert_eq!(children[0].local_sheet_id, Some(2));
+        assert_eq!(children[0].raw, raw);
+    }
+
+    #[test]
+    fn upsert_preserves_literal_attribute_whitespace() {
+        let xml = b"<workbook><sheets></sheets><definedNames><definedName name=\"R&amp;D\" \
+                    comment=\" a\tb\r\nc&#10; \">old</definedName></definedNames></workbook>";
+        let names = [DefinedNameMut {
+            name: "R&D".into(),
+            formula: " A1 & \" B \" ".into(),
+            ..Default::default()
+        }];
+        let output = merge_defined_names(xml, &names).unwrap();
+        let children = extract_defined_name_children(&output);
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0].name, "R&D");
+        let text = std::str::from_utf8(&children[0].raw).unwrap();
+        assert!(text.contains("comment=\" a\tb\r\nc\n \""));
+        assert!(text.contains(" A1 &amp; \" B \" "));
     }
 
     #[test]

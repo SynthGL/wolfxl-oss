@@ -46,7 +46,6 @@ pub struct ExternalLinkRels {
 /// message on malformed XML so the PyO3 wrapper can wrap it cleanly.
 pub fn parse_part(xml: &[u8]) -> Result<ExternalLinkPart, String> {
     let mut reader = XmlReader::from_reader(xml);
-    reader.config_mut().trim_text(false);
 
     let mut out = ExternalLinkPart::default();
     let mut current_sheet_id: Option<String> = None;
@@ -60,13 +59,13 @@ pub fn parse_part(xml: &[u8]) -> Result<ExternalLinkPart, String> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 let name = e.name();
-                let local = local_name(name.as_ref());
+                let local = local_name(name.as_ref().as_bytes());
                 match local {
                     b"externalBook" => {
                         for attr in e.attributes().flatten() {
-                            let key = attr.key.as_ref();
+                            let key = attr.key.as_ref().as_bytes();
                             if local_name(key) == b"id" && key.iter().any(|&c| c == b':') {
-                                if let Ok(v) = attr.unescape_value() {
+                                if let Ok(v) = quick_xml::escape::unescape(&attr.value) {
                                     out.book_rid = Some(v.into_owned());
                                 }
                             }
@@ -74,8 +73,8 @@ pub fn parse_part(xml: &[u8]) -> Result<ExternalLinkPart, String> {
                     }
                     b"sheetName" => {
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"val" {
-                                if let Ok(v) = attr.unescape_value() {
+                            if attr.key.as_ref() == "val" {
+                                if let Ok(v) = quick_xml::escape::unescape(&attr.value) {
                                     out.sheet_names.push(v.into_owned());
                                 }
                             }
@@ -85,8 +84,8 @@ pub fn parse_part(xml: &[u8]) -> Result<ExternalLinkPart, String> {
                         current_sheet_id = None;
                         current_cells = Vec::new();
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"sheetId" {
-                                if let Ok(v) = attr.unescape_value() {
+                            if attr.key.as_ref() == "sheetId" {
+                                if let Ok(v) = quick_xml::escape::unescape(&attr.value) {
                                     current_sheet_id = Some(v.into_owned());
                                 }
                             }
@@ -95,8 +94,8 @@ pub fn parse_part(xml: &[u8]) -> Result<ExternalLinkPart, String> {
                     b"cell" => {
                         current_ref = None;
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"r" {
-                                if let Ok(v) = attr.unescape_value() {
+                            if attr.key.as_ref() == "r" {
+                                if let Ok(v) = quick_xml::escape::unescape(&attr.value) {
                                     current_ref = Some(v.into_owned());
                                 }
                             }
@@ -111,14 +110,25 @@ pub fn parse_part(xml: &[u8]) -> Result<ExternalLinkPart, String> {
             }
             Ok(Event::Text(ref e)) => {
                 if in_value {
-                    if let Ok(t) = e.unescape() {
-                        value_buf.push_str(&t);
-                    }
+                    value_buf.push_str(e);
+                }
+            }
+            Ok(Event::GeneralRef(e)) => {
+                if in_value {
+                    value_buf.push_str(
+                        crate::resolve_xml_reference(&e, &mut [0; 4])
+                            .map_err(|err| format!("external link XML text: {err}"))?,
+                    );
+                }
+            }
+            Ok(Event::CData(e)) => {
+                if in_value {
+                    value_buf.push_str(&e);
                 }
             }
             Ok(Event::End(ref e)) => {
                 let name = e.name();
-                let local = local_name(name.as_ref());
+                let local = local_name(name.as_ref().as_bytes());
                 match local {
                     b"v" => in_value = false,
                     b"cell" => {
@@ -234,6 +244,21 @@ mod tests {
     fn parse_part_malformed_rejects() {
         let xml = b"<externalLink><externalBook";
         assert!(parse_part(xml).is_err());
+    }
+
+    #[test]
+    fn cached_values_resolve_split_references_once() {
+        let xml = br#"<externalLink xmlns:r="urn:rels"><externalBook r:id="r&amp;1">
+          <sheetNames><sheetName val="A &amp; B"/></sheetNames>
+          <sheetDataSet><sheetData sheetId="0"><row r="1">
+            <cell r="A1"><v> left &amp; right &#x1D11E; &amp;lt;<![CDATA[ <raw>]]></v></cell>
+          </row></sheetData></sheetDataSet>
+        </externalBook></externalLink>"#;
+        let part = parse_part(xml).unwrap();
+        assert_eq!(part.book_rid.as_deref(), Some("r&1"));
+        assert_eq!(part.sheet_names, ["A & B"]);
+        assert_eq!(part.cached_data[0].1[0].value, " left & right \u{1D11E} &lt; <raw>");
+        assert!(parse_part(b"<externalLink><v>&unknown;</v></externalLink>").is_err());
     }
 
     #[test]

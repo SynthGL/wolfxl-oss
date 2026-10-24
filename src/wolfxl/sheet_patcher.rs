@@ -3,6 +3,8 @@
 //! Takes a worksheet XML string and a set of cell patches, produces a new XML
 //! string with those cells replaced or inserted.  Uses quick-xml's streaming
 //! reader+writer to avoid building a full DOM.
+//! General-reference events are forwarded verbatim alongside text, preserving
+//! entity spelling and surrounding whitespace; copied attributes stay escaped.
 //!
 //! WolfXL uses **inline strings** (`t="str"`) for all new string values.  This
 //! avoids modifying the shared string table for the common case.
@@ -93,7 +95,7 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
     if patches.is_empty() {
         return Ok(xml.to_string());
     }
-    if let Some(out) = patch_existing_value_cells_spliced(xml, patches)? {
+    if let Some(out) = patch_existing_value_cells_prefix(xml, patches)? {
         return Ok(out);
     }
 
@@ -125,8 +127,9 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
-                let tag = e.local_name().as_ref().to_vec();
-                capture_prefix(&mut worksheet_prefix, e.name().as_ref(), &tag);
+                let local = e.local_name();
+                let tag = local.as_ref().as_bytes();
+                capture_prefix(&mut worksheet_prefix, e.name().as_ref().as_bytes(), tag);
 
                 if tag == b"dimension" {
                     let dim = rewrite_dimension(e, patch_bounds, worksheet_prefix.as_deref())?;
@@ -215,8 +218,9 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                let tag = e.local_name().as_ref().to_vec();
-                capture_prefix(&mut worksheet_prefix, e.name().as_ref(), &tag);
+                let local = e.local_name();
+                let tag = local.as_ref().as_bytes();
+                capture_prefix(&mut worksheet_prefix, e.name().as_ref().as_bytes(), tag);
 
                 if tag == b"dimension" {
                     let dim = rewrite_dimension(e, patch_bounds, worksheet_prefix.as_deref())?;
@@ -307,7 +311,8 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                 }
             }
             Ok(Event::End(ref e)) => {
-                let tag = e.local_name().as_ref().to_vec();
+                let local = e.local_name();
+                let tag = local.as_ref().as_bytes();
 
                 if tag == b"c" && skip_until_cell_end {
                     skip_until_cell_end = false;
@@ -357,6 +362,7 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                 }
             }
             Ok(event @ Event::Text(_))
+            | Ok(event @ Event::GeneralRef(_))
             | Ok(event @ Event::CData(_))
             | Ok(event @ Event::Comment(_))
             | Ok(event @ Event::Decl(_))
@@ -380,12 +386,7 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Replace existing value cells while copying every unaffected XML byte verbatim.
-///
-/// quick-xml supplies element boundaries; only the changed cells go through the
-/// writer. The scan stops after the final target and leaves insertion/style-only
-/// patches to the general stream patcher below.
-fn patch_existing_value_cells_spliced(
+fn patch_existing_value_cells_prefix(
     xml: &str,
     patches: &[CellPatch],
 ) -> Result<Option<String>, String> {
@@ -394,63 +395,32 @@ fn patch_existing_value_cells_spliced(
     }
 
     let mut patch_map: BTreeMap<(u32, u32), &CellPatch> = BTreeMap::new();
-    let mut target_rows = BTreeSet::new();
     for patch in patches {
         patch_map.insert((patch.row, patch.col), patch);
-        target_rows.insert(patch.row);
     }
 
     let mut reader = XmlReader::from_str(xml);
     reader.config_mut().trim_text(false);
-    let mut writer = XmlWriter::new(Vec::with_capacity(xml.len()));
-    let mut depth = 0usize;
-    let mut sheet_data_depth = None;
-    let mut row_depth = None;
-    let mut target_row = false;
-    let mut replaced_cell_depth = None;
-    let mut copied_through = 0usize;
-    let mut patched = BTreeSet::new();
+    let mut writer = XmlWriter::new(Vec::new());
+    let mut buf: Vec<u8> = Vec::new();
+    let mut in_sheet_data = false;
+    let mut skip_until_cell_end = false;
+    let mut patched_count = 0usize;
     let mut worksheet_prefix: Option<String> = None;
 
     loop {
-        let event_start = reader.buffer_position() as usize;
-        // A slice reader borrows from `xml`, avoiding a copy and owned event for
-        // every element in the prefix before a late edit.
-        match reader.read_event() {
+        match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
-                depth += 1;
-                if replaced_cell_depth.is_some() {
-                    continue;
-                }
                 let local = e.local_name();
-                let tag = local.as_ref();
-                capture_prefix(&mut worksheet_prefix, e.name().as_ref(), tag);
-                if tag == b"sheetData" && depth == 2 {
-                    sheet_data_depth = Some(depth);
-                } else if tag == b"row" && sheet_data_depth == Some(depth - 1) {
-                    row_depth = Some(depth);
-                    target_row = attr_value(e, b"r")
-                        .and_then(|value| value.parse::<u32>().ok())
-                        // Some producers omit the optional row index. Those
-                        // rows must still be searched by their cell references.
-                        .is_none_or(|row| target_rows.contains(&row));
-                    if !target_row {
-                        // Unchanged rows need no cell-level state. The parser
-                        // still validates their tags while the bytes stay raw.
-                        reader
-                            .read_to_end(e.name())
-                            .map_err(|e| format!("XML parse error: {e}"))?;
-                        depth -= 1;
-                        row_depth = None;
-                    }
-                } else if tag == b"c" && target_row && row_depth == Some(depth - 1) {
+                let tag = local.as_ref().as_bytes();
+                capture_prefix(&mut worksheet_prefix, e.name().as_ref().as_bytes(), tag);
+                if tag == b"sheetData" {
+                    in_sheet_data = true;
+                    write_event(&mut writer, Event::Start(e.to_owned()))?;
+                } else if tag == b"c" && in_sheet_data {
                     let cell_ref = attr_value(e, b"r").unwrap_or_default();
                     let key = parse_cell_ref(&cell_ref);
                     if let Some(patch) = patch_map.get(&key) {
-                        if !patched.insert(key) {
-                            return Ok(None);
-                        }
-                        append_xml_span(&mut writer, xml, copied_through, event_start)?;
                         write_patched_cell(
                             &mut writer,
                             &cell_ref,
@@ -458,24 +428,26 @@ fn patch_existing_value_cells_spliced(
                             patch,
                             worksheet_prefix.as_deref(),
                         )?;
-                        replaced_cell_depth = Some(depth);
+                        patched_count += 1;
+                        skip_until_cell_end = true;
+                    } else {
+                        write_event(&mut writer, Event::Start(e.to_owned()))?;
                     }
+                } else if !skip_until_cell_end {
+                    write_event(&mut writer, Event::Start(e.to_owned()))?;
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                if replaced_cell_depth.is_some() {
-                    continue;
-                }
                 let local = e.local_name();
-                let tag = local.as_ref();
-                if tag == b"c" && target_row && row_depth == Some(depth) {
+                let tag = local.as_ref().as_bytes();
+                capture_prefix(&mut worksheet_prefix, e.name().as_ref().as_bytes(), tag);
+                if tag == b"sheetData" {
+                    in_sheet_data = false;
+                    write_event(&mut writer, Event::Empty(e.to_owned()))?;
+                } else if tag == b"c" && in_sheet_data {
                     let cell_ref = attr_value(e, b"r").unwrap_or_default();
                     let key = parse_cell_ref(&cell_ref);
                     if let Some(patch) = patch_map.get(&key) {
-                        if !patched.insert(key) {
-                            return Ok(None);
-                        }
-                        append_xml_span(&mut writer, xml, copied_through, event_start)?;
                         write_patched_cell(
                             &mut writer,
                             &cell_ref,
@@ -483,52 +455,70 @@ fn patch_existing_value_cells_spliced(
                             patch,
                             worksheet_prefix.as_deref(),
                         )?;
-                        copied_through = reader.buffer_position() as usize;
-                        if patched.len() == patch_map.len() {
-                            append_xml_span(&mut writer, xml, copied_through, xml.len())?;
-                            return String::from_utf8(writer.into_inner())
+                        patched_count += 1;
+                        if patched_count == patch_map.len() {
+                            append_xml_tail(&mut writer, xml, reader.buffer_position() as usize)?;
+                            let out = writer.into_inner();
+                            return String::from_utf8(out)
                                 .map(Some)
                                 .map_err(|e| format!("Output not UTF-8: {e}"));
                         }
+                    } else {
+                        write_event(&mut writer, Event::Empty(e.to_owned()))?;
                     }
+                } else if !skip_until_cell_end {
+                    write_event(&mut writer, Event::Empty(e.to_owned()))?;
                 }
             }
-            Ok(Event::End(_)) => {
-                if replaced_cell_depth == Some(depth) {
-                    replaced_cell_depth = None;
-                    copied_through = reader.buffer_position() as usize;
-                    if patched.len() == patch_map.len() {
-                        append_xml_span(&mut writer, xml, copied_through, xml.len())?;
-                        return String::from_utf8(writer.into_inner())
+            Ok(Event::End(ref e)) => {
+                let local = e.local_name();
+                let tag = local.as_ref().as_bytes();
+                if tag == b"c" && skip_until_cell_end {
+                    skip_until_cell_end = false;
+                    if patched_count == patch_map.len() {
+                        append_xml_tail(&mut writer, xml, reader.buffer_position() as usize)?;
+                        let out = writer.into_inner();
+                        return String::from_utf8(out)
                             .map(Some)
                             .map_err(|e| format!("Output not UTF-8: {e}"));
                     }
-                } else if row_depth == Some(depth) {
-                    row_depth = None;
-                    target_row = false;
-                } else if sheet_data_depth == Some(depth) {
-                    // No target can appear after sheetData; missing cells use
-                    // the general patcher, which also expands dimensions/spans.
-                    return Ok(None);
+                } else {
+                    if tag == b"sheetData" {
+                        in_sheet_data = false;
+                    }
+                    if !skip_until_cell_end {
+                        write_event(&mut writer, Event::End(e.to_owned()))?;
+                    }
                 }
-                depth -= 1;
             }
-            Ok(Event::Eof) => return Ok(None),
-            Ok(_) => {}
+            Ok(event @ Event::Text(_))
+            | Ok(event @ Event::GeneralRef(_))
+            | Ok(event @ Event::CData(_))
+            | Ok(event @ Event::Comment(_))
+            | Ok(event @ Event::Decl(_))
+            | Ok(event @ Event::PI(_))
+            | Ok(event @ Event::DocType(_)) => {
+                if !skip_until_cell_end {
+                    write_event(&mut writer, event.into_owned())?;
+                }
+            }
+            Ok(Event::Eof) => break,
             Err(e) => return Err(format!("XML parse error: {e}")),
         }
+        buf.clear();
     }
+
+    Ok(None)
 }
 
-fn append_xml_span<W: Write>(
+fn append_xml_tail<W: Write>(
     writer: &mut XmlWriter<W>,
     xml: &str,
     start: usize,
-    end: usize,
 ) -> Result<(), String> {
     writer
         .get_mut()
-        .write_all(&xml.as_bytes()[start..end])
+        .write_all(&xml.as_bytes()[start.min(xml.len())..])
         .map_err(|e| format!("XML write error: {e}"))
 }
 
@@ -561,7 +551,7 @@ fn rewrite_dimension(
     patch_bounds: Option<(u32, u32, u32, u32)>,
     prefix: Option<&str>,
 ) -> Result<BytesStart<'static>, String> {
-    let dimension_name = qname_for_original(original.name().as_ref(), "dimension", prefix);
+    let dimension_name = qname_for_original(original.name().as_ref().as_bytes(), "dimension", prefix);
     let mut elem = BytesStart::new(dimension_name);
     let original_ref = attr_value(original, b"ref");
     let merged_ref = original_ref
@@ -573,10 +563,10 @@ fn rewrite_dimension(
 
     for a in original.attributes() {
         let a = a.map_err(|e| format!("XML attr error: {e}"))?;
-        if a.key.as_ref() == b"ref" {
+        if a.key.as_ref() == "ref" {
             continue;
         }
-        elem.push_attribute((a.key.as_ref(), a.value.as_ref()));
+        elem.push_attribute(a);
     }
     if let Some(ref_value) = merged_ref {
         elem.push_attribute(("ref", ref_value.as_str()));
@@ -631,7 +621,7 @@ fn rewrite_row_spans(
     row_patches: Option<&BTreeMap<u32, &CellPatch>>,
     prefix: Option<&str>,
 ) -> Result<BytesStart<'static>, String> {
-    let row_name = qname_for_original(original.name().as_ref(), "row", prefix);
+    let row_name = qname_for_original(original.name().as_ref().as_bytes(), "row", prefix);
     let mut elem = BytesStart::new(row_name);
     let patch_bounds = row_patches.map(|patches| {
         let min_col = patches.keys().copied().min().unwrap_or(1);
@@ -648,10 +638,10 @@ fn rewrite_row_spans(
 
     for a in original.attributes() {
         let a = a.map_err(|e| format!("XML attr error: {e}"))?;
-        if a.key.as_ref() == b"spans" {
+        if a.key.as_ref() == "spans" {
             continue;
         }
-        elem.push_attribute((a.key.as_ref(), a.value.as_ref()));
+        elem.push_attribute(a);
     }
     if let Some(spans) = merged_spans {
         elem.push_attribute(("spans", spans.as_str()));
@@ -686,21 +676,21 @@ fn write_style_only_cell_start<W: Write>(
     patch: &CellPatch,
     prefix: Option<&str>,
 ) -> Result<(), String> {
-    let cell_name = qname_for_original(original.name().as_ref(), "c", prefix);
+    let cell_name = qname_for_original(original.name().as_ref().as_bytes(), "c", prefix);
     let mut elem = BytesStart::new(cell_name.as_str());
 
     // Copy all original attributes except r/s. We'll re-add r and (patched) s.
     for a in original.attributes() {
         let a = a.map_err(|e| format!("XML attr error: {e}"))?;
         let key = a.key.as_ref();
-        if key == b"r" || key == b"s" {
+        if key == "r" || key == "s" {
             continue;
         }
-        elem.push_attribute((key, a.value.as_ref()));
+        elem.push_attribute(a);
     }
 
     // Always set r (cell reference)
-    elem.push_attribute((b"r".as_slice(), cell_ref.as_bytes()));
+    elem.push_attribute(("r", cell_ref));
 
     // Apply (or preserve) style index
     let style = if let Some(s) = patch.style_index {
@@ -711,7 +701,7 @@ fn write_style_only_cell_start<W: Write>(
     if let Some(s) = style {
         if s > 0 {
             let sval = s.to_string();
-            elem.push_attribute((b"s".as_slice(), sval.as_bytes()));
+            elem.push_attribute(("s", sval.as_str()));
         }
     }
 
@@ -727,7 +717,7 @@ fn write_patched_cell<W: Write>(
     prefix: Option<&str>,
 ) -> Result<(), String> {
     let original_name = original.name();
-    let effective_prefix = prefix_for_original(original_name.as_ref(), b"c").or(prefix);
+    let effective_prefix = prefix_for_original(original_name.as_ref().as_bytes(), b"c").or(prefix);
     let cell_name = qname(effective_prefix, "c");
     let value_name = qname(effective_prefix, "v");
     let formula_name = qname(effective_prefix, "f");
@@ -1136,6 +1126,37 @@ mod tests {
     use super::*;
 
     #[test]
+    fn style_patch_preserves_references_whitespace_and_escaped_attributes() {
+        let xml = r#"<x:worksheet xmlns:x="urn:x"><x:dimension ref="A1" note="A&amp;B"/><x:sheetData><x:row r="1" note="C&#38;D"><x:c r="A1" t="str" note="E&quot;F"><x:v> A &amp; B &#x26; C &#38; D &custom; </x:v></x:c></x:row></x:sheetData></x:worksheet>"#;
+        let out = patch_worksheet(xml, &[CellPatch {
+            row: 1,
+            col: 1,
+            value: None,
+            style_index: Some(2),
+        }]).unwrap();
+        assert!(out.contains(r#"note="A&amp;B""#));
+        assert!(out.contains(r#"note="C&#38;D""#));
+        assert!(out.contains(r#"note="E&quot;F""#));
+        assert!(out.contains("<x:v> A &amp; B &#x26; C &#38; D &custom; </x:v>"));
+        assert!(out.contains(r#"s="2""#));
+    }
+
+    #[test]
+    fn value_patch_preserves_other_references_and_escapes_new_text() {
+        let xml = r#"<worksheet><sheetData><row r="1"><c r="A1" t="str"><v> A &amp; &#x26; &#38; B </v></c><c r="B1" t="str"><v> old &amp; text </v></c><c r="C1"><v>&custom;</v></c></row></sheetData></worksheet>"#;
+        let out = patch_existing_value_cells_prefix(xml, &[CellPatch {
+            row: 1,
+            col: 2,
+            value: Some(CellValue::String(" <new> & value ".to_string())),
+            style_index: None,
+        }]).unwrap().unwrap();
+        assert!(out.contains("<v> A &amp; &#x26; &#38; B </v>"));
+        assert!(out.contains("<v> &lt;new&gt; &amp; value </v>"));
+        assert!(out.contains("<v>&custom;</v>"));
+        assert!(!out.contains("old"));
+    }
+
+    #[test]
     fn test_parse_cell_ref() {
         assert_eq!(parse_cell_ref("A1"), (1, 1));
         assert_eq!(parse_cell_ref("B3"), (3, 2));
@@ -1189,7 +1210,7 @@ mod tests {
             },
         ];
 
-        let result = patch_existing_value_cells_spliced(xml, &patches)
+        let result = patch_existing_value_cells_prefix(xml, &patches)
             .unwrap()
             .expect("existing value patches should use prefix fast path");
         assert!(result.contains(r#"<c r="B2" s="4" t="str"><v>changed</v></c>"#));
@@ -1208,7 +1229,7 @@ mod tests {
             style_index: None,
         }];
 
-        assert!(patch_existing_value_cells_spliced(xml, &patches)
+        assert!(patch_existing_value_cells_prefix(xml, &patches)
             .unwrap()
             .is_none());
     }
@@ -1223,104 +1244,9 @@ mod tests {
             style_index: Some(2),
         }];
 
-        assert!(patch_existing_value_cells_spliced(xml, &patches)
+        assert!(patch_existing_value_cells_prefix(xml, &patches)
             .unwrap()
             .is_none());
-    }
-
-    #[test]
-    fn test_existing_value_splices_preserve_all_unedited_bytes() {
-        let prefix = "<?xml version='1.0'?>\n<s:worksheet xmlns:s='urn:sheet' xmlns:x='urn:extension'>\n<!-- before -->\n<s:sheetData><s:row r = '1' customFormat='true'><s:c r='A1' s='7' cm='2'><s:f t='shared' si='4' ref='A1:A9'>SUM(B1:B2)</s:f><s:v>3</s:v><x:extra><![CDATA[<unchanged>&]]></x:extra></s:c>\n";
-        let between = " <!-- between --> <s:c r='C1' t='inlineStr'><s:is><s:t xml:space='preserve'> é &amp; </s:t></s:is></s:c>\n";
-        let tail = "</s:row></s:sheetData><!-- after --><s:extLst><s:ext uri='kept'><x:c r='B1'>extension</x:c></s:ext></s:extLst></s:worksheet>";
-        let first = "<s:c r='B1' s='4'><s:v>2</s:v></s:c>";
-        let second = "<s:c r='D1' s='6'/>";
-        let xml = format!("{prefix}{first}{between}{second}{tail}");
-        let patches = [
-            CellPatch {
-                row: 1,
-                col: 2,
-                value: Some(CellValue::String("<&>".into())),
-                style_index: None,
-            },
-            CellPatch {
-                row: 1,
-                col: 4,
-                value: Some(CellValue::Number(9.0)),
-                style_index: None,
-            },
-        ];
-        let result = patch_worksheet(&xml, &patches).unwrap();
-        assert_eq!(result, format!("{prefix}<s:c r=\"B1\" s=\"4\" t=\"str\"><s:v>&lt;&amp;&gt;</s:v></s:c>{between}<s:c r=\"D1\" s=\"6\"><s:v>9</s:v></s:c>{tail}"));
-    }
-
-    #[test]
-    fn test_existing_value_splices_skip_cell_like_extensions() {
-        let xml = "<worksheet><sheetData><row r='1'><ext><c r='B1'><v>extension</v></c></ext><c r='B1'><v>2</v></c></row></sheetData></worksheet>";
-        let patch = CellPatch {
-            row: 1,
-            col: 2,
-            value: Some(CellValue::Number(9.0)),
-            style_index: None,
-        };
-        let result = patch_existing_value_cells_spliced(xml, &[patch])
-            .unwrap()
-            .unwrap();
-        assert!(result.contains("<ext><c r='B1'><v>extension</v></c></ext>"));
-        assert!(result.contains("<c r=\"B1\"><v>9</v></c>"));
-    }
-
-    #[test]
-    fn test_existing_value_splices_search_rows_without_an_index() {
-        let xml = "<worksheet><sheetData><row><c r='A2'><v>2</v></c></row></sheetData></worksheet>";
-        let patch = CellPatch {
-            row: 2,
-            col: 1,
-            value: Some(CellValue::Number(9.0)),
-            style_index: None,
-        };
-        assert_eq!(
-            patch_existing_value_cells_spliced(xml, &[patch])
-                .unwrap()
-                .unwrap(),
-            "<worksheet><sheetData><row><c r=\"A2\"><v>9</v></c></row></sheetData></worksheet>"
-        );
-    }
-
-    #[test]
-    fn test_existing_value_splices_handle_nested_children() {
-        let xml = "<worksheet><sheetData><row r='1'><c r='A1'><is><r><t>old</t></r></is></c><c r='B1'><v>2</v></c></row></sheetData></worksheet>";
-        let patches = [
-            CellPatch {
-                row: 1,
-                col: 1,
-                value: Some(CellValue::Boolean(true)),
-                style_index: Some(3),
-            },
-            CellPatch {
-                row: 1,
-                col: 2,
-                value: Some(CellValue::Blank),
-                style_index: None,
-            },
-        ];
-        let result = patch_worksheet(xml, &patches).unwrap();
-        assert_eq!(result, "<worksheet><sheetData><row r='1'><c r=\"A1\" s=\"3\" t=\"b\"><v>1</v></c><c r=\"B1\"/></row></sheetData></worksheet>");
-    }
-
-    #[test]
-    fn test_existing_value_splices_reject_malformed_changed_cell() {
-        let xml =
-            "<worksheet><sheetData><row r='1'><c r='A1'><v>2</c></row></sheetData></worksheet>";
-        let patch = CellPatch {
-            row: 1,
-            col: 1,
-            value: Some(CellValue::Number(9.0)),
-            style_index: None,
-        };
-        assert!(patch_existing_value_cells_spliced(xml, &[patch])
-            .unwrap_err()
-            .contains("XML parse error"));
     }
 
     #[test]

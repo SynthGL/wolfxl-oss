@@ -19,6 +19,23 @@ _VALID_ORIENTATION = ("default", "portrait", "landscape")
 _VALID_CELL_COMMENTS = ("asDisplayed", "atEnd", "none")
 _VALID_ERRORS = ("displayed", "blank", "dash", "NA")
 _VALID_PAGE_ORDER = ("downThenOver", "overThenDown")
+_ENUM_FIELDS = {
+    "orientation": _VALID_ORIENTATION,
+    "cellComments": _VALID_CELL_COMMENTS,
+    "errors": _VALID_ERRORS,
+    "pageOrder": _VALID_PAGE_ORDER,
+}
+
+
+def _validate_page_setup_field(name: str, value: Any) -> None:
+    """Refuse a CT_PageSetup enum or scale value the schema does not allow."""
+    if value is None:
+        return
+    allowed = _ENUM_FIELDS.get(name)
+    if allowed is not None and value not in allowed:
+        raise ValueError(f"{name} must be one of {allowed}, got {value!r}")
+    if name == "scale" and not (10 <= value <= 400):
+        raise ValueError(f"scale must be between 10 and 400, got {value}")
 
 
 @dataclass
@@ -118,28 +135,12 @@ class PageSetup:
     def autoPageBreaks(self, value: Any) -> None:  # noqa: N802
         self._autoPageBreaks = None if value is None else bool(value)
 
-    def __post_init__(self) -> None:
-        self._validate()
-
-    def _validate(self) -> None:
-        if self.orientation is not None and self.orientation not in _VALID_ORIENTATION:
-            raise ValueError(
-                f"orientation must be one of {_VALID_ORIENTATION}, got {self.orientation!r}"
-            )
-        if self.cellComments is not None and self.cellComments not in _VALID_CELL_COMMENTS:
-            raise ValueError(
-                f"cellComments must be one of {_VALID_CELL_COMMENTS}, got {self.cellComments!r}"
-            )
-        if self.errors is not None and self.errors not in _VALID_ERRORS:
-            raise ValueError(
-                f"errors must be one of {_VALID_ERRORS}, got {self.errors!r}"
-            )
-        if self.pageOrder is not None and self.pageOrder not in _VALID_PAGE_ORDER:
-            raise ValueError(
-                f"pageOrder must be one of {_VALID_PAGE_ORDER}, got {self.pageOrder!r}"
-            )
-        if self.scale is not None and not (10 <= self.scale <= 400):
-            raise ValueError(f"scale must be between 10 and 400, got {self.scale}")
+    def __setattr__(self, name: str, value: Any) -> None:
+        # Validate on every assignment, not only at construction, so
+        # ``ws.page_setup.orientation = "sideways"`` refuses at the setter
+        # instead of reaching the saved package.
+        _validate_page_setup_field(name, value)
+        super().__setattr__(name, value)
 
     def to_rust_dict(self) -> dict[str, Any]:
         """Emit the §10 ``page_setup`` dict for the PyO3 boundary."""

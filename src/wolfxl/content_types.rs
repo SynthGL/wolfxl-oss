@@ -118,17 +118,17 @@ impl ContentTypesGraph {
                     let local = e.local_name();
                     let local = local.as_ref();
                     match local {
-                        b"Default" => {
+                        "Default" => {
                             let mut ext: Option<String> = None;
                             let mut ct: Option<String> = None;
                             for a in e.attributes().with_checks(false).flatten() {
-                                let value =
-                                    a.unescape_value().map(|v| v.into_owned()).unwrap_or_else(
-                                        |_| String::from_utf8_lossy(a.value.as_ref()).into_owned(),
-                                    );
+                                let value = a
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                    .map(|v| v.into_owned())
+                                    .unwrap_or_else(|_| a.value.to_string());
                                 match a.key.as_ref() {
-                                    b"Extension" => ext = Some(value),
-                                    b"ContentType" => ct = Some(value),
+                                    "Extension" => ext = Some(value),
+                                    "ContentType" => ct = Some(value),
                                     _ => {}
                                 }
                             }
@@ -136,17 +136,17 @@ impl ContentTypesGraph {
                                 defaults.push((ext, ct));
                             }
                         }
-                        b"Override" => {
+                        "Override" => {
                             let mut part: Option<String> = None;
                             let mut ct: Option<String> = None;
                             for a in e.attributes().with_checks(false).flatten() {
-                                let value =
-                                    a.unescape_value().map(|v| v.into_owned()).unwrap_or_else(
-                                        |_| String::from_utf8_lossy(a.value.as_ref()).into_owned(),
-                                    );
+                                let value = a
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                    .map(|v| v.into_owned())
+                                    .unwrap_or_else(|_| a.value.to_string());
                                 match a.key.as_ref() {
-                                    b"PartName" => part = Some(value),
-                                    b"ContentType" => ct = Some(value),
+                                    "PartName" => part = Some(value),
+                                    "ContentType" => ct = Some(value),
                                     _ => {}
                                 }
                             }
@@ -292,6 +292,15 @@ fn push_attr_escape(out: &mut String, s: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn entity_encoded_attributes_roundtrip() {
+        let xml = br#"<Types><Default Extension="x&#109;l" ContentType="type/a&amp;b"/><Override PartName="/a&#38;b.xml" ContentType="type/&quot;quoted&quot;"/></Types>"#;
+        let graph = ContentTypesGraph::parse(xml).unwrap();
+        assert_eq!(graph.defaults(), &[("xml".to_string(), "type/a&b".to_string())]);
+        assert_eq!(graph.overrides(), &[("/a&b.xml".to_string(), "type/\"quoted\"".to_string())]);
+        assert_eq!(ContentTypesGraph::parse(&graph.serialize()).unwrap(), graph);
+    }
 
     const CT_COMMENTS: &str =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";

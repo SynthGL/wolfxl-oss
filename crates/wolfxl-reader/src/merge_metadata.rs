@@ -6,7 +6,9 @@ use std::io::{BufRead, BufReader, Read};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
-use super::{attr_value, zip_from_source, NativeXlsxBook, ReaderError, Result};
+use super::{
+    attr_value, resolve_zip_part_name, zip_from_source, NativeXlsxBook, ReaderError, Result,
+};
 
 pub(super) fn read_ranges(book: &NativeXlsxBook, sheet: &str) -> Result<Vec<String>> {
     let info = book
@@ -15,10 +17,7 @@ pub(super) fn read_ranges(book: &NativeXlsxBook, sheet: &str) -> Result<Vec<Stri
         .find(|s| s.name == sheet)
         .ok_or_else(|| ReaderError::SheetNotFound(sheet.to_string()))?;
     let mut zip = zip_from_source(&book.source)?;
-    let part_name = zip
-        .file_names()
-        .find(|name| name.eq_ignore_ascii_case(&info.path))
-        .map(str::to_string)
+    let part_name = resolve_zip_part_name(&zip, &info.path)?
         .ok_or_else(|| ReaderError::MissingPart(info.path.clone()))?;
     let part = zip.by_name(&part_name)?;
     parse_ranges(BufReader::new(part))
@@ -34,10 +33,7 @@ pub(super) fn may_have_ranges(book: &NativeXlsxBook, sheet: &str) -> Result<bool
         .find(|s| s.name == sheet)
         .ok_or_else(|| ReaderError::SheetNotFound(sheet.to_string()))?;
     let mut zip = zip_from_source(&book.source)?;
-    let part_name = zip
-        .file_names()
-        .find(|name| name.eq_ignore_ascii_case(&info.path))
-        .map(str::to_string)
+    let part_name = resolve_zip_part_name(&zip, &info.path)?
         .ok_or_else(|| ReaderError::MissingPart(info.path.clone()))?;
     let part = zip.by_name(&part_name)?;
     contains_marker(part)
@@ -71,7 +67,7 @@ fn parse_ranges<R: BufRead>(source: R) -> Result<Vec<String>> {
             .map_err(|e| ReaderError::Xml(e.to_string()))?
         {
             Event::Start(ref e) | Event::Empty(ref e)
-                if e.local_name().as_ref() == b"mergeCell" =>
+                if e.local_name().as_ref() == "mergeCell" =>
             {
                 if let Some(range) = attr_value(e, b"ref") {
                     ranges.push(range);
@@ -104,10 +100,7 @@ pub(super) fn read_endpoint_styles(
         .find(|s| s.name == sheet)
         .ok_or_else(|| ReaderError::SheetNotFound(sheet.to_string()))?;
     let mut zip = zip_from_source(&book.source)?;
-    let part_name = zip
-        .file_names()
-        .find(|name| name.eq_ignore_ascii_case(&info.path))
-        .map(str::to_string)
+    let part_name = resolve_zip_part_name(&zip, &info.path)?
         .ok_or_else(|| ReaderError::MissingPart(info.path.clone()))?;
     let part = zip.by_name(&part_name)?;
     parse_endpoint_styles(BufReader::new(part), &targets)
@@ -125,7 +118,7 @@ fn parse_endpoint_styles<R: BufRead>(
             .read_event_into(&mut buf)
             .map_err(|e| ReaderError::Xml(e.to_string()))?
         {
-            Event::Start(ref e) | Event::Empty(ref e) if e.local_name().as_ref() == b"c" => {
+            Event::Start(ref e) | Event::Empty(ref e) if e.local_name().as_ref() == "c" => {
                 if let Some(coord) = attr_value(e, b"r").and_then(|r| parse_cell(&r)) {
                     if targets.contains(&coord) {
                         let style = attr_value(e, b"s")
@@ -135,7 +128,7 @@ fn parse_endpoint_styles<R: BufRead>(
                     }
                 }
             }
-            Event::End(ref e) if e.local_name().as_ref() == b"sheetData" => break,
+            Event::End(ref e) if e.local_name().as_ref() == "sheetData" => break,
             Event::Eof => break,
             _ => {}
         }

@@ -746,10 +746,9 @@ def _probe_charts_combination(tmp_path: Path) -> None:
     ref_wb = _opx.load_workbook(out)
     ref_ws = ref_wb[ref_wb.sheetnames[0]]
     ref_charts = getattr(ref_ws, "_charts", [])
-    assert ref_charts, "openpyxl found no charts in combo file"
-    types = {type(c).__name__ for c in ref_charts}
-    assert "BarChart" in types and "LineChart" in types, (
-        f"openpyxl saw {types}, expected both BarChart and LineChart"
+    families = [[type(f).__name__ for f in c._charts] for c in ref_charts]
+    assert families == [["BarChart", "LineChart"]], (
+        f"openpyxl saw {families}, expected one combo chart carrying both families"
     )
 
 
@@ -2269,10 +2268,11 @@ def _probe_calc_chain_basic(tmp_path: Path) -> None:
     wb2.save(out)
     wb2.close()
 
-    entries = _zip_listing(out)
-    assert "xl/calcChain.xml" in entries
-    calc_chain = _zip_read_text(out, "xl/calcChain.xml")
-    assert 'r="A3"' in calc_chain
+    # openpyxl writes no chain, and a modify save keeps an absent chain absent.
+    with zipfile.ZipFile(src) as before, zipfile.ZipFile(out) as after:
+        assert "xl/calcChain.xml" not in after.namelist()
+        for part in ("[Content_Types].xml", "xl/_rels/workbook.xml.rels"):
+            assert after.read(part) == before.read(part), part
     _opx.load_workbook(out, data_only=False)
 
 

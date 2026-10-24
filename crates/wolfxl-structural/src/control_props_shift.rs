@@ -7,8 +7,8 @@ use quick_xml::Writer as XmlWriter;
 use crate::axis::ShiftPlan;
 use crate::shift_anchors::shift_anchor;
 
-fn push_attr<'a>(e: &mut BytesStart<'a>, key: &[u8], val: &str) {
-    e.push_attribute((key, val.as_bytes()));
+fn push_attr<'a>(e: &mut BytesStart<'a>, key: &str, val: &str) {
+    e.push_attribute((key, val));
 }
 
 /// Rewrite form-control range attributes such as `fmlaRange`.
@@ -46,15 +46,15 @@ pub fn shift_control_props_xml(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
 }
 
 fn rewrite_attrs<'a>(e: &BytesStart<'a>, plan: &ShiftPlan) -> BytesStart<'a> {
-    let mut new_e = BytesStart::new(String::from_utf8_lossy(e.name().as_ref()).into_owned());
+    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
     for attr_res in e.attributes().with_checks(false) {
         let Ok(attr) = attr_res else { continue };
         let key = attr.key.as_ref();
-        let val = match attr.unescape_value() {
+        let val = match quick_xml::escape::unescape(&attr.value) {
             Ok(v) => v.into_owned(),
             Err(_) => continue,
         };
-        if key == b"fmlaRange" {
+        if key == "fmlaRange" {
             let shifted = shift_anchor(&val, plan);
             if shifted != "#REF!" {
                 push_attr(&mut new_e, key, &shifted);

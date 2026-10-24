@@ -8,7 +8,8 @@ future function and is stored with the ``_xlfn.`` namespace prefix.
 Only formula-cell XML is rewritten. Every other worksheet byte, every other
 package part, ZIP entry metadata, namespace bindings and the archive comment
 are carried over unchanged. Results the evaluator could not compute, or that
-have no SpreadsheetML scalar form, are left uncached.
+have no SpreadsheetML scalar form, are left uncached. Formula caches hidden
+by a data-only load are preserved unless that call actually computed them.
 """
 
 from __future__ import annotations
@@ -97,9 +98,10 @@ def saved_formula_results(wb: Any) -> tuple[dict[str, Any] | None, bool]:
 
     ``results`` is ``None`` when :meth:`Workbook.calculate` has not run. When
     the inputs, formulas, sheet names, defined names or date system changed
-    since the calculation, ``stale`` is true: no calculated result is written
-    and cached formula values are dropped instead of saved out of date. A
-    what-if ``recalculate()`` never changes the workbook, so it never affects
+    since the calculation, ``stale`` is true: no calculated result is written.
+    Normal loads drop old caches; data-only loads invalidate only the formulas
+    actually computed, preserving formulas hidden by their saved values.
+    A what-if ``recalculate()`` never changes the workbook, so it never affects
     this decision.
     """
     if getattr(wb, "_pending_axis_shifts", None) or getattr(wb, "_pending_range_moves", None):
@@ -182,6 +184,7 @@ def _sheet_xml(
     results: dict[str, Any] | None,
     stale: bool,
     epoch: datetime.datetime,
+    preserve_uncomputed: bool = False,
 ) -> bytes:
     """Qualify XLOOKUP and, when *results* is given, rewrite formula caches."""
     if results is None and _XLOOKUP_BYTES.search(xml) is None:
@@ -214,18 +217,19 @@ def _sheet_xml(
         if results is not None:
             reference = _REF.search(attrs)
             key = f"{name}!{_xml_unescape(reference[2])}" if reference else None
-            # A calculation supplies only results it could actually compute.
-            # Never carry an old answer for an unsupported or nonscalar result:
-            # inputs may have changed before calculate() was called.
-            cached = None if stale or key not in results else _cached_value(results[key], epoch)
-            before, after = _VALUE.sub("", before), _VALUE.sub("", after)
-            attrs = _TYPE.sub("", attrs)
-            if cached is not None:
-                kind, cached_text = cached
-                if kind is not None:
-                    attrs += f' t="{kind}"'
-                prefix = formula["tag"].removesuffix("f")
-                formula_xml += f"<{prefix}v>{_xml_escape(cached_text)}</{prefix}v>"
+            if not preserve_uncomputed or key in results:
+                # Normal calculation sees formula text, so unsupported results
+                # must not inherit potentially stale answers. A data-only load
+                # cannot evaluate its original formulas: preserve those caches.
+                cached = None if stale or key not in results else _cached_value(results[key], epoch)
+                before, after = _VALUE.sub("", before), _VALUE.sub("", after)
+                attrs = _TYPE.sub("", attrs)
+                if cached is not None:
+                    kind, cached_text = cached
+                    if kind is not None:
+                        attrs += f' t="{kind}"'
+                    prefix = formula["tag"].removesuffix("f")
+                    formula_xml += f"<{prefix}v>{_xml_escape(cached_text)}</{prefix}v>"
         return f"<{match['tag']}{attrs}>{before}{formula_xml}{after}</{match['tag']}>"
 
     try:
@@ -278,13 +282,18 @@ def apply_formula_results(
 
     The package is rewritten atomically and only when a worksheet changed.
     """
+    preserve_uncomputed = wb.data_only
+    if preserve_uncomputed and results is not None:
+        # A stale snapshot returns {}, but we still need its computed keys to
+        # invalidate just those caches, not formulas hidden by data_only.
+        results = wb._calculated_formula_results  # noqa: SLF001
     with zipfile.ZipFile(filename) as src:
         updates: dict[str, bytes] = {}
         for name, path in _worksheet_parts(src):
             if results is None and not _mentions_xlookup(src, path):
                 continue
             original = src.read(path)
-            patched = _sheet_xml(original, name, results, stale, wb.epoch)
+            patched = _sheet_xml(original, name, results, stale, wb.epoch, preserve_uncomputed)
             if patched is not original:
                 updates[path] = patched
         if not updates:

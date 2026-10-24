@@ -53,6 +53,9 @@ class Translator:
 
     @classmethod
     def translate_range(cls, range_str: str, rdelta: int, cdelta: int) -> str:
+        # The tokenizer keeps implicit intersection attached to range operands.
+        if range_str.startswith("@"):
+            return "@" + cls.translate_range(range_str[1:], rdelta, cdelta)
         ws_part, range_str = cls.strip_ws_name(range_str)
         match = cls.ROW_RANGE_RE.match(range_str)
         if match is not None:
@@ -72,8 +75,7 @@ class Translator:
             )
         if ":" in range_str:
             return ws_part + ":".join(
-                cls.translate_range(piece, rdelta, cdelta)
-                for piece in range_str.split(":")
+                cls.translate_range(piece, rdelta, cdelta) for piece in range_str.split(":")
             )
         match = cls.CELL_REF_RE.match(range_str)
         if match is None:
@@ -118,4 +120,3 @@ __all__ = [
     "get_column_letter",
     "re",
 ]
-

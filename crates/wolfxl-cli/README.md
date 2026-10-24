@@ -56,10 +56,10 @@ table borders.
 `.ods` through the workbook reader, and treats `.csv`, `.tsv`, and `.txt` as a
 single synthetic sheet named after the file stem.
 
-`.xlsx` / `.xlsm` / `.xlam` can carry resolved number formats and the style
-walker fallback. Legacy/binary/OpenDocument formats are value/schema-first when
-the reader does not expose styles. Delimited files have no style metadata, so
-schema inference reads numeric-looking strings to classify columns.
+Read workbook values with the independent MIT native readers and resolve
+available number formats, including the OOXML style-walker fallback. Retain
+historical CLI error spelling separately from canonical core error values.
+For delimited text, infer numeric-looking strings without changing their values.
 
 `map` emits workbook-level metadata for planning a next step: sheet names,
 dimensions, detected sheet class, headers, and named ranges. `agent` uses the
@@ -73,8 +73,7 @@ sample-value inference for one sheet or the whole workbook.
 
 - [`wolfxl-core`](https://crates.io/crates/wolfxl-core) — pure-Rust
   spreadsheet reader.
-- [`calamine-styles`](https://crates.io/crates/calamine-styles) — workbook
-  parser with style metadata for primary OOXML paths.
+- [`wolfxl-reader`](../wolfxl-reader/) for native XLSX, XLS, XLSB and ODS reads.
 
 ## License
 

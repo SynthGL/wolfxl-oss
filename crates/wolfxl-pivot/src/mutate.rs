@@ -83,7 +83,7 @@ impl std::error::Error for MutateError {}
 
 fn local_name<'a>(e: &'a BytesStart<'a>) -> &'a [u8] {
     let n = e.name();
-    let bytes = n.into_inner();
+    let bytes = n.into_inner().as_bytes();
     match bytes.iter().rposition(|b| *b == b':') {
         Some(idx) => &bytes[idx + 1..],
         None => bytes,
@@ -92,13 +92,15 @@ fn local_name<'a>(e: &'a BytesStart<'a>) -> &'a [u8] {
 
 fn attr_value(e: &BytesStart<'_>, key: &[u8]) -> Option<String> {
     for attr in e.attributes().with_checks(false).flatten() {
-        let name = attr.key.into_inner();
+        let name = attr.key.into_inner().as_bytes();
         let local = match name.iter().rposition(|b| *b == b':') {
             Some(idx) => &name[idx + 1..],
             None => name,
         };
         if local == key {
-            return attr.unescape_value().ok().map(|cow| cow.into_owned());
+            return quick_xml::escape::unescape(&attr.value)
+                .ok()
+                .map(|cow| cow.into_owned());
         }
     }
     None

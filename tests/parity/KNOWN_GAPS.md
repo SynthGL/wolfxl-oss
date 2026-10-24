@@ -138,15 +138,15 @@ Documented divergences (out of scope for Pod-β, tracked elsewhere):
 ### Phase 5 — T1 .xls / .xlsb (✅ SHIPPED in 1.4, Sprint Κ)
 
 `load_workbook("foo.xlsb")` and `load_workbook("foo.xls")` ship in 1.4.
-`.xlsb` now routes through `NativeXlsbBook`; `.xls` remains on
-`CalamineXlsBook`. Reads return values + cached formula results, and native
-`.xlsb` exposes read-side style accessors (`cell.font` / `.fill` / `.border` /
-`.alignment` / `.number_format`). `.xls` style accessors still raise
-`NotImplementedError`;
-`modify=True`, `read_only=True`, `password=`, and `Workbook.save("out.xlsb")`
-are explicitly xlsx-only. `.xlsb` parity is pinned by committed JSON sidecars
-in `tests/parity/fixtures/xlsb/`; `.xls` parity still uses
-`tests/parity/test_xls_reads.py`.
+Use `NativeXlsbBook` for `.xlsb` and the independently authored MIT
+`NativeXlsBook` for `.xls`. Read values and saved formula results; access
+native `.xlsb` styles through `cell.font`, `.fill`, `.border`, `.alignment`
+and `.number_format`. Expect `NotImplementedError` for `.xls` style access.
+Binary-format `modify=True`, `read_only=True` and `password=` remain refused.
+Keep Community Python ODS unsupported; use native ODS through Rust core/CLI.
+For XLSB parity, use the committed JSON sidecars in `tests/parity/fixtures/xlsb/`.
+For XLS parity, use `tests/parity/test_xls_reads.py` against the independent
+xlwt fixture and literal expectations in `crates/wolfxl-reader/qualification/`.
 See `Plans/rfcs/043-xlsb-xls-reads.md`.
 
 ## Per-fixture read gaps (surfaced by Phase 0 baseline run)

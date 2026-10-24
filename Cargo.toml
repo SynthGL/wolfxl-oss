@@ -9,19 +9,21 @@ repository = "https://github.com/SynthGL/wolfxl-oss"
 authors = ["Wolfgang Schoenberger"]
 
 [workspace.dependencies]
-calamine-styles = { version = "0.1", features = ["dates"] }
+base16ct = { version = "1", features = ["alloc"] }
+cfb = "0.15"
 indexmap = "2.2"
-zip = { version = "2", default-features = false, features = ["deflate"] }
-quick-xml = "0.37"
+zip = { version = "9", default-features = false, features = ["deflate", "unreserved"] }
+quick-xml = "0.42"
 chrono = "0.4"
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.11"
 tempfile = "3"
 
 [package]
 name = "wolfxl"
-version = "2.0.10"
+version = "2.0.11"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -37,8 +39,7 @@ default = []
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-pyo3 = { version = "0.28", features = ["multiple-pymethods"] }
-calamine-styles.workspace = true
+pyo3 = { version = "0.29", features = ["multiple-pymethods"] }
 indexmap.workspace = true
 zip.workspace = true
 quick-xml.workspace = true
@@ -56,7 +57,7 @@ wolfxl-autofilter = { path = "crates/wolfxl-autofilter", version = "2.0.0" }
 tempfile.workspace = true
 
 [build-dependencies]
-pyo3-build-config = "0.28"
+pyo3-build-config = "0.29"
 
 # Release tuning for the shipped cdylib. `lto = "fat"` + `codegen-units = 1`
 # let the optimizer inline across crate boundaries (the 11 worker crates +

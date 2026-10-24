@@ -30,7 +30,9 @@ fn read_zip_part(bytes: &[u8], path: &str) -> Option<String> {
 
 fn list_zip_paths(bytes: &[u8]) -> HashSet<String> {
     let zip = zip::ZipArchive::new(Cursor::new(bytes)).expect("open xlsx zip");
-    zip.file_names().map(|s| s.to_string()).collect()
+    zip.file_names()
+        .map(|s| s.expect("valid fixture entry name").into_owned())
+        .collect()
 }
 
 #[test]

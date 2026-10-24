@@ -218,7 +218,7 @@ impl RelsGraph {
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                    if e.local_name().as_ref() != b"Relationship" {
+                    if e.local_name().as_ref() != "Relationship" {
                         buf.clear();
                         continue;
                     }
@@ -229,17 +229,15 @@ impl RelsGraph {
 
                     for a in e.attributes().with_checks(false).flatten() {
                         let key = a.key.as_ref();
-                        let value =
-                            a.unescape_value()
-                                .map(|v| v.into_owned())
-                                .unwrap_or_else(|_| {
-                                    String::from_utf8_lossy(a.value.as_ref()).into_owned()
-                                });
+                        let value = match quick_xml::escape::unescape(&a.value) {
+                            Ok(v) => v.into_owned(),
+                            Err(_) => a.value.to_string(),
+                        };
                         match key {
-                            b"Id" => id_str = Some(value),
-                            b"Type" => rel_type = Some(value),
-                            b"Target" => target = Some(value),
-                            b"TargetMode" => {
+                            "Id" => id_str = Some(value),
+                            "Type" => rel_type = Some(value),
+                            "Target" => target = Some(value),
+                            "TargetMode" => {
                                 if value == "External" {
                                     mode = TargetMode::External;
                                 }

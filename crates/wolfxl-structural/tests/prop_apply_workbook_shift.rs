@@ -45,7 +45,7 @@ use wolfxl_structural::{apply_workbook_shift, Axis, AxisShiftOp, SheetXmlInputs}
 ///   - one merged region (`<mergeCells>`),
 ///   - one hyperlink (`<hyperlinks>`),
 ///   - one autoFilter,
-///   - one inline formula referencing a coordinate inside the band,
+///   - inline formulas and strings split by XML entity references,
 ///   - a `<dimension ref="...">` header,
 ///   - a `<cols>` block with width metadata.
 const FIXTURE_SHEET_XML: &[u8] = br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -54,7 +54,7 @@ const FIXTURE_SHEET_XML: &[u8] = br#"<?xml version="1.0" encoding="UTF-8" standa
   <cols><col min="1" max="2" width="12.0" customWidth="1"/><col min="3" max="4" width="9.0"/></cols>
   <sheetData>
     <row r="1"><c r="A1" t="inlineStr"><is><t>Name</t></is></c><c r="B1" t="inlineStr"><is><t>Q1</t></is></c><c r="C1" t="inlineStr"><is><t>Q2</t></is></c><c r="D1" t="inlineStr"><is><t>Total</t></is></c></row>
-    <row r="2"><c r="A2" t="inlineStr"><is><t>Widget</t></is></c><c r="B2"><v>10</v></c><c r="C2"><v>20</v></c><c r="D2"><f>SUM(B2:C2)</f><v>30</v></c></row>
+    <row r="2"><c r="A2" t="inlineStr"><is><t>Widget &amp; &#71;adget</t></is></c><c r="B2"><v>10</v></c><c r="C2"><v>20</v></c><c r="D2"><f>SUM(B&#50;:C2)</f><v>30</v></c></row>
     <row r="3"><c r="A3" t="inlineStr"><is><t>Gadget</t></is></c><c r="B3"><v>15</v></c><c r="C3"><v>25</v></c><c r="D3"><f>SUM(B3:C3)</f><v>40</v></c></row>
     <row r="4"><c r="A4" t="inlineStr"><is><t>Sprocket</t></is></c><c r="B4"><v>5</v></c><c r="C4"><v>15</v></c><c r="D4"><f>SUM(B4:C4)</f><v>20</v></c></row>
     <row r="5"><c r="A5" t="inlineStr"><is><t>Total</t></is></c><c r="B5"><f>SUM(B2:B4)</f><v>30</v></c><c r="C5"><f>SUM(C2:C4)</f><v>60</v></c><c r="D5"><f>SUM(D2:D4)</f><v>90</v></c></row>
@@ -86,7 +86,7 @@ const FIXTURE_WORKBOOK_XML: &[u8] = br#"<?xml version="1.0" encoding="UTF-8" sta
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>
-  <definedNames><definedName name="MyTotal" localSheetId="0">Sheet1!$D$5</definedName></definedNames>
+  <definedNames><definedName name="MyTotal" localSheetId="0">Sheet1!$D$&#53;</definedName></definedNames>
 </workbook>"#;
 
 fn build_inputs<'a>() -> SheetXmlInputs<'a> {
@@ -113,7 +113,6 @@ fn build_inputs<'a>() -> SheetXmlInputs<'a> {
 /// schema correctness.
 fn xml_is_well_formed(bytes: &[u8]) -> Result<(), String> {
     let mut reader = XmlReader::from_reader(bytes);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
@@ -128,6 +127,28 @@ fn xml_is_well_formed(bytes: &[u8]) -> Result<(), String> {
         }
         buf.clear();
     }
+}
+
+#[test]
+fn workbook_shift_preserves_entities_and_transforms_whole_references() {
+    let out = apply_workbook_shift(
+        build_inputs(),
+        &[AxisShiftOp {
+            sheet: "Sheet1".to_string(),
+            axis: Axis::Row,
+            idx: 2,
+            n: 1,
+        }],
+    );
+    let sheet = &out.file_patches["xl/worksheets/sheet1.xml"];
+    xml_is_well_formed(sheet).unwrap();
+    let text = std::str::from_utf8(sheet).unwrap();
+    assert!(text.contains("<f>SUM(B3:C3)</f>"), "{text}");
+    assert!(text.contains("<t>Widget &amp; &#71;adget</t>"), "{text}");
+    let workbook = &out.file_patches["xl/workbook.xml"];
+    xml_is_well_formed(workbook).unwrap();
+    let text = std::str::from_utf8(workbook).unwrap();
+    assert!(text.contains(">Sheet1!$D$6</definedName>"), "{text}");
 }
 
 // Counters for the branch-coverage summary printed at the end of the

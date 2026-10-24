@@ -9,7 +9,7 @@ use wolfxl_writer::model::chart::{
     ErrorBarValType, ErrorBars, GraphicalProperties, Gridlines, Layout, LayoutTarget, Legend,
     LegendPosition, Marker, MarkerSymbol, PivotSource, RadarStyle, Reference as ChartReference,
     ScatterStyle, Series, SeriesAxis, SeriesTitle, TickMark, Title as ChartTitle, TitleRun,
-    Trendline, TrendlineKind, ValueAxis, View3D,
+    Trendline, TrendlineKind, UpDownBars, ValueAxis, View3D,
 };
 use wolfxl_writer::model::image::ImageAnchor;
 
@@ -218,6 +218,11 @@ pub(crate) fn parse_chart_dict(d: &Bound<'_, PyDict>, anchor_a1: &str) -> PyResu
     if let Some(b) = py_opt_bool(d, "smoothing")? {
         chart.smoothing = Some(b);
     }
+    // Only stock charts emit these; other kinds keep ignoring the keys.
+    if matches!(chart.kind, ChartKind::Stock) {
+        chart.hi_low_lines = parse_optional_chart_lines(d, "hi_low_lines")?;
+        chart.up_down_bars = parse_optional_up_down_bars(d)?;
+    }
     if let Some(n) = py_opt_u32(d, "style")? {
         chart.style = Some(n);
     }
@@ -389,6 +394,42 @@ fn parse_gridlines(d: &Bound<'_, PyDict>) -> PyResult<Gridlines> {
     Ok(Gridlines {
         graphical_properties,
     })
+}
+
+fn parse_optional_chart_lines(d: &Bound<'_, PyDict>, key: &str) -> PyResult<Option<Gridlines>> {
+    let Some(value) = d.get_item(key)? else {
+        return Ok(None);
+    };
+    if value.is_none() {
+        return Ok(None);
+    }
+    let lines = value
+        .cast::<PyDict>()
+        .map_err(|_| PyValueError::new_err(format!("{key} must be a dict")))?;
+    Ok(Some(parse_gridlines(lines)?))
+}
+
+fn parse_optional_up_down_bars(d: &Bound<'_, PyDict>) -> PyResult<Option<UpDownBars>> {
+    let Some(value) = d.get_item("up_down_bars")? else {
+        return Ok(None);
+    };
+    if value.is_none() {
+        return Ok(None);
+    }
+    let bars = value
+        .cast::<PyDict>()
+        .map_err(|_| PyValueError::new_err("up_down_bars must be a dict"))?;
+    let gap_width = py_opt_u32(bars, "gap_width")?;
+    if gap_width.is_some_and(|gap| gap > 500) {
+        return Err(PyValueError::new_err(
+            "up_down_bars.gap_width must be in [0, 500]",
+        ));
+    }
+    Ok(Some(UpDownBars {
+        gap_width,
+        up_bars: parse_optional_chart_lines(bars, "up_bars")?,
+        down_bars: parse_optional_chart_lines(bars, "down_bars")?,
+    }))
 }
 
 fn a1_to_one_cell_anchor(a1: &str) -> PyResult<ImageAnchor> {

@@ -10,37 +10,35 @@ protection, properties, print_settings.
 
 from __future__ import annotations
 
+from importlib import import_module as _import_module
+
 from wolfxl._compat import _openpyxl_name_fallback
 
-# Re-export key classes for ``from wolfxl.worksheet import X`` users.
-from wolfxl.worksheet.page_setup import (
-    PageMargins,
-    PageSetup,
-    PrintOptions,
-    PrintPageSetup,
-)
-from wolfxl.worksheet.header_footer import (
-    HeaderFooter,
-    HeaderFooterItem,
-)
-from wolfxl.worksheet.views import (
-    Pane,
-    Selection,
-    SheetView,
-    SheetViewList,
-)
-from wolfxl.worksheet.protection import SheetProtection
-from wolfxl.worksheet.properties import (
-    Outline,
-    PageSetupProperties,
-    WorksheetProperties,
-)
-from wolfxl.worksheet.print_settings import (
-    ColRange,
-    PrintArea,
-    PrintTitles,
-    RowRange,
-)
+# ``from wolfxl.worksheet import X`` users keep every re-export, but a name loads
+# its defining module on first access. Importing any ``wolfxl.worksheet.<module>``
+# runs this package first, and an eager namespace made every write_only workbook
+# load the page-setup, header/footer, view, protection, property and print-settings
+# models it never touches.
+_EXPORTS = {
+    "PageMargins": "wolfxl.worksheet.page_setup",
+    "PageSetup": "wolfxl.worksheet.page_setup",
+    "PrintOptions": "wolfxl.worksheet.page_setup",
+    "PrintPageSetup": "wolfxl.worksheet.page_setup",
+    "HeaderFooter": "wolfxl.worksheet.header_footer",
+    "HeaderFooterItem": "wolfxl.worksheet.header_footer",
+    "Pane": "wolfxl.worksheet.views",
+    "Selection": "wolfxl.worksheet.views",
+    "SheetView": "wolfxl.worksheet.views",
+    "SheetViewList": "wolfxl.worksheet.views",
+    "SheetProtection": "wolfxl.worksheet.protection",
+    "Outline": "wolfxl.worksheet.properties",
+    "PageSetupProperties": "wolfxl.worksheet.properties",
+    "WorksheetProperties": "wolfxl.worksheet.properties",
+    "ColRange": "wolfxl.worksheet.print_settings",
+    "PrintArea": "wolfxl.worksheet.print_settings",
+    "PrintTitles": "wolfxl.worksheet.print_settings",
+    "RowRange": "wolfxl.worksheet.print_settings",
+}
 
 __all__ = [
     "PageMargins",
@@ -63,4 +61,13 @@ __all__ = [
     "RowRange",
 ]
 
-__getattr__ = _openpyxl_name_fallback(globals())
+_fallback = _openpyxl_name_fallback(globals())
+
+
+def __getattr__(name: str):
+    module = _EXPORTS.get(name)
+    if module is None:
+        return _fallback(name)
+    value = getattr(_import_module(module), name)
+    globals()[name] = value
+    return value

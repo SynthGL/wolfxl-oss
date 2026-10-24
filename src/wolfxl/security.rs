@@ -100,18 +100,15 @@ pub fn merge_calc_properties(
             .map_err(|e| e.to_string())?
         {
             Event::Start(element) | Event::Empty(element)
-                if depth == 1 && element.local_name().as_ref() == b"calcPr" =>
+                if depth == 1 && element.local_name().as_ref() == "calcPr" =>
             {
-                tag_name = String::from_utf8(element.name().as_ref().to_vec())
-                    .map_err(|e| e.to_string())?;
+                tag_name = element.name().as_ref().to_owned();
                 for attribute in element.attributes() {
                     let attribute = attribute.map_err(|e| e.to_string())?;
                     old_attributes.push((
-                        String::from_utf8(attribute.key.as_ref().to_vec())
-                            .map_err(|e| e.to_string())?,
+                        attribute.key.as_ref().to_owned(),
                         Some(
-                            attribute
-                                .unescape_value()
+                            quick_xml::escape::unescape(&attribute.value)
                                 .map_err(|e| e.to_string())?
                                 .into_owned(),
                         ),
@@ -129,21 +126,17 @@ pub fn merge_calc_properties(
             Event::Start(element) => {
                 if depth == 0 {
                     let name = element.name();
-                    if let Some(colon) = name.as_ref().iter().position(|byte| *byte == b':') {
-                        tag_name = format!(
-                            "{}:calcPr",
-                            std::str::from_utf8(&name.as_ref()[..colon])
-                                .map_err(|e| e.to_string())?
-                        );
+                    if let Some((prefix, _)) = name.as_ref().split_once(':') {
+                        tag_name = format!("{prefix}:calcPr");
                     }
                 }
-                if depth == 1 && is_after_calc_pr(element.local_name().as_ref()) {
+                if depth == 1 && is_after_calc_pr(element.local_name().as_ref().as_bytes()) {
                     insertion.get_or_insert(before);
                 }
                 depth += 1;
             }
             Event::Empty(element) if depth == 1 => {
-                if is_after_calc_pr(element.local_name().as_ref()) {
+                if is_after_calc_pr(element.local_name().as_ref().as_bytes()) {
                     insertion.get_or_insert(before);
                 }
             }
@@ -243,7 +236,7 @@ fn scan_layout(workbook_xml: &[u8]) -> Result<Layout, String> {
             Ok(Event::Empty(ref e)) => {
                 let pos_after = reader.buffer_position() as usize;
                 let name = e.name();
-                let local = name.as_ref();
+                let local = name.as_ref().as_bytes();
                 match local {
                     b"fileVersion" => {
                         after_file_version = Some(pos_after);
@@ -263,7 +256,7 @@ fn scan_layout(workbook_xml: &[u8]) -> Result<Layout, String> {
             Ok(Event::Start(ref e)) => {
                 let pos_after = reader.buffer_position() as usize;
                 let name = e.name();
-                let local = name.as_ref();
+                let local = name.as_ref().as_bytes();
                 match local {
                     b"bookViews" => {
                         at_book_views = Some(pos_before);
@@ -404,6 +397,22 @@ mod tests {
     use wolfxl_writer::parse::workbook_security::{
         FileSharingSpec, WorkbookProtectionSpec, WorkbookSecurity,
     };
+
+    #[test]
+    fn calc_properties_decode_and_escape_attributes_once() {
+        let xml = br#"<x:workbook xmlns:x="urn:x"><x:sheets/><x:calcPr note="A&amp;&#x42;&#38;&quot;"/><x:extLst/></x:workbook>"#;
+        let out = merge_calc_properties(xml, &[("calcId".into(), Some("1&2".into()))]).unwrap();
+        let text = std::str::from_utf8(&out).unwrap();
+        assert!(text.contains(r#"<x:calcPr note="A&amp;B&amp;&quot;" calcId="1&amp;2"/>"#));
+        assert!(text.starts_with(r#"<x:workbook xmlns:x="urn:x"><x:sheets/>"#));
+        assert!(text.ends_with("<x:extLst/></x:workbook>"));
+    }
+
+    #[test]
+    fn calc_properties_reject_unknown_attribute_entities() {
+        let xml = br#"<workbook><calcPr note="&unknown;"/></workbook>"#;
+        assert!(merge_calc_properties(xml, &[("calcId".into(), Some("1".into()))]).is_err());
+    }
 
     const MINIMAL_WB: &[u8] = b"<?xml version=\"1.0\"?>\
         <workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\

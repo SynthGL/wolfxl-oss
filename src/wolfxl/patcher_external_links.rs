@@ -44,7 +44,8 @@ pub(super) fn apply_external_links_drop_phase(
             .by_index(i)
             .map_err(|e| PyIOError::new_err(format!("zip entry read: {e}")))?
             .name()
-            .to_string();
+            .map_err(|e| PyIOError::new_err(format!("zip entry name: {e}")))?
+            .into_owned();
         if name.starts_with("xl/externalLinks/") {
             patcher.file_deletes.insert(name);
         }
@@ -119,3 +120,4 @@ mod tests {
         );
     }
 }
+

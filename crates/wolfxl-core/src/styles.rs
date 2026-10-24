@@ -1,15 +1,11 @@
 //! Pure-Rust `xl/styles.xml` reader — cellXfs + numFmts.
 //!
-//! `calamine-styles` resolves number formats for us when it can (real Excel
-//! workbooks expose them via `Style::get_number_format`), but for workbooks
-//! authored by openpyxl the style information is sometimes missing from the
-//! surface calamine exposes. This module lets us walk the raw styles.xml
-//! ourselves: read the cellXfs table of style entries, read any custom
-//! numFmts the workbook defines, and resolve a style id → format code.
+//! Reads the cellXfs table and custom numFmts directly from styles.xml,
+//! then resolves a style id to its number-format code.
 //!
 //! Paired with [`crate::worksheet_xml::parse_cell_style_ids`] (which builds
-//! the per-cell `(row, col) → styleId` map), this gives a complete fallback
-//! path for the openpyxl fixture gap.
+//! the per-cell `(row, col) → styleId` map), this resolves styles without
+//! relying on an external workbook reader.
 
 use std::collections::HashMap;
 
@@ -34,7 +30,6 @@ pub struct XfEntry {
 /// [`XfEntry`]s. The ordinal position matches the `s="N"` attribute on cells.
 pub fn parse_cellxfs(xml: &str) -> Vec<XfEntry> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf: Vec<u8> = Vec::new();
     let mut in_cellxfs = false;
     let mut entries: Vec<XfEntry> = Vec::new();
@@ -43,19 +38,19 @@ pub fn parse_cellxfs(xml: &str) -> Vec<XfEntry> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
                 let tag = e.local_name();
-                if tag.as_ref() == b"cellXfs" {
+                if tag.as_ref() == "cellXfs" {
                     in_cellxfs = true;
-                } else if tag.as_ref() == b"xf" && in_cellxfs {
+                } else if tag.as_ref() == "xf" && in_cellxfs {
                     entries.push(parse_xf_entry(e));
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                if e.local_name().as_ref() == b"xf" && in_cellxfs {
+                if e.local_name().as_ref() == "xf" && in_cellxfs {
                     entries.push(parse_xf_entry(e));
                 }
             }
             Ok(Event::End(ref e)) => {
-                if e.local_name().as_ref() == b"cellXfs" {
+                if e.local_name().as_ref() == "cellXfs" {
                     in_cellxfs = false;
                 }
             }
@@ -96,7 +91,6 @@ fn parse_xf_entry(e: &BytesStart<'_>) -> XfEntry {
 /// [`builtin_num_fmt`] instead.
 pub fn parse_num_fmts(xml: &str) -> Result<HashMap<u32, String>> {
     let mut reader = XmlReader::from_str(xml);
-    reader.config_mut().trim_text(true);
     let mut buf: Vec<u8> = Vec::new();
 
     let mut in_numfmts = false;
@@ -105,19 +99,19 @@ pub fn parse_num_fmts(xml: &str) -> Result<HashMap<u32, String>> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                if e.local_name().as_ref() == b"numFmts" {
+                if e.local_name().as_ref() == "numFmts" {
                     in_numfmts = true;
-                } else if in_numfmts && e.local_name().as_ref() == b"numFmt" {
+                } else if in_numfmts && e.local_name().as_ref() == "numFmt" {
                     capture_num_fmt(&e, &mut formats);
                 }
             }
             Ok(Event::Empty(e)) => {
-                if in_numfmts && e.local_name().as_ref() == b"numFmt" {
+                if in_numfmts && e.local_name().as_ref() == "numFmt" {
                     capture_num_fmt(&e, &mut formats);
                 }
             }
             Ok(Event::End(e)) => {
-                if e.local_name().as_ref() == b"numFmts" {
+                if e.local_name().as_ref() == "numFmts" {
                     in_numfmts = false;
                 }
             }
@@ -251,6 +245,17 @@ mod tests {
         let customs = parse_num_fmts(MINIMAL_STYLES).unwrap();
         assert_eq!(customs.get(&164).map(|s| s.as_str()), Some("\"$\"#,##0.00"));
         assert_eq!(customs.get(&165).map(|s| s.as_str()), Some("0.0%"));
+    }
+
+    #[test]
+    fn prefixed_styles_decode_attribute_entities() {
+        let xml = r#"<s:styleSheet xmlns:s="urn:styles"><s:numFmts><s:numFmt numFmtId="16&#52;" formatCode="&quot;A&amp;B&lt;&#x3E;&quot;0"/></s:numFmts><s:cellXfs><s:xf numFmtId="16&#52;" fontId="&#49;"/></s:cellXfs></s:styleSheet>"#;
+        let formats = parse_num_fmts(xml).unwrap();
+        assert_eq!(formats.get(&164).map(String::as_str), Some("\"A&B<>\"0"));
+        let entries = parse_cellxfs(xml);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].num_fmt_id, 164);
+        assert_eq!(entries[0].font_id, 1);
     }
 
     #[test]

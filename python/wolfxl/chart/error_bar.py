@@ -158,10 +158,7 @@ def _to_native_error_bar_model(value: Any) -> Any:
         return tuple(_to_native_error_bar_model(item) for item in value)
 
     native_cls = globals().get(value.__class__.__name__)
-    if (
-        not isinstance(native_cls, type)
-        or native_cls.__name__ not in _ERROR_BAR_XML_MODEL_NAMES
-    ):
+    if not isinstance(native_cls, type) or native_cls.__name__ not in _ERROR_BAR_XML_MODEL_NAMES:
         return value
     upstream_cls = _resolve_openpyxl_class(__name__, native_cls.__name__)
     if upstream_cls is None or not isinstance(value, upstream_cls):
@@ -182,13 +179,39 @@ def _error_bar_to_tree(
 def _error_bar_from_tree(cls: type, node: Any) -> Any:
     upstream_cls = _resolve_openpyxl_class(__name__, cls.__name__)
     if upstream_cls is None:
-        raise AttributeError("from_tree")
+        return _native_error_bar_from_tree(cls, node)
     return _from_openpyxl_error_bar_model(cls, upstream_cls.from_tree(node))
+
+
+def _native_error_bar_from_tree(cls: type, node: Any) -> Any:
+    """Hydrate ``c:errBars`` without openpyxl's descriptors."""
+    from .data_source import NumDataSource
+
+    kwargs: dict[str, Any] = {}
+    for child in node:
+        if not isinstance(child.tag, str):
+            continue
+        name = child.tag.rsplit("}", 1)[-1]
+        if name in ("errDir", "errBarType", "errValType"):
+            kwargs[name] = child.get("val")
+        elif name == "noEndCap":
+            kwargs[name] = child.get("val", "1") in ("1", "true")
+        elif name == "val":
+            kwargs[name] = float(child.get("val"))
+        elif name in ("plus", "minus"):
+            kwargs[name] = NumDataSource.from_tree(child)
+        elif name == "spPr":
+            kwargs[name] = GraphicalProperties.from_tree(child)
+    return cls(**kwargs)
 
 
 def _error_bar_eq(self: Any, other: Any) -> bool:
     if type(self) is not type(other):
         return False
+    if _resolve_openpyxl_class(__name__, type(self).__name__) is None:
+        # Without openpyxl the conversion below is the identity, and comparing
+        # the results would re-enter this method forever.
+        return all(getattr(self, n) == getattr(other, n) for n in type(self).__slots__)
     return _to_openpyxl_model(self) == _to_openpyxl_model(other)
 
 

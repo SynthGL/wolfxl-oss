@@ -43,9 +43,7 @@ _FORMAT_CODE_RE = re.compile(
 # Mini-format inline regex for prefix codes. Mirrors openpyxl's
 # FORMAT_REGEX so we parse ``&"Arial,Bold"&14&KFF0000Title`` into
 # (font, color, size, text).
-_PREFIX_FORMAT_RE = re.compile(
-    r'&"(?P<font>[^"]+)"|&K(?P<color>[A-Fa-f0-9]{6})|&(?P<size>\d+\s?)'
-)
+_PREFIX_FORMAT_RE = re.compile(r'&"(?P<font>[^"]+)"|&K(?P<color>[A-Fa-f0-9]{6})|&(?P<size>\d+\s?)')
 FORMAT_REGEX = _PREFIX_FORMAT_RE
 FONT_PATTERN = r'&"(?P<font>[^"]+)"'
 COLOR_PATTERN = r"&K(?P<color>[A-Fa-f0-9]{6})"
@@ -124,13 +122,13 @@ def validate_header_footer_format(text: str) -> bool:
             if text[i + 2] == "{":
                 if i + 9 >= n or text[i + 9] != "}":
                     return False
-                if not all(c in "0123456789abcdefABCDEF" for c in text[i + 3:i + 9]):
+                if not all(c in "0123456789abcdefABCDEF" for c in text[i + 3 : i + 9]):
                     return False
                 i += 10
                 continue
             if i + 8 > n:
                 return False
-            if not all(c in "0123456789abcdefABCDEF" for c in text[i + 2:i + 8]):
+            if not all(c in "0123456789abcdefABCDEF" for c in text[i + 2 : i + 8]):
                 return False
             i += 8
             continue
@@ -192,7 +190,9 @@ class _HeaderFooterPart:
             self._text = None
             return
         if not isinstance(value, str):
-            raise TypeError(f"_HeaderFooterPart.text must be str or None; got {type(value).__name__}")
+            raise TypeError(
+                f"_HeaderFooterPart.text must be str or None; got {type(value).__name__}"
+            )
         self._text = value
 
     @property
@@ -205,7 +205,9 @@ class _HeaderFooterPart:
             self._font = None
             return
         if not isinstance(value, str):
-            raise TypeError(f"_HeaderFooterPart.font must be str or None; got {type(value).__name__}")
+            raise TypeError(
+                f"_HeaderFooterPart.font must be str or None; got {type(value).__name__}"
+            )
         self._font = value
 
     @property
@@ -220,9 +222,7 @@ class _HeaderFooterPart:
         try:
             self._size = int(value)
         except (TypeError, ValueError) as exc:
-            raise TypeError(
-                f"_HeaderFooterPart.size must be int or None; got {value!r}"
-            ) from exc
+            raise TypeError(f"_HeaderFooterPart.size must be int or None; got {value!r}") from exc
 
     @property
     def color(self) -> str | None:
@@ -234,17 +234,12 @@ class _HeaderFooterPart:
             self._color = None
             return
         if not isinstance(value, str) or not _RGB_RE.match(value):
-            raise ValueError(
-                f"_HeaderFooterPart.color must match RRGGBB hex; got {value!r}"
-            )
+            raise ValueError(f"_HeaderFooterPart.color must match RRGGBB hex; got {value!r}")
         self._color = value.upper()
 
     def is_empty(self) -> bool:
         return (
-            self._text is None
-            and self._font is None
-            and self._size is None
-            and self._color is None
+            self._text is None and self._font is None and self._size is None and self._color is None
         )
 
     def to_format_string(self) -> str | None:
@@ -424,11 +419,7 @@ class HeaderFooterItem:
         return _EXPANDED_CONTROL_RE.sub(lambda match: _EXPANDED_CONTROL_CODES[match.group(0)], text)
 
     def is_empty(self) -> bool:
-        return (
-            self._left.is_empty()
-            and self._center.is_empty()
-            and self._right.is_empty()
-        )
+        return self._left.is_empty() and self._center.is_empty() and self._right.is_empty()
 
     def to_rust_dict(self) -> dict[str, Any] | None:
         if self.is_empty():
@@ -470,9 +461,7 @@ class HeaderFooterItem:
         parts = _split_string(unescape(node.text))
         return cls(
             left=(
-                _HeaderFooterPart.from_str(parts["left"])
-                if parts.get("left") is not None
-                else None
+                _HeaderFooterPart.from_str(parts["left"]) if parts.get("left") is not None else None
             ),
             center=(
                 _HeaderFooterPart.from_str(parts["center"])
@@ -500,8 +489,7 @@ class HeaderFooterItem:
 
     def __repr__(self) -> str:
         return (
-            f"HeaderFooterItem(left={self._left!r}, center={self._center!r}, "
-            f"right={self._right!r})"
+            f"HeaderFooterItem(left={self._left!r}, center={self._center!r}, right={self._right!r})"
         )
 
 
@@ -549,22 +537,19 @@ class HeaderFooter:
         self.even_footer = _coerce_item(evenFooter if evenFooter is not None else even_footer)
         self.first_header = _coerce_item(firstHeader if firstHeader is not None else first_header)
         self.first_footer = _coerce_item(firstFooter if firstFooter is not None else first_footer)
-        self.different_odd_even = bool(
-            differentOddEven if differentOddEven is not None else (different_odd_even or False)
+        self.different_odd_even = (
+            differentOddEven if differentOddEven is not None else different_odd_even
         )
-        self.different_first = bool(
-            differentFirst if differentFirst is not None else (different_first or False)
+        self.different_first = differentFirst if differentFirst is not None else different_first
+        self.scale_with_doc = scaleWithDoc if scaleWithDoc is not None else scale_with_doc
+        self.align_with_margins = (
+            alignWithMargins if alignWithMargins is not None else align_with_margins
         )
-        self.scale_with_doc = bool(
-            scaleWithDoc if scaleWithDoc is not None else (
-                True if scale_with_doc is None else scale_with_doc
-            )
-        )
-        self.align_with_margins = bool(
-            alignWithMargins if alignWithMargins is not None else (
-                True if align_with_margins is None else align_with_margins
-            )
-        )
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in _FLAG_DEFAULTS:
+            value = _coerce_flag(name, value)
+        super().__setattr__(name, value)
 
     @property
     def oddHeader(self) -> HeaderFooterItem:  # noqa: N802
@@ -717,6 +702,26 @@ class HeaderFooter:
             if local in child_map:
                 values[child_map[local]] = HeaderFooterItem.from_tree(child)
         return cls(**values)
+
+
+# CT_HeaderFooter boolean attributes and their schema defaults.
+_FLAG_DEFAULTS = {
+    "different_odd_even": False,
+    "different_first": False,
+    "scale_with_doc": True,
+    "align_with_margins": True,
+}
+
+
+def _coerce_flag(name: str, value: Any) -> bool:
+    """Return a header/footer flag as a bool; ``None`` restores the default."""
+    if value is None:
+        return _FLAG_DEFAULTS[name]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    raise TypeError(f"HeaderFooter.{name} must be a bool or None; got {value!r}")
 
 
 def _coerce_item(value: Any) -> HeaderFooterItem:

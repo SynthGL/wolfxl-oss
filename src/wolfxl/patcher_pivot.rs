@@ -20,7 +20,10 @@ pub(super) fn apply_pivot_adds_phase(
     // source ZIP so we never collide with existing pivot parts.
     let mut counters = pivot::PivotPartCounters::new(1, 1);
     for i in 0..zip.len() {
-        if let Ok(name) = zip.by_index(i).map(|f| f.name().to_string()) {
+        if let Ok(entry) = zip.by_index(i) {
+            let Ok(name) = entry.name() else {
+                continue;
+            };
             counters.observe(&name);
         }
     }
@@ -248,7 +251,10 @@ pub(super) fn apply_slicer_adds_phase(
     // (so RFC-035 deep-clones never collide).
     let mut counters = pivot_slicer::SlicerPartCounters::new();
     for i in 0..zip.len() {
-        if let Ok(name) = zip.by_index(i).map(|f| f.name().to_string()) {
+        if let Ok(entry) = zip.by_index(i) {
+            let Ok(name) = entry.name() else {
+                continue;
+            };
             counters.observe(&name);
         }
     }

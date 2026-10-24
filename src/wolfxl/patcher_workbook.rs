@@ -144,33 +144,29 @@ pub(crate) fn splice_into_sheets_block(
         let post = reader.buffer_position() as usize;
         match evt {
             Ok(XmlEvent::Start(ref e)) => {
-                if e.local_name().as_ref() == b"sheets" && sheets_open_depth.is_none() {
+                if e.local_name().as_ref() == "sheets" && sheets_open_depth.is_none() {
                     sheets_open_depth = Some(depth);
-                    sheets_element_name =
-                        Some(String::from_utf8_lossy(e.name().as_ref()).into_owned());
+                    sheets_element_name = Some(e.name().as_ref().to_owned());
                 }
                 depth += 1;
             }
             Ok(XmlEvent::End(ref e)) => {
                 depth -= 1;
-                if e.local_name().as_ref() == b"sheets"
+                if e.local_name().as_ref() == "sheets"
                     && Some(depth) == sheets_open_depth
                     && splice_pos.is_none()
                 {
-                    let event_name: Vec<u8> = sheets_element_name
-                        .as_ref()
-                        .map(|name| name.as_bytes().to_vec())
-                        .unwrap_or_else(|| e.name().as_ref().to_vec());
+                    let name = e.name();
+                    let event_name = sheets_element_name.as_deref().unwrap_or(name.as_ref());
                     splice_pos =
-                        find_end_event_start(workbook_xml, pre, post, &event_name).or(Some(pre));
+                        find_end_event_start(workbook_xml, pre, post, event_name.as_bytes()).or(Some(pre));
                     break;
                 }
             }
             Ok(XmlEvent::Empty(ref e)) => {
-                if e.local_name().as_ref() == b"sheets" && self_closing_range.is_none() {
+                if e.local_name().as_ref() == "sheets" && self_closing_range.is_none() {
                     self_closing_range = Some((pre, post));
-                    sheets_element_name =
-                        Some(String::from_utf8_lossy(e.name().as_ref()).into_owned());
+                    sheets_element_name = Some(e.name().as_ref().to_owned());
                     break;
                 }
             }
@@ -461,7 +457,10 @@ fn workbook_cache_parts_for_names(
         let Ok(entry) = zip.by_index(i) else {
             continue;
         };
-        let name = entry.name().to_string();
+        let Ok(name) = entry.name() else {
+            continue;
+        };
+        let name = name.into_owned();
         if is_workbook_cache_part(&name) {
             candidates.insert(name);
         }
@@ -508,8 +507,8 @@ fn xml_attr_values_by_local_name(xml: &[u8], attr_name: &[u8]) -> Vec<String> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 for attr in e.attributes().with_checks(false).flatten() {
-                    if attr.key.local_name().as_ref() == attr_name {
-                        if let Ok(value) = attr.decode_and_unescape_value(reader.decoder()) {
+                    if attr.key.local_name().as_ref().as_bytes() == attr_name {
+                        if let Ok(value) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                             out.push(value.into_owned());
                         }
                     }
@@ -588,7 +587,10 @@ fn retained_deleted_subgraph_parts(
         let Ok(entry) = zip.by_index(i) else {
             continue;
         };
-        let name = entry.name().to_string();
+        let Ok(name) = entry.name() else {
+            continue;
+        };
+        let name = name.into_owned();
         if name.ends_with(".rels") {
             rels_paths.insert(name);
         }
@@ -811,17 +813,15 @@ fn max_sheet_id_and_count(workbook_xml: &[u8]) -> (u32, usize) {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(quick_xml::events::Event::Start(e)) | Ok(quick_xml::events::Event::Empty(e))
-                if e.local_name().as_ref() == b"sheet" =>
+                if e.local_name().as_ref() == "sheet" =>
             {
                 count += 1;
                 for attr in e.attributes().with_checks(false).flatten() {
-                    if attr.key.as_ref() == b"sheetId" {
+                    if attr.key.as_ref() == "sheetId" {
                         let value = attr
-                            .unescape_value()
+                            .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                             .map(|v| v.into_owned())
-                            .unwrap_or_else(|_| {
-                                String::from_utf8_lossy(attr.value.as_ref()).into_owned()
-                            });
+                            .unwrap_or_else(|_| attr.value.to_string());
                         if let Ok(parsed) = value.parse::<u32>() {
                             max_id = max_id.max(parsed);
                         }
@@ -845,20 +845,18 @@ fn sheet_ids_by_name(workbook_xml: &[u8]) -> HashMap<String, u32> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(quick_xml::events::Event::Start(e)) | Ok(quick_xml::events::Event::Empty(e))
-                if e.local_name().as_ref() == b"sheet" =>
+                if e.local_name().as_ref() == "sheet" =>
             {
                 let mut name = None;
                 let mut sheet_id = None;
                 for attr in e.attributes().with_checks(false).flatten() {
                     let value = attr
-                        .unescape_value()
+                        .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                         .map(|v| v.into_owned())
-                        .unwrap_or_else(|_| {
-                            String::from_utf8_lossy(attr.value.as_ref()).into_owned()
-                        });
+                        .unwrap_or_else(|_| attr.value.to_string());
                     match attr.key.as_ref() {
-                        b"name" => name = Some(value),
-                        b"sheetId" => sheet_id = value.parse::<u32>().ok(),
+                        "name" => name = Some(value),
+                        "sheetId" => sheet_id = value.parse::<u32>().ok(),
                         _ => {}
                     }
                 }
@@ -1179,7 +1177,10 @@ pub(super) fn apply_sheet_rename_chart_formula_refs_phase(
         let Ok(entry) = zip.by_index(idx) else {
             continue;
         };
-        let name = entry.name();
+        let Ok(name) = entry.name() else {
+            continue;
+        };
+        let name = name.as_ref();
         if is_chart_part_path(name) {
             chart_paths.insert(name.to_string());
         }
@@ -1273,11 +1274,21 @@ fn rewrite_workbook_defined_name_sheet_renames(
     let mut writer = XmlWriter::new(Vec::with_capacity(workbook_xml.len()));
     let mut buf = Vec::new();
     let mut in_defined_name = false;
+    let mut text = String::new();
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event = reader.read_event_into(&mut buf);
+        // A logical text node can span Text and GeneralRef events in 0.42.
+        if !matches!(&event, Ok(Event::Text(_) | Event::GeneralRef(_))) && !text.is_empty() {
+            let translated = rename_formula_sheet_refs(&text, renames);
+            writer
+                .write_event(Event::Text(BytesText::new(&translated)))
+                .map_err(|e| format!("workbook XML write error: {e}"))?;
+            text.clear();
+        }
+        match event {
             Ok(Event::Start(e)) => {
-                if e.local_name().as_ref() == b"definedName" {
+                if e.local_name().as_ref() == "definedName" {
                     in_defined_name = true;
                 }
                 writer
@@ -1285,7 +1296,7 @@ fn rewrite_workbook_defined_name_sheet_renames(
                     .map_err(|e| format!("workbook XML write error: {e}"))?;
             }
             Ok(Event::End(e)) => {
-                if e.local_name().as_ref() == b"definedName" {
+                if e.local_name().as_ref() == "definedName" {
                     in_defined_name = false;
                 }
                 writer
@@ -1297,16 +1308,15 @@ fn rewrite_workbook_defined_name_sheet_renames(
                     .write_event(Event::Empty(e.into_owned()))
                     .map_err(|e| format!("workbook XML write error: {e}"))?;
             }
-            Ok(Event::Text(t)) if in_defined_name => {
-                let formula_text = t
-                    .unescape()
-                    .map_err(|e| format!("defined name decode error: {e}"))?
-                    .into_owned();
-                let translated = rename_formula_sheet_refs(&formula_text, renames);
-                writer
-                    .write_event(Event::Text(BytesText::new(&translated)))
-                    .map_err(|e| format!("workbook XML write error: {e}"))?;
+            Ok(Event::Text(t)) if in_defined_name => text.push_str(t.as_ref()),
+            Ok(Event::GeneralRef(reference)) if in_defined_name => {
+                let value = ooxml_util::resolve_general_ref(&reference)
+                    .map_err(|e| format!("defined name decode error: {e}"))?;
+                text.push_str(&value);
             }
+            Ok(Event::GeneralRef(reference)) => writer
+                .write_event(Event::GeneralRef(reference))
+                .map_err(|e| format!("workbook XML write error: {e}"))?,
             Ok(Event::Text(t)) => {
                 writer
                     .write_event(Event::Text(t.into_owned()))
@@ -1345,11 +1355,24 @@ fn rewrite_worksheet_formula_sheet_renames(
     let mut writer = XmlWriter::new(Vec::with_capacity(worksheet_xml.len()));
     let mut buf = Vec::new();
     let mut formula_depth = 0usize;
+    let mut text = String::new();
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event = reader.read_event_into(&mut buf);
+        if !matches!(&event, Ok(Event::Text(_) | Event::GeneralRef(_))) && !text.is_empty() {
+            let translated = if text.trim().is_empty() {
+                std::borrow::Cow::Borrowed(text.as_str())
+            } else {
+                std::borrow::Cow::Owned(rename_formula_sheet_refs(&text, renames))
+            };
+            writer
+                .write_event(Event::Text(BytesText::new(&translated)))
+                .map_err(|e| format!("worksheet XML write error: {e}"))?;
+            text.clear();
+        }
+        match event {
             Ok(Event::Start(e)) => {
-                if is_formula_text_element(e.local_name().as_ref()) {
+                if is_formula_text_element(e.local_name().as_ref().as_bytes()) {
                     formula_depth += 1;
                 }
                 writer
@@ -1357,7 +1380,7 @@ fn rewrite_worksheet_formula_sheet_renames(
                     .map_err(|e| format!("worksheet XML write error: {e}"))?;
             }
             Ok(Event::End(e)) => {
-                let closes_formula = is_formula_text_element(e.local_name().as_ref());
+                let closes_formula = is_formula_text_element(e.local_name().as_ref().as_bytes());
                 writer
                     .write_event(Event::End(e.into_owned()))
                     .map_err(|e| format!("worksheet XML write error: {e}"))?;
@@ -1370,22 +1393,15 @@ fn rewrite_worksheet_formula_sheet_renames(
                     .write_event(Event::Empty(e.into_owned()))
                     .map_err(|e| format!("worksheet XML write error: {e}"))?;
             }
-            Ok(Event::Text(t)) if formula_depth > 0 => {
-                let formula_text = t
-                    .unescape()
-                    .map_err(|e| format!("worksheet formula decode error: {e}"))?
-                    .into_owned();
-                if formula_text.trim().is_empty() {
-                    writer
-                        .write_event(Event::Text(t.into_owned()))
-                        .map_err(|e| format!("worksheet XML write error: {e}"))?;
-                } else {
-                    let translated = rename_formula_sheet_refs(&formula_text, renames);
-                    writer
-                        .write_event(Event::Text(BytesText::new(&translated)))
-                        .map_err(|e| format!("worksheet XML write error: {e}"))?;
-                }
+            Ok(Event::Text(t)) if formula_depth > 0 => text.push_str(t.as_ref()),
+            Ok(Event::GeneralRef(reference)) if formula_depth > 0 => {
+                let value = ooxml_util::resolve_general_ref(&reference)
+                    .map_err(|e| format!("worksheet formula decode error: {e}"))?;
+                text.push_str(&value);
             }
+            Ok(Event::GeneralRef(reference)) => writer
+                .write_event(Event::GeneralRef(reference))
+                .map_err(|e| format!("worksheet XML write error: {e}"))?,
             Ok(Event::Text(t)) => {
                 writer
                     .write_event(Event::Text(t.into_owned()))
@@ -1430,13 +1446,13 @@ fn rewrite_pivot_cache_sheet_renames(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.local_name().as_ref() == b"worksheetSource" => {
+            Ok(Event::Start(e)) if e.local_name().as_ref() == "worksheetSource" => {
                 let updated = rename_worksheet_source_sheet_attr(&e, renames)?;
                 writer
                     .write_event(Event::Start(updated))
                     .map_err(|e| format!("pivot cache XML write error: {e}"))?;
             }
-            Ok(Event::Empty(e)) if e.local_name().as_ref() == b"worksheetSource" => {
+            Ok(Event::Empty(e)) if e.local_name().as_ref() == "worksheetSource" => {
                 let updated = rename_worksheet_source_sheet_attr(&e, renames)?;
                 writer
                     .write_event(Event::Empty(updated))
@@ -1453,6 +1469,9 @@ fn rewrite_pivot_cache_sheet_renames(
                 .map_err(|e| format!("pivot cache XML write error: {e}"))?,
             Ok(Event::Text(t)) => writer
                 .write_event(Event::Text(t.into_owned()))
+                .map_err(|e| format!("pivot cache XML write error: {e}"))?,
+            Ok(Event::GeneralRef(reference)) => writer
+                .write_event(Event::GeneralRef(reference))
                 .map_err(|e| format!("pivot cache XML write error: {e}"))?,
             Ok(Event::CData(c)) => writer
                 .write_event(Event::CData(c.into_owned()))
@@ -1482,12 +1501,12 @@ fn rename_worksheet_source_sheet_attr(
     event: &BytesStart<'_>,
     renames: &[(String, String)],
 ) -> Result<BytesStart<'static>, String> {
-    let mut out = BytesStart::new(String::from_utf8_lossy(event.name().as_ref()).into_owned());
+    let mut out = BytesStart::new(event.name().as_ref().to_owned());
     for attr in event.attributes().with_checks(false) {
         let attr = attr.map_err(|e| format!("pivot cache worksheetSource attr error: {e}"))?;
-        if attr.key.as_ref() == b"sheet" {
+        if attr.key.as_ref() == "sheet" {
             let value = attr
-                .unescape_value()
+                .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                 .map_err(|e| format!("pivot cache worksheetSource sheet decode error: {e}"))?;
             if let Some((_, new_name)) = renames
                 .iter()
@@ -1515,17 +1534,30 @@ fn rewrite_chart_formula_sheet_renames(
     let mut in_formula = false;
     let mut in_pivot_source = false;
     let mut in_pivot_source_name = false;
+    let mut text = String::new();
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event = reader.read_event_into(&mut buf);
+        if !matches!(&event, Ok(Event::Text(_) | Event::GeneralRef(_))) && !text.is_empty() {
+            let translated = if in_formula {
+                rename_formula_sheet_refs(&text, renames)
+            } else {
+                rename_chart_pivot_source_sheet_refs(&text, renames)
+            };
+            writer
+                .write_event(Event::Text(BytesText::new(&translated)))
+                .map_err(|e| format!("chart XML write error: {e}"))?;
+            text.clear();
+        }
+        match event {
             Ok(Event::Start(e)) => {
                 let local_name = e.local_name();
                 let local = local_name.as_ref();
-                if local == b"pivotSource" {
+                if local == "pivotSource" {
                     in_pivot_source = true;
                 }
-                in_formula = local == b"f";
-                in_pivot_source_name = in_pivot_source && local == b"name";
+                in_formula = local == "f";
+                in_pivot_source_name = in_pivot_source && local == "name";
                 writer
                     .write_event(Event::Start(e.into_owned()))
                     .map_err(|e| format!("chart XML write error: {e}"))?;
@@ -1533,13 +1565,13 @@ fn rewrite_chart_formula_sheet_renames(
             Ok(Event::End(e)) => {
                 let local_name = e.local_name();
                 let local = local_name.as_ref();
-                if local == b"f" {
+                if local == "f" {
                     in_formula = false;
                 }
-                if local == b"name" {
+                if local == "name" {
                     in_pivot_source_name = false;
                 }
-                if local == b"pivotSource" {
+                if local == "pivotSource" {
                     in_pivot_source = false;
                 }
                 writer
@@ -1551,26 +1583,15 @@ fn rewrite_chart_formula_sheet_renames(
                     .write_event(Event::Empty(e.into_owned()))
                     .map_err(|e| format!("chart XML write error: {e}"))?;
             }
-            Ok(Event::Text(t)) if in_formula => {
-                let formula_text = t
-                    .unescape()
-                    .map_err(|e| format!("chart formula decode error: {e}"))?
-                    .into_owned();
-                let translated = rename_formula_sheet_refs(&formula_text, renames);
-                writer
-                    .write_event(Event::Text(BytesText::new(&translated)))
-                    .map_err(|e| format!("chart XML write error: {e}"))?;
+            Ok(Event::Text(t)) if in_formula || in_pivot_source_name => text.push_str(t.as_ref()),
+            Ok(Event::GeneralRef(reference)) if in_formula || in_pivot_source_name => {
+                let value = ooxml_util::resolve_general_ref(&reference)
+                    .map_err(|e| format!("chart text decode error: {e}"))?;
+                text.push_str(&value);
             }
-            Ok(Event::Text(t)) if in_pivot_source_name => {
-                let pivot_source_name = t
-                    .unescape()
-                    .map_err(|e| format!("chart pivot source decode error: {e}"))?
-                    .into_owned();
-                let translated = rename_chart_pivot_source_sheet_refs(&pivot_source_name, renames);
-                writer
-                    .write_event(Event::Text(BytesText::new(&translated)))
-                    .map_err(|e| format!("chart XML write error: {e}"))?;
-            }
+            Ok(Event::GeneralRef(reference)) => writer
+                .write_event(Event::GeneralRef(reference))
+                .map_err(|e| format!("chart XML write error: {e}"))?,
             Ok(Event::Text(t)) => {
                 writer
                     .write_event(Event::Text(t.into_owned()))
@@ -2030,7 +2051,10 @@ pub(super) fn rewrite_zip_phase(
             let file = zip
                 .by_index(i)
                 .map_err(|e| PyIOError::new_err(format!("ZIP entry read error: {e}")))?;
-            let name = file.name().to_string();
+            let name = file
+                .name()
+                .map_err(|e| PyIOError::new_err(format!("ZIP entry name error: {e}")))?
+                .into_owned();
             source_names.insert(name.clone());
 
             if patcher.file_deletes.contains(&name) {
@@ -2215,6 +2239,66 @@ mod tests {
     use super::super::content_types::{ContentTypeOp, ContentTypesGraph};
     use super::*;
     use crate::ooxml_util;
+
+    #[test]
+    fn sheet_renames_aggregate_entity_split_text() {
+        let renames = vec![("A&B".to_string(), "C&D".to_string())];
+        let source = " 'A&amp;B'!A1&amp;&quot;A&amp;B!A1&quot; ";
+        let decoded = " 'A&B'!A1&\"A&B!A1\" ";
+        let expected = quick_xml::escape::escape(rename_formula_sheet_refs(decoded, &renames));
+        let workbook = format!("<workbook><definedName>{source}</definedName><other>&custom;&#32;</other></workbook>");
+        let output = rewrite_workbook_defined_name_sheet_renames(workbook.as_bytes(), &renames).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains(&format!("<definedName>{expected}</definedName>")));
+        assert!(output.contains("<other>&custom;&#32;</other>"));
+
+        for tag in ["f", "formula", "formula1", "formula2"] {
+            let worksheet = format!("<worksheet><{tag}>{source}</{tag}><t>&custom;&#32;</t></worksheet>");
+            let output = rewrite_worksheet_formula_sheet_renames(worksheet.as_bytes(), &renames).unwrap();
+            let output = String::from_utf8(output).unwrap();
+            assert!(output.contains(&format!("<{tag}>{expected}</{tag}>")));
+            assert!(output.contains("<t>&custom;&#32;</t>"));
+        }
+
+        let chart = format!("<chart><f>{source}</f><pivotSource><name>[book]A&amp;B!Pivot</name></pivotSource><v>&custom;&#32;</v></chart>");
+        let output = rewrite_chart_formula_sheet_renames(chart.as_bytes(), &renames).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains(&format!("<f>{expected}</f>")));
+        assert!(output.contains("<name>[book]C&amp;D!Pivot</name>"));
+        assert!(output.contains("<v>&custom;&#32;</v>"));
+    }
+
+    #[test]
+    fn sheet_renames_resolve_numeric_refs_and_reject_unknown_refs() {
+        let renames = vec![("Old".to_string(), "New".to_string())];
+        let output = rewrite_worksheet_formula_sheet_renames(
+            b"<worksheet><f>&#79;ld!A1</f><f> &#32; </f></worksheet>",
+            &renames,
+        ).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("<f>New!A1</f>"));
+        assert!(output.contains("<f>   </f>"));
+        assert!(rewrite_workbook_defined_name_sheet_renames(
+            b"<workbook><definedName>Old&unknown;!A1</definedName></workbook>", &renames,
+        ).is_err());
+        assert!(rewrite_worksheet_formula_sheet_renames(
+            b"<worksheet><f>Old&unknown;!A1</f></worksheet>", &renames,
+        ).is_err());
+        assert!(rewrite_chart_formula_sheet_renames(
+            b"<chart><pivotSource><name>Old&unknown;!Pivot</name></pivotSource></chart>", &renames,
+        ).is_err());
+    }
+
+    #[test]
+    fn pivot_sheet_rename_escapes_attributes_and_preserves_references() {
+        let source = br#"<pivotCacheDefinition><worksheetSource sheet="A&amp;B" ref="A1:B2"/><ext>A&amp;B&#32;&custom;</ext></pivotCacheDefinition>"#;
+        let renames = vec![("A&B".to_string(), "C&D".to_string())];
+        let output = rewrite_pivot_cache_sheet_renames(source, &renames).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains(r#"sheet="C&amp;D""#));
+        assert!(!output.contains("&amp;amp;"));
+        assert!(output.contains("<ext>A&amp;B&#32;&custom;</ext>"));
+    }
 
     static TEST_EPOCH_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 

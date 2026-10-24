@@ -1,7 +1,7 @@
-"""`StockChart` — OHLC stock chart.
+"""`StockChart` — HLC or OHLC stock chart.
 
-Validates exactly 4 series in fixed Open / High / Low / Close order.
-Emits ``hi_low_lines: True`` and ``up_down_bars: True`` flags by default.
+Validates 3 series in High / Low / Close order or 4 in Open / High / Low / Close order.
+Serializes the default high-low lines and up/down bars as native decoration models.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from .label import DataLabelList
 
 
 class StockChart(ChartBase):
-    """A stock chart — Open/High/Low/Close, exactly 4 series in that order."""
+    """A stock chart with 3 HLC series or 4 OHLC series, in that order."""
 
     tagname = "stockChart"
     _series_type = "line"
@@ -38,20 +38,21 @@ class StockChart(ChartBase):
         self.y_axis = NumericAxis()
 
     def _validate_at_emit(self) -> None:  # noqa: D401
-        # StockChart REQUIRES exactly 4 series in OHLC order.
-        if len(self.ser) != 4:
+        # CT_StockChart permits three HLC series or four OHLC series.
+        if len(self.ser) not in (3, 4):
             raise ValueError(
-                f"StockChart requires exactly 4 series (Open/High/Low/Close), "
-                f"got {len(self.ser)}"
+                f"StockChart requires exactly 4 series (Open/High/Low/Close) "
+                f"or 3 series (High/Low/Close), got {len(self.ser)}"
             )
 
     def _chart_type_specific_keys(self) -> dict[str, Any]:
         d: dict[str, Any] = {
-            "hi_low_lines": self.hi_low_lines,
-            "up_down_bars": self.up_down_bars,
+            "hi_low_lines": {} if self.hi_low_lines else None,
+            "up_down_bars": {"gap_width": 150} if self.up_down_bars else None,
         }
         if self.dLbls is not None:
             from .series import _dlbls_to_snake
+
             d["data_labels"] = _dlbls_to_snake(self.dLbls.to_dict())
         return d
 

@@ -323,6 +323,14 @@ def _chart_from_payload(payload: dict[str, Any]) -> Any:
         for series_payload in payload.get("series", [])
         if isinstance(series_payload, dict)
     ]
+    subcharts = payload.get("subcharts")
+    if isinstance(subcharts, list) and len(subcharts) > 1:
+        for subchart_payload in subcharts[1:]:
+            if not isinstance(subchart_payload, dict):
+                continue
+            secondary = _chart_from_payload(subchart_payload)
+            if secondary is not None:
+                chart += secondary
     return chart
 
 

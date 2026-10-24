@@ -38,7 +38,7 @@ class Tokenizer:
     """
 
     SN_RE = re.compile("^[1-9](\\.[0-9]+)?[Ee]$")  # Scientific notation
-    WSPACE_RE = re.compile(r"[ \n]+")
+    WSPACE_RE = re.compile(r"[ \r\n]+")
     STRING_REGEXES = {
         # Inside a string, all characters are treated as literals, except for
         # the quote character used to start the string. That character, when
@@ -49,8 +49,9 @@ class Tokenizer:
     }
     ERROR_CODES = ("#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?",
                    "#NUM!", "#N/A", "#GETTING_DATA")
-    TOKEN_ENDERS = ',;}) +-*/^&=><%'  # Each of these characters, marks the
-                                       # end of an operand token
+    TOKEN_ENDERS = ',;}) \r\n+-*/^&=><%'  # Each of these characters, marks the
+                                           # end of an operand token; a line
+                                           # break ends one as a space does
 
     def __init__(self, formula):
         self.formula = formula
@@ -76,8 +77,7 @@ class Tokenizer:
             ('"\'', self._parse_string),
             ('[', self._parse_brackets),
             ('#', self._parse_error),
-            (' ', self._parse_whitespace),
-            ('\n', self._parse_whitespace),
+            (' \r\n', self._parse_whitespace),
             ('+-*/^&=><%', self._parse_operator),
             ('{(', self._parse_opener),
             (')}', self._parse_closer),
@@ -174,14 +174,16 @@ class Tokenizer:
 
     def _parse_whitespace(self):
         """
-        Consume a string of consecutive spaces.
+        Consume a run of spaces and line breaks (LF, CR, or CRLF).
 
-        Returns the number of spaces found. (Does not update self.offset).
+        The token keeps the whole run, so rendering restores it in place.
+        Returns the number of characters found. (Does not update self.offset).
 
         """
-        assert self.formula[self.offset] in (' ', '\n')
-        self.items.append(Token(self.formula[self.offset], Token.WSPACE))
-        return self.WSPACE_RE.match(self.formula[self.offset:]).end()
+        assert self.formula[self.offset] in (' ', '\r', '\n')
+        run = self.WSPACE_RE.match(self.formula, self.offset).group()
+        self.items.append(Token(run, Token.WSPACE))
+        return len(run)
 
     def _parse_operator(self):
         """

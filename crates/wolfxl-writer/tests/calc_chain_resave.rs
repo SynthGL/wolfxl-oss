@@ -9,7 +9,7 @@ fn parts(workbook: &mut Workbook) -> BTreeMap<String, String> {
     (0..zip.len())
         .map(|i| {
             let mut entry = zip.by_index(i).unwrap();
-            let name = entry.name().to_owned();
+            let name = entry.name().expect("valid fixture entry name").into_owned();
             let mut xml = String::new();
             entry.read_to_string(&mut xml).unwrap();
             (name, xml)

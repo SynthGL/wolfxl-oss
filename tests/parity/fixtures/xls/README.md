@@ -1,8 +1,8 @@
 # `.xls` parity fixtures (Sprint Κ Pod-γ)
 
-Five committed legacy BIFF8 (`.xls`) files used by
-`tests/parity/test_xls_reads.py` to assert wolfxl reads match
-`pandas.read_excel(engine="calamine")`.
+Legacy BIFF8 fixtures with retained authoring provenance. Current Community
+XLS parity uses the independently authored xlwt fixture and literal
+`crates/wolfxl-reader/qualification/expected.json` expectations instead.
 
 | File              | Content                                                |
 |-------------------|--------------------------------------------------------|

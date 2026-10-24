@@ -19,11 +19,11 @@ use crate::error::{Error, Result};
 /// malformed workbooks still yield something rather than failing hard.
 pub fn attr_value(e: &BytesStart<'_>, key: &[u8]) -> Option<String> {
     for a in e.attributes().with_checks(false).flatten() {
-        if a.key.as_ref() == key {
-            if let Ok(v) = a.unescape_value() {
-                return Some(v.to_string());
+        if a.key.as_ref().as_bytes() == key {
+            if let Ok(v) = quick_xml::escape::unescape(&a.value) {
+                return Some(v.into_owned());
             }
-            return Some(String::from_utf8_lossy(a.value.as_ref()).into_owned());
+            return Some(a.value.into_owned());
         }
     }
     None
@@ -62,7 +62,7 @@ pub fn parse_workbook_sheet_rids(xml: &str) -> Result<Vec<(String, String)>> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.local_name().as_ref() == b"sheet" {
+                if e.local_name().as_ref() == "sheet" {
                     let name = attr_value(&e, b"name");
                     let rid = attr_value(&e, b"r:id");
                     if let (Some(n), Some(r)) = (name, rid) {
@@ -92,7 +92,7 @@ pub fn parse_relationship_targets(xml: &str) -> Result<HashMap<String, String>> 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.local_name().as_ref() == b"Relationship" {
+                if e.local_name().as_ref() == "Relationship" {
                     let id = attr_value(&e, b"Id");
                     let target = attr_value(&e, b"Target");
                     if let (Some(i), Some(t)) = (id, target) {

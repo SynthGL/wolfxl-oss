@@ -1,16 +1,7 @@
 //! Multi-format `Workbook::open` dispatch tests.
 //!
-//! Sprint 2 task #21 extends wolfxl-core beyond xlsx. The acceptance
-//! criterion per B3 is that `Workbook::open(path)` sniffs the extension,
-//! routes to the right backend, and returns a workbook that answers the
-//! same questions (`sheet_names`, `first_sheet`, per-column schema) as
-//! the xlsx path - even when the backend has to synthesize a sheet (CSV)
-//! or calamine leaves styles empty (xls / ods).
-//!
-//! What these tests do NOT assert: number-format fidelity on xls/ods.
-//! calamine-styles' legacy non-xlsx readers return an empty `StyleRange`
-//! today, so the `number_format` field always comes back `None` there.
-//! Native xlsb carries number-format metadata through the shared Sheet API.
+//! Native format adapters retain typed values and sparse coordinates.
+//! Delimited inputs remain a synthetic worksheet of strings.
 
 use std::path::PathBuf;
 
@@ -82,7 +73,7 @@ fn opens_csv_as_single_synthetic_sheet() {
 }
 
 #[test]
-fn opens_xls_with_calamine_backend() {
+fn opens_xls_with_native_backend() {
     let path = fixture("sample-minimal.xls");
     assert!(path.exists(), "xls fixture missing at {}", path.display());
 
@@ -104,8 +95,7 @@ fn opens_xls_with_calamine_backend() {
     assert_eq!(headers[0], "Account");
     assert_eq!(headers[1], "Jan");
 
-    // Values come through calamine's xls reader; schema infers Int
-    // on numeric columns even though worksheet_style returns empty.
+    // BIFF8 numeric values remain numeric during schema inference.
     let schema = infer_sheet_schema(&sheet);
     assert_eq!(schema.columns[0].inferred_type, InferredType::String);
     assert_eq!(
@@ -151,7 +141,7 @@ fn opens_xlsb_with_native_backend() {
 }
 
 #[test]
-fn opens_ods_with_calamine_backend() {
+fn opens_ods_with_native_backend() {
     let path = fixture("sample-minimal.ods");
     assert!(path.exists(), "ods fixture missing at {}", path.display());
 
@@ -211,5 +201,50 @@ fn styles_accessor_errors_for_non_xlsx_formats() {
     match wb.styles() {
         Ok(_) => panic!("styles walker should error on non-xlsx"),
         Err(e) => assert!(format!("{e}").contains("only supports xlsx"), "got {e}"),
+    }
+}
+
+#[test]
+fn independently_authored_reader_fixtures_keep_their_sparse_coordinates() {
+    let input = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../wolfxl-reader/qualification");
+    for extension in ["xls", "ods"] {
+        let mut workbook = Workbook::open(input.join(format!("fixtures.{extension}"))).unwrap();
+        assert_eq!(workbook.sheet_names(), &["Values", "Second sheet"]);
+        let values = workbook.sheet("Values").unwrap();
+        assert_eq!(values.origin(), (2, 1));
+        assert_eq!(values.cell_address(0, 0), "B3");
+        assert_eq!(values.dimensions(), (1, 5));
+        assert!(values.get_at_address("A1").is_none());
+        assert!(matches!(&values.get_at_address("B3").unwrap().value,
+            CellValue::String(text) if text == "Independent café 中文"));
+        assert!(matches!(
+            values.get_at_address("C3").unwrap().value,
+            CellValue::Float(42.5)
+        ));
+        assert!(matches!(
+            values.get_at_address("D3").unwrap().value,
+            CellValue::Bool(true)
+        ));
+        assert!(
+            matches!(values.get_at_address("E3").unwrap().value, CellValue::Date(date)
+            if date == chrono::NaiveDate::from_ymd_opt(2024, 2, 29).unwrap())
+        );
+        if extension == "ods" {
+            assert!(matches!(
+                values.get_at_address("F3").unwrap().value,
+                CellValue::Int(45)
+            ));
+        } else {
+            // xlwt stores F3's FormulaValue as 03 00 00 00 00 00 ff ff.
+            // MS-XLS 2.5.133 defines type 0x03 as a blank string, not Empty.
+            assert!(matches!(
+                &values.get_at_address("F3").unwrap().value,
+                CellValue::String(text) if text.is_empty()
+            ));
+        }
+        assert!(matches!(
+            workbook.sheet("absent"),
+            Err(wolfxl_core::Error::SheetNotFound(_))
+        ));
     }
 }

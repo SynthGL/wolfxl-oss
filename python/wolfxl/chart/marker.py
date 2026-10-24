@@ -193,13 +193,46 @@ def _marker_to_tree(
 def _marker_from_tree(cls: type, node: Any) -> Any:
     upstream_cls = _resolve_openpyxl_class(__name__, cls.__name__)
     if upstream_cls is None:
-        raise AttributeError("from_tree")
+        return _native_marker_from_tree(cls, node)
     return _from_openpyxl_marker_model(cls, upstream_cls.from_tree(node))
+
+
+def _nested_bool(node: Any) -> bool:
+    """``CT_Boolean``: an omitted ``val`` means true."""
+    return node.get("val", "1") in ("1", "true")
+
+
+def _native_marker_from_tree(cls: type, node: Any) -> Any:
+    """Hydrate ``c:marker``/``c:dPt`` without openpyxl's descriptors."""
+    kwargs: dict[str, Any] = {}
+    for child in node:
+        if not isinstance(child.tag, str):
+            continue
+        name = child.tag.rsplit("}", 1)[-1]
+        if name == "spPr":
+            kwargs[name] = GraphicalProperties.from_tree(child)
+        elif name == "marker" and cls is DataPoint:
+            kwargs[name] = Marker.from_tree(child)
+        elif name in ("invertIfNegative", "bubble3D") and cls is DataPoint:
+            kwargs[name] = _nested_bool(child)
+        elif name in ("idx", "explosion", "size"):
+            kwargs[name] = int(child.get("val"))
+        elif name == "symbol" and cls is Marker:
+            kwargs[name] = child.get("val")
+        elif name == "extLst" and cls is Marker:
+            from .text import _TextXML
+
+            kwargs[name] = _TextXML(child)
+    return cls(**kwargs)
 
 
 def _marker_eq(self: Any, other: Any) -> bool:
     if type(self) is not type(other):
         return False
+    if _resolve_openpyxl_class(__name__, type(self).__name__) is None:
+        # Without openpyxl the conversion below is the identity, and comparing
+        # the results would re-enter this method forever.
+        return all(getattr(self, n) == getattr(other, n) for n in type(self).__slots__)
     return _to_openpyxl_model(self) == _to_openpyxl_model(other)
 
 

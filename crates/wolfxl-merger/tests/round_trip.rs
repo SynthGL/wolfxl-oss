@@ -40,7 +40,7 @@ fn sheet_xml_entries_in(xlsx: &Path) -> Vec<(String, Vec<u8>)> {
     let mut out = Vec::new();
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).expect("zip entry");
-        let name = entry.name().to_string();
+        let name = entry.name().expect("valid fixture entry name").into_owned();
         // Match xl/worksheets/sheetN.xml or xl/worksheets/chartsheetN.xml,
         // not xl/worksheets/_rels/...
         if !name.starts_with("xl/worksheets/")

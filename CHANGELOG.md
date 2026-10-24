@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.0.11 - 2026-10-24
+
+### Security
+
+- Remove `calamine-styles` after the native reader cutover and move direct XML
+  parsing and the isolated reader qualifier to `quick-xml` 0.42.
+- Upgrade ZIP handling to `zip` 9.0.5, clearing RUSTSEC-2026-0367,
+  RUSTSEC-2026-0368 and RUSTSEC-2026-0369 (patched in 9.0.0).
+- Exclude Python 3.9.0 and 3.9.1, which cannot install the fixed cryptography
+  resolution for the encrypted extra. Python 3.9.2 and later remain supported.
+- Keep Community Python ODS refusal and existing binary-format read, style, and
+  modification boundaries.
+
+### Fixed
+
+- Calling `calculate()` on a workbook opened with `data_only=True` preserves
+  its existing formula caches when saving, and writes caches only for formulas
+  actually computed by that call.
+
 ## 2.0.10 - 2026-10-20
 
 ### Fixed

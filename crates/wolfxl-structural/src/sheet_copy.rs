@@ -45,9 +45,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use quick_xml::events::attributes::Attribute;
-use quick_xml::events::{BytesStart, Event};
-use quick_xml::name::QName;
+use quick_xml::events::{BytesStart, BytesText, Event};
 use quick_xml::Reader as XmlReader;
 use quick_xml::Writer as XmlWriter;
 
@@ -55,6 +53,8 @@ use wolfxl_rels::{
     rt, walk_sheet_subgraph_with_nested, PartIdAllocator, RelId, Relationship, RelsGraph,
     TargetMode,
 };
+
+use crate::xml_text::TextNode;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -1032,14 +1032,13 @@ struct ParsedDefinedName {
 
 fn parse_workbook_metadata(workbook_xml: &[u8]) -> Result<SheetMetadata, SheetCopyError> {
     let mut reader = XmlReader::from_reader(workbook_xml);
-    reader.config_mut().trim_text(false);
     let mut buf: Vec<u8> = Vec::new();
     let mut meta = SheetMetadata::default();
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.local_name().as_ref() {
-                b"sheet" => {
+                "sheet" => {
                     let name = attr_value(&e, b"name").unwrap_or_default();
                     let sheet_id = attr_value(&e, b"sheetId")
                         .and_then(|v| v.parse::<u32>().ok())
@@ -1047,7 +1046,7 @@ fn parse_workbook_metadata(workbook_xml: &[u8]) -> Result<SheetMetadata, SheetCo
                     meta.sheet_titles.push(name);
                     meta.sheet_ids.push(sheet_id);
                 }
-                b"definedName" => {
+                "definedName" => {
                     let name = attr_value(&e, b"name").unwrap_or_default();
                     let lsid = attr_value(&e, b"localSheetId").and_then(|v| v.parse::<u32>().ok());
                     meta.defined_names.push(ParsedDefinedName {
@@ -1077,32 +1076,35 @@ fn populate_defined_name_formulas(
     defined_names: &mut [ParsedDefinedName],
 ) -> Result<(), SheetCopyError> {
     let mut reader = XmlReader::from_reader(workbook_xml);
-    reader.config_mut().trim_text(false);
     let mut buf: Vec<u8> = Vec::new();
     let mut in_dn: Option<usize> = None;
     let mut idx = 0;
+    let mut formula = TextNode::default();
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.local_name().as_ref() == b"definedName" => {
+        let event = reader.read_event_into(&mut buf);
+        if !formula.is_empty()
+            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
+        {
+            let text = formula
+                .unescaped()
+                .map_err(|e| SheetCopyError::Xml(format!("dn formula: {e}")))?;
+            if let Some(dn) = in_dn.and_then(|i| defined_names.get_mut(i)) {
+                dn.formula.push_str(text);
+            }
+            formula.clear();
+        }
+        match event {
+            Ok(Event::Start(e)) if e.local_name().as_ref() == "definedName" => {
                 in_dn = Some(idx);
             }
-            Ok(Event::Text(t)) if in_dn.is_some() => {
-                let text = t
-                    .unescape()
-                    .map(|s| s.into_owned())
-                    .unwrap_or_else(|_| String::from_utf8_lossy(&t).into_owned());
-                if let Some(i) = in_dn {
-                    if let Some(dn) = defined_names.get_mut(i) {
-                        dn.formula.push_str(&text);
-                    }
-                }
-            }
-            Ok(Event::End(e)) if e.local_name().as_ref() == b"definedName" => {
+            Ok(Event::Text(t)) if in_dn.is_some() => formula.push_text(&t),
+            Ok(Event::GeneralRef(r)) if in_dn.is_some() => formula.push_ref(&r),
+            Ok(Event::End(e)) if e.local_name().as_ref() == "definedName" => {
                 in_dn = None;
                 idx += 1;
             }
-            Ok(Event::Empty(e)) if e.local_name().as_ref() == b"definedName" => {
+            Ok(Event::Empty(e)) if e.local_name().as_ref() == "definedName" => {
                 // Self-closing definedName has no formula text.
                 idx += 1;
             }
@@ -1118,11 +1120,11 @@ fn populate_defined_name_formulas(
 
 fn attr_value(e: &BytesStart<'_>, key: &[u8]) -> Option<String> {
     for a in e.attributes().with_checks(false).flatten() {
-        if a.key.as_ref() == key {
+        if a.key.as_ref().as_bytes() == key {
             return Some(
-                a.unescape_value()
+                quick_xml::escape::unescape(&a.value)
                     .map(|v| v.into_owned())
-                    .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned()),
+                    .unwrap_or_else(|_| a.value.into_owned()),
             );
         }
     }
@@ -1167,7 +1169,6 @@ fn clone_table_part(
     new_n: u32,
 ) -> Result<(Vec<u8>, String, Option<String>), SheetCopyError> {
     let mut reader = XmlReader::from_reader(src_bytes);
-    reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(Vec::with_capacity(src_bytes.len()));
     let mut buf: Vec<u8> = Vec::new();
     let mut renamed: Option<String> = None;
@@ -1180,7 +1181,7 @@ fn clone_table_part(
                     .write_event(Event::Decl(d))
                     .map_err(|e| SheetCopyError::Xml(format!("table decl: {e}")))?;
             }
-            Ok(Event::Start(e)) if e.local_name().as_ref() == b"table" => {
+            Ok(Event::Start(e)) if e.local_name().as_ref() == "table" => {
                 let (new_e, new_name, old_name) = clone_table_start(&e, taken_names, new_n)?;
                 renamed = Some(new_name);
                 original_name = old_name;
@@ -1188,7 +1189,7 @@ fn clone_table_part(
                     .write_event(Event::Start(new_e))
                     .map_err(|e| SheetCopyError::Xml(format!("table root: {e}")))?;
             }
-            Ok(Event::Empty(e)) if e.local_name().as_ref() == b"table" => {
+            Ok(Event::Empty(e)) if e.local_name().as_ref() == "table" => {
                 let (new_e, new_name, old_name) = clone_table_start(&e, taken_names, new_n)?;
                 renamed = Some(new_name);
                 original_name = old_name;
@@ -1223,18 +1224,17 @@ fn clone_table_start(
     taken_names: &HashSet<String>,
     new_n: u32,
 ) -> Result<(BytesStart<'static>, String, Option<String>), SheetCopyError> {
-    let mut attrs: Vec<(Vec<u8>, String)> = Vec::new();
+    let mut attrs: Vec<(String, String)> = Vec::new();
     let mut source_name: Option<String> = None;
     let mut source_display_name: Option<String> = None;
     for a in e.attributes().with_checks(false).flatten() {
-        let key = a.key.as_ref().to_vec();
-        let value = a
-            .unescape_value()
+        let key = a.key.as_ref().to_owned();
+        let value = quick_xml::escape::unescape(&a.value)
             .map(|v| v.into_owned())
-            .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned());
-        match key.as_slice() {
-            b"name" => source_name = Some(value.clone()),
-            b"displayName" => source_display_name = Some(value.clone()),
+            .unwrap_or_else(|_| a.value.into_owned());
+        match key.as_str() {
+            "name" => source_name = Some(value.clone()),
+            "displayName" => source_display_name = Some(value.clone()),
             _ => {}
         }
         attrs.push((key, value));
@@ -1246,27 +1246,23 @@ fn clone_table_start(
         .map(|name| dedup_table_name(name, taken_names))
         .unwrap_or_else(|| format!("Table{new_n}"));
 
-    let mut new_e = BytesStart::new(
-        std::str::from_utf8(e.name().as_ref())
-            .map_err(|er| SheetCopyError::Xml(format!("table tag utf8: {er}")))?
-            .to_owned(),
-    );
+    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
     let mut wrote_name = false;
     let mut wrote_display_name = false;
     let mut wrote_id = false;
 
     for (key, value) in attrs {
-        match key.as_slice() {
-            b"name" => {
-                push_attr_escaped(&mut new_e, b"name", &new_name);
+        match key.as_str() {
+            "name" => {
+                push_attr_escaped(&mut new_e, "name", &new_name);
                 wrote_name = true;
             }
-            b"displayName" => {
-                push_attr_escaped(&mut new_e, b"displayName", &new_name);
+            "displayName" => {
+                push_attr_escaped(&mut new_e, "displayName", &new_name);
                 wrote_display_name = true;
             }
-            b"id" => {
-                push_attr_escaped(&mut new_e, b"id", &new_n.to_string());
+            "id" => {
+                push_attr_escaped(&mut new_e, "id", &new_n.to_string());
                 wrote_id = true;
             }
             _ => {
@@ -1276,13 +1272,13 @@ fn clone_table_start(
     }
 
     if !wrote_id {
-        push_attr_escaped(&mut new_e, b"id", &new_n.to_string());
+        push_attr_escaped(&mut new_e, "id", &new_n.to_string());
     }
     if !wrote_name {
-        push_attr_escaped(&mut new_e, b"name", &new_name);
+        push_attr_escaped(&mut new_e, "name", &new_name);
     }
     if !wrote_display_name {
-        push_attr_escaped(&mut new_e, b"displayName", &new_name);
+        push_attr_escaped(&mut new_e, "displayName", &new_name);
     }
 
     Ok((new_e, new_name, original_name))
@@ -1290,11 +1286,10 @@ fn clone_table_start(
 
 fn table_id_from_xml(src_bytes: &[u8]) -> Option<String> {
     let mut reader = XmlReader::from_reader(src_bytes);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.local_name().as_ref() == b"table" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.local_name().as_ref() == "table" => {
                 return attr_value(&e, b"id");
             }
             Ok(Event::Eof) => return None,
@@ -1322,12 +1317,11 @@ fn slicer_names_from_parts(zip_parts: &HashMap<String, Vec<u8>>) -> HashSet<Stri
             continue;
         }
         let mut reader = XmlReader::from_reader(bytes.as_slice());
-        reader.config_mut().trim_text(false);
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) | Ok(Event::Empty(e))
-                    if e.local_name().as_ref() == b"slicer" =>
+                    if e.local_name().as_ref() == "slicer" =>
                 {
                     if let Some(name) = attr_value(&e, b"name") {
                         names.insert(name);
@@ -1345,12 +1339,11 @@ fn slicer_names_from_parts(zip_parts: &HashMap<String, Vec<u8>>) -> HashSet<Stri
 
 fn slicer_cache_name_from_xml(src_bytes: &[u8]) -> Option<String> {
     let mut reader = XmlReader::from_reader(src_bytes);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e))
-                if e.local_name().as_ref() == b"slicerCacheDefinition" =>
+                if e.local_name().as_ref() == "slicerCacheDefinition" =>
             {
                 return attr_value(&e, b"name");
             }
@@ -1379,11 +1372,10 @@ fn clone_slicer_caches_for_presentation(
     let cache_parts = slicer_cache_parts_by_name(zip_parts);
     let mut workbook_refs = Vec::new();
     let mut reader = XmlReader::from_reader(slicer_xml);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.local_name().as_ref() == b"slicer" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.local_name().as_ref() == "slicer" => {
                 let Some(old_cache_name) = attr_value(&e, b"cache") else {
                     buf.clear();
                     continue;
@@ -1491,12 +1483,11 @@ fn slicer_cache_parts_by_name(
 
 fn table_slicer_cache_table_id(src_bytes: &[u8]) -> Option<String> {
     let mut reader = XmlReader::from_reader(src_bytes);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e))
-                if e.local_name().as_ref() == b"tableSlicerCache" =>
+                if e.local_name().as_ref() == "tableSlicerCache" =>
             {
                 return attr_value(&e, b"tableId");
             }
@@ -1570,11 +1561,10 @@ fn clone_timeline_cache_for_presentation(
     let cache_parts = timeline_cache_parts_by_name(zip_parts);
     let mut workbook_refs = Vec::new();
     let mut reader = XmlReader::from_reader(timeline_xml);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.local_name().as_ref() == b"timeline" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.local_name().as_ref() == "timeline" => {
                 let Some(old_cache_name) = attr_value(&e, b"cache") else {
                     buf.clear();
                     continue;
@@ -1753,12 +1743,11 @@ fn rewrite_vml_control_shape_ids(
     let mut attr_maps = HashMap::new();
     attr_maps.insert("id".to_string(), vml_id_remap);
     let mut reader = XmlReader::from_reader(xml);
-    reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(Vec::with_capacity(xml.len()));
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.local_name().as_ref() == b"shape" => {
+            Ok(Event::Start(e)) if e.local_name().as_ref() == "shape" => {
                 let Ok(new_e) = rewrite_element_attrs_by_local_name(&e, &attr_maps) else {
                     return xml.to_vec();
                 };
@@ -1766,7 +1755,7 @@ fn rewrite_vml_control_shape_ids(
                     return xml.to_vec();
                 }
             }
-            Ok(Event::Empty(e)) if e.local_name().as_ref() == b"shape" => {
+            Ok(Event::Empty(e)) if e.local_name().as_ref() == "shape" => {
                 let Ok(new_e) = rewrite_element_attrs_by_local_name(&e, &attr_maps) else {
                     return xml.to_vec();
                 };
@@ -1793,31 +1782,30 @@ fn vml_control_shape_ids(xml: &[u8], id_remap: &HashMap<String, String>) -> Hash
         .map(|old_id| format!("_x0000_s{old_id}"))
         .collect();
     let mut reader = XmlReader::from_reader(xml);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut shape_stack: Vec<Option<String>> = Vec::new();
     let mut out = HashSet::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.local_name().as_ref() == b"shape" => {
+            Ok(Event::Start(e)) if e.local_name().as_ref() == "shape" => {
                 let candidate = attr_value(&e, b"id").filter(|id| candidate_ids.contains(id));
                 shape_stack.push(candidate);
             }
-            Ok(Event::Empty(e)) if e.local_name().as_ref() == b"ClientData" => {
+            Ok(Event::Empty(e)) if e.local_name().as_ref() == "ClientData" => {
                 if let Some(Some(shape_id)) = shape_stack.last() {
                     if is_vml_control_client_data(&e) {
                         out.insert(shape_id.clone());
                     }
                 }
             }
-            Ok(Event::Start(e)) if e.local_name().as_ref() == b"ClientData" => {
+            Ok(Event::Start(e)) if e.local_name().as_ref() == "ClientData" => {
                 if let Some(Some(shape_id)) = shape_stack.last() {
                     if is_vml_control_client_data(&e) {
                         out.insert(shape_id.clone());
                     }
                 }
             }
-            Ok(Event::End(e)) if e.local_name().as_ref() == b"shape" => {
+            Ok(Event::End(e)) if e.local_name().as_ref() == "shape" => {
                 shape_stack.pop();
             }
             Ok(Event::Eof) => break,
@@ -1846,12 +1834,11 @@ fn rewrite_vml_control_idmap_data(xml: &[u8], id_remap: &HashMap<String, String>
     };
     let idmap_data = idmap_data.to_string();
     let mut reader = XmlReader::from_reader(xml);
-    reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(Vec::with_capacity(xml.len()));
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.local_name().as_ref() == b"idmap" => {
+            Ok(Event::Start(e)) if e.local_name().as_ref() == "idmap" => {
                 let Ok(new_e) = rewrite_element_attr_value_by_local_name(&e, "data", &idmap_data)
                 else {
                     return xml.to_vec();
@@ -1860,7 +1847,7 @@ fn rewrite_vml_control_idmap_data(xml: &[u8], id_remap: &HashMap<String, String>
                     return xml.to_vec();
                 }
             }
-            Ok(Event::Empty(e)) if e.local_name().as_ref() == b"idmap" => {
+            Ok(Event::Empty(e)) if e.local_name().as_ref() == "idmap" => {
                 let Ok(new_e) = rewrite_element_attr_value_by_local_name(&e, "data", &idmap_data)
                 else {
                     return xml.to_vec();
@@ -1884,12 +1871,11 @@ fn rewrite_vml_control_idmap_data(xml: &[u8], id_remap: &HashMap<String, String>
 
 fn control_shape_ids_from_sheet(sheet_xml: &[u8]) -> Vec<String> {
     let mut reader = XmlReader::from_reader(sheet_xml);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut out = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.local_name().as_ref() == b"control" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.local_name().as_ref() == "control" => {
                 if let Some(value) = attr_value(&e, b"shapeId") {
                     if value.chars().all(|c| c.is_ascii_digit()) {
                         out.push(value);
@@ -1919,28 +1905,24 @@ fn vml_shape_id_block_data(shape_id: u32) -> u32 {
 
 fn shape_ids_from_xml(xml: &[u8]) -> Vec<u32> {
     let mut reader = XmlReader::from_reader(xml);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut out = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 for attr in e.attributes().with_checks(false).flatten() {
-                    let key = attr.key.as_ref().to_vec();
-                    let local_key = key.rsplit(|b| *b == b':').next().unwrap_or(key.as_slice());
-                    let value = attr
-                        .unescape_value()
+                    let key = attr.key.as_ref();
+                    let local_key = key.rsplit(':').next().unwrap_or(key);
+                    let value = quick_xml::escape::unescape(&attr.value)
                         .map(|v| v.into_owned())
-                        .unwrap_or_else(|_| {
-                            String::from_utf8_lossy(attr.value.as_ref()).into_owned()
-                        });
+                        .unwrap_or_else(|_| attr.value.into_owned());
                     match local_key {
-                        b"shapeId" => {
+                        "shapeId" => {
                             if let Ok(id) = value.parse::<u32>() {
                                 out.push(id);
                             }
                         }
-                        b"id" | b"spid" => {
+                        "id" | "spid" => {
                             if let Some(id) = value
                                 .strip_prefix("_x0000_s")
                                 .and_then(|suffix| suffix.parse::<u32>().ok())
@@ -1978,11 +1960,10 @@ fn rewrite_table_formula_refs(xml: &[u8], table_name_remap: &HashMap<String, Str
 
 fn first_attr_on_local_element(src_bytes: &[u8], element: &[u8], attr: &[u8]) -> Option<String> {
     let mut reader = XmlReader::from_reader(src_bytes);
-    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.local_name().as_ref() == element => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.local_name().as_ref().as_bytes() == element => {
                 return attr_value(&e, attr);
             }
             Ok(Event::Eof) => return None,
@@ -2001,7 +1982,6 @@ fn rewrite_attributes_by_local_name(
         return xml.to_vec();
     }
     let mut reader = XmlReader::from_reader(xml);
-    reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(Vec::with_capacity(xml.len()));
     let mut buf = Vec::new();
     loop {
@@ -2039,25 +2019,19 @@ fn rewrite_element_attrs_by_local_name(
     e: &BytesStart<'_>,
     attr_maps: &HashMap<String, HashMap<String, String>>,
 ) -> Result<BytesStart<'static>, SheetCopyError> {
-    let mut new_e = BytesStart::new(
-        std::str::from_utf8(e.name().as_ref())
-            .map_err(|er| SheetCopyError::Xml(format!("element name utf8: {er}")))?
-            .to_owned(),
-    );
+    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
     for a in e.attributes().with_checks(false).flatten() {
-        let key = a.key.as_ref().to_vec();
-        let local_key = key.rsplit(|b| *b == b':').next().unwrap_or(key.as_slice());
-        let local_key = String::from_utf8_lossy(local_key).into_owned();
-        let value = a
-            .unescape_value()
+        let key = a.key.as_ref();
+        let local_key = key.rsplit(':').next().unwrap_or(key);
+        let value = quick_xml::escape::unescape(&a.value)
             .map(|v| v.into_owned())
-            .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned());
+            .unwrap_or_else(|_| a.value.into_owned());
         let new_value = attr_maps
-            .get(&local_key)
+            .get(local_key)
             .and_then(|m| m.get(&value))
             .cloned()
             .unwrap_or(value);
-        push_attr_escaped(&mut new_e, &key, &new_value);
+        push_attr_escaped(&mut new_e, key, &new_value);
     }
     Ok(new_e)
 }
@@ -2067,22 +2041,17 @@ fn rewrite_element_attr_value_by_local_name(
     attr_name: &str,
     attr_value: &str,
 ) -> Result<BytesStart<'static>, SheetCopyError> {
-    let mut new_e = BytesStart::new(
-        std::str::from_utf8(e.name().as_ref())
-            .map_err(|er| SheetCopyError::Xml(format!("element name utf8: {er}")))?
-            .to_owned(),
-    );
+    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
     for a in e.attributes().with_checks(false).flatten() {
-        let key = a.key.as_ref().to_vec();
-        let local_key = key.rsplit(|b| *b == b':').next().unwrap_or(key.as_slice());
-        if local_key == attr_name.as_bytes() {
-            push_attr_escaped(&mut new_e, &key, attr_value);
+        let key = a.key.as_ref();
+        let local_key = key.rsplit(':').next().unwrap_or(key);
+        if local_key == attr_name {
+            push_attr_escaped(&mut new_e, key, attr_value);
         } else {
-            let value = a
-                .unescape_value()
+            let value = quick_xml::escape::unescape(&a.value)
                 .map(|v| v.into_owned())
-                .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned());
-            push_attr_escaped(&mut new_e, &key, &value);
+                .unwrap_or_else(|_| a.value.into_owned());
+            push_attr_escaped(&mut new_e, key, &value);
         }
     }
     Ok(new_e)
@@ -2106,7 +2075,6 @@ fn rewrite_rids(
         return Ok(src_xml.to_vec());
     }
     let mut reader = XmlReader::from_reader(src_xml);
-    reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(Vec::with_capacity(src_xml.len()));
     let mut buf: Vec<u8> = Vec::new();
 
@@ -2141,24 +2109,19 @@ fn remap_element_attributes<'a>(
     e: &BytesStart<'a>,
     remap: &HashMap<String, String>,
 ) -> Result<BytesStart<'static>, SheetCopyError> {
-    let mut new_e = BytesStart::new(
-        std::str::from_utf8(e.name().as_ref())
-            .map_err(|er| SheetCopyError::Xml(format!("element name utf8: {er}")))?
-            .to_owned(),
-    );
+    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
     for a in e.attributes().with_checks(false).flatten() {
-        let key = a.key.as_ref().to_vec();
-        let value = a
-            .unescape_value()
+        let key = a.key.as_ref();
+        let value = quick_xml::escape::unescape(&a.value)
             .map(|v| v.into_owned())
-            .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned());
-        let is_r_id = key == b"r:id" || (key.ends_with(b":id") && key.starts_with(b"r"));
+            .unwrap_or_else(|_| a.value.into_owned());
+        let is_r_id = key == "r:id" || (key.ends_with(":id") && key.starts_with('r'));
         let new_value = if is_r_id {
             remap.get(&value).cloned().unwrap_or(value)
         } else {
             value
         };
-        push_attr_escaped(&mut new_e, &key, &new_value);
+        push_attr_escaped(&mut new_e, key, &new_value);
     }
     Ok(new_e)
 }
@@ -2268,14 +2231,35 @@ pub(crate) fn rewrite_sheet_formula_refs(
         return sheet_xml.to_vec();
     }
     let mut reader = XmlReader::from_reader(sheet_xml);
-    reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(Vec::with_capacity(sheet_xml.len()));
     let mut in_f = false;
     let mut buf: Vec<u8> = Vec::new();
+    // A formula is one logical node even when XML entity references split it.
+    let mut formula = TextNode::default();
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event = reader.read_event_into(&mut buf);
+        if !formula.is_empty()
+            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
+        {
+            if let Ok(text) = formula.unescaped() {
+                // OOXML formula bodies omit the tokenizer's leading `=`.
+                let prefixed = format!("={text}");
+                let translated = wolfxl_formula::rename_sheet(&prefixed, src_title, dst_title);
+                writer
+                    .write_event(Event::Text(BytesText::new(
+                        translated.strip_prefix('=').unwrap_or(&translated),
+                    )))
+                    .expect("write");
+            } else {
+                writer
+                    .write_event(Event::Text(BytesText::from_escaped(formula.raw())))
+                    .expect("write");
+            }
+            formula.clear();
+        }
+        match event {
             Ok(Event::Start(e)) => {
-                if e.local_name().as_ref() == b"f" {
+                if e.local_name().as_ref() == "f" {
                     in_f = true;
                     let new_e = rewrite_f_attributes(&e, src_title, dst_title);
                     writer.write_event(Event::Start(new_e)).expect("write");
@@ -2286,7 +2270,7 @@ pub(crate) fn rewrite_sheet_formula_refs(
                 }
             }
             Ok(Event::End(e)) => {
-                if e.local_name().as_ref() == b"f" {
+                if e.local_name().as_ref() == "f" {
                     in_f = false;
                 }
                 writer
@@ -2294,7 +2278,7 @@ pub(crate) fn rewrite_sheet_formula_refs(
                     .expect("write");
             }
             Ok(Event::Empty(e)) => {
-                if e.local_name().as_ref() == b"f" {
+                if e.local_name().as_ref() == "f" {
                     let new_e = rewrite_f_attributes(&e, src_title, dst_title);
                     writer.write_event(Event::Empty(new_e)).expect("write");
                 } else {
@@ -2303,36 +2287,13 @@ pub(crate) fn rewrite_sheet_formula_refs(
                         .expect("write");
                 }
             }
+            Ok(Event::Text(t)) if in_f => formula.push_text(&t),
+            Ok(Event::GeneralRef(r)) if in_f => formula.push_ref(&r),
             Ok(Event::Text(t)) => {
-                if in_f {
-                    let raw = t.unescape().map(|c| c.into_owned()).ok();
-                    if let Some(formula_text) = raw {
-                        // Worksheet `<f>` bodies do not carry the
-                        // leading `=`; the formula translator's
-                        // tokenizer needs it, so we add it before and
-                        // strip after.
-                        let prefixed = format!("={formula_text}");
-                        let translated_eq =
-                            wolfxl_formula::rename_sheet(&prefixed, src_title, dst_title);
-                        let translated = translated_eq
-                            .strip_prefix('=')
-                            .unwrap_or(&translated_eq)
-                            .to_string();
-                        writer
-                            .write_event(Event::Text(quick_xml::events::BytesText::new(
-                                &translated,
-                            )))
-                            .expect("write");
-                    } else {
-                        writer
-                            .write_event(Event::Text(t.into_owned()))
-                            .expect("write");
-                    }
-                } else {
-                    writer
-                        .write_event(Event::Text(t.into_owned()))
-                        .expect("write");
-                }
+                writer.write_event(Event::Text(t)).expect("write");
+            }
+            Ok(Event::GeneralRef(r)) => {
+                writer.write_event(Event::GeneralRef(r)).expect("write");
             }
             Ok(Event::CData(c)) => {
                 writer
@@ -2375,18 +2336,13 @@ fn rewrite_f_attributes(
     src_title: &str,
     dst_title: &str,
 ) -> BytesStart<'static> {
-    let mut new_e = BytesStart::new(
-        std::str::from_utf8(e.name().as_ref())
-            .map(|s| s.to_owned())
-            .unwrap_or_default(),
-    );
+    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
     for a in e.attributes().with_checks(false).flatten() {
-        let key = a.key.as_ref().to_vec();
-        let value = a
-            .unescape_value()
+        let key = a.key.as_ref();
+        let value = quick_xml::escape::unescape(&a.value)
             .map(|v| v.into_owned())
-            .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned());
-        let new_value = if matches!(key.as_slice(), b"ref" | b"r1" | b"r2") {
+            .unwrap_or_else(|_| a.value.into_owned());
+        let new_value = if matches!(key, "ref" | "r1" | "r2") {
             // Wrap as `=value` to feed the tokenizer, strip back.
             let prefixed = format!("={value}");
             let translated_eq = wolfxl_formula::rename_sheet(&prefixed, src_title, dst_title);
@@ -2397,7 +2353,7 @@ fn rewrite_f_attributes(
         } else {
             value
         };
-        push_attr_escaped(&mut new_e, &key, &new_value);
+        push_attr_escaped(&mut new_e, key, &new_value);
     }
     new_e
 }
@@ -2424,15 +2380,35 @@ pub(crate) fn rewrite_chart_sheet_refs(
         return chart_xml.to_vec();
     }
     let mut reader = XmlReader::from_reader(chart_xml);
-    reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(Vec::with_capacity(chart_xml.len()));
     let mut in_f = false;
     let mut buf: Vec<u8> = Vec::new();
+    let mut formula = TextNode::default();
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event = reader.read_event_into(&mut buf);
+        if !formula.is_empty()
+            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
+        {
+            if let Ok(text) = formula.unescaped() {
+                // Resolve the entire chart reference before renaming its sheet.
+                let prefixed = format!("={text}");
+                let translated = wolfxl_formula::rename_sheet(&prefixed, src_title, dst_title);
+                writer
+                    .write_event(Event::Text(BytesText::new(
+                        translated.strip_prefix('=').unwrap_or(&translated),
+                    )))
+                    .expect("write");
+            } else {
+                writer
+                    .write_event(Event::Text(BytesText::from_escaped(formula.raw())))
+                    .expect("write");
+            }
+            formula.clear();
+        }
+        match event {
             Ok(Event::Start(e)) => {
                 let local = e.local_name();
-                if local.as_ref() == b"f" {
+                if local.as_ref() == "f" {
                     in_f = true;
                 }
                 writer
@@ -2441,7 +2417,7 @@ pub(crate) fn rewrite_chart_sheet_refs(
             }
             Ok(Event::End(e)) => {
                 let local = e.local_name();
-                if local.as_ref() == b"f" {
+                if local.as_ref() == "f" {
                     in_f = false;
                 }
                 writer
@@ -2453,34 +2429,13 @@ pub(crate) fn rewrite_chart_sheet_refs(
                     .write_event(Event::Empty(e.into_owned()))
                     .expect("write");
             }
+            Ok(Event::Text(t)) if in_f => formula.push_text(&t),
+            Ok(Event::GeneralRef(r)) if in_f => formula.push_ref(&r),
             Ok(Event::Text(t)) => {
-                if in_f {
-                    let raw = t.unescape().map(|c| c.into_owned()).ok();
-                    if let Some(formula_text) = raw {
-                        // The formula translator expects formulas
-                        // with a leading `=` (its tokenizer keys off
-                        // that prefix). `<c:f>` bodies in chart XML
-                        // do NOT carry the `=`, so we prepend it
-                        // before translating and strip it afterwards.
-                        let prefixed = format!("={formula_text}");
-                        let translated_eq =
-                            wolfxl_formula::rename_sheet(&prefixed, src_title, dst_title);
-                        let translated = translated_eq
-                            .strip_prefix('=')
-                            .unwrap_or(&translated_eq)
-                            .to_string();
-                        let new_text = quick_xml::events::BytesText::new(&translated);
-                        writer.write_event(Event::Text(new_text)).expect("write");
-                    } else {
-                        writer
-                            .write_event(Event::Text(t.into_owned()))
-                            .expect("write");
-                    }
-                } else {
-                    writer
-                        .write_event(Event::Text(t.into_owned()))
-                        .expect("write");
-                }
+                writer.write_event(Event::Text(t)).expect("write");
+            }
+            Ok(Event::GeneralRef(r)) => {
+                writer.write_event(Event::GeneralRef(r)).expect("write");
             }
             Ok(Event::CData(c)) => {
                 writer
@@ -2531,14 +2486,13 @@ pub(crate) fn rewrite_drawing_chart_rids(
         return drawing_xml.to_vec();
     }
     let mut reader = XmlReader::from_reader(drawing_xml);
-    reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(Vec::with_capacity(drawing_xml.len()));
     let mut buf: Vec<u8> = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
                 let local = e.local_name();
-                if local.as_ref() == b"chart" {
+                if local.as_ref() == "chart" {
                     let new_e = remap_chart_attrs(&e, chart_rid_remap);
                     writer.write_event(Event::Start(new_e)).expect("write");
                 } else {
@@ -2549,7 +2503,7 @@ pub(crate) fn rewrite_drawing_chart_rids(
             }
             Ok(Event::Empty(e)) => {
                 let local = e.local_name();
-                if local.as_ref() == b"chart" {
+                if local.as_ref() == "chart" {
                     let new_e = remap_chart_attrs(&e, chart_rid_remap);
                     writer.write_event(Event::Empty(new_e)).expect("write");
                 } else {
@@ -2567,6 +2521,9 @@ pub(crate) fn rewrite_drawing_chart_rids(
                 writer
                     .write_event(Event::Text(t.into_owned()))
                     .expect("write");
+            }
+            Ok(Event::GeneralRef(r)) => {
+                writer.write_event(Event::GeneralRef(r)).expect("write");
             }
             Ok(Event::CData(c)) => {
                 writer
@@ -2607,37 +2564,26 @@ fn remap_chart_attrs<'a>(
     e: &BytesStart<'a>,
     remap: &HashMap<String, String>,
 ) -> BytesStart<'static> {
-    let name_str = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+    let name_str = e.name().as_ref().to_owned();
     let mut new_e = BytesStart::new(name_str);
     for a in e.attributes().with_checks(false).flatten() {
-        let key = a.key.as_ref().to_vec();
-        let value = a
-            .unescape_value()
+        let key = a.key.as_ref();
+        let value = quick_xml::escape::unescape(&a.value)
             .map(|v| v.into_owned())
-            .unwrap_or_else(|_| String::from_utf8_lossy(a.value.as_ref()).into_owned());
-        let is_r_id = key == b"r:id" || (key.ends_with(b":id") && key.starts_with(b"r"));
+            .unwrap_or_else(|_| a.value.into_owned());
+        let is_r_id = key == "r:id" || (key.ends_with(":id") && key.starts_with('r'));
         let new_value = if is_r_id {
             remap.get(&value).cloned().unwrap_or(value)
         } else {
             value
         };
-        push_attr_escaped(&mut new_e, &key, &new_value);
+        push_attr_escaped(&mut new_e, key, &new_value);
     }
     new_e
 }
 
-fn push_attr_escaped(e: &mut BytesStart<'_>, key: &[u8], value: &str) {
-    let escaped = xml_attr_escape(value);
-    e.push_attribute(Attribute {
-        key: QName(key),
-        value: escaped.into_bytes().into(),
-    });
-}
-
-fn xml_attr_escape(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    push_xml_attr_escape(&mut out, value);
-    out
+fn push_attr_escaped(e: &mut BytesStart<'_>, key: &str, value: &str) {
+    e.push_attribute((key, value));
 }
 
 // ---------------------------------------------------------------------------
@@ -2647,6 +2593,47 @@ fn xml_attr_escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn defined_name_formulas_resolve_split_references() {
+        let xml = br#"<workbook><definedNames><definedName name="empty"/><definedName name="range">'A&amp;B'!A&#49;&amp;&quot;A1&quot;</definedName><definedName name="entity">&#65;</definedName></definedNames></workbook>"#;
+        let meta = parse_workbook_metadata(xml).unwrap();
+        assert_eq!(meta.defined_names.len(), 3);
+        assert_eq!(meta.defined_names[0].formula, "");
+        assert_eq!(meta.defined_names[1].formula, "'A&B'!A1&\"A1\"");
+        assert_eq!(meta.defined_names[2].formula, "A");
+        let bad = br#"<workbook><definedNames><definedName name="bad">&unknown;</definedName></definedNames></workbook>"#;
+        assert!(matches!(parse_workbook_metadata(bad), Err(SheetCopyError::Xml(_))));
+    }
+
+    #[test]
+    fn sheet_and_chart_renames_resolve_complete_formula_nodes() {
+        let sheet = br#"<worksheet><sheetData><row r="1"><c r="A1"><f>'A&amp;B'!A&#49;&amp;&quot;A&amp;B!A1&quot;</f><is><t> &#65;&amp;&lt; </t></is></c></row></sheetData></worksheet>"#;
+        let out = String::from_utf8(rewrite_sheet_formula_refs(sheet, "A&B", "C&D")).unwrap();
+        assert!(out.contains("<f>&apos;C&amp;D&apos;!A1&amp;&quot;A&amp;B!A1&quot;</f>"), "{out}");
+        assert!(out.contains("<t> &#65;&amp;&lt; </t>"), "{out}");
+
+        let chart = br#"<c:chart xmlns:c="urn:chart"><c:f>'A&amp;B'!$A$&#49;:$A$2</c:f><c:v> &#65;&amp;&lt; </c:v></c:chart>"#;
+        let out = String::from_utf8(rewrite_chart_sheet_refs(chart, "A&B", "C&D")).unwrap();
+        assert!(out.contains("<c:f>&apos;C&amp;D&apos;!$A$1:$A$2</c:f>"), "{out}");
+        assert!(out.contains("<c:v> &#65;&amp;&lt; </c:v>"), "{out}");
+    }
+
+    #[test]
+    fn unresolvable_formula_references_remain_raw() {
+        let xml = br#"<root><f>Template!A1&amp;&unknown;</f></root>"#;
+        assert_eq!(rewrite_sheet_formula_refs(xml, "Template", "Copy"), xml);
+        assert_eq!(rewrite_chart_sheet_refs(xml, "Template", "Copy"), xml);
+    }
+
+    #[test]
+    fn drawing_rid_rewrite_preserves_text_and_escapes_attributes_once() {
+        let xml = br#"<drawing><chart r:id="old" note="A&amp;B"/><t> &#65;&amp;&lt; </t></drawing>"#;
+        let remap = HashMap::from([("old".to_string(), "new&rid".to_string())]);
+        let out = String::from_utf8(rewrite_drawing_chart_rids(xml, &remap)).unwrap();
+        assert!(out.contains(r#"r:id="new&amp;rid" note="A&amp;B""#), "{out}");
+        assert!(out.contains("<t> &#65;&amp;&lt; </t>"), "{out}");
+    }
 
     fn minimal_sheet_xml() -> Vec<u8> {
         br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -2993,7 +2980,6 @@ mod tests {
         );
 
         let mut reader = XmlReader::from_reader(mutations.new_sheet_xml.as_slice());
-        reader.config_mut().trim_text(false);
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {

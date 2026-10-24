@@ -48,9 +48,6 @@ fn main() {
         return;
     };
 
-    if let Some(v) = parse_lock_version(&lock, "calamine-styles") {
-        emit_version("WOLFXL_DEP_CALAMINE_VERSION", &v);
-    }
     if let Some(v) = parse_lock_version(&lock, "rust_xlsxwriter") {
         emit_version("WOLFXL_DEP_RUST_XLSXWRITER_VERSION", &v);
     }

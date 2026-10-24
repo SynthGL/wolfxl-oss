@@ -23,7 +23,19 @@ def _to_int(value):  # type: ignore[no-untyped-def]
     return int(value) if value is not None else None
 
 
+_PHONETIC_TYPES = ("noConversion", "halfwidthKatakana", "fullwidthKatakana", "Hiragana")
+_PHONETIC_ALIGNMENTS = ("noControl", "left", "center", "distributed")
+_MAX_FONT_ID = 2**32 - 1
+
+
 class PhoneticProperties:
+    """``<phoneticPr>``: ``fontId`` (xsd:unsignedInt), ``type`` and ``alignment``.
+
+    Each attribute is validated against the schema when assigned, so a bad value is
+    refused at the assignment instead of failing when the workbook is saved. Values
+    read from a stored workbook bypass validation so a foreign file reads back as written.
+    """
+
     tagname = "phoneticPr"
 
     def __init__(self, fontId=None, type=None, alignment=None):  # noqa: N803, ANN001
@@ -32,8 +44,63 @@ class PhoneticProperties:
         self.alignment = alignment
 
     @classmethod
+    def _from_stored(cls, fontId=None, type=None, alignment=None):  # type: ignore[no-untyped-def]  # noqa: N803, ANN001
+        """Build from a stored workbook without validating its values."""
+        properties = cls()
+        properties._fontId = fontId
+        properties._type = type
+        properties._alignment = alignment
+        return properties
+
+    @staticmethod
+    def _choice(name, value, choices):  # type: ignore[no-untyped-def]
+        if value is not None:
+            if not isinstance(value, str):
+                raise TypeError(
+                    f"PhoneticProperties.{name} must be a str or None, got {type(value).__name__}"
+                )
+            if value not in choices:
+                raise ValueError(
+                    f"PhoneticProperties.{name} {value!r} is not one of {', '.join(choices)}"
+                )
+        return value
+
+    @property
+    def fontId(self):  # type: ignore[no-untyped-def]  # noqa: N802
+        return self._fontId
+
+    @fontId.setter
+    def fontId(self, value):  # type: ignore[no-untyped-def]  # noqa: N802, ANN001
+        if value is not None:
+            if type(value) is not int:
+                raise TypeError(
+                    f"PhoneticProperties.fontId must be an int or None, got {type(value).__name__}"
+                )
+            if not 0 <= value <= _MAX_FONT_ID:
+                raise ValueError(
+                    f"PhoneticProperties.fontId {value} is outside 0..{_MAX_FONT_ID}"
+                )
+        self._fontId = value
+
+    @property
+    def type(self):  # type: ignore[no-untyped-def]
+        return self._type
+
+    @type.setter
+    def type(self, value):  # type: ignore[no-untyped-def]  # noqa: ANN001
+        self._type = self._choice("type", value, _PHONETIC_TYPES)
+
+    @property
+    def alignment(self):  # type: ignore[no-untyped-def]
+        return self._alignment
+
+    @alignment.setter
+    def alignment(self, value):  # type: ignore[no-untyped-def]  # noqa: ANN001
+        self._alignment = self._choice("alignment", value, _PHONETIC_ALIGNMENTS)
+
+    @classmethod
     def from_tree(cls, node):  # type: ignore[no-untyped-def]
-        return cls(
+        return cls._from_stored(
             fontId=_to_int(node.get("fontId")),
             type=node.get("type"),
             alignment=node.get("alignment"),

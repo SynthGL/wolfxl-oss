@@ -39,7 +39,7 @@ fn rels_entries_in(xlsx: &Path) -> Vec<(String, Vec<u8>)> {
     let mut out = Vec::new();
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).expect("zip entry");
-        let name = entry.name().to_string();
+        let name = entry.name().expect("valid fixture entry name").into_owned();
         if !name.ends_with(".rels") {
             continue;
         }

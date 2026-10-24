@@ -94,7 +94,7 @@ fn ordered_top_level_children(xml: &[u8]) -> Vec<(Vec<u8>, Option<u32>)> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                let name = e.local_name().as_ref().to_vec();
+                let name = e.local_name().as_ref().as_bytes().to_vec();
                 if depth == 1 {
                     let ord = lookup.get(name.as_slice()).copied();
                     out.push((name, ord));
@@ -102,7 +102,7 @@ fn ordered_top_level_children(xml: &[u8]) -> Vec<(Vec<u8>, Option<u32>)> {
                 depth += 1;
             }
             Ok(Event::Empty(e)) => {
-                let name = e.local_name().as_ref().to_vec();
+                let name = e.local_name().as_ref().as_bytes().to_vec();
                 if depth == 1 {
                     let ord = lookup.get(name.as_slice()).copied();
                     out.push((name, ord));

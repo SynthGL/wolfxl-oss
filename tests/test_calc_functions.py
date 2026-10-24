@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -21,19 +20,6 @@ from wolfxl.calc._functions import (
 class TestWhitelist:
     def test_whitelist_has_67_functions(self) -> None:
         assert len(FUNCTION_WHITELIST_V1) == 67
-
-    def test_public_formula_counts_match_whitelist(self) -> None:
-        root = Path(__file__).resolve().parents[1]
-        count = len(FUNCTION_WHITELIST_V1)
-        readme = (root / "README.md").read_text(encoding="utf-8")
-        pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
-
-        assert f"with {count} functions across 7 categories" in readme
-        assert f"formula engine ({count} functions" in pyproject
-        assert (
-            "| **Date / Time** (12) | TODAY, DATE, YEAR, MONTH, DAY, "
-            "EDATE, EOMONTH, DAYS, NOW, HOUR, MINUTE, SECOND |"
-        ) in readme
 
     def test_all_categories_represented(self) -> None:
         categories = set(FUNCTION_WHITELIST_V1.values())

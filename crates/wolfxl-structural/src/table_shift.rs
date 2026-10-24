@@ -7,9 +7,10 @@ use quick_xml::Writer as XmlWriter;
 use crate::axis::{Axis, ShiftPlan};
 use crate::shift_anchors::shift_anchor;
 use crate::shift_formulas::shift_formula;
+use crate::xml_text::TextNode;
 
-fn push_attr<'a>(e: &mut BytesStart<'a>, key: &[u8], val: &str) {
-    e.push_attribute((key, val.as_bytes()));
+fn push_attr<'a>(e: &mut BytesStart<'a>, key: &str, val: &str) {
+    e.push_attribute((key, val));
 }
 
 /// Rewrite a `xl/tables/tableN.xml` part: `<table ref>`, `<autoFilter ref>`,
@@ -70,14 +71,26 @@ fn shift_table_xml_inner(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
     let mut writer = XmlWriter::new(std::io::Cursor::new(Vec::new()));
     let mut buf: Vec<u8> = Vec::new();
     let mut in_calc_formula = false;
+    // `<calculatedColumnFormula>` text, collected across text and
+    // entity-reference events and shifted as one node.
+    let mut formula = TextNode::default();
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event = reader.read_event_into(&mut buf);
+        if !formula.is_empty()
+            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
+        {
+            let s = formula.unescaped().unwrap_or_else(|_| formula.raw());
+            let new_s = shift_formula(s, plan);
+            let _ = writer.write_event(Event::Text(BytesText::new(&new_s)));
+            formula.clear();
+        }
+        match event {
             Ok(Event::Start(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name().as_ref().as_bytes().to_vec();
                 match local.as_slice() {
                     b"table" | b"autoFilter" => {
-                        let new_e = rewrite_attr_value(e, b"ref", |v| shift_anchor(v, plan));
+                        let new_e = rewrite_attr_value(e, "ref", |v| shift_anchor(v, plan));
                         let _ = writer.write_event(Event::Start(new_e));
                     }
                     b"calculatedColumnFormula" => {
@@ -90,10 +103,10 @@ fn shift_table_xml_inner(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name().as_ref().as_bytes().to_vec();
                 match local.as_slice() {
                     b"table" | b"autoFilter" => {
-                        let new_e = rewrite_attr_value(e, b"ref", |v| shift_anchor(v, plan));
+                        let new_e = rewrite_attr_value(e, "ref", |v| shift_anchor(v, plan));
                         let _ = writer.write_event(Event::Empty(new_e));
                     }
                     _ => {
@@ -102,25 +115,13 @@ fn shift_table_xml_inner(xml: &[u8], plan: &ShiftPlan) -> Vec<u8> {
                 }
             }
             Ok(Event::End(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
-                if local.as_slice() == b"calculatedColumnFormula" {
+                if e.local_name().as_ref() == "calculatedColumnFormula" {
                     in_calc_formula = false;
                 }
                 let _ = writer.write_event(Event::End(e.to_owned()));
             }
-            Ok(Event::Text(ref t)) => {
-                if in_calc_formula {
-                    let s = match t.unescape() {
-                        Ok(c) => c.into_owned(),
-                        Err(_) => String::from_utf8_lossy(t.as_ref()).into_owned(),
-                    };
-                    let new_s = shift_formula(&s, plan);
-                    let new_t = BytesText::new(&new_s);
-                    let _ = writer.write_event(Event::Text(new_t));
-                } else {
-                    let _ = writer.write_event(Event::Text(t.to_owned()));
-                }
-            }
+            Ok(Event::Text(ref t)) if in_calc_formula => formula.push_text(t),
+            Ok(Event::GeneralRef(ref r)) if in_calc_formula => formula.push_ref(r),
             Ok(Event::Eof) => break,
             Ok(other) => {
                 let _ = writer.write_event(other);
@@ -475,14 +476,14 @@ fn extract_attr(elt: &str, key: &str) -> Option<String> {
 
 fn rewrite_attr_value<'a, F: Fn(&str) -> String>(
     e: &BytesStart<'a>,
-    attr_name: &[u8],
+    attr_name: &str,
     f: F,
 ) -> BytesStart<'a> {
-    let mut new_e = BytesStart::new(String::from_utf8_lossy(e.name().as_ref()).into_owned());
+    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
     for attr_res in e.attributes().with_checks(false) {
         let Ok(attr) = attr_res else { continue };
         let key = attr.key.as_ref();
-        let val = match attr.unescape_value() {
+        let val = match quick_xml::escape::unescape(&attr.value) {
             Ok(v) => v.into_owned(),
             Err(_) => continue,
         };

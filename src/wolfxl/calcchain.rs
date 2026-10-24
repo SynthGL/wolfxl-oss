@@ -77,18 +77,18 @@ pub fn scan_sheet_for_formulas(sheet_xml: &[u8], sheet_index_1based: u32) -> Vec
                 let name = e.name();
                 let local = name.local_name();
                 match local.as_ref() {
-                    b"c" => {
+                    "c" => {
                         // Pull r="..." attribute.
                         for attr in e.attributes().flatten() {
-                            if attr.key.local_name().as_ref() == b"r" {
-                                if let Ok(v) = attr.unescape_value() {
+                            if attr.key.local_name().as_ref() == "r" {
+                                if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                                     current_c_ref = Some(v.into_owned());
                                 }
                             }
                         }
                         emitted_for_current = false;
                     }
-                    b"f" => {
+                    "f" => {
                         if let Some(r) = current_c_ref.as_ref() {
                             if !emitted_for_current {
                                 entries.push(CalcChainEntry {
@@ -110,12 +110,12 @@ pub fn scan_sheet_for_formulas(sheet_xml: &[u8], sheet_index_1based: u32) -> Vec
                 let name = e.name();
                 let local = name.local_name();
                 match local.as_ref() {
-                    b"c" => {
+                    "c" => {
                         // Self-closing <c .../> has no children → no formula.
                         current_c_ref = None;
                         emitted_for_current = false;
                     }
-                    b"f" => {
+                    "f" => {
                         if let Some(r) = current_c_ref.as_ref() {
                             if !emitted_for_current {
                                 entries.push(CalcChainEntry {
@@ -130,7 +130,7 @@ pub fn scan_sheet_for_formulas(sheet_xml: &[u8], sheet_index_1based: u32) -> Vec
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().local_name().as_ref() == b"c" {
+                if e.name().local_name().as_ref() == "c" {
                     current_c_ref = None;
                     emitted_for_current = false;
                 }
@@ -164,12 +164,12 @@ pub fn extract_ext_lst(calc_chain_xml: &[u8]) -> Option<Vec<u8>> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().local_name().as_ref() == b"extLst" && !in_ext_lst => {
+            Ok(Event::Start(e)) if e.name().local_name().as_ref() == "extLst" && !in_ext_lst => {
                 in_ext_lst = true;
                 depth = 1;
                 writer.write_event(Event::Start(e.into_owned())).ok()?;
             }
-            Ok(Event::Empty(e)) if e.name().local_name().as_ref() == b"extLst" && !in_ext_lst => {
+            Ok(Event::Empty(e)) if e.name().local_name().as_ref() == "extLst" && !in_ext_lst => {
                 writer.write_event(Event::Empty(e.into_owned())).ok()?;
                 return Some(writer.into_inner());
             }
@@ -182,6 +182,10 @@ pub fn extract_ext_lst(calc_chain_xml: &[u8]) -> Option<Vec<u8>> {
             }
             Ok(Event::Text(e)) if in_ext_lst => {
                 writer.write_event(Event::Text(e.into_owned())).ok()?;
+            }
+            // References are separate events in quick-xml 0.42; copy them verbatim.
+            Ok(Event::GeneralRef(e)) if in_ext_lst => {
+                writer.write_event(Event::GeneralRef(e.into_owned())).ok()?;
             }
             Ok(Event::CData(e)) if in_ext_lst => {
                 writer.write_event(Event::CData(e.into_owned())).ok()?;
@@ -242,6 +246,13 @@ pub fn render_calc_chain_with_ext_lst(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extract_ext_lst_preserves_entity_spelling() {
+        let xml = br#"<calcChain><extLst><ext uri="A&amp;B"><value> A&amp;B&#32;&custom; </value></ext></extLst></calcChain>"#;
+        let ext = extract_ext_lst(xml).unwrap();
+        assert_eq!(ext, br#"<extLst><ext uri="A&amp;B"><value> A&amp;B&#32;&custom; </value></ext></extLst>"#);
+    }
 
     #[test]
     fn scan_finds_formula_cells_only() {

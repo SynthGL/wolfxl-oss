@@ -30,6 +30,8 @@ use quick_xml::Writer as XmlWriter;
 
 use wolfxl_formula::{move_range as formula_move_range, Range};
 
+use crate::xml_text::TextNode;
+
 /// Plan for one paste-style range move.
 ///
 /// Both corners are 1-based, inclusive. `d_row` / `d_col` are signed.
@@ -234,7 +236,7 @@ struct CapturedCell {
     /// re-emit happens at relocation time so the `r=` attribute can
     /// be rewritten and any embedded `<f>` payload can be paste-
     /// translated.
-    raw_attrs: Vec<(Vec<u8>, Vec<u8>)>,
+    raw_attrs: Vec<(String, String)>,
     /// True if the source was `<c .../>` (no children).
     self_closing: bool,
     /// Verbatim child events (between `<c>` and `</c>`), suitable for
@@ -251,7 +253,7 @@ struct CapturedCell {
 #[derive(Debug, Clone, Default)]
 struct CapturedRow {
     /// Attributes other than `r`.
-    extra_attrs: Vec<(Vec<u8>, Vec<u8>)>,
+    extra_attrs: Vec<(String, String)>,
 }
 
 /// Parse the `<sheetData>` inner XML, relocate cells per `plan`,
@@ -260,7 +262,6 @@ struct CapturedRow {
 /// at the destination are overwritten.
 fn rewrite_sheet_data(inner: &str, plan: &RangeMovePlan, element_prefix: &str) -> String {
     let mut reader = XmlReader::from_str(inner);
-    reader.config_mut().trim_text(false);
     let mut buf: Vec<u8> = Vec::new();
 
     // Per-row metadata captured in input order. Indexed by the row's
@@ -285,7 +286,7 @@ fn rewrite_sheet_data(inner: &str, plan: &RangeMovePlan, element_prefix: &str) -
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name();
                 if let Some(_) = in_cell.as_mut() {
                     // Inside a cell — pipe through to the child writer.
                     cell_depth += 1;
@@ -295,21 +296,19 @@ fn rewrite_sheet_data(inner: &str, plan: &RangeMovePlan, element_prefix: &str) -
                     buf.clear();
                     continue;
                 }
-                match local.as_slice() {
+                match local.as_ref().as_bytes() {
                     b"row" => {
                         let mut row_n: Option<u32> = None;
-                        let mut extra: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+                        let mut extra: Vec<(String, String)> = Vec::new();
                         for attr_res in e.attributes().with_checks(false) {
                             let Ok(attr) = attr_res else { continue };
-                            let key = attr.key.as_ref().to_vec();
-                            let val = match attr.unescape_value() {
-                                Ok(v) => v.into_owned().into_bytes(),
+                            let key = attr.key.as_ref().to_owned();
+                            let val = match quick_xml::escape::unescape(&attr.value) {
+                                Ok(v) => v.into_owned(),
                                 Err(_) => continue,
                             };
-                            if key == b"r" {
-                                if let Ok(s) = std::str::from_utf8(&val) {
-                                    row_n = s.parse().ok();
-                                }
+                            if key == "r" {
+                                row_n = val.parse().ok();
                             } else {
                                 extra.push((key, val));
                             }
@@ -343,7 +342,7 @@ fn rewrite_sheet_data(inner: &str, plan: &RangeMovePlan, element_prefix: &str) -
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name();
                 if let Some(_) = in_cell.as_mut() {
                     if let Some(w) = cell_child_writer.as_mut() {
                         let _ = w.write_event(Event::Empty(e.to_owned()));
@@ -351,22 +350,20 @@ fn rewrite_sheet_data(inner: &str, plan: &RangeMovePlan, element_prefix: &str) -
                     buf.clear();
                     continue;
                 }
-                match local.as_slice() {
+                match local.as_ref().as_bytes() {
                     b"row" => {
                         // Empty row — capture metadata, no cells.
                         let mut row_n: Option<u32> = None;
-                        let mut extra: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+                        let mut extra: Vec<(String, String)> = Vec::new();
                         for attr_res in e.attributes().with_checks(false) {
                             let Ok(attr) = attr_res else { continue };
-                            let key = attr.key.as_ref().to_vec();
-                            let val = match attr.unescape_value() {
-                                Ok(v) => v.into_owned().into_bytes(),
+                            let key = attr.key.as_ref().to_owned();
+                            let val = match quick_xml::escape::unescape(&attr.value) {
+                                Ok(v) => v.into_owned(),
                                 Err(_) => continue,
                             };
-                            if key == b"r" {
-                                if let Ok(s) = std::str::from_utf8(&val) {
-                                    row_n = s.parse().ok();
-                                }
+                            if key == "r" {
+                                row_n = val.parse().ok();
                             } else {
                                 extra.push((key, val));
                             }
@@ -390,9 +387,9 @@ fn rewrite_sheet_data(inner: &str, plan: &RangeMovePlan, element_prefix: &str) -
                 }
             }
             Ok(Event::End(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
+                let local = e.local_name();
                 if in_cell.is_some() {
-                    if cell_depth == 0 && local.as_slice() == b"c" {
+                    if cell_depth == 0 && local.as_ref() == "c" {
                         // Closing the captured cell.
                         let mut cap = in_cell.take().unwrap();
                         let writer = cell_child_writer.take().unwrap();
@@ -411,7 +408,7 @@ fn rewrite_sheet_data(inner: &str, plan: &RangeMovePlan, element_prefix: &str) -
                     buf.clear();
                     continue;
                 }
-                if local.as_slice() == b"row" {
+                if local.as_ref() == "row" {
                     current_row = None;
                 }
             }
@@ -430,7 +427,11 @@ fn rewrite_sheet_data(inner: &str, plan: &RangeMovePlan, element_prefix: &str) -
                 }
             }
             Ok(Event::Eof) => break,
-            Ok(_) => {}
+            Ok(other) => {
+                if let Some(w) = cell_child_writer.as_mut() {
+                    let _ = w.write_event(other);
+                }
+            }
             Err(_) => break,
         }
         buf.clear();
@@ -463,8 +464,8 @@ fn rewrite_sheet_data(inner: &str, plan: &RangeMovePlan, element_prefix: &str) -
         // Update the `r=` attribute in raw_attrs.
         let new_r = a1(new_row, new_col);
         for (key, val) in cell.raw_attrs.iter_mut() {
-            if key == b"r" {
-                *val = new_r.clone().into_bytes();
+            if key == "r" {
+                *val = new_r.clone();
             }
         }
         cell.row = new_row;
@@ -511,10 +512,10 @@ fn rewrite_sheet_data(inner: &str, plan: &RangeMovePlan, element_prefix: &str) -
             for (key, val) in &extra.extra_attrs {
                 // Skip any `spans` attribute — Excel re-derives, and
                 // a stale span for the post-move row would be wrong.
-                if key == b"spans" {
+                if key == "spans" {
                     continue;
                 }
-                start.push_attribute((key.as_slice(), val.as_slice()));
+                start.push_attribute((key.as_str(), val.as_str()));
             }
             let _ = writer.write_event(Event::Start(start));
             current_emit_row = Some(cell.row);
@@ -523,7 +524,7 @@ fn rewrite_sheet_data(inner: &str, plan: &RangeMovePlan, element_prefix: &str) -
         // Emit <c r="...">...</c>
         let mut c_start = BytesStart::new(cell_name.as_str());
         for (key, val) in &cell.raw_attrs {
-            c_start.push_attribute((key.as_slice(), val.as_slice()));
+            c_start.push_attribute((key.as_str(), val.as_str()));
         }
         if cell.self_closing && cell.children.is_empty() {
             let _ = writer.write_event(Event::Empty(c_start));
@@ -568,24 +569,24 @@ fn inverse_row_index(post_move_row: u32, plan: &RangeMovePlan) -> u32 {
 fn parse_cell_attrs(
     e: &BytesStart<'_>,
     current_row: Option<u32>,
-) -> (u32, u32, Vec<(Vec<u8>, Vec<u8>)>) {
+) -> (u32, u32, Vec<(String, String)>) {
     let mut row: u32 = current_row.unwrap_or(0);
     let mut col: u32 = 0;
-    let mut attrs: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+    let mut attrs: Vec<(String, String)> = Vec::new();
     for attr_res in e.attributes().with_checks(false) {
         let Ok(attr) = attr_res else { continue };
-        let key = attr.key.as_ref().to_vec();
-        let val = match attr.unescape_value() {
+        let key = attr.key.as_ref().to_owned();
+        let val = match quick_xml::escape::unescape(&attr.value) {
             Ok(v) => v.into_owned(),
             Err(_) => continue,
         };
-        if key == b"r" {
+        if key == "r" {
             if let Some((r, c)) = parse_a1(&val) {
                 row = r;
                 col = c;
             }
         }
-        attrs.push((key, val.into_bytes()));
+        attrs.push((key, val));
     }
     (row, col, attrs)
 }
@@ -670,62 +671,65 @@ impl FormulaTranslator {
         // elements. Wrap in a synthetic root for parsing.
         let wrapped = format!("<__r__>{s}</__r__>");
         let mut reader = XmlReader::from_str(&wrapped);
-        reader.config_mut().trim_text(false);
         let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
         let mut buf: Vec<u8> = Vec::new();
         let mut in_f: bool = false;
+        let mut formula = TextNode::default();
 
         loop {
-            match reader.read_event_into(&mut buf) {
+            let event = reader.read_event_into(&mut buf);
+            if !formula.is_empty()
+                && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
+            {
+                if let Ok(text) = formula.unescaped() {
+                    let translated = self.translate_text(text);
+                    let _ = writer.write_event(Event::Text(BytesText::new(&translated)));
+                } else {
+                    let _ = writer.write_event(Event::Text(BytesText::from_escaped(formula.raw())));
+                }
+                formula.clear();
+            }
+            match event {
                 Ok(Event::Start(ref e)) => {
-                    let local = e.local_name().as_ref().to_vec();
-                    if local.as_slice() == b"__r__" {
+                    let local = e.local_name();
+                    if local.as_ref() == "__r__" {
                         // Drop the synthetic root.
                         buf.clear();
                         continue;
                     }
-                    if local.as_slice() == b"f" {
+                    if local.as_ref() == "f" {
                         in_f = true;
                     }
                     let _ = writer.write_event(Event::Start(e.to_owned()));
                 }
                 Ok(Event::Empty(ref e)) => {
-                    let local = e.local_name().as_ref().to_vec();
-                    if local.as_slice() == b"__r__" {
+                    let local = e.local_name();
+                    if local.as_ref() == "__r__" {
                         buf.clear();
                         continue;
                     }
                     let _ = writer.write_event(Event::Empty(e.to_owned()));
                 }
                 Ok(Event::End(ref e)) => {
-                    let local = e.local_name().as_ref().to_vec();
-                    if local.as_slice() == b"__r__" {
+                    let local = e.local_name();
+                    if local.as_ref() == "__r__" {
                         buf.clear();
                         continue;
                     }
-                    if local.as_slice() == b"f" {
+                    if local.as_ref() == "f" {
                         in_f = false;
                     }
                     let _ = writer.write_event(Event::End(e.to_owned()));
                 }
-                Ok(Event::Text(ref t)) => {
-                    if in_f {
-                        let raw = match t.unescape() {
-                            Ok(c) => c.into_owned(),
-                            Err(_) => String::from_utf8_lossy(t.as_ref()).into_owned(),
-                        };
-                        let unwrapped = self.translate_text(&raw);
-                        let new_t = BytesText::new(&unwrapped);
-                        let _ = writer.write_event(Event::Text(new_t));
-                    } else {
-                        let _ = writer.write_event(Event::Text(t.to_owned()));
-                    }
-                }
+                Ok(Event::Text(t)) if in_f => formula.push_text(&t),
+                Ok(Event::GeneralRef(r)) if in_f => formula.push_ref(&r),
                 Ok(Event::CData(ref t)) => {
                     let _ = writer.write_event(Event::CData(t.to_owned()));
                 }
                 Ok(Event::Eof) => break,
-                Ok(_) => {}
+                Ok(other) => {
+                    let _ = writer.write_event(other);
+                }
                 Err(_) => break,
             }
             buf.clear();
@@ -768,7 +772,6 @@ fn rewrite_anchors_and_dimension(xml: &[u8], plan: &RangeMovePlan) -> Vec<u8> {
         Err(_) => return xml.to_vec(),
     };
     let mut reader = XmlReader::from_str(xml_str);
-    reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
     let mut buf: Vec<u8> = Vec::new();
 
@@ -776,18 +779,31 @@ fn rewrite_anchors_and_dimension(xml: &[u8], plan: &RangeMovePlan) -> Vec<u8> {
     let mut in_dv_formula: u32 = 0;
     let mut in_cf_formula: u32 = 0;
     let formula_translator = FormulaTranslator::from_plan(plan);
+    let mut formula = TextNode::default();
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        let event = reader.read_event_into(&mut buf);
+        if !formula.is_empty()
+            && !matches!(event, Ok(Event::Text(_)) | Ok(Event::GeneralRef(_)))
+        {
+            if let Ok(text) = formula.unescaped() {
+                let translated = formula_translator.translate_text(text);
+                let _ = writer.write_event(Event::Text(BytesText::new(&translated)));
+            } else {
+                let _ = writer.write_event(Event::Text(BytesText::from_escaped(formula.raw())));
+            }
+            formula.clear();
+        }
+        match event {
             Ok(Event::Start(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
-                match local.as_slice() {
+                let local = e.local_name();
+                match local.as_ref().as_bytes() {
                     b"mergeCell" | b"hyperlink" => {
-                        let new_e = rewrite_anchor_attr(e, plan, b"ref");
+                        let new_e = rewrite_anchor_attr(e, plan, "ref");
                         let _ = writer.write_event(Event::Start(new_e));
                     }
                     b"dataValidation" | b"conditionalFormatting" => {
-                        let new_e = rewrite_anchor_attr(e, plan, b"sqref");
+                        let new_e = rewrite_anchor_attr(e, plan, "sqref");
                         let _ = writer.write_event(Event::Start(new_e));
                     }
                     b"formula1" | b"formula2" => {
@@ -804,18 +820,18 @@ fn rewrite_anchors_and_dimension(xml: &[u8], plan: &RangeMovePlan) -> Vec<u8> {
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
-                match local.as_slice() {
+                let local = e.local_name();
+                match local.as_ref().as_bytes() {
                     b"dimension" => {
-                        let new_e = rewrite_anchor_attr(e, plan, b"ref");
+                        let new_e = rewrite_anchor_attr(e, plan, "ref");
                         let _ = writer.write_event(Event::Empty(new_e));
                     }
                     b"mergeCell" | b"hyperlink" => {
-                        let new_e = rewrite_anchor_attr(e, plan, b"ref");
+                        let new_e = rewrite_anchor_attr(e, plan, "ref");
                         let _ = writer.write_event(Event::Empty(new_e));
                     }
                     b"dataValidation" | b"conditionalFormatting" => {
-                        let new_e = rewrite_anchor_attr(e, plan, b"sqref");
+                        let new_e = rewrite_anchor_attr(e, plan, "sqref");
                         let _ = writer.write_event(Event::Empty(new_e));
                     }
                     _ => {
@@ -824,8 +840,8 @@ fn rewrite_anchors_and_dimension(xml: &[u8], plan: &RangeMovePlan) -> Vec<u8> {
                 }
             }
             Ok(Event::End(ref e)) => {
-                let local = e.local_name().as_ref().to_vec();
-                match local.as_slice() {
+                let local = e.local_name();
+                match local.as_ref().as_bytes() {
                     b"formula1" | b"formula2" => {
                         if in_dv_formula > 0 {
                             in_dv_formula -= 1;
@@ -840,18 +856,11 @@ fn rewrite_anchors_and_dimension(xml: &[u8], plan: &RangeMovePlan) -> Vec<u8> {
                 }
                 let _ = writer.write_event(Event::End(e.to_owned()));
             }
-            Ok(Event::Text(ref t)) => {
-                if plan.translate && (in_dv_formula > 0 || in_cf_formula > 0) {
-                    let raw = match t.unescape() {
-                        Ok(c) => c.into_owned(),
-                        Err(_) => String::from_utf8_lossy(t.as_ref()).into_owned(),
-                    };
-                    let unwrapped = formula_translator.translate_text(&raw);
-                    let new_t = BytesText::new(&unwrapped);
-                    let _ = writer.write_event(Event::Text(new_t));
-                } else {
-                    let _ = writer.write_event(Event::Text(t.to_owned()));
-                }
+            Ok(Event::Text(t)) if plan.translate && (in_dv_formula > 0 || in_cf_formula > 0) => {
+                formula.push_text(&t);
+            }
+            Ok(Event::GeneralRef(r)) if plan.translate && (in_dv_formula > 0 || in_cf_formula > 0) => {
+                formula.push_ref(&r);
             }
             Ok(Event::Eof) => break,
             Ok(other) => {
@@ -873,13 +882,13 @@ fn rewrite_anchors_and_dimension(xml: &[u8], plan: &RangeMovePlan) -> Vec<u8> {
 fn rewrite_anchor_attr<'a>(
     e: &BytesStart<'a>,
     plan: &RangeMovePlan,
-    attr_name: &[u8],
+    attr_name: &str,
 ) -> BytesStart<'a> {
-    let mut new_e = BytesStart::new(String::from_utf8_lossy(e.name().as_ref()).into_owned());
+    let mut new_e = BytesStart::new(e.name().as_ref().to_owned());
     for attr_res in e.attributes().with_checks(false) {
         let Ok(attr) = attr_res else { continue };
         let key = attr.key.as_ref();
-        let val = match attr.unescape_value() {
+        let val = match quick_xml::escape::unescape(&attr.value) {
             Ok(v) => v.into_owned(),
             Err(_) => continue,
         };
@@ -893,24 +902,8 @@ fn rewrite_anchor_attr<'a>(
     new_e
 }
 
-fn push_attr_escaped(e: &mut BytesStart<'_>, key: &[u8], val: &str) {
-    let escaped = xml_attr_escape(val);
-    e.push_attribute((key, escaped.as_bytes()));
-}
-
-fn xml_attr_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for ch in s.chars() {
-        match ch {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&apos;"),
-            _ => out.push(ch),
-        }
-    }
-    out
+fn push_attr_escaped(e: &mut BytesStart<'_>, key: &str, val: &str) {
+    e.push_attribute((key, val));
 }
 
 /// Split a `ref` or `sqref` value on whitespace, apply the
@@ -1218,5 +1211,19 @@ mod tests {
         let s = String::from_utf8(out).unwrap();
         assert!(s.contains(r#"<c r="A8" t="inlineStr">"#), "got: {s}");
         assert!(s.contains("<t>hello</t>"), "got: {s}");
+    }
+
+    #[test]
+    fn move_preserves_literal_entities_and_translates_complete_formulas() {
+        let xml = br#"<worksheet><sheetData><row r="1" note="A&amp;B"><c r="A1" note="&quot;&amp;"><f>A&#49;&amp;&quot;A1&quot;</f><is><t> &#65;&amp;&lt; </t></is></c></row></sheetData><dataValidation sqref="A1"><formula1>A&#49;</formula1></dataValidation><conditionalFormatting sqref="A1"><cfRule><formula>A&#x31;&lt;2</formula></cfRule></conditionalFormatting></worksheet>"#;
+        let mut p = plan((1, 1), (1, 1), 1, 0);
+        p.translate = true;
+        let out = String::from_utf8(apply_range_move(xml, &p)).unwrap();
+        assert!(out.contains("<f>A2&amp;&quot;A1&quot;</f>"), "{out}");
+        assert!(out.contains("<formula1>A2</formula1>"), "{out}");
+        assert!(out.contains("<formula>A2&lt;2</formula>"), "{out}");
+        assert!(out.contains(r#"note="A&amp;B""#), "{out}");
+        assert!(out.contains(r#"note="&quot;&amp;""#), "{out}");
+        assert!(out.contains("<t> &#65;&amp;&lt; </t>"), "{out}");
     }
 }

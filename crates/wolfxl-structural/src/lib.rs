@@ -43,6 +43,7 @@ pub mod shift_formulas;
 pub mod shift_workbook;
 pub(crate) mod table_shift;
 pub(crate) mod vml_shift;
+pub(crate) mod xml_text;
 
 #[cfg(test)]
 mod tests;

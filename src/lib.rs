@@ -1,10 +1,9 @@
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyBytes, PyDict, PyList};
 
 type PyObject = Py<PyAny>;
 
 mod atomic_save;
-mod calamine_xlsb_xls_backend;
 mod native_reader_backend;
 mod native_reader_cell_helpers;
 mod native_reader_cf;
@@ -38,13 +37,33 @@ mod native_writer_sheet_state;
 mod native_writer_streaming;
 mod native_writer_workbook;
 mod native_writer_workbook_metadata;
+mod native_xls_backend;
 mod ooxml_util;
 mod streaming;
+mod streaming_blank_rows;
 mod util;
 mod wolfxl;
 mod wolfxl_core_bridge;
 
 pub use wolfxl::XlsxPatcher;
+
+/// Keep classification independent of the selected workbook value reader.
+#[pyfunction]
+fn classify_file_format(input: &Bound<'_, PyAny>) -> PyResult<String> {
+    if let Ok(data) = input.cast::<PyBytes>() {
+        return Ok(wolfxl_classify::classify_file_format_bytes(data.as_bytes())
+            .as_str()
+            .to_owned());
+    }
+    if let Ok(path) = input.extract::<String>() {
+        return Ok(wolfxl_classify::classify_file_format_path(&path)
+            .as_str()
+            .to_owned());
+    }
+    Err(pyo3::exceptions::PyValueError::new_err(
+        "classify_file_format: expected str path or bytes",
+    ))
+}
 
 #[pyfunction]
 fn build_info(py: Python<'_>) -> PyResult<PyObject> {
@@ -52,11 +71,10 @@ fn build_info(py: Python<'_>) -> PyResult<PyObject> {
     info.set_item("package", "wolfxl")?;
     info.set_item("package_version", env!("CARGO_PKG_VERSION"))?;
 
-    let enabled = PyList::new(py, ["native-xlsx", "native-xlsb", "calamine-xls", "wolfxl"])?;
+    let enabled = PyList::new(py, ["native-xlsx", "native-xlsb", "native-xls", "wolfxl"])?;
     info.set_item("enabled_backends", enabled)?;
 
     let versions = PyDict::new(py);
-    versions.set_item("calamine-xls", option_env!("WOLFXL_DEP_CALAMINE_VERSION"))?;
     info.set_item("backend_versions", versions)?;
 
     Ok(info.into())
@@ -96,11 +114,8 @@ fn _rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_first_sheet_formula_summary, m)?)?;
     m.add_class::<native_reader_backend::NativeXlsxBook>()?;
     m.add_class::<native_reader_backend::NativeXlsbBook>()?;
-    m.add_class::<calamine_xlsb_xls_backend::CalamineXlsBook>()?;
-    m.add_function(wrap_pyfunction!(
-        calamine_xlsb_xls_backend::classify_file_format,
-        m
-    )?)?;
+    m.add_class::<native_xls_backend::NativeXlsBook>()?;
+    m.add_function(wrap_pyfunction!(classify_file_format, m)?)?;
     m.add_class::<native_writer_backend::NativeWorkbook>()?;
     m.add_function(wrap_pyfunction!(
         native_writer_charts::serialize_chart_dict,
@@ -163,6 +178,10 @@ fn _rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_class::<streaming::StreamingSheetReader>()?;
+    m.add_function(wrap_pyfunction!(
+        streaming_blank_rows::streaming_blank_rows,
+        m
+    )?)?;
     m.add_class::<wolfxl::XlsxPatcher>()?;
     wolfxl_core_bridge::register(m)?;
     Ok(())

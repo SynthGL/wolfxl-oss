@@ -104,6 +104,26 @@ pub(crate) fn chart_to_py(py: Python<'_>, chart: &ChartInfo) -> PyResult<PyObjec
         series.append(chart_series_to_py(py, item)?)?;
     }
     d.set_item("series", series)?;
+    // `subcharts[0]` is the primary family the fields above describe; a
+    // combination chart lists its other families after it.
+    let subcharts = PyList::empty(py);
+    for item in &chart.subcharts {
+        let payload = PyDict::new(py);
+        payload.set_item("kind", &item.kind)?;
+        payload.set_item("bar_dir", item.bar_dir.as_deref())?;
+        payload.set_item("grouping", item.grouping.as_deref())?;
+        payload.set_item("scatter_style", item.scatter_style.as_deref())?;
+        payload.set_item("vary_colors", item.vary_colors)?;
+        payload.set_item("x_axis", chart_axis_to_py(py, item.x_axis.as_ref())?)?;
+        payload.set_item("y_axis", chart_axis_to_py(py, item.y_axis.as_ref())?)?;
+        let item_series = PyList::empty(py);
+        for series_item in &item.series {
+            item_series.append(chart_series_to_py(py, series_item)?)?;
+        }
+        payload.set_item("series", item_series)?;
+        subcharts.append(payload)?;
+    }
+    d.set_item("subcharts", subcharts)?;
     Ok(d.into())
 }
 

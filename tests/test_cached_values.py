@@ -129,6 +129,47 @@ def test_calculated_values_survive_save(tmp_path, mode):
     assert _cached(cells["B7"]) is None
 
 
+@pytest.mark.parametrize("modify", [False, True])
+@pytest.mark.parametrize("new_formula", [False, True])
+@pytest.mark.parametrize("edit_after", [False, True])
+def test_data_only_calculation_preserves_existing_caches(tmp_path, modify, new_formula, edit_after):
+    source = tmp_path / "cached.xlsx"
+    original = _workbook()
+    original.calculate()
+    original.save(source)
+    original.close()
+    before = _cells(source)
+
+    wb = wolfxl.load_workbook(source, data_only=True, modify=modify)
+    if new_formula:
+        wb.active["C1"] = "=SUM(A1:A2)"
+    assert wb.calculate() == ({"Sheet!C1": 5} if new_formula else {})
+    if edit_after:
+        wb.active["D1"] = 7
+    output = tmp_path / "saved.xlsx"
+    wb.save(output)
+    wb.close()
+
+    after = _cells(output)
+    for row in range(1, 9):
+        coordinate = f"B{row}"
+        assert _cached(after[coordinate]) == _cached(before[coordinate])
+        assert after[coordinate].get("t") == before[coordinate].get("t")
+        assert after[coordinate].find("s:f", NS).text == before[coordinate].find("s:f", NS).text
+    if new_formula:
+        assert _cached(after["C1"]) == (None if edit_after else "5")
+        assert after["C1"].find("s:f", NS).text == "SUM(A1:A2)"
+    for reader in READERS:
+        saved = _data_only(output, reader)
+        assert saved["Sheet"]["B1"].value == 5
+        assert saved["Sheet"]["B3"].value == "<&> text"
+        assert saved["Sheet"]["B4"].value is True
+        assert saved["Sheet"]["B5"].value == "#DIV/0!"
+        if new_formula:
+            assert saved["Sheet"]["C1"].value == (None if edit_after else 5)
+        saved.close()
+
+
 def test_edited_input_and_formula_text_survive_modify_calculate_save(tmp_path):
     source = _formula_source(tmp_path)
     wb = wolfxl.load_workbook(source, modify=True)

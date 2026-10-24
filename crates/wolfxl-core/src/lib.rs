@@ -1,10 +1,9 @@
 //! wolfxl-core: pure-Rust spreadsheet reader with Excel number-format-aware rendering.
 //!
-//! This crate carries no PyO3 / Python coupling. It opens spreadsheets via
-//! [`calamine-styles`] for xlsx / xls / ods, WolfXL's native BIFF12 reader
-//! for xlsb, and a built-in reader for CSV. It exposes a `Workbook → Sheet → Cell` API and renders cell
-//! values with awareness of common Excel number formats (currency,
-//! percentage, scientific, date, time).
+//! Read XLSX, XLS, XLSB and ODS with the independently authored MIT native
+//! readers. Use the built-in delimited reader for CSV. The Python-independent
+//! `Workbook → Sheet → Cell` API includes common Excel number-format rendering
+//! for currency, percentage, scientific, date and time values.
 //!
 //! ```no_run
 //! use wolfxl_core::Workbook;
@@ -18,18 +17,16 @@
 //!
 //! ## Scope
 //!
-//! - **In scope today:** read xlsx / xls / xlsb / ods / csv values + best-effort
-//!   number-format strings (xlsx and native xlsb; xls/ods style ranges remain
-//!   empty and CSV has no style concept), classify formats into
-//!   [`FormatCategory`], render via [`format_cell`], map workbook structure,
-//!   infer per-column schema/cardinality summaries (reads through
-//!   numeric-looking strings so CSV columns classify correctly), and walk
-//!   `xl/styles.xml` cellXfs + numFmts as a fallback when calamine's fast
-//!   path returns None (covers openpyxl-generated fixtures).
+//! - **In scope today:** native spreadsheet values, best-effort number formats,
+//!   [`FormatCategory`], [`format_cell`], workbook maps and column summaries.
+//!   Retain sparse cell origins, date epochs, scoped-name entries, XLSX table
+//!   inventory and canonical error literals. For OOXML formats, use the
+//!   `xl/styles.xml` fallback when reader metadata is unavailable. For CSV,
+//!   infer numeric-looking strings while retaining their original values.
 //! - **Not yet:** write side.
 //!
-//! The existing PyO3 layer in the sibling `wolfxl` cdylib still owns its own
-//! implementation; unifying the two is follow-up work.
+//! Python support remains edition-specific: Community XLS values are supported;
+//! Community Python ODS, binary-format editing, streaming and styles stay refused.
 
 pub mod cell;
 mod csv_reader;
