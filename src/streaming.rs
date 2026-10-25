@@ -25,7 +25,8 @@ use std::fs::File;
 use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom};
 
 use flate2::read::DeflateDecoder;
-use pyo3::exceptions::{PyIOError, PyStopIteration, PyValueError};
+use pyo3::exceptions::{PyIOError, PyMemoryError, PyStopIteration, PyValueError};
+use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDateTime, PyDict, PyFloat, PyInt, PyList, PyTime, PyTuple};
 use pyo3::IntoPyObjectExt;
@@ -45,6 +46,80 @@ const SHEET_ENTRY_BUFFER: usize = 64 * 1024;
 // Bound the value cells materialized per chunk so wide sheets (up to 16,384
 // columns) stream a few rows at a time instead of 1,024 padded rows.
 const CHUNK_CELL_BUDGET: usize = 65_536;
+
+// pyo3's `IntoPyObject` for str, ints and floats, `PyList::empty`,
+// `PyDict::new`, and `PyTuple::new` panic when CPython returns NULL, which
+// drops the pending `MemoryError` and raises `PanicException` (a
+// `BaseException`) instead. The constructors below return the pending error
+// so an exhausted allocator surfaces as a catchable `MemoryError`.
+
+/// Take ownership of a new reference, or fetch the pending Python error.
+fn owned_or_err(py: Python<'_>, ptr: *mut ffi::PyObject) -> PyResult<Bound<'_, PyAny>> {
+    // SAFETY: every caller passes the result of a CPython constructor, which is
+    // either NULL or a new strong reference.
+    unsafe { Bound::from_owned_ptr_or_err(py, ptr) }
+}
+
+fn str_to_py(py: Python<'_>, value: &str) -> PyResult<PyObjectOwned> {
+    let len = ffi::Py_ssize_t::try_from(value.len())
+        .map_err(|_| PyMemoryError::new_err("string too large for a Python str"))?;
+    // SAFETY: `value` is valid UTF-8 for `len` bytes.
+    let ptr = unsafe { ffi::PyUnicode_FromStringAndSize(value.as_ptr().cast(), len) };
+    Ok(owned_or_err(py, ptr)?.unbind())
+}
+
+fn u32_to_py(py: Python<'_>, value: u32) -> PyResult<PyObjectOwned> {
+    // SAFETY: plain value constructor.
+    let ptr = unsafe { ffi::PyLong_FromUnsignedLong(std::os::raw::c_ulong::from(value)) };
+    Ok(owned_or_err(py, ptr)?.unbind())
+}
+
+fn i64_to_py(py: Python<'_>, value: i64) -> PyResult<PyObjectOwned> {
+    // SAFETY: plain value constructor.
+    let ptr = unsafe { ffi::PyLong_FromLongLong(value) };
+    Ok(owned_or_err(py, ptr)?.unbind())
+}
+
+fn f64_to_py(py: Python<'_>, value: f64) -> PyResult<PyObjectOwned> {
+    // SAFETY: plain value constructor.
+    let ptr = unsafe { ffi::PyFloat_FromDouble(value) };
+    Ok(owned_or_err(py, ptr)?.unbind())
+}
+
+fn new_list(py: Python<'_>) -> PyResult<Bound<'_, PyList>> {
+    // SAFETY: plain constructor.
+    let ptr = unsafe { ffi::PyList_New(0) };
+    Ok(owned_or_err(py, ptr)?.cast_into::<PyList>()?)
+}
+
+fn new_dict(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+    // SAFETY: plain constructor.
+    let ptr = unsafe { ffi::PyDict_New() };
+    Ok(owned_or_err(py, ptr)?.cast_into::<PyDict>()?)
+}
+
+fn set_dict_item(dict: &Bound<'_, PyDict>, key: &str, value: PyObjectOwned) -> PyResult<()> {
+    dict.set_item(str_to_py(dict.py(), key)?, value)
+}
+
+fn new_tuple<'py>(
+    py: Python<'py>,
+    items: impl ExactSizeIterator<Item = PyObjectOwned>,
+) -> PyResult<Bound<'py, PyTuple>> {
+    let len = ffi::Py_ssize_t::try_from(items.len())
+        .map_err(|_| PyMemoryError::new_err("tuple too large for a Python tuple"))?;
+    // SAFETY: plain constructor.
+    let ptr = unsafe { ffi::PyTuple_New(len) };
+    let tuple = owned_or_err(py, ptr)?.cast_into::<PyTuple>()?;
+    for (index, item) in (0..len).zip(items) {
+        // SAFETY: `index` is in range and `PyTuple_SetItem` steals `item`'s
+        // reference, including on failure.
+        if unsafe { ffi::PyTuple_SetItem(tuple.as_ptr(), index, item.into_ptr()) } != 0 {
+            return Err(PyErr::fetch(py));
+        }
+    }
+    Ok(tuple)
+}
 
 /// Parse `xl/sharedStrings.xml` into a flat `Vec<String>`. Each entry is
 /// the plain-text concatenation of any nested `<r><t>...</t></r>` runs
@@ -222,9 +297,10 @@ impl DateStyles {
         }
         if cell_type == "formula" {
             let formula = value.bind(py).cast::<PyDict>()?;
-            if let Some(cached) = formula.get_item("cached")? {
+            let key = str_to_py(py, "cached")?;
+            if let Some(cached) = formula.get_item(&key)? {
                 let converted = self.convert(py, kind, cached.unbind())?;
-                formula.set_item("cached", converted)?;
+                formula.set_item(key, converted)?;
             }
             return Ok(value);
         }
@@ -584,25 +660,28 @@ impl StreamingSheetReader {
         loop {
             match self.parse_one_row(py)? {
                 StepResult::Row(row_idx, cells) => {
-                    let cell_list = PyList::empty(py);
+                    let cell_list = new_list(py)?;
                     for c in cells {
                         let style_obj = match c.style_id {
-                            Some(s) => s.into_py_any(py)?,
+                            Some(s) => u32_to_py(py, s)?,
                             None => py.None(),
                         };
-                        let tup = PyTuple::new(
+                        let tup = new_tuple(
                             py,
                             [
-                                c.col.into_py_any(py)?,
+                                u32_to_py(py, c.col)?,
                                 c.value,
                                 style_obj,
-                                c.cell_type.into_py_any(py)?,
-                            ],
+                                str_to_py(py, c.cell_type)?,
+                            ]
+                            .into_iter(),
                         )?;
                         cell_list.append(tup)?;
                     }
-                    let outer =
-                        PyTuple::new(py, [row_idx.into_py_any(py)?, cell_list.into_py_any(py)?])?;
+                    let outer = new_tuple(
+                        py,
+                        [u32_to_py(py, row_idx)?, cell_list.into_any().unbind()].into_iter(),
+                    )?;
                     return Ok(Some(outer));
                 }
                 StepResult::Skip => continue,
@@ -649,8 +728,11 @@ impl StreamingSheetReader {
         loop {
             match self.parse_one_value_row(py)? {
                 ValueStepResult::Row(row_idx, values, _needs_normalise) => {
-                    let row_obj = row_idx.into_py_any(py)?;
-                    return Ok(Some(PyTuple::new(py, [row_obj, values.into_py_any(py)?])?));
+                    let row_obj = u32_to_py(py, row_idx)?;
+                    return Ok(Some(new_tuple(
+                        py,
+                        [row_obj, values.into_any().unbind()].into_iter(),
+                    )?));
                 }
                 ValueStepResult::Skip => continue,
                 ValueStepResult::Done => {
@@ -693,7 +775,7 @@ impl StreamingSheetReader {
             return Ok(None);
         }
         let limit = max_rows.max(1);
-        let chunk = PyList::empty(py);
+        let chunk = new_list(py)?;
         let mut needs_normalise = false;
         let mut cells = 0usize;
         while chunk.len() < limit && cells < CHUNK_CELL_BUDGET {
@@ -701,8 +783,8 @@ impl StreamingSheetReader {
                 ValueStepResult::Row(row_idx, values, row_needs_normalise) => {
                     needs_normalise |= row_needs_normalise;
                     cells += values.len();
-                    let row_obj = row_idx.into_py_any(py)?;
-                    let item = PyTuple::new(py, [row_obj, values.into_py_any(py)?])?;
+                    let row_obj = u32_to_py(py, row_idx)?;
+                    let item = new_tuple(py, [row_obj, values.into_any().unbind()].into_iter())?;
                     chunk.append(item)?;
                 }
                 ValueStepResult::Skip => continue,
@@ -715,9 +797,9 @@ impl StreamingSheetReader {
         if chunk.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(PyTuple::new(
+            Ok(Some(new_tuple(
                 py,
-                [chunk.into_py_any(py)?, needs_normalise.into_py_any(py)?],
+                [chunk.into_any().unbind(), needs_normalise.into_py_any(py)?].into_iter(),
             )?))
         }
     }
@@ -771,27 +853,31 @@ impl StreamingSheetReader {
         }
 
         let dense_plain = contiguous && !needs_normalise;
-        let items = PyList::empty(py);
+        let items = new_list(py)?;
         if dense_plain {
             for (_row_idx, values) in rows {
                 items.append(values)?;
             }
         } else {
             for (row_idx, values) in rows {
-                let row_obj = row_idx.into_py_any(py)?;
-                items.append(PyTuple::new(py, [row_obj, values.into_py_any(py)?])?)?;
+                let row_obj = u32_to_py(py, row_idx)?;
+                items.append(new_tuple(
+                    py,
+                    [row_obj, values.into_any().unbind()].into_iter(),
+                )?)?;
             }
         }
 
-        Ok(Some(PyTuple::new(
+        Ok(Some(new_tuple(
             py,
             [
-                items.into_py_any(py)?,
+                items.into_any().unbind(),
                 needs_normalise.into_py_any(py)?,
-                first_row.into_py_any(py)?,
-                last_row.into_py_any(py)?,
+                u32_to_py(py, first_row)?,
+                u32_to_py(py, last_row)?,
                 dense_plain.into_py_any(py)?,
-            ],
+            ]
+            .into_iter(),
         )?))
     }
 
@@ -1204,7 +1290,7 @@ fn finish_value_row<'py>(
     } else if min_col.is_some() && out.is_empty() {
         out.push(py.None());
     }
-    Ok(PyTuple::new(py, out)?)
+    new_tuple(py, out.into_iter())
 }
 
 fn empty_value_row<'py>(
@@ -1334,12 +1420,12 @@ fn read_cell_contents(
                         }
                         if let Some(idx) = fast_shared {
                             let resolved = sst.get(idx).map_or("", String::as_str);
-                            return Ok((resolved.into_py_any(py)?, "s"));
+                            return Ok((str_to_py(py, resolved)?, "s"));
                         }
                     } else if let Some(idx) = fast_shared {
                         let formula = f_text.unwrap_or_default();
                         let resolved = sst.get(idx).map_or("", String::as_str);
-                        let cached = resolved.into_py_any(py)?;
+                        let cached = str_to_py(py, resolved)?;
                         return Ok((build_formula_dict(py, &formula, cached)?, "formula"));
                     }
                     // openpyxl reads an inline string only from `<is>` and
@@ -1687,10 +1773,10 @@ fn build_cell_object(
     match t_attr {
         CellTypeAttr::Error => {
             let v = raw_value.unwrap_or_else(|| "#ERROR!".to_string());
-            let d = PyDict::new(py);
-            d.set_item("type", "error")?;
-            d.set_item("value", &v)?;
-            Ok((d.into_py_any(py)?, "e"))
+            let d = new_dict(py)?;
+            set_dict_item(&d, "type", str_to_py(py, "error")?)?;
+            set_dict_item(&d, "value", str_to_py(py, &v)?)?;
+            Ok((d.into_any().unbind(), "e"))
         }
         CellTypeAttr::Number => {
             let Some(v) = raw_value else {
@@ -1698,12 +1784,12 @@ fn build_cell_object(
             };
             if let Ok(i) = v.parse::<i64>() {
                 // Excel-stored ints: surface as int when round-trip safe.
-                return Ok((i.into_py_any(py)?, "n"));
+                return Ok((i64_to_py(py, i)?, "n"));
             }
             let f: f64 = v
                 .parse()
                 .map_err(|_| PyErr::new::<PyValueError, _>(format!("Bad numeric value: {v:?}")))?;
-            Ok((f.into_py_any(py)?, "n"))
+            Ok((f64_to_py(py, f)?, "n"))
         }
         _ => {
             let tag = match t_attr {
@@ -1737,19 +1823,20 @@ fn cached_value_to_py(
                 .trim()
                 .parse()
                 .map_err(|_| PyErr::new::<PyValueError, _>(format!("Bad SST index: {v:?}")))?;
-            Ok(sst.get(idx).map_or("", String::as_str).into_py_any(py)?)
+            str_to_py(py, sst.get(idx).map_or("", String::as_str))
         }
         CellTypeAttr::Bool => match v.trim().parse::<i64>() {
             Ok(n) => Ok((n != 0).into_py_any(py)?),
             Err(_) => Ok(matches!(v.trim(), "true" | "TRUE").into_py_any(py)?),
         },
-        CellTypeAttr::Number => Ok(
-            number_text_to_py(py, v.trim().as_bytes())?.map_or_else(|| v.into_py_any(py), Ok)?
-        ),
+        CellTypeAttr::Number => match number_text_to_py(py, v.trim().as_bytes())? {
+            Some(number) => Ok(number),
+            None => str_to_py(py, &v),
+        },
         CellTypeAttr::FormulaString
         | CellTypeAttr::InlineString
         | CellTypeAttr::Error
-        | CellTypeAttr::Date => Ok(v.into_py_any(py)?),
+        | CellTypeAttr::Date => str_to_py(py, &v),
     }
 }
 
@@ -1758,16 +1845,16 @@ fn build_formula_dict(
     formula: &str,
     cached: PyObjectOwned,
 ) -> PyResult<PyObjectOwned> {
-    let d = PyDict::new(py);
+    let d = new_dict(py)?;
     let f_with_eq = if formula.starts_with('=') {
         formula.to_string()
     } else {
         format!("={formula}")
     };
-    d.set_item("type", "formula")?;
-    d.set_item("formula", &f_with_eq)?;
-    d.set_item("cached", cached)?;
-    Ok(d.into_py_any(py)?)
+    set_dict_item(&d, "type", str_to_py(py, "formula")?)?;
+    set_dict_item(&d, "formula", str_to_py(py, &f_with_eq)?)?;
+    set_dict_item(&d, "cached", cached)?;
+    Ok(d.into_any().unbind())
 }
 
 fn number_text_to_py(py: Python<'_>, bytes: &[u8]) -> PyResult<Option<PyObjectOwned>> {
@@ -1775,10 +1862,10 @@ fn number_text_to_py(py: Python<'_>, bytes: &[u8]) -> PyResult<Option<PyObjectOw
         return Ok(None);
     };
     if let Ok(i) = text.parse::<i64>() {
-        return Ok(Some(i.into_py_any(py)?));
+        return Ok(Some(i64_to_py(py, i)?));
     }
     if let Ok(f) = text.parse::<f64>() {
-        return Ok(Some(f.into_py_any(py)?));
+        return Ok(Some(f64_to_py(py, f)?));
     }
     Ok(None)
 }
