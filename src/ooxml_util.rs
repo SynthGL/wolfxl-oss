@@ -222,10 +222,7 @@ pub fn parse_relationship_targets(xml: &str) -> PyResult<HashMap<String, String>
     Ok(out)
 }
 
-pub fn zip_read_to_string<R: Read + Seek>(
-    zip: &mut ZipArchive<R>,
-    name: &str,
-) -> PyResult<String> {
+pub fn zip_read_to_string<R: Read + Seek>(zip: &mut ZipArchive<R>, name: &str) -> PyResult<String> {
     match zip.by_name(name) {
         Ok(mut f) => {
             validate_zip_entry_metadata(name, f.size(), f.compressed_size())?;

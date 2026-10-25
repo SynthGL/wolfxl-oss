@@ -7198,8 +7198,7 @@ impl SheetRefCursor {
     /// Position of a `<c>`: its parsed `r`, or the cell after the previous
     /// cell of the current row.
     fn cell(&mut self, explicit: Option<(u32, u32)>) -> (u32, u32) {
-        let (row, col) =
-            explicit.unwrap_or_else(|| (self.row.max(1), self.col.saturating_add(1)));
+        let (row, col) = explicit.unwrap_or_else(|| (self.row.max(1), self.col.saturating_add(1)));
         self.col = col;
         (row, col)
     }

@@ -68,7 +68,8 @@ def test_bounded_records_return_values_and_source_style_ids_without_cells(tmp_pa
         assert "bold" not in by_position[3, 1]
         assert by_position[4, 1]["value"] == 6.5
         assert by_position[4, 1]["formula"] == "=A3*2"
-        assert by_position[6, 1]["value"].microsecond == 0
+        # openpyxl rounds the stored day fraction to the millisecond.
+        assert by_position[6, 1]["value"] == datetime(2026, 10, 8, 7, 30, 15, 123000)
         assert by_position[5, 2]["value"] is None
         assert "style_id" not in by_position[5, 2]
         assert "number_format" not in by_position[5, 2]

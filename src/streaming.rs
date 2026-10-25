@@ -981,9 +981,13 @@ fn read_cell_contents(
             },
             Event::Text(t) => {
                 if in_f {
-                    f_text.get_or_insert_with(String::new).push_str(&normalize_xml_eol(&t));
+                    f_text
+                        .get_or_insert_with(String::new)
+                        .push_str(&normalize_xml_eol(&t));
                 } else if in_t && !in_rph {
-                    inline_text.get_or_insert_with(String::new).push_str(&normalize_xml_eol(&t));
+                    inline_text
+                        .get_or_insert_with(String::new)
+                        .push_str(&normalize_xml_eol(&t));
                 }
             }
             Event::GeneralRef(r) => {
@@ -1410,8 +1414,9 @@ fn cached_value_to_py(
             Ok(n) => Ok((n != 0).into_py_any(py)?),
             Err(_) => Ok(matches!(v.trim(), "true" | "TRUE").into_py_any(py)?),
         },
-        CellTypeAttr::Number => Ok(number_text_to_py(py, v.trim().as_bytes())?
-            .map_or_else(|| v.into_py_any(py), Ok)?),
+        CellTypeAttr::Number => Ok(
+            number_text_to_py(py, v.trim().as_bytes())?.map_or_else(|| v.into_py_any(py), Ok)?
+        ),
         CellTypeAttr::FormulaString
         | CellTypeAttr::InlineString
         | CellTypeAttr::Error
@@ -1683,8 +1688,18 @@ mod tests {
                 read_cell_contents(&mut reader, &mut buf, py, &CellTypeAttr::Number, &[]).unwrap();
             assert_eq!(kind, "formula");
             let fields = value.bind(py).cast::<PyDict>().unwrap();
-            let formula: String = fields.get_item("formula").unwrap().unwrap().extract().unwrap();
-            let cached: i64 = fields.get_item("cached").unwrap().unwrap().extract().unwrap();
+            let formula: String = fields
+                .get_item("formula")
+                .unwrap()
+                .unwrap()
+                .extract()
+                .unwrap();
+            let cached: i64 = fields
+                .get_item("cached")
+                .unwrap()
+                .unwrap()
+                .extract()
+                .unwrap();
             assert_eq!(formula, "= A1 & \" B \"\n");
             assert_eq!(cached, 123);
         });
