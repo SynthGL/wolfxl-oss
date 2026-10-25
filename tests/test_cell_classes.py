@@ -332,10 +332,10 @@ def test_cell_style_reader_batches_payloads_for_clean_worksheets() -> None:
             self._workbook = Workbook()
             self._style_payload_cache = None
 
-        def _max_row(self) -> int:
+        def _bounds_max_row(self) -> int:
             return 2
 
-        def _max_col(self) -> int:
+        def _bounds_max_col(self) -> int:
             return 1
 
     ws = Worksheet()
@@ -382,10 +382,10 @@ def test_basic_style_access_caches_sibling_components() -> None:
             self._workbook = Workbook()
             self._style_payload_cache = None
 
-        def _max_row(self) -> int:
+        def _bounds_max_row(self) -> int:
             return 1
 
-        def _max_col(self) -> int:
+        def _bounds_max_col(self) -> int:
             return 1
 
     ws = Worksheet()
@@ -431,10 +431,10 @@ def test_basic_style_hydration_caches_number_format_after_empty_merge_probe(
             self._workbook = Workbook()
             self._style_payload_cache = None
 
-        def _max_row(self) -> int:
+        def _bounds_max_row(self) -> int:
             return 1
 
-        def _max_col(self) -> int:
+        def _bounds_max_col(self) -> int:
             return 1
 
     def fail_number_format_read(self: Cell) -> str:
@@ -478,10 +478,10 @@ def test_repeated_read_style_payloads_reuse_python_style_objects() -> None:
             self._workbook = Workbook()
             self._style_payload_cache = None
 
-        def _max_row(self) -> int:
+        def _bounds_max_row(self) -> int:
             return 1
 
-        def _max_col(self) -> int:
+        def _bounds_max_col(self) -> int:
             return 2
 
     ws = Worksheet()
@@ -529,10 +529,10 @@ def test_repeated_read_style_payloads_convert_components_once(
             self._style_payload_cache = None
             self._style_component_cache = None
 
-        def _max_row(self) -> int:
+        def _bounds_max_row(self) -> int:
             return 1
 
-        def _max_col(self) -> int:
+        def _bounds_max_col(self) -> int:
             return 2
 
     font_calls = 0

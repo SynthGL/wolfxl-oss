@@ -28,6 +28,7 @@ def initialize_worksheet_state(
     ws._rels = RelationshipList()  # noqa: SLF001
     ws._read_only_dimensions_reset = False  # noqa: SLF001
     ws._read_only_dimensions_forced = False  # noqa: SLF001
+    ws._read_only_assigned_dimensions: list[int | None] | None = None  # noqa: SLF001
     ws._max_col_idx = 0  # noqa: SLF001
     ws._next_append_row = 1  # noqa: SLF001
     ws._current_row = 0  # noqa: SLF001

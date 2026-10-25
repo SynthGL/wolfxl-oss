@@ -1032,7 +1032,7 @@ def should_auto_stream(ws: Worksheet) -> bool:
     Triggers when the sheet's ``max_row`` exceeds
     :data:`AUTO_STREAM_ROW_THRESHOLD`. This deliberately consults the
     worksheet ``<dimension ref=...>`` tag directly from the ZIP head instead
-    of ``Worksheet._max_row()``, because the normal dimensions API may parse
+    of ``Worksheet._bounds_max_row()``, because the normal dimensions API may parse
     and cache the full sheet before streaming can engage.
     """
     wb = ws._workbook  # noqa: SLF001

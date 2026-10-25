@@ -33,7 +33,7 @@ def append_row(ws: Worksheet, iterable: Iterable[Any]) -> None:
     ws._plain_cell_fast_path = False  # noqa: SLF001
     if not ws._append_buffer:  # noqa: SLF001
         if getattr(ws._workbook, "_rust_reader", None) is not None:
-            ws._next_append_row = max(ws._next_append_row, ws._max_row() + 1)  # noqa: SLF001
+            ws._next_append_row = max(ws._next_append_row, ws._bounds_max_row() + 1)  # noqa: SLF001
         ws._append_buffer_start = ws._next_append_row  # noqa: SLF001
     ws._append_buffer.append(row)  # noqa: SLF001
     ncols = len(row)

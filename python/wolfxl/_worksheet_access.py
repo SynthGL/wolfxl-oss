@@ -59,13 +59,13 @@ def resolve_string_key(ws: Worksheet, key: str) -> Any:
     min_col, min_row, max_col, max_row = range_boundaries(key)
 
     if min_row is None and max_row is None:
-        bounded_max_row = ws._max_row()  # noqa: SLF001
+        bounded_max_row = ws._bounds_max_row()  # noqa: SLF001
         if min_col is None or max_col is None:
             raise ValueError(f"Invalid range: {key!r}")
         return get_col_tuple(ws, min_col, max_col, 1, bounded_max_row)
 
     if min_col is None and max_col is None:
-        bounded_max_col = ws._max_col()  # noqa: SLF001
+        bounded_max_col = ws._bounds_max_col()  # noqa: SLF001
         if min_row is None or max_row is None:
             raise ValueError(f"Invalid range: {key!r}")
         if min_row == max_row:
@@ -98,7 +98,7 @@ def get_row_tuple(
     max_row: int,
 ) -> tuple[tuple[Cell, ...], ...]:
     """Return row-major cell tuples for an inclusive row span."""
-    max_col = ws._max_col()  # noqa: SLF001
+    max_col = ws._bounds_max_col()  # noqa: SLF001
     return tuple(
         tuple(ws._get_or_create_cell(row, col) for col in range(1, max_col + 1))  # noqa: SLF001
         for row in range(min_row, max_row + 1)
@@ -114,7 +114,7 @@ def get_col_tuple(
 ) -> tuple[tuple[Cell, ...], ...]:
     """Return column-major cell tuples for an inclusive column span."""
     row_min = min_row if min_row is not None else 1
-    row_max = max_row if max_row is not None else ws._max_row()  # noqa: SLF001
+    row_max = max_row if max_row is not None else ws._bounds_max_row()  # noqa: SLF001
     return tuple(
         tuple(ws._get_or_create_cell(row, col) for row in range(row_min, row_max + 1))  # noqa: SLF001
         for col in range(min_col, max_col + 1)

@@ -432,6 +432,7 @@ class Worksheet:
         "_workbook", "_title", "_cells", "_dirty", "_dirty_values",
         "_format_dirty_cells", "_dimensions", "_rels",
         "_read_only_dimensions_reset", "_read_only_dimensions_forced",
+        "_read_only_assigned_dimensions",
         "_max_col_idx", "_next_append_row", "_current_row",
         "_append_buffer", "_append_buffer_start", "_bulk_writes",
         "_plain_cell_fast_path",
@@ -1750,6 +1751,7 @@ class Worksheet:
         max_row, max_col = self._read_dimensions()
         self._dimensions = (max_row, max_col)
         self._read_only_dimensions_forced = True
+        self._read_only_assigned_dimensions = None
         return f"A1:{rowcol_to_a1(max_row or 1, max_col or 1)}"
 
     def calculate_dimension(self, force: Any = None) -> str:
@@ -1767,6 +1769,7 @@ class Worksheet:
         self._dimensions = None
         self._read_only_dimensions_reset = True
         self._read_only_dimensions_forced = False
+        self._read_only_assigned_dimensions = None
 
     def _read_dimension_bounds(self) -> tuple[int, int, int, int] | None:
         """Return 1-based ``(min_row, min_col, max_row, max_col)`` bounds.
@@ -1782,7 +1785,7 @@ class Worksheet:
         """Bounds of unsaved Python-side writes: ``(min_row, min_col, max_row, max_col)``.
 
         Used by ``_read_dimension_bounds`` to fold modify-mode edits into the
-        on-disk Rust bounds, and by ``_max_row``/``_max_col`` so write-mode
+        on-disk Rust bounds, and by ``_bounds_max_row``/``_bounds_max_col`` so write-mode
         ``ws.max_row`` reflects ``append()``/``write_rows()`` that haven't
         materialized yet.
 
@@ -1798,10 +1801,10 @@ class Worksheet:
         """Discover sheet dimensions from the Rust backend (read mode only)."""
         return _read_dimensions(self)
 
-    def _max_row(self) -> int:
+    def _bounds_max_row(self) -> int:
         return _worksheet_max_row(self)
 
-    def _max_col(self) -> int:
+    def _bounds_max_col(self) -> int:
         return _worksheet_max_col(self)
 
     # openpyxl exposes these as properties, not methods. Mirror that contract
@@ -1811,25 +1814,58 @@ class Worksheet:
     def max_row(self) -> int | None:
         """Largest row index visible to openpyxl-style callers."""
         if getattr(self._workbook, "_read_only", False):  # noqa: SLF001
+            if self._read_only_assigned_dimensions is not None:
+                return self._read_only_assigned_dimensions[0]
             if self._read_only_dimensions_forced and self._dimensions is not None:
                 return self._dimensions[0]
             declared = self._read_only_declared_dimension_bounds()
             if declared is not None:
                 return declared[2]
             return None
-        return self._max_row()
+        return self._bounds_max_row()
 
     @property
     def max_column(self) -> int | None:
         """Largest column index visible to openpyxl-style callers."""
         if getattr(self._workbook, "_read_only", False):  # noqa: SLF001
+            if self._read_only_assigned_dimensions is not None:
+                return self._read_only_assigned_dimensions[1]
             if self._read_only_dimensions_forced and self._dimensions is not None:
                 return self._dimensions[1]
             declared = self._read_only_declared_dimension_bounds()
             if declared is not None:
                 return declared[3]
             return None
-        return self._max_col()
+        return self._bounds_max_col()
+
+    # openpyxl's ReadOnlyWorksheet keeps its dimensions in assignable
+    # ``_max_row``/``_max_column`` attributes behind ``max_row``/``max_column``.
+    # pandas 3 saves them, calls reset_dimensions(), and assigns them back
+    # after reading a sheet (pandas GH 63010).
+    @property
+    def _max_row(self) -> int | None:
+        return self.max_row
+
+    @_max_row.setter
+    def _max_row(self, value: int | None) -> None:
+        self._assign_read_only_dimension(0, value, "_max_row")
+
+    @property
+    def _max_column(self) -> int | None:
+        return self.max_column
+
+    @_max_column.setter
+    def _max_column(self, value: int | None) -> None:
+        self._assign_read_only_dimension(1, value, "_max_column")
+
+    def _assign_read_only_dimension(self, axis: int, value: int | None, name: str) -> None:
+        if not getattr(self._workbook, "_read_only", False):  # noqa: SLF001
+            raise AttributeError(f"{name} can only be assigned in read_only=True mode")
+        assigned = self._read_only_assigned_dimensions
+        if assigned is None:
+            assigned = [self.max_row, self.max_column]
+        assigned[axis] = value
+        self._read_only_assigned_dimensions = assigned
 
     @property
     def min_row(self) -> int:

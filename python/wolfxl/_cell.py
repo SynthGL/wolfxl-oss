@@ -1609,8 +1609,8 @@ def _style_payload_cache_for(ws: Worksheet) -> Any:
         return _disable_style_payload_cache(ws)
 
     try:
-        max_row = int(ws._max_row())  # noqa: SLF001
-        max_col = int(ws._max_col())  # noqa: SLF001
+        max_row = int(ws._bounds_max_row())  # noqa: SLF001
+        max_col = int(ws._bounds_max_col())  # noqa: SLF001
     except Exception:
         return _disable_style_payload_cache(ws)
     if max_row <= 0 or max_col <= 0:
