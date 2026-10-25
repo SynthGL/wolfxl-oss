@@ -6795,6 +6795,7 @@ impl ValueCellBuilder {
             CellDataType::Error => {
                 CellValue::Error(String::from_utf8_lossy(&self.value_text).into_owned())
             }
+            CellDataType::FormulaString if self.value_text.is_empty() => CellValue::Empty,
             CellDataType::DateIso | CellDataType::FormulaString => {
                 CellValue::String(String::from_utf8_lossy(&self.value_text).into_owned())
             }
@@ -6979,6 +6980,7 @@ impl CellBuilder {
             CellDataType::Bool => CellValue::Bool(matches!(self.value_text.trim(), "1" | "true")),
             CellDataType::Error => CellValue::Error(self.value_text),
             CellDataType::DateIso => CellValue::String(self.value_text),
+            CellDataType::FormulaString if self.value_text.is_empty() => CellValue::Empty,
             CellDataType::FormulaString => CellValue::String(self.value_text),
             CellDataType::Number | CellDataType::FloatNumber => {
                 let raw = self.value_text.trim();

@@ -214,6 +214,41 @@ def _source_dimension_bounds(
         return None
 
 
+def _source_cell_bounds(source: str | bytes, sheet_title: str) -> tuple[int, int, int, int]:
+    """Scan eager cell/merge bounds without materializing values or an XML tree."""
+    max_row = max_col = row = col = 0
+    with _open_source_zip(source) as zf:
+        validate_zipfile(zf)
+        sheet_path = _sheet_path_from_workbook(zf, sheet_title)
+        if sheet_path is None:
+            raise ValueError(f"Worksheet part not found: {sheet_title}")
+        with zf.open(sheet_path) as stream:
+            parents = []
+            for event, elem in ET.iterparse(stream, events=("start", "end")):
+                name = _local_name(elem.tag)
+                if event == "start":
+                    parents.append(elem)
+                    if name == "row":
+                        row = int(elem.get("r", row + 1))
+                        col = 0
+                    elif name == "c":
+                        ref = elem.get("r")
+                        cell_row, col = a1_to_rowcol(ref) if ref else (row, col + 1)
+                        max_row = max(max_row, cell_row)
+                        max_col = max(max_col, col)
+                    elif name == "mergeCell":
+                        bounds = _bounds_from_dimension_ref(elem.get("ref", ""))
+                        if bounds is not None:
+                            max_row = max(max_row, bounds[2])
+                            max_col = max(max_col, bounds[3])
+                else:
+                    parents.pop()
+                    if parents:
+                        parents[-1].remove(elem)
+                    elem.clear()
+    return 1, 1, max_row, max_col
+
+
 def _source_dimension_max_row(source: str | bytes, sheet_title: str) -> int | None:
     try:
         with _open_source_zip(source) as zf:
@@ -334,6 +369,14 @@ class StreamingCell:
         object.__setattr__(self, "_row", row)
         object.__setattr__(self, "_col", col)
         data_only = bool(getattr(ws._workbook, "_data_only", False))  # noqa: SLF001
+        if (
+            data_only
+            and cell_type == "formula"
+            and isinstance(value, dict)
+            and value.get("cached") is None
+            and value.get("cached_type") == "str"
+        ):
+            cell_type = "str"
         object.__setattr__(self, "_value", _streaming_value(value, data_only=data_only))
         object.__setattr__(self, "_style_id", style_id)
         object.__setattr__(self, "_cell_type", cell_type)
@@ -405,7 +448,7 @@ class StreamingCell:
         return {
             "n": "n",
             "s": "s",
-            "str": "s",
+            "str": "str" if self._value is None else "s",
             "inlineStr": "s",
             "b": "b",
             "e": "e",
@@ -620,6 +663,10 @@ def stream_iter_rows(
         if dimensions is not None:
             forced_bounds = (1, 1, int(dimensions[0]), int(dimensions[1]))
     default_bounds = source_bounds or forced_bounds
+    # Eager openpyxl ignores stale dimensions and row-only formatting.
+    # Keep the read-only contract, including declared trailing blank rows.
+    if not bool(getattr(wb, "_read_only", False)) and (mx_r is None or mx_c is None):
+        default_bounds = _source_cell_bounds(path, ws.title)
     stream_mx_r = (
         mx_r if mx_r is not None else (default_bounds[2] if default_bounds is not None else None)
     )

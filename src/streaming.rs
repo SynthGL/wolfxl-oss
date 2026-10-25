@@ -1767,7 +1767,14 @@ fn build_cell_object(
     if let Some(formula) = formula {
         if !matches!(t_attr, CellTypeAttr::Error) {
             let cached = cached_value_to_py(py, t_attr, raw_value, sst)?;
-            return Ok((build_formula_dict(py, &formula, cached)?, "formula"));
+            let payload = build_formula_dict(py, &formula, cached)?;
+            if matches!(t_attr, CellTypeAttr::FormulaString) {
+                payload
+                    .bind(py)
+                    .cast::<PyDict>()?
+                    .set_item("cached_type", "str")?;
+            }
+            return Ok((payload, "formula"));
         }
     }
     match t_attr {

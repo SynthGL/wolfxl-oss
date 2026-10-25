@@ -91,6 +91,7 @@ pub(crate) fn native_data_type(
     match cell.data_type {
         CellDataType::Bool => "boolean",
         CellDataType::Error => "error",
+        CellDataType::FormulaString if matches!(cell.value, CellValue::Empty) => "str",
         CellDataType::DateIso
         | CellDataType::InlineString
         | CellDataType::SharedString
