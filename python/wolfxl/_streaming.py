@@ -565,11 +565,12 @@ def _resolve_bounds(
     min_col: int | None,
     max_col: int | None,
 ) -> tuple[int | None, int | None, int | None, int | None]:
-    """Pass-through that just clamps user ``None``s to ``None`` (the Rust
-    layer treats ``None`` as 'unbounded'). Kept as a seam so future
-    sheet-dimension probing can land here without churning callers.
+    """Default ``min_row`` to 1 as openpyxl does, so an invalid
+    ``<row r="0">`` is skipped; other ``None`` bounds stay unbounded for the
+    Rust reader. Kept as a seam so future sheet-dimension probing can land
+    here without churning callers.
     """
-    return min_row, max_row, min_col, max_col
+    return min_row or 1, max_row, min_col, max_col
 
 
 def stream_iter_rows(
@@ -1031,7 +1032,7 @@ def should_auto_stream(ws: Worksheet) -> bool:
     Triggers when the sheet's ``max_row`` exceeds
     :data:`AUTO_STREAM_ROW_THRESHOLD`. This deliberately consults the
     worksheet ``<dimension ref=...>`` tag directly from the ZIP head instead
-    of ``Worksheet._max_row()``, because the normal dimensions API may parse
+    of ``Worksheet._bounds_max_row()``, because the normal dimensions API may parse
     and cache the full sheet before streaming can engage.
     """
     wb = ws._workbook  # noqa: SLF001

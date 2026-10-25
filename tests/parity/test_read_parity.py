@@ -103,14 +103,8 @@ def _diff_sheet(
     op_max_row = op_ws.max_row
     op_max_col = op_ws.max_column
 
-    # Older wolfxl wheels exposed these via private methods; keep the fallback
-    # so this parity harness can still compare archived baseline wheels.
-    wx_max_row = getattr(wx_ws, "max_row", None)
-    if wx_max_row is None and hasattr(wx_ws, "_max_row"):
-        wx_max_row = wx_ws._max_row()  # noqa: SLF001
-    wx_max_col = getattr(wx_ws, "max_column", None)
-    if wx_max_col is None and hasattr(wx_ws, "_max_col"):
-        wx_max_col = wx_ws._max_col()  # noqa: SLF001
+    wx_max_row = wx_ws.max_row
+    wx_max_col = wx_ws.max_column
 
     report.record("max_row", f"{sheet_name}:dim", op_max_row, wx_max_row)
     report.record("max_col", f"{sheet_name}:dim", op_max_col, wx_max_col)

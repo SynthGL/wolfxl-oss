@@ -1,6 +1,6 @@
 # WolfXL Community
 
-**Edit existing Excel files from Python without losing formatting, 3.0-17.3x faster than openpyxl on the committed read/write benchmark (small-file gains vary), with an openpyxl-compatible API. MIT licensed.**
+**Edit existing Excel files from Python without losing formatting, with an openpyxl-compatible API. MIT licensed. In the committed historical read/write benchmark, WolfXL 2.0.8 measured 3.0-17.3x faster than openpyxl 3.1.5 (small-file gains vary).**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
@@ -12,7 +12,7 @@ WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported 
 ## Install
 
 ```bash
-python -m pip install wolfxl==2.0.13
+python -m pip install wolfxl==2.0.14
 ```
 
 ## Edit an existing workbook

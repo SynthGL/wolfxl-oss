@@ -147,9 +147,9 @@ def _record_scan_range(
     if unbounded_sparse_read:
         return 1, None, 1, None, None
     row_min = min_row or 1
-    row_max = max_row or ws._max_row()  # noqa: SLF001
+    row_max = max_row or ws._bounds_max_row()  # noqa: SLF001
     col_min = min_col or 1
-    col_max = max_col or ws._max_col()  # noqa: SLF001
+    col_max = max_col or ws._bounds_max_col()  # noqa: SLF001
     range_str = f"{rowcol_to_a1(row_min, col_min)}:{rowcol_to_a1(row_max, col_max)}"
     return row_min, row_max, col_min, col_max, range_str
 
@@ -221,9 +221,9 @@ def iter_cell_records_python(
 ) -> Iterator[dict[str, Any]]:
     """Iterate cell records from Python-side cells in pure write mode."""
     row_min = min_row or 1
-    row_max = max_row or ws._max_row()  # noqa: SLF001
+    row_max = max_row or ws._bounds_max_row()  # noqa: SLF001
     col_min = min_col or 1
-    col_max = max_col or ws._max_col()  # noqa: SLF001
+    col_max = max_col or ws._bounds_max_col()  # noqa: SLF001
     for row in range(row_min, row_max + 1):
         for col in range(col_min, col_max + 1):
             cell = ws._get_or_create_cell(row, col)  # noqa: SLF001
@@ -284,8 +284,8 @@ def schema(ws: Worksheet) -> dict[str, Any]:
     from wolfxl._cell import _UNSET
     from wolfxl._rust import infer_sheet_schema as _infer_sheet_schema
 
-    max_row = ws._max_row()  # noqa: SLF001
-    max_col = ws._max_col()  # noqa: SLF001
+    max_row = ws._bounds_max_row()  # noqa: SLF001
+    max_col = ws._bounds_max_col()  # noqa: SLF001
     values: list[list[Any]] = [[None] * max_col for _ in range(max_row)]
     formats: list[list[str | None]] = [[None] * max_col for _ in range(max_row)]
     for record in ws.iter_cell_records(

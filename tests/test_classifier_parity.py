@@ -29,7 +29,7 @@ surfaced on every run.
   Excel go through calamine's fast path and agree on both surfaces;
   openpyxl-styled workbooks may report `general` on Python while the
   CLI reports `currency` / `percentage` / `date`.
-- **Trailing empty columns**: Python's `worksheet._max_col()` honors
+- **Trailing empty columns**: Python's `worksheet._bounds_max_col()` honors
   the sheet's `<dimension ref="A1:X">` tag (openpyxl compat), which
   can include trailing columns with formatting but no values.
   `wolfxl_core`'s `Sheet::from_calamine` trims those. We strip

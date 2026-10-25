@@ -10,6 +10,7 @@ functions fall back to the library's Excel function implementations.
 
 from __future__ import annotations
 
+import datetime
 import inspect
 import logging
 import math
@@ -26,11 +27,15 @@ from wolfxl.calc._functions import (
 from wolfxl.calc._graph import DependencyGraph
 from wolfxl.calc._parser import expand_range, range_shape
 from wolfxl.calc._protocol import CellDelta, RecalcResult
+from wolfxl.utils.datetime import MAC_EPOCH, WINDOWS_EPOCH, to_excel
 
 if TYPE_CHECKING:
     from wolfxl._workbook import Workbook
 
 logger = logging.getLogger(__name__)
+
+# Excel stores these as serial numbers; ``datetime.datetime`` is a ``date``.
+_DATE_TYPES = (datetime.date, datetime.time, datetime.timedelta)
 
 # ---------------------------------------------------------------------------
 # formulas library availability
@@ -553,8 +558,25 @@ class WorkbookEvaluator:
     # Atom / argument resolution
     # ------------------------------------------------------------------
 
+    def _cell_value(self, ref: str) -> Any:
+        """Return the value formulas see for *ref*.
+
+        Excel stores date, datetime, time and duration cells as serial numbers
+        in the workbook's date system, so formulas read them as numbers. The
+        stored values stay untouched: ``_cell_values`` mirrors the workbook so
+        the formula-cache snapshot taken after :meth:`load` still matches it.
+        """
+        value = self._cell_values.get(ref)
+        if not isinstance(value, _DATE_TYPES):
+            return value
+        serial = to_excel(value, MAC_EPOCH if self._date1904 else WINDOWS_EPOCH)
+        # Whole days are integers, like DATE() results and Excel's own cells.
+        if isinstance(serial, float) and serial.is_integer():
+            return int(serial)
+        return serial
+
     def _resolve_cell_ref(self, expr: str, sheet: str) -> Any:
-        """Resolve a cell reference string to its stored value."""
+        """Resolve a cell reference string to the value formulas see."""
         clean = expr.strip().replace("$", "")
         if "!" in clean:
             parts = clean.split("!", 1)
@@ -562,7 +584,7 @@ class WorkbookEvaluator:
             ref = f"{ref_sheet}!{parts[1].upper()}"
         else:
             ref = f"{sheet}!{clean.upper()}"
-        return self._cell_values.get(ref)
+        return self._cell_value(ref)
 
     def _resolve_range(self, arg: str, sheet: str) -> list[Any]:
         """Resolve a range like ``A1:A5`` to a flat list of cell values.
@@ -577,7 +599,7 @@ class WorkbookEvaluator:
             ref_sheet = parts[0].strip("'")
             range_ref = f"{ref_sheet}!{parts[1].upper()}"
         cells = expand_range(range_ref)
-        return [self._cell_values.get(c) for c in cells]
+        return [self._cell_value(c) for c in cells]
 
     def _resolve_range_2d(self, arg: str, sheet: str) -> RangeValue:
         """Resolve a range to a :class:`RangeValue` preserving 2D shape."""
@@ -590,7 +612,7 @@ class WorkbookEvaluator:
             range_ref = f"{ref_sheet}!{parts[1].upper()}"
         cells = expand_range(range_ref)
         n_rows, n_cols = range_shape(range_ref)
-        values = [self._cell_values.get(c) for c in cells]
+        values = [self._cell_value(c) for c in cells]
         return RangeValue(values=values, n_rows=n_rows, n_cols=n_cols)
 
     # ------------------------------------------------------------------

@@ -149,6 +149,19 @@ def test_rows_and_cells_without_r_read_at_implicit_coordinates(
 
 @pytest.mark.parametrize("read_only", MODES)
 @pytest.mark.parametrize("source", SOURCES)
+def test_row_zero_is_skipped_like_openpyxl(tmp_path: Path, source: str, read_only: bool) -> None:
+    # Row numbers are 1-based; openpyxl drops an invalid <row r="0"> in
+    # every load mode (seen in Apache POI test-data poc-shared-strings.xlsx).
+    data = _package(
+        '<row r="0"><c r="A0" t="inlineStr"><is><t>zero</t></is></c></row>'
+        '<row r="1"><c r="A1" t="inlineStr"><is><t>one</t></is></c></row>'
+        '<row r="2"><c r="A2" t="inlineStr"><is><t>two</t></is></c></row>'
+    )
+    assert _rows(data, tmp_path, source, read_only) == [("one",), ("two",)]
+
+
+@pytest.mark.parametrize("read_only", MODES)
+@pytest.mark.parametrize("source", SOURCES)
 def test_shared_string_phonetic_runs_are_not_cell_text(
     tmp_path: Path, source: str, read_only: bool
 ) -> None:

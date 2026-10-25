@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.0.14 - 2026-10-25
+
+### Fixed
+
+- Convert date, datetime, time and duration input cells to Excel serial values
+  during `calculate()`, respecting the workbook's 1900 or 1904 date system.
+- Apply the same input conversion to single-cell references and ranges without
+  changing the values stored in the workbook.
+- Preserve saved formula caches after date and time calculations while keeping
+  formula text, input values and number formats unchanged in normal and modify
+  modes.
+- Skip an invalid `<row r="0">` in `read_only=True` loads, as openpyxl and normal loads do. It was returned as an extra first row.
+- Keep pandas' `openpyxl` engine working after `wolfxl.install_as_openpyxl()`.
+  pandas read the WolfXL version from the aliased module and refused it as an
+  openpyxl older than 3.1; its version check now sees openpyxl 3.1.5, the API
+  release the alias provides. `wolfxl.__version__` is unchanged.
+- Accept pandas 3 restoring `_max_row` and `_max_column` on a `read_only=True`
+  worksheet after `reset_dimensions()`, as openpyxl's read-only worksheet does.
+  `read_excel` raised `AttributeError` after reading each sheet.
+
+### Compatibility
+
+- The built-in formula catalog is unchanged. `TIME` remains available through
+  the existing optional `calc` extra, not through the default installation.
+
 ## 2.0.13 - 2026-10-24
 
 ### Fixed

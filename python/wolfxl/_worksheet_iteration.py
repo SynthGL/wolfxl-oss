@@ -64,9 +64,9 @@ def iter_rows(
         return iter(())
 
     row_min = min_row or 1
-    row_max = max_row or ws._max_row()  # noqa: SLF001
+    row_max = max_row or ws._bounds_max_row()  # noqa: SLF001
     col_min = min_col or 1
-    col_max = max_col or ws._max_col()  # noqa: SLF001
+    col_max = max_col or ws._bounds_max_col()  # noqa: SLF001
 
     return _iter_materialized_rows(ws, row_min, row_max, col_min, col_max, values_only)
 
@@ -106,9 +106,9 @@ def iter_rows_cells_with_bulk_values(
     reader = ws._workbook._rust_reader  # noqa: SLF001
     if not hasattr(reader, "read_sheet_values_plain"):
         row_min = min_row or 1
-        row_max = max_row or ws._max_row()  # noqa: SLF001
+        row_max = max_row or ws._bounds_max_row()  # noqa: SLF001
         col_min = min_col or 1
-        col_max = max_col or ws._max_col()  # noqa: SLF001
+        col_max = max_col or ws._bounds_max_col()  # noqa: SLF001
         for row in range(row_min, row_max + 1):
             yield tuple(
                 ws._get_or_create_cell(row, col)  # noqa: SLF001
@@ -117,9 +117,9 @@ def iter_rows_cells_with_bulk_values(
         return
 
     row_min = min_row or 1
-    row_max = max_row or ws._max_row()  # noqa: SLF001
+    row_max = max_row or ws._bounds_max_row()  # noqa: SLF001
     col_min = min_col or 1
-    col_max = max_col or ws._max_col()  # noqa: SLF001
+    col_max = max_col or ws._bounds_max_col()  # noqa: SLF001
     expected_cols = col_max - col_min + 1
     range_str = f"{rowcol_to_a1(row_min, col_min)}:{rowcol_to_a1(row_max, col_max)}"
     rows = reader.read_sheet_values_plain(ws._title, range_str, data_only)  # noqa: SLF001
@@ -181,9 +181,9 @@ def iter_cols(
         return
 
     row_min = min_row or 1
-    row_max = max_row or ws._max_row()  # noqa: SLF001
+    row_max = max_row or ws._bounds_max_row()  # noqa: SLF001
     col_min = min_col or 1
-    col_max = max_col or ws._max_col()  # noqa: SLF001
+    col_max = max_col or ws._bounds_max_col()  # noqa: SLF001
 
     for col in range(col_min, col_max + 1):
         if values_only:
@@ -265,9 +265,9 @@ def iter_cols_cells_with_bulk_values(
     reader = ws._workbook._rust_reader  # noqa: SLF001
     if not hasattr(reader, "read_sheet_values_plain"):
         row_min = min_row or 1
-        row_max = max_row or ws._max_row()  # noqa: SLF001
+        row_max = max_row or ws._bounds_max_row()  # noqa: SLF001
         col_min = min_col or 1
-        col_max = max_col or ws._max_col()  # noqa: SLF001
+        col_max = max_col or ws._bounds_max_col()  # noqa: SLF001
         for col in range(col_min, col_max + 1):
             yield tuple(
                 ws._get_or_create_cell(row, col)  # noqa: SLF001
@@ -276,9 +276,9 @@ def iter_cols_cells_with_bulk_values(
         return
 
     row_min = min_row or 1
-    row_max = max_row or ws._max_row()  # noqa: SLF001
+    row_max = max_row or ws._bounds_max_row()  # noqa: SLF001
     col_min = min_col or 1
-    col_max = max_col or ws._max_col()  # noqa: SLF001
+    col_max = max_col or ws._bounds_max_col()  # noqa: SLF001
     expected_rows = row_max - row_min + 1
     range_str = f"{rowcol_to_a1(row_min, col_min)}:{rowcol_to_a1(row_max, col_max)}"
     rows = reader.read_sheet_values_plain(ws._title, range_str, data_only)  # noqa: SLF001
@@ -395,9 +395,9 @@ def iter_cols_bulk(
     data_only = getattr(ws._workbook, "_data_only", False)  # noqa: SLF001
 
     row_min = min_row or 1
-    row_max = max_row or ws._max_row()  # noqa: SLF001
+    row_max = max_row or ws._bounds_max_row()  # noqa: SLF001
     col_min = min_col or 1
-    col_max = max_col or ws._max_col()  # noqa: SLF001
+    col_max = max_col or ws._bounds_max_col()  # noqa: SLF001
     range_str = f"{rowcol_to_a1(row_min, col_min)}:{rowcol_to_a1(row_max, col_max)}"
 
     use_plain = hasattr(reader, "read_sheet_values_plain")
@@ -466,9 +466,9 @@ def iter_rows_bulk(
     expected_cols = None
     if not is_unbounded:
         row_min = min_row or 1
-        row_max = max_row or ws._max_row()  # noqa: SLF001
+        row_max = max_row or ws._bounds_max_row()  # noqa: SLF001
         col_min = min_col or 1
-        col_max = max_col or ws._max_col()  # noqa: SLF001
+        col_max = max_col or ws._bounds_max_col()  # noqa: SLF001
         expected_cols = col_max - col_min + 1
         range_str = f"{rowcol_to_a1(row_min, col_min)}:{rowcol_to_a1(row_max, col_max)}"
 
