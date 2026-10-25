@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import date, datetime, time
+import io
 import posixpath
 import re
 from typing import TYPE_CHECKING, Any
@@ -58,6 +59,28 @@ AUTO_STREAM_ROW_THRESHOLD = 50_000
 
 _DIMENSION_REF_RE = re.compile(rb"<(?:[A-Za-z0-9_]+:)?dimension\b[^>]*\bref=[\"']([^\"']+)[\"']")
 _ROW_TAG_RE = re.compile(rb"<(?:[A-Za-z0-9_]+:)?row(?:\s|>)")
+
+
+def stream_source(wb: Any) -> str | bytes | None:
+    """Path, or in-memory bytes for file-like loads, the workbook came from."""
+    path = getattr(wb, "_source_path", None)
+    if path:
+        return path
+    return getattr(wb, "_source_bytes", None)
+
+
+def _open_source_zip(source: str | bytes) -> zipfile.ZipFile:
+    if isinstance(source, (bytes, bytearray)):
+        return zipfile.ZipFile(io.BytesIO(source))
+    return zipfile.ZipFile(source)
+
+
+def _open_stream_reader(source: str | bytes, sheet_title: str, *bounds: int | None) -> Any:
+    from wolfxl import _rust
+
+    if isinstance(source, (bytes, bytearray)):
+        return _rust.StreamingSheetReader.open_from_bytes(bytes(source), sheet_title, *bounds)
+    return _rust.StreamingSheetReader.open(source, sheet_title, *bounds)
 
 
 def _local_name(tag: str) -> str:
@@ -176,22 +199,24 @@ def _bounds_from_dimension_ref(ref: str) -> tuple[int, int, int, int] | None:
     )
 
 
-def _source_dimension_bounds(path: str, sheet_title: str) -> tuple[int, int, int, int] | None:
+def _source_dimension_bounds(
+    source: str | bytes, sheet_title: str
+) -> tuple[int, int, int, int] | None:
     try:
-        with zipfile.ZipFile(path) as zf:
+        with _open_source_zip(source) as zf:
             validate_zipfile(zf)
             sheet_path = _sheet_path_from_workbook(zf, sheet_title)
             if sheet_path is None:
                 return None
             ref = _dimension_ref_from_sheet_head(zf, sheet_path)
             return _bounds_from_dimension_ref(ref) if ref is not None else None
-    except (OSError, zipfile.BadZipFile):
+    except (OSError, ValueError, zipfile.BadZipFile):
         return None
 
 
-def _source_dimension_max_row(path: str, sheet_title: str) -> int | None:
+def _source_dimension_max_row(source: str | bytes, sheet_title: str) -> int | None:
     try:
-        with zipfile.ZipFile(path) as zf:
+        with _open_source_zip(source) as zf:
             validate_zipfile(zf)
             sheet_path = _sheet_path_from_workbook(zf, sheet_title)
             if sheet_path is None:
@@ -204,7 +229,7 @@ def _source_dimension_max_row(path: str, sheet_title: str) -> int | None:
             if _row_count_exceeds_threshold(zf, sheet_path):
                 return AUTO_STREAM_ROW_THRESHOLD + 1
             return None
-    except (OSError, zipfile.BadZipFile):
+    except (OSError, ValueError, zipfile.BadZipFile):
         return None
 
 
@@ -231,18 +256,10 @@ def _streaming_value(payload: Any, *, data_only: bool = False) -> Any:
 
 
 def _cached_formula_value(value: Any) -> Any:
-    if value in (None, ""):
+    """Cached formula results arrive typed from Rust; an empty cache is None."""
+    if value == "":
         return None
-    if not isinstance(value, str):
-        return value
-    try:
-        return int(value)
-    except ValueError:
-        pass
-    try:
-        return float(value)
-    except ValueError:
-        return value
+    return value
 
 
 def _maybe_datetime_from_serial(value: Any, num_fmt: str | None) -> Any:
@@ -573,14 +590,12 @@ def stream_iter_rows(
         - Otherwise: tuples of :class:`StreamingCell` instances covering
           the same range.
     """
-    from wolfxl import _rust
-
     wb = ws._workbook  # noqa: SLF001
-    path = getattr(wb, "_source_path", None)
+    path = stream_source(wb)
     if path is None:
         raise RuntimeError(
-            "stream_iter_rows requires a source-path-bearing workbook "
-            "(use load_workbook to obtain one)"
+            "stream_iter_rows requires a workbook loaded from a path or file-like "
+            "source (use load_workbook to obtain one)"
         )
     mn_r, mx_r, mn_c, mx_c = _resolve_bounds(ws, min_row, max_row, min_col, max_col)
     source_bounds = (
@@ -600,7 +615,7 @@ def stream_iter_rows(
     stream_mx_c = (
         mx_c if mx_c is not None else (default_bounds[3] if default_bounds is not None else None)
     )
-    reader = _rust.StreamingSheetReader.open(path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
+    reader = _open_stream_reader(path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
 
     # The hydrated stylesheet has already classified source style IDs.
     date_styles, timedelta_styles = streaming_date_style_ids(wb)
@@ -841,13 +856,11 @@ def stream_value_chunks(
         )
         return
 
-    from wolfxl import _rust
-
-    path = getattr(wb, "_source_path", None)
+    path = stream_source(wb)
     if path is None:
         raise RuntimeError(
-            "stream_value_chunks requires a source-path-bearing workbook "
-            "(use load_workbook to obtain one)"
+            "stream_value_chunks requires a workbook loaded from a path or file-like "
+            "source (use load_workbook to obtain one)"
         )
     mn_r, mx_r, mn_c, mx_c = _resolve_bounds(ws, min_row, max_row, min_col, max_col)
     source_bounds = (
@@ -880,7 +893,7 @@ def stream_value_chunks(
         yield from direct_chunks
         return
 
-    reader = _rust.StreamingSheetReader.open(path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
+    reader = _open_stream_reader(path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
     try:
         read_chunk_with_flags = getattr(reader, "read_next_values_chunk_with_flags", None)
         if read_chunk_with_flags is None:
@@ -1022,7 +1035,7 @@ def should_auto_stream(ws: Worksheet) -> bool:
     and cache the full sheet before streaming can engage.
     """
     wb = ws._workbook  # noqa: SLF001
-    path = getattr(wb, "_source_path", None)
+    path = stream_source(wb)
     if not path:
         return False
     rows = _source_dimension_max_row(path, ws.title)

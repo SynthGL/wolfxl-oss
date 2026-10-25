@@ -2284,6 +2284,7 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
     let mut in_si = false;
     let mut in_t = false;
     let mut saw_r = false;
+    let mut in_rph = false;
     let mut text_buf = String::new();
 
     loop {
@@ -2291,6 +2292,7 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
             Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"si" => {
                     in_si = true;
+                    in_rph = false;
                     current.clear();
                     runs.clear();
                     current_run = None;
@@ -2298,7 +2300,8 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
                     saw_r = false;
                     text_buf.clear();
                 }
-                b"r" if in_si => {
+                b"rPh" if in_si => in_rph = true,
+                b"r" if in_si && !in_rph => {
                     saw_r = true;
                     current_run = Some(RichTextRun::default());
                     current_props = None;
@@ -2307,7 +2310,7 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
                     current_props = Some(InlineFontProps::default());
                 }
                 b"t" => {
-                    if in_si {
+                    if in_si && !in_rph {
                         in_t = true;
                         text_buf.clear();
                     }
@@ -2333,7 +2336,8 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
                     out.rich_text.push(saw_r.then(|| std::mem::take(&mut runs)));
                     in_si = false;
                 }
-                b"t" => {
+                b"rPh" => in_rph = false,
+                b"t" if in_t => {
                     let normalized = normalize_ooxml_text(&text_buf);
                     current.push_str(&normalized);
                     if let Some(run) = current_run.as_mut() {
@@ -3050,7 +3054,7 @@ fn parse_worksheet(
     let mut current_conditional_range: Option<String> = None;
     let mut current_conditional_rule: Option<ConditionalFormatBuilder> = None;
     let mut in_conditional_formula = false;
-    let mut row_index: Option<u32> = None;
+    let mut refs = SheetRefCursor::default();
     let mut current: Option<CellBuilder> = None;
     let mut active_text: Option<TextTarget> = None;
     let mut current_validation: Option<DataValidationBuilder> = None;
@@ -3118,14 +3122,14 @@ fn parse_worksheet(
                     sheet_format = Some(SheetFormatInfo::from_start(&e));
                 }
                 b"row" => {
-                    row_index = attr_value(&e, b"r").and_then(|v| v.parse::<u32>().ok());
+                    let row_index = Some(refs.start_row(&e));
                     if let Some((row, height)) = parse_row_height(&e, row_index) {
                         row_heights.insert(row, height);
                     }
                     update_row_visibility(&e, row_index, &mut hidden_rows, &mut row_outline_levels);
                 }
                 b"c" => {
-                    current = Some(CellBuilder::from_start(&e, row_index));
+                    current = Some(CellBuilder::from_start(&e, &mut refs));
                 }
                 b"dataValidation" => {
                     current_validation = Some(DataValidationBuilder::from_start(&e));
@@ -3221,6 +3225,14 @@ fn parse_worksheet(
                     }
                     active_text = Some(TextTarget::Formula);
                 }
+                b"is" => {
+                    if let Some(cell) = current
+                        .as_mut()
+                        .filter(|c| c.data_type == CellDataType::InlineString)
+                    {
+                        cell.inline_present = true;
+                    }
+                }
                 b"t" => {
                     if current
                         .as_ref()
@@ -3255,6 +3267,14 @@ fn parse_worksheet(
                 }
             },
             Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
+                b"is" => {
+                    if let Some(cell) = current
+                        .as_mut()
+                        .filter(|c| c.data_type == CellDataType::InlineString)
+                    {
+                        cell.inline_present = true;
+                    }
+                }
                 b"sheetPr" => {
                     sheet_properties = Some(SheetPropertiesInfo::from_start(&e));
                 }
@@ -3314,7 +3334,7 @@ fn parse_worksheet(
                     sheet_format = Some(SheetFormatInfo::from_start(&e));
                 }
                 b"c" => {
-                    let builder = CellBuilder::from_start(&e, row_index);
+                    let builder = CellBuilder::from_start(&e, &mut refs);
                     cells.push(builder.finish(shared_strings)?);
                 }
                 b"f" => {
@@ -3323,7 +3343,7 @@ fn parse_worksheet(
                     }
                 }
                 b"row" => {
-                    let row = attr_value(&e, b"r").and_then(|v| v.parse::<u32>().ok());
+                    let row = Some(refs.start_row(&e));
                     if let Some((row, height)) = parse_row_height(&e, row) {
                         row_heights.insert(row, height);
                     }
@@ -3496,7 +3516,6 @@ fn parse_worksheet(
                         cell.end_inline_run();
                     }
                 }
-                b"row" => row_index = None,
                 _ => {}
             },
             Ok(Event::Eof) => break,
@@ -3594,7 +3613,7 @@ fn parse_worksheet_value_cells_bytes(
 ) -> Result<Vec<ValueCell>> {
     let mut reader = XmlReader::from_reader(xml);
     let mut buf = Vec::new();
-    let mut row_index: Option<u32> = None;
+    let mut refs = SheetRefCursor::default();
     let mut current: Option<ValueCellBuilder> = None;
     let mut active_text: Option<TextTarget> = None;
     let mut inline_text = String::new();
@@ -3606,11 +3625,18 @@ fn parse_worksheet_value_cells_bytes(
             Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"dimension" if !in_sheet_data => reserve_value_cell_capacity(&mut cells, &e),
                 b"sheetData" => in_sheet_data = true,
-                b"row" if in_sheet_data => row_index = raw_attr_u32(&e, b"r"),
+                b"row" if in_sheet_data => {
+                    refs.start_row(&e);
+                }
                 b"c" if in_sheet_data => {
-                    current = Some(ValueCellBuilder::from_start(&e, row_index));
+                    current = Some(ValueCellBuilder::from_start(&e, &mut refs));
                 }
                 b"v" if current.is_some() => active_text = Some(TextTarget::Value),
+                b"is" => {
+                    if let Some(cell) = current.as_mut().filter(|c| c.is_inline_string()) {
+                        cell.inline_present = true;
+                    }
+                }
                 b"t" if current
                     .as_ref()
                     .is_some_and(ValueCellBuilder::is_inline_string) =>
@@ -3623,17 +3649,21 @@ fn parse_worksheet_value_cells_bytes(
                 b"dimension" if !in_sheet_data => reserve_value_cell_capacity(&mut cells, &e),
                 b"sheetData" => break,
                 b"row" if in_sheet_data => {
-                    row_index = None;
+                    refs.start_row(&e);
+                }
+                b"is" => {
+                    if let Some(cell) = current.as_mut().filter(|c| c.is_inline_string()) {
+                        cell.inline_present = true;
+                    }
                 }
                 b"c" if in_sheet_data => {
-                    let builder = ValueCellBuilder::from_start(&e, row_index);
+                    let builder = ValueCellBuilder::from_start(&e, &mut refs);
                     cells.push(builder.finish(shared_strings)?);
                 }
                 _ => {}
             },
             Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => break,
-                b"row" if in_sheet_data => row_index = None,
                 b"c" if in_sheet_data => {
                     if let Some(builder) = current.take() {
                         cells.push(builder.finish(shared_strings)?);
@@ -3729,7 +3759,7 @@ fn read_first_sheet_formula_summary_source(source: &WorkbookSource) -> Result<Fo
 fn parse_worksheet_value_summary_bytes(xml: &[u8]) -> Result<ValueSheetSummary> {
     let mut reader = XmlReader::from_reader(xml);
     let mut buf = Vec::new();
-    let mut row_index: Option<u32> = None;
+    let mut refs = SheetRefCursor::default();
     let mut current: Option<FormulaSummaryCellBuilder> = None;
     let mut active_value = false;
     let mut in_sheet_data = false;
@@ -3742,25 +3772,28 @@ fn parse_worksheet_value_summary_bytes(xml: &[u8]) -> Result<ValueSheetSummary> 
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => in_sheet_data = true,
-                b"row" if in_sheet_data => row_index = raw_attr_u32(&e, b"r"),
+                b"row" if in_sheet_data => {
+                    refs.start_row(&e);
+                }
                 b"c" if in_sheet_data => {
-                    current = Some(FormulaSummaryCellBuilder::from_start(&e, row_index));
+                    current = Some(FormulaSummaryCellBuilder::from_start(&e, &mut refs));
                 }
                 b"v" if current.is_some() => active_value = true,
                 _ => {}
             },
             Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => break,
-                b"row" if in_sheet_data => row_index = None,
+                b"row" if in_sheet_data => {
+                    refs.start_row(&e);
+                }
                 b"c" if in_sheet_data => {
-                    let cell = FormulaSummaryCellBuilder::from_start(&e, row_index);
+                    let cell = FormulaSummaryCellBuilder::from_start(&e, &mut refs);
                     cell.update_value_summary(&mut summary)?;
                 }
                 _ => {}
             },
             Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => break,
-                b"row" if in_sheet_data => row_index = None,
                 b"c" if in_sheet_data => {
                     if let Some(cell) = current.take() {
                         cell.update_value_summary(&mut summary)?;
@@ -3805,7 +3838,7 @@ fn parse_worksheet_value_summary_bytes(xml: &[u8]) -> Result<ValueSheetSummary> 
 fn parse_worksheet_formula_summary_bytes(xml: &[u8]) -> Result<FormulaSheetSummary> {
     let mut reader = XmlReader::from_reader(xml);
     let mut buf = Vec::new();
-    let mut row_index: Option<u32> = None;
+    let mut refs = SheetRefCursor::default();
     let mut current: Option<FormulaSummaryCellBuilder> = None;
     let mut active_value = false;
     let mut in_sheet_data = false;
@@ -3819,9 +3852,11 @@ fn parse_worksheet_formula_summary_bytes(xml: &[u8]) -> Result<FormulaSheetSumma
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => in_sheet_data = true,
-                b"row" if in_sheet_data => row_index = raw_attr_u32(&e, b"r"),
+                b"row" if in_sheet_data => {
+                    refs.start_row(&e);
+                }
                 b"c" if in_sheet_data => {
-                    current = Some(FormulaSummaryCellBuilder::from_start(&e, row_index));
+                    current = Some(FormulaSummaryCellBuilder::from_start(&e, &mut refs));
                 }
                 b"f" if current.is_some() => {
                     if let Some(cell) = current.as_mut() {
@@ -3833,9 +3868,11 @@ fn parse_worksheet_formula_summary_bytes(xml: &[u8]) -> Result<FormulaSheetSumma
             },
             Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => break,
-                b"row" if in_sheet_data => row_index = None,
+                b"row" if in_sheet_data => {
+                    refs.start_row(&e);
+                }
                 b"c" if in_sheet_data => {
-                    let cell = FormulaSummaryCellBuilder::from_start(&e, row_index);
+                    let cell = FormulaSummaryCellBuilder::from_start(&e, &mut refs);
                     cell.update_summary(&mut summary)?;
                 }
                 b"f" if current.is_some() => {
@@ -3847,7 +3884,6 @@ fn parse_worksheet_formula_summary_bytes(xml: &[u8]) -> Result<FormulaSheetSumma
             },
             Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetData" => break,
-                b"row" if in_sheet_data => row_index = None,
                 b"c" if in_sheet_data => {
                     if let Some(cell) = current.take() {
                         cell.update_summary(&mut summary)?;
@@ -6387,6 +6423,8 @@ struct CellBuilder {
     inline_current_run: Option<RichTextRun>,
     inline_current_props: Option<InlineFontProps>,
     inline_saw_r: bool,
+    /// The cell holds an `<is>` element; openpyxl reads an empty one as "".
+    inline_present: bool,
 }
 
 #[derive(Debug)]
@@ -6399,6 +6437,8 @@ struct ValueCellBuilder {
     fast_number_text: [u8; 64],
     fast_number_text_len: u8,
     inline_text: String,
+    /// The cell holds an `<is>` element; openpyxl reads an empty one as "".
+    inline_present: bool,
 }
 
 #[derive(Debug)]
@@ -6414,8 +6454,8 @@ struct FormulaSummaryCellBuilder {
 }
 
 impl FormulaSummaryCellBuilder {
-    fn from_start(e: &BytesStart<'_>, current_row: Option<u32>) -> Self {
-        let base = ValueCellBuilder::from_start(e, current_row);
+    fn from_start(e: &BytesStart<'_>, refs: &mut SheetRefCursor) -> Self {
+        let base = ValueCellBuilder::from_start(e, refs);
         Self {
             row: base.row,
             col: base.col,
@@ -6519,7 +6559,7 @@ impl FormulaSummaryCellBuilder {
 }
 
 impl ValueCellBuilder {
-    fn from_start(e: &BytesStart<'_>, current_row: Option<u32>) -> Self {
+    fn from_start(e: &BytesStart<'_>, refs: &mut SheetRefCursor) -> Self {
         let mut row_col: Option<(u32, u32)> = None;
         let mut data_type = CellDataType::Number;
         for attr in e.attributes().with_checks(false).flatten() {
@@ -6539,7 +6579,7 @@ impl ValueCellBuilder {
                 _ => {}
             }
         }
-        let (row, col) = row_col.unwrap_or((current_row.unwrap_or(1), 1));
+        let (row, col) = refs.cell(row_col);
         Self {
             row,
             col,
@@ -6549,6 +6589,7 @@ impl ValueCellBuilder {
             fast_number_text: [0; 64],
             fast_number_text_len: 0,
             inline_text: String::new(),
+            inline_present: false,
         }
     }
 
@@ -6619,7 +6660,7 @@ impl ValueCellBuilder {
                 .map(CellValue::String)
                 .unwrap_or(CellValue::Empty),
             CellDataType::InlineString => {
-                if self.inline_text.is_empty() {
+                if self.inline_text.is_empty() && !self.inline_present {
                     CellValue::Empty
                 } else {
                     CellValue::String(self.inline_text)
@@ -6670,13 +6711,13 @@ impl ValueCellBuilder {
 }
 
 impl CellBuilder {
-    fn from_start(e: &BytesStart<'_>, current_row: Option<u32>) -> Self {
+    fn from_start(e: &BytesStart<'_>, refs: &mut SheetRefCursor) -> Self {
         let coordinate = attr_value(e, b"r");
-        let (row, col) = coordinate
-            .as_deref()
-            .and_then(a1_to_row_col)
-            .unwrap_or((current_row.unwrap_or(1), 1));
-        let coordinate = coordinate.unwrap_or_else(|| row_col_to_a1(row, col));
+        let explicit = coordinate.as_deref().and_then(a1_to_row_col);
+        let (row, col) = refs.cell(explicit);
+        let coordinate = coordinate
+            .filter(|_| explicit.is_some())
+            .unwrap_or_else(|| row_col_to_a1(row, col));
         let data_type = match attr_value(e, b"t").as_deref() {
             Some("s") => CellDataType::SharedString,
             Some("inlineStr") => CellDataType::InlineString,
@@ -6710,6 +6751,7 @@ impl CellBuilder {
             inline_current_run: None,
             inline_current_props: None,
             inline_saw_r: false,
+            inline_present: false,
         }
     }
 
@@ -6802,7 +6844,7 @@ impl CellBuilder {
                 .map(CellValue::String)
                 .unwrap_or(CellValue::Empty),
             CellDataType::InlineString => {
-                if self.inline_text.is_empty() {
+                if self.inline_text.is_empty() && !self.inline_present {
                     CellValue::Empty
                 } else {
                     CellValue::String(self.inline_text)
@@ -7131,6 +7173,44 @@ fn raw_attr_u32(e: &BytesStart<'_>, key: &[u8]) -> Option<u32> {
         }
     }
     None
+}
+
+/// Worksheet reference cursor matching openpyxl's `WorkSheetParser`: a
+/// `<row>` without `r` follows the previous row (row 1 first), and a `<c>`
+/// without `r` follows the previous cell of its row (column A first). An
+/// explicit cell reference moves the column cursor but not the row cursor.
+#[derive(Debug, Default)]
+struct SheetRefCursor {
+    /// Current row index; 0 before the first `<row>`.
+    row: u32,
+    /// Column of the current row's previous cell; 0 before its first cell.
+    col: u32,
+}
+
+impl SheetRefCursor {
+    /// Enter a `<row>`, returning its explicit or implicit 1-based index.
+    fn start_row(&mut self, e: &BytesStart<'_>) -> u32 {
+        self.row = row_attr_index(e).unwrap_or_else(|| self.row.saturating_add(1));
+        self.col = 0;
+        self.row
+    }
+
+    /// Position of a `<c>`: its parsed `r`, or the cell after the previous
+    /// cell of the current row.
+    fn cell(&mut self, explicit: Option<(u32, u32)>) -> (u32, u32) {
+        let (row, col) = explicit.unwrap_or_else(|| (self.row.max(1), self.col.saturating_add(1)));
+        self.col = col;
+        (row, col)
+    }
+}
+
+/// `row@r` as a 1-based index. openpyxl also accepts integral floats ("3.0").
+fn row_attr_index(e: &BytesStart<'_>) -> Option<u32> {
+    raw_attr_u32(e, b"r").or_else(|| {
+        let value = attr_value(e, b"r")?.trim().parse::<f64>().ok()?;
+        (value.fract() == 0.0 && value >= 1.0 && value <= f64::from(u32::MAX))
+            .then_some(value as u32)
+    })
 }
 
 fn trim_ascii(mut value: &[u8]) -> &[u8] {

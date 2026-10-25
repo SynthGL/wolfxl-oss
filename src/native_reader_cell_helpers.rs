@@ -5,7 +5,7 @@
 
 use chrono::{Datelike, Duration, NaiveDate, Timelike};
 use pyo3::prelude::*;
-use pyo3::types::{PyDateTime, PyDict};
+use pyo3::types::{PyDateTime, PyDict, PyTime};
 use pyo3::IntoPyObjectExt;
 
 use wolfxl_reader::{Cell, CellDataType, CellValue};
@@ -30,13 +30,10 @@ pub(crate) fn cell_to_dict(
         CellValue::Empty => cell_blank(py),
         CellValue::String(s) => cell_with_value(py, "string", s),
         CellValue::Number(n) if is_date_format(number_format) => {
-            let dt = excel_serial_to_datetime(*n, date1904);
-            let midnight = chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap();
-            if dt.time() == midnight {
-                cell_with_value(py, "date", dt.date().format("%Y-%m-%d").to_string())
-            } else {
-                cell_with_value(py, "datetime", dt.format("%Y-%m-%dT%H:%M:%S").to_string())
-            }
+            let d = PyDict::new(py);
+            d.set_item("type", "datetime")?;
+            d.set_item("value", date_serial_to_py(py, *n, date1904, number_format)?)?;
+            Ok(d.into())
         }
         CellValue::Number(n) => {
             let d = PyDict::new(py);
@@ -65,19 +62,7 @@ pub(crate) fn cell_to_plain(
         CellValue::Empty => Ok(py.None()),
         CellValue::String(s) => Ok(s.clone().into_py_any(py)?),
         CellValue::Number(n) if is_date_format(number_format) => {
-            let dt = excel_serial_to_datetime(*n, date1904);
-            let py_dt = PyDateTime::new(
-                py,
-                dt.year(),
-                dt.month() as u8,
-                dt.day() as u8,
-                dt.hour() as u8,
-                dt.minute() as u8,
-                dt.second() as u8,
-                0,
-                None,
-            )?;
-            Ok(py_dt.into_any().unbind())
+            date_serial_to_py(py, *n, date1904, number_format)
         }
         CellValue::Number(n) => number_to_py(py, *n),
         CellValue::Bool(b) => Ok((*b).into_py_any(py)?),
@@ -200,6 +185,63 @@ pub(crate) fn is_date_format(format: Option<&str>) -> bool {
         i += 1;
     }
     false
+}
+
+/// Whether `format` is a duration format such as `[h]:mm:ss`, by the rule of
+/// `wolfxl.styles.numbers.is_timedelta_format`: its first section holds an
+/// elapsed-time token `[h]`, `[hh]`, `[m]`, `[mm]`, `[s]` or `[ss]`.
+fn is_timedelta_format(format: &str) -> bool {
+    let first = format.split(';').next().unwrap_or(format);
+    first.split('[').skip(1).any(|rest| {
+        matches!(
+            rest.split_once(']'),
+            Some((token, _)) if matches!(
+                token.to_ascii_lowercase().as_str(),
+                "h" | "hh" | "m" | "mm" | "s" | "ss"
+            )
+        )
+    })
+}
+
+/// Python value of a date-formatted serial, matching openpyxl's `from_excel`:
+/// a serial in `[0, 1)` is a `datetime.time` (serial 0 is midnight), any
+/// other serial a `datetime.datetime`. The day fraction rounds to the
+/// millisecond and is kept as microseconds. A duration format always yields a
+/// `datetime.datetime`, which `Cell.value` converts to `datetime.timedelta`.
+fn date_serial_to_py(
+    py: Python<'_>,
+    serial: f64,
+    date1904: bool,
+    number_format: Option<&str>,
+) -> PyResult<PyObject> {
+    if (0.0..1.0).contains(&serial) && !number_format.is_some_and(is_timedelta_format) {
+        let millis = (serial * 86_400_000.0).round() as u32;
+        if millis < 86_400_000 {
+            let secs = millis / 1000;
+            let time = PyTime::new(
+                py,
+                (secs / 3600) as u8,
+                (secs % 3600 / 60) as u8,
+                (secs % 60) as u8,
+                millis % 1000 * 1000,
+                None,
+            )?;
+            return Ok(time.into_any().unbind());
+        }
+    }
+    let dt = excel_serial_to_datetime(serial, date1904);
+    let py_dt = PyDateTime::new(
+        py,
+        dt.year(),
+        dt.month() as u8,
+        dt.day() as u8,
+        dt.hour() as u8,
+        dt.minute() as u8,
+        dt.second() as u8,
+        dt.nanosecond() / 1000,
+        None,
+    )?;
+    Ok(py_dt.into_any().unbind())
 }
 
 pub(crate) fn excel_serial_to_datetime(serial: f64, date1904: bool) -> chrono::NaiveDateTime {
