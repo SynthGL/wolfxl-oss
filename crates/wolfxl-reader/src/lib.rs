@@ -55,12 +55,28 @@ fn resolve_xml_reference<'a>(
 
 /// Borrow literal text or resolve a split reference into caller-owned scratch.
 /// Consumers append all chunks before interpreting a complete element value.
-fn xml_event_text<'a>(event: &'a Event<'_>, utf8: &'a mut [u8; 4]) -> Result<Option<&'a str>> {
+/// Literal text and CDATA read CR LF and lone CR as LF (XML 1.0 section 2.11);
+/// a character reference such as `&#13;` keeps its CR.
+fn xml_event_text<'a>(
+    event: &'a Event<'_>,
+    utf8: &'a mut [u8; 4],
+) -> Result<Option<std::borrow::Cow<'a, str>>> {
+    use std::borrow::Cow;
     match event {
-        Event::Text(text) => Ok(Some(text.as_ref())),
-        Event::CData(text) => Ok(Some(text.as_ref())),
-        Event::GeneralRef(reference) => resolve_xml_reference(reference, utf8).map(Some),
+        Event::Text(text) => Ok(Some(normalize_xml_line_ends(text.as_ref()))),
+        Event::CData(text) => Ok(Some(normalize_xml_line_ends(text.as_ref()))),
+        Event::GeneralRef(reference) => {
+            resolve_xml_reference(reference, utf8).map(|text| Some(Cow::Borrowed(text)))
+        }
         _ => Ok(None),
+    }
+}
+
+fn normalize_xml_line_ends(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.contains('\r') {
+        std::borrow::Cow::Owned(text.replace("\r\n", "\n").replace('\r', "\n"))
+    } else {
+        std::borrow::Cow::Borrowed(text)
     }
 }
 
@@ -215,6 +231,9 @@ pub struct ValueCell {
     pub col: u32,
     /// Cached/display value. Formula text is intentionally skipped.
     pub value: CellValue,
+    /// The numeric cell text held a decimal point or exponent, so openpyxl reads it
+    /// as a float even when the value is integral. Only worksheet XML sets this.
+    pub float_text: bool,
 }
 
 /// Compact value-scan summary for one worksheet.
@@ -246,6 +265,9 @@ pub enum CellValue {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CellDataType {
     Number,
+    /// A numeric `<c>` whose text held a decimal point or exponent. openpyxl reads
+    /// such text as a float even when the value is integral. Only worksheet XML sets this.
+    FloatNumber,
     DateIso,
     SharedString,
     InlineString,
@@ -2338,10 +2360,9 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
                 }
                 b"rPh" => in_rph = false,
                 b"t" if in_t => {
-                    let normalized = normalize_ooxml_text(&text_buf);
-                    current.push_str(&normalized);
+                    current.push_str(&text_buf);
                     if let Some(run) = current_run.as_mut() {
-                        run.text.push_str(&normalized);
+                        run.text.push_str(&text_buf);
                     }
                     text_buf.clear();
                     in_t = false;
@@ -2360,7 +2381,7 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
             },
             Ok(Event::Text(e)) => {
                 if in_si && in_t {
-                    text_buf.push_str(&e);
+                    text_buf.push_str(&normalize_xml_line_ends(&e));
                 }
             }
             Ok(Event::GeneralRef(e)) => {
@@ -2370,7 +2391,7 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
             }
             Ok(Event::CData(e)) => {
                 if in_si && in_t {
-                    text_buf.push_str(&e);
+                    text_buf.push_str(&normalize_xml_line_ends(&e));
                 }
             }
             Ok(Event::Eof) => break,
@@ -3525,19 +3546,19 @@ fn parse_worksheet(
                 if let Some(text) = xml_event_text(&event, &mut utf8)? {
                     if in_conditional_formula {
                         if let Some(rule) = current_conditional_rule.as_mut() {
-                            rule.push_formula_text(text);
+                            rule.push_formula_text(&text);
                         }
                     } else if let (Some(target), Some(validation)) =
                         (active_validation_text, current_validation.as_mut())
                     {
-                        validation.push_text(target, text);
+                        validation.push_text(target, &text);
                     } else if active_header_footer.is_some() {
-                        header_footer_text.push_str(text);
+                        header_footer_text.push_str(&text);
                     } else if let (Some(target), Some(cell)) = (active_text, current.as_mut()) {
                         if matches!(target, TextTarget::InlineString) {
-                            inline_text.push_str(text);
+                            inline_text.push_str(&text);
                         } else {
-                            cell.push_text(target, text);
+                            cell.push_text(target, &text);
                         }
                     }
                 }
@@ -3687,7 +3708,7 @@ fn parse_worksheet_value_cells_bytes(
                 if let (Some(target), Some(cell)) = (active_text, current.as_mut()) {
                     if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
                         if matches!(target, TextTarget::InlineString) {
-                            inline_text.push_str(text);
+                            inline_text.push_str(&text);
                         } else {
                             cell.push_raw_text(target, text.as_bytes());
                         }
@@ -4915,7 +4936,7 @@ fn parse_threaded_comments(xml: &str) -> Result<Vec<ParsedThreadedComment>> {
             Ok(event) => {
                 if in_text {
                     if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
-                        text_buf.push_str(text);
+                        text_buf.push_str(&text);
                     }
                 }
             }
@@ -4986,9 +5007,9 @@ fn parse_comments(xml: &str) -> Result<Vec<Comment>> {
             Ok(event) => {
                 if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
                     if in_author {
-                        current_author.push_str(text);
+                        current_author.push_str(&text);
                     } else if in_comment && in_t {
-                        current_text.push_str(text);
+                        current_text.push_str(&text);
                     }
                 }
             }
@@ -5035,7 +5056,7 @@ fn parse_doc_properties_into(
             Ok(event) => {
                 if current_tag.is_some() {
                     match xml_event_text(&event, &mut [0; 4]) {
-                        Ok(Some(text)) => current_text.push_str(text),
+                        Ok(Some(text)) => current_text.push_str(&text),
                         // This best-effort API omits an invalid property rather
                         // than publishing the chunks surrounding a bad entity.
                         Err(_) => {
@@ -5154,7 +5175,7 @@ fn parse_custom_doc_properties(xml: &str) -> Result<Vec<CustomPropertyInfo>> {
             Ok(event) => {
                 if active_value_tag.is_some() {
                     if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
-                        current_value.push_str(text);
+                        current_value.push_str(&text);
                     }
                 }
             }
@@ -5498,7 +5519,7 @@ fn parse_drawing_objects(
             Ok(event) => {
                 if marker_text.is_some() {
                     if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
-                        marker_value.push_str(text);
+                        marker_value.push_str(&text);
                     }
                 }
             }
@@ -5641,7 +5662,7 @@ fn parse_chart_xml(xml: &str, anchor: ImageAnchorInfo) -> Result<Option<ChartInf
             Err(e) => return Err(ReaderError::Xml(format!("failed to parse chart: {e}"))),
             Ok(event) => {
                 if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
-                    text_buf.push_str(text);
+                    text_buf.push_str(&text);
                 }
             }
         }
@@ -5800,7 +5821,7 @@ fn parse_chart_subcharts(xml: &str, axes: &[ChartAxisInfo]) -> Result<Vec<ChartS
             Ok(event) => {
                 if current.is_some() {
                     if let Some(text) = xml_event_text(&event, &mut [0; 4])? {
-                        text_buf.push_str(text);
+                        text_buf.push_str(&text);
                     }
                 }
             }
@@ -6603,11 +6624,7 @@ impl ValueCellBuilder {
                 self.value_text.extend_from_slice(text.as_bytes())
             }
             TextTarget::InlineString => {
-                if text.contains('\r') {
-                    self.inline_text.push_str(&normalize_ooxml_text(text));
-                } else {
-                    self.inline_text.push_str(text);
-                }
+                self.inline_text.push_str(text);
             }
         }
     }
@@ -6654,6 +6671,12 @@ impl ValueCellBuilder {
         } else {
             None
         };
+        let float_text = self.data_type == CellDataType::Number
+            && number_text_is_float(if self.fast_number.is_some() {
+                &self.fast_number_text[..self.fast_number_text_len as usize]
+            } else {
+                &self.value_text
+            });
         let value = match self.data_type {
             CellDataType::SharedString => shared_string_idx
                 .and_then(|i| shared_strings.values.get(i).cloned())
@@ -6675,12 +6698,13 @@ impl ValueCellBuilder {
             CellDataType::DateIso | CellDataType::FormulaString => {
                 CellValue::String(String::from_utf8_lossy(&self.value_text).into_owned())
             }
-            CellDataType::Number => {
+            CellDataType::Number | CellDataType::FloatNumber => {
                 if let Some(value) = self.fast_number {
                     return Ok(ValueCell {
                         row: self.row,
                         col: self.col,
                         value: CellValue::Number(value),
+                        float_text,
                     });
                 }
                 let raw = trim_ascii(&self.value_text);
@@ -6706,6 +6730,7 @@ impl ValueCellBuilder {
             row: self.row,
             col: self.col,
             value,
+            float_text,
         })
     }
 }
@@ -6773,10 +6798,9 @@ impl CellBuilder {
             TextTarget::Value => self.value_text.push_str(text),
             TextTarget::Formula => self.formula_text.push_str(text),
             TextTarget::InlineString => {
-                let text = normalize_ooxml_text(text);
-                self.inline_text.push_str(&text);
+                self.inline_text.push_str(text);
                 if let Some(run) = self.inline_current_run.as_mut() {
-                    run.text.push_str(&text);
+                    run.text.push_str(text);
                 }
             }
         }
@@ -6838,6 +6862,8 @@ impl CellBuilder {
             CellDataType::InlineString if self.inline_saw_r => Some(self.inline_runs),
             _ => None,
         };
+        let float_text = self.data_type == CellDataType::Number
+            && number_text_is_float(self.value_text.as_bytes());
         let value = match self.data_type {
             CellDataType::SharedString => shared_string_idx
                 .and_then(|i| shared_strings.values.get(i).cloned())
@@ -6854,7 +6880,7 @@ impl CellBuilder {
             CellDataType::Error => CellValue::Error(self.value_text),
             CellDataType::DateIso => CellValue::String(self.value_text),
             CellDataType::FormulaString => CellValue::String(self.value_text),
-            CellDataType::Number => {
+            CellDataType::Number | CellDataType::FloatNumber => {
                 let raw = self.value_text.trim();
                 if raw.is_empty() {
                     CellValue::Empty
@@ -6887,7 +6913,11 @@ impl CellBuilder {
             col: self.col,
             coordinate: self.coordinate,
             style_id: self.style_id,
-            data_type: self.data_type,
+            data_type: if float_text {
+                CellDataType::FloatNumber
+            } else {
+                self.data_type
+            },
             value,
             formula: if self.formula_text.is_empty() {
                 None
@@ -6900,6 +6930,12 @@ impl CellBuilder {
             rich_text,
         })
     }
+}
+
+/// openpyxl's `_cast_number`: numeric text with a decimal point or exponent is a
+/// float, any other numeric text an int.
+fn number_text_is_float(text: &[u8]) -> bool {
+    text.iter().any(|b| matches!(b, b'.' | b'e' | b'E'))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -7022,10 +7058,6 @@ fn validate_zip_entry_metadata(name: &str, size: u64, compressed_size: u64) -> R
         )));
     }
     Ok(())
-}
-
-fn normalize_ooxml_text(text: &str) -> String {
-    text.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 fn read_part_required<R: Read + std::io::Seek>(
@@ -7572,12 +7604,12 @@ mod tests {
     fn parses_shared_strings_plain_and_rich_text() {
         let xml = r#"<sst><si><t>Plain</t></si><si><r><rPr><b/><color rgb="FFFF0000"/></rPr><t>Rich&#13;&#10;</t></r><r><t>Text</t></r></si></sst>"#;
         let strings = parse_shared_strings(xml).expect("parse sst");
-        assert_eq!(strings.values, vec!["Plain", "Rich\nText"]);
+        assert_eq!(strings.values, vec!["Plain", "Rich\r\nText"]);
         assert_eq!(strings.rich_text[0], None);
         let rich = strings.rich_text[1].as_ref().expect("rich runs");
         assert_eq!(
             rich.iter().map(|run| run.text.as_str()).collect::<Vec<_>>(),
-            vec!["Rich\n", "Text"]
+            vec!["Rich\r\n", "Text"]
         );
         assert_eq!(rich[0].font.as_ref().and_then(|font| font.bold), Some(true));
         assert_eq!(
@@ -7855,21 +7887,25 @@ mod tests {
                     row: 1,
                     col: 1,
                     value: CellValue::String("Shared".to_string()),
+                    float_text: false,
                 },
                 ValueCell {
                     row: 1,
                     col: 2,
                     value: CellValue::Number(42.0),
+                    float_text: false,
                 },
                 ValueCell {
                     row: 1,
                     col: 3,
                     value: CellValue::Bool(true),
+                    float_text: false,
                 },
                 ValueCell {
                     row: 2,
                     col: 1,
                     value: CellValue::String("Inline".to_string()),
+                    float_text: false,
                 },
             ]
         );
@@ -7886,6 +7922,46 @@ mod tests {
 
         assert_eq!(cells[0].value, CellValue::String("AT&T".to_string()));
         assert_eq!(cells[1].value, CellValue::String("one\ntwo".to_string()));
+    }
+
+    #[test]
+    fn numeric_text_with_point_or_exponent_is_float_text() {
+        let xml = r#"<worksheet><sheetData><row r="1">
+            <c r="A1"><v>100</v></c>
+            <c r="B1"><v>100.0</v></c>
+            <c r="C1"><v>1E2</v></c>
+            <c r="D1"><v>1e2</v></c>
+            <c r="E1" t="str"><v>1.5</v></c>
+        </row></sheetData></worksheet>"#;
+        let shared = SharedStrings::default();
+        let sheet = parse_worksheet(xml, &shared, None, Vec::new(), Vec::new()).unwrap();
+        let eager: Vec<bool> = sheet
+            .cells
+            .iter()
+            .map(|c| c.data_type == CellDataType::FloatNumber)
+            .collect();
+        assert_eq!(eager, [false, true, true, true, false]);
+        let values = parse_worksheet_value_cells(xml, &shared).unwrap();
+        let value_only: Vec<bool> = values.iter().map(|c| c.float_text).collect();
+        assert_eq!(value_only, eager);
+    }
+
+    #[test]
+    fn literal_line_ends_read_as_lf_and_references_keep_cr() {
+        let xml = "<worksheet><sheetData><row r=\"1\">\
+            <c r=\"A1\" t=\"str\"><v>a\r\nb\rc&#13;d</v></c>\
+            <c r=\"B1\" t=\"inlineStr\"><is><t>a\r\nb\rc&#13;d</t></is></c>\
+        </row></sheetData></worksheet>";
+        let shared = SharedStrings::default();
+        let expected = CellValue::String("a\nb\nc\rd".into());
+        let sheet = parse_worksheet(xml, &shared, None, Vec::new(), Vec::new()).unwrap();
+        assert_eq!(sheet.cells[0].value, expected);
+        assert_eq!(sheet.cells[1].value, expected);
+        let values = parse_worksheet_value_cells(xml, &shared).unwrap();
+        assert_eq!(values[0].value, expected);
+        assert_eq!(values[1].value, expected);
+        let strings = parse_shared_strings("<sst><si><t>a\r\nb\rc&#13;d</t></si></sst>").unwrap();
+        assert_eq!(strings.values, ["a\nb\nc\rd"]);
     }
 
     #[test]
@@ -8370,9 +8446,9 @@ mod tests {
             </sst>"#,
         )
         .unwrap();
-        assert_eq!(strings.values, [" left & right \u{1D11E} &lt; ", "A\n&B"]);
+        assert_eq!(strings.values, [" left & right \u{1D11E} &lt; ", "A\r\n&B"]);
         let runs = strings.rich_text[1].as_ref().unwrap();
-        assert_eq!(runs[0].text, "A\n&");
+        assert_eq!(runs[0].text, "A\r\n&");
         assert_eq!(runs[0].font.as_ref().unwrap().bold, Some(true));
         assert_eq!(runs[1].text, "B");
         assert!(parse_shared_strings("<sst><si><t>&unknown;</t></si></sst>").is_err());
@@ -8392,9 +8468,9 @@ mod tests {
         </worksheet>"#;
         let shared = SharedStrings::default();
         let sheet = parse_worksheet(xml, &shared, None, Vec::new(), Vec::new()).unwrap();
-        assert_eq!(sheet.cells[0].value, CellValue::String("A\n&B".into()));
+        assert_eq!(sheet.cells[0].value, CellValue::String("A\r\n&B".into()));
         let runs = sheet.cells[0].rich_text.as_ref().unwrap();
-        assert_eq!(runs[0].text, "A\n&");
+        assert_eq!(runs[0].text, "A\r\n&");
         assert_eq!(runs[0].font.as_ref().unwrap().italic, Some(true));
         assert_eq!(
             sheet.cells[1].formula.as_deref(),
