@@ -139,6 +139,57 @@ def test_excel_writer_append_mode_matches_upstream(tmp_path: Path) -> None:
     assert aliased == upstream
 
 
+APPEND_NEW = """
+base = pathlib.Path({base!r})
+extra = pd.DataFrame({{"name": ["delta", "epsilon"], "count": [4, 5], "ratio": [2.5, None]}})
+frame.to_excel(base, sheet_name="Data", index=False, engine="openpyxl")
+with pd.ExcelWriter(base, engine="openpyxl", mode="a", if_sheet_exists="new") as writer:
+    extra.to_excel(writer, sheet_name="Data", index=False)
+with pd.ExcelWriter(base, engine="openpyxl", mode="a", if_sheet_exists="new") as writer:
+    extra.to_excel(writer, sheet_name="data", index=False)
+print(json.dumps(dump(base)))
+"""
+
+
+def test_excel_writer_append_new_sheet_matches_upstream(tmp_path: Path) -> None:
+    """``if_sheet_exists="new"`` renames the duplicate (Data -> Data1) like openpyxl."""
+    aliased = _run(
+        tmp_path,
+        ALIAS_FIRST,
+        "import pathlib\nimport openpyxl\nassert openpyxl is wolfxl",
+        FRAME,
+        APPEND_NEW.format(base=str(tmp_path / "alias-new.xlsx")),
+    )
+    upstream = _run(
+        tmp_path,
+        UPSTREAM,
+        "import pathlib",
+        FRAME,
+        APPEND_NEW.format(base=str(tmp_path / "upstream-new.xlsx")),
+    )
+
+    assert list(upstream) == ["Data", "Data1", "data2"]
+    assert aliased == upstream
+
+
+def test_worksheet_title_assignment_dedupes_like_openpyxl() -> None:
+    import openpyxl
+
+    import wolfxl
+
+    def exercise(module: object) -> tuple[list[str], list[str]]:
+        wb = module.Workbook()  # type: ignore[attr-defined]
+        wb.active.title = "Data"
+        wb.active.title = "Data"  # renaming to its own title is a no-op
+        renamed = [wb.active.title]
+        other = wb.create_sheet("Other")
+        other.title = "dATA"  # case-insensitive match
+        renamed.append(other.title)
+        return renamed, wb.sheetnames
+
+    assert exercise(wolfxl) == exercise(openpyxl) == (["Data", "dATA1"], ["Data", "dATA1"])
+
+
 def test_alias_reports_api_version_to_pandas_only_and_uninstall_restores(
     tmp_path: Path,
 ) -> None:

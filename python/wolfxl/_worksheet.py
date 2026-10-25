@@ -556,13 +556,17 @@ class Worksheet:
 
     @title.setter
     def title(self, value: str) -> None:
-        """Rename this worksheet (write mode only)."""
+        """Rename this worksheet, deduplicating like openpyxl (``Data`` -> ``Data1``)."""
+        from wolfxl.workbook.child import avoid_duplicate_name
+
         wb = self._workbook
         old = self._title
         if old == value:
             return
-        if value in wb._sheets or value in getattr(wb, "_chartsheets", {}):  # noqa: SLF001
-            raise ValueError(f"Sheet '{value}' already exists")
+        value = avoid_duplicate_name(
+            [*wb._sheet_names, *getattr(wb, "_chartsheets", {})],  # noqa: SLF001
+            value,
+        )
         idx = wb._sheet_names.index(old)  # noqa: SLF001
         _queue_defined_name_sheet_rename(wb, old, value, idx)
         if wb._rust_patcher is not None:  # noqa: SLF001
