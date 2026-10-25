@@ -32,11 +32,12 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import tempfile
 import zipfile
 from collections.abc import Iterable, Iterator, Mapping
 from io import BytesIO
-from typing import Any
+from typing import Any, Union
 
 from wolfxl._compat import _OpenpyxlSerialisable, _xml_element_factory
 
@@ -204,7 +205,10 @@ class CellWatch:
         return f"<CellWatch r={self._r!r}>"
 
 
-_WatchLike = CellWatch | str
+if sys.version_info >= (3, 10):
+    _WatchLike = CellWatch | str
+else:
+    _WatchLike = Union[CellWatch, str]
 
 
 def _coerce_watch(value: Any) -> CellWatch:

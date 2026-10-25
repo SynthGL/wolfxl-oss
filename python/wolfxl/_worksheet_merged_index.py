@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import sys
 from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Any, Iterable
 
 from wolfxl.utils.cell import range_boundaries
 
+# Python 3.9 has frozen dataclasses but no slots keyword.
+_DATACLASS_SLOTS = {"slots": True} if sys.version_info >= (3, 10) else {}
 
-@dataclass(frozen=True, slots=True)
+
+@dataclass(frozen=True, **_DATACLASS_SLOTS)
 class _MergedRangeBounds:
     min_row: int
     min_col: int
@@ -17,7 +21,7 @@ class _MergedRangeBounds:
     max_col: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, **_DATACLASS_SLOTS)
 class _RowIntervalNode:
     center: int
     by_start: tuple[_MergedRangeBounds, ...]
@@ -74,7 +78,9 @@ class MergedRangeIndex:
         return False
 
     def bounds_for_cell(
-        self, row: int, col: int,
+        self,
+        row: int,
+        col: int,
         priorities: dict[tuple[int, int, int, int], int] | None = None,
     ) -> tuple[int, int, int, int] | None:
         """Find a containing range, retaining first-match overlap precedence.
@@ -101,8 +107,10 @@ class MergedRangeIndex:
                 candidate_count = len(candidates)
             # Row navigation must continue after a match: an accepted overlap
             # may live in an ancestor and another in a descendant bucket.
-            node = current.left if row < current.center else (
-                current.right if row > current.center else None
+            node = (
+                current.left
+                if row < current.center
+                else (current.right if row > current.center else None)
             )
             if current.disjoint_columns:
                 column_index = bisect_right(current.column_starts, col) - 1
@@ -162,9 +170,7 @@ def _build_row_interval_tree(
     if not entries:
         return None
     endpoints = sorted(
-        endpoint
-        for bounds in entries
-        for endpoint in (bounds.min_row, bounds.max_row)
+        endpoint for bounds in entries for endpoint in (bounds.min_row, bounds.max_row)
     )
     center = endpoints[len(endpoints) // 2]
     left: list[_MergedRangeBounds] = []
@@ -178,13 +184,10 @@ def _build_row_interval_tree(
         else:
             spanning.append(bounds)
     by_start = tuple(sorted(spanning, key=lambda bounds: (bounds.min_row, bounds.min_col)))
-    by_end = tuple(
-        sorted(spanning, key=lambda bounds: (-bounds.max_row, bounds.min_col))
-    )
+    by_end = tuple(sorted(spanning, key=lambda bounds: (-bounds.max_row, bounds.min_col)))
     by_column = tuple(sorted(spanning, key=lambda bounds: (bounds.min_col, bounds.max_col)))
     disjoint_columns = all(
-        left.max_col < right.min_col
-        for left, right in zip(by_column, by_column[1:])
+        left.max_col < right.min_col for left, right in zip(by_column, by_column[1:])
     )
     return _RowIntervalNode(
         center=center,

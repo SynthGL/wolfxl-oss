@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.0.12 - 2026-10-24
+
+### Fixed
+
+- Restore Python 3.9 calculation and worksheet iteration by omitting the
+  unsupported dataclass `slots` argument on Python 3.9. Python 3.10 and later
+  retain frozen, slotted merged-range records. The failure also affected 2.0.10
+  and 2.0.11.
+- Restore Python 3.9 drawing text imports and keyword construction of bullet
+  styles by omitting the unsupported dataclass `kw_only` argument and using a
+  compatible runtime type union. Repair the same runtime union incompatibility
+  in worksheet cell watches. Python 3.10 and later retain the same
+  constructor signatures.
+- Import every installed package module and check bullet construction in
+  clean-installed CPython 3.9 wheels on every supported platform:
+  calculate the README result 2450, save and reload cached values, and preserve
+  formula text, edited inputs, formatting and merged headings in normal and
+  modify modes.
+
 ## 2.0.11 - 2026-10-24
 
 ### Security
