@@ -132,3 +132,27 @@ def test_reopened_workbook_after_resave_accepts_further_edits(tmp_path: Path) ->
     reopened.save(path)
     assert _anchors(path) == [(3, 3), (5, 5)]
     _assert_clean_package(path)
+
+
+@pytest.mark.parametrize("sheet_kind", ["created", "renamed"])
+def test_image_add_on_sheet_unknown_to_source_reader(tmp_path: Path, sheet_kind: str) -> None:
+    path = _workbook(tmp_path, with_image=True)
+    wb = load_workbook(path, modify=True)
+    if sheet_kind == "created":
+        ws = wb.create_sheet("New")
+    else:
+        ws = wb.active
+        ws.title = "Renamed"
+    ws.add_image(Image(JPG_PATH), "D4")
+    wb.save(path)
+    ws["A2"] = "second save"
+    wb.save(path)
+
+    reopened = load_workbook(path)
+    anchors = [
+        (int(image.anchor._from.col), int(image.anchor._from.row))
+        for image in reopened[ws.title]._images
+    ]
+    expected = [(1, 1), (3, 3)] if sheet_kind == "renamed" else [(3, 3)]
+    assert anchors == expected
+    _assert_clean_package(path)

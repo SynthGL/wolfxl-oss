@@ -361,6 +361,9 @@ def _initialize_sheet_proxies(wb: Any, rust_book: Any) -> None:
     wb._sheets = {
         name: Worksheet(wb, name) for name in names if name not in chartsheet_names
     }
+    # Proxies the source reader can serve by title. Held strongly so a freed
+    # sheet's id cannot be reused by a sheet created later in the session.
+    wb._source_worksheets = {id(ws): ws for ws in wb._sheets.values()}
     wb._chartsheets = {}
     for name in names:
         if name in chartsheet_names:

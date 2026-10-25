@@ -580,6 +580,8 @@ class Worksheet:
         wb._sheet_names[idx] = value  # noqa: SLF001
         wb._sheets[value] = wb._sheets.pop(old)  # noqa: SLF001
         self._title = value
+        # The source reader knows this sheet only by its old title.
+        getattr(wb, "_source_worksheets", {}).pop(id(self), None)
         self._defined_names_cache = None
         # Sync the Rust writer so ensure_sheet_exists() sees the new name.
         if wb._rust_writer is not None:  # noqa: SLF001

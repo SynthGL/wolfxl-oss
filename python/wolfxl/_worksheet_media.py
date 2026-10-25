@@ -568,12 +568,23 @@ def has_pending_image_deletions(ws: Worksheet) -> bool:
 def record_flushed_image_edits(ws: Worksheet, deletions: list[int], added: list[Any]) -> None:
     """Remember the image edits handed to the patcher for *ws*'s next save."""
     _FLUSHED_IMAGE_EDITS.pop(id(ws), None)
-    if added and ws._images_cache is None:  # noqa: SLF001
+    if added and ws._images_cache is None and _source_reader_serves(ws):  # noqa: SLF001
         # Hydrate while the source drawing and pending adds are both visible, so
         # an in-place save can keep the added image objects addressable.
         get_images(ws)
     if ws._images_cache is not None and (deletions or added):  # noqa: SLF001
         _FLUSHED_IMAGE_EDITS[id(ws)] = (sorted(deletions), list(added))
+
+
+def _source_reader_serves(ws: Worksheet) -> bool:
+    """Return whether the source reader holds *ws* under its current title.
+
+    Sheets created or renamed in this session are unknown to the reader, or
+    would resolve to a different source sheet's drawing.
+    """
+    sheets = getattr(ws._workbook, "_source_worksheets", None)  # noqa: SLF001
+    return sheets is not None and sheets.get(id(ws)) is ws
+
 
 
 def rebase_source_image_indices(wb: Any, *, in_place: bool) -> None:
