@@ -3,8 +3,8 @@
 //! Activated by `load_workbook(path, read_only=True)` (or auto-trigger when
 //! a sheet has > 50k rows). Walks `xl/worksheets/sheetN.xml` one row at a
 //! time using an incremental XML reader over a bounded in-memory sheet part, or
-//! a disk-spooled sheet part for larger worksheets, resolving shared-string-table
-//! (SST) references upfront. Style metadata is
+//! for larger worksheets over the sheet part inflated from its ZIP entry while
+//! parsing, resolving shared-string-table (SST) references upfront. Style metadata is
 //! exposed as a `style_id` only — Python-side `StreamingCell` resolves the
 //! actual font/fill/etc. via the eager Rust reader code path
 //! (which already loads `xl/styles.xml` and exposes O(1) style lookups).
@@ -15,15 +15,16 @@
 //! - `reader.read_next_row()` → `(row_index_1based, [(col_1based, value, style_id, type), ...])`.
 //! - `reader.read_next_values()` → padded value tuple.
 //! - `reader.read_next_values_row()` → `(row_index_1based, padded value tuple)`.
-//! - `reader.close()` — eagerly closes the XML reader and removes the temp part.
+//! - `reader.close()` — eagerly closes the XML reader and releases the sheet part.
 //!
 //! Memory profile: SST loaded once (typically <10MB even on huge
 //! workbooks); sheet XML uses a bounded in-memory fast path for small/medium
-//! sheets and falls back to temp-file spooling for large sheets.
+//! sheets and inflates large sheets from the ZIP entry as rows are read.
 
 use std::fs::File;
-use std::io::{BufReader, Cursor, Read, Seek, SeekFrom};
+use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom};
 
+use flate2::read::DeflateDecoder;
 use pyo3::exceptions::{PyIOError, PyStopIteration, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDateTime, PyDict, PyFloat, PyInt, PyList, PyTime, PyTuple};
@@ -31,15 +32,16 @@ use pyo3::IntoPyObjectExt;
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader as XmlReader;
-use tempfile::NamedTempFile;
-use zip::ZipArchive;
+use zip::{CompressionMethod, ZipArchive};
 
 use crate::ooxml_util;
 
 type PyObjectOwned = Py<PyAny>;
 // Keep read_only value scans below openpyxl's peak RSS on ordinary table-sized
-// workbooks; larger sheet XML parts stream through a temp file instead.
+// workbooks; larger sheet XML parts inflate from the ZIP entry while parsing.
 const IN_MEMORY_SHEET_XML_LIMIT: u64 = 1 * 1024 * 1024;
+// Read buffer between the entry inflater and the XML reader.
+const SHEET_ENTRY_BUFFER: usize = 64 * 1024;
 // Bound the value cells materialized per chunk so wide sheets (up to 16,384
 // columns) stream a few rows at a time instead of 1,024 padded rows.
 const CHUNK_CELL_BUDGET: usize = 65_536;
@@ -158,8 +160,6 @@ pub struct StreamingSheetReader {
     reader: Option<SheetXmlReader>,
     /// Scratch buffer reused for quick-xml events.
     event_buf: Vec<u8>,
-    /// Temp file that owns the decompressed sheet XML while streaming.
-    temp_file: Option<NamedTempFile>,
     /// Shared-strings table loaded upfront from `xl/sharedStrings.xml`.
     sst: Vec<String>,
     /// Whether the reader has been exhausted.
@@ -328,14 +328,14 @@ enum CellTypeAttr {
 
 enum SheetXmlReader {
     Memory(XmlReader<Cursor<Vec<u8>>>),
-    File(XmlReader<BufReader<File>>),
+    Entry(XmlReader<BufReader<SheetEntryReader>>),
 }
 
 impl SheetXmlReader {
     fn read_event_into<'a>(&mut self, buf: &'a mut Vec<u8>) -> quick_xml::Result<Event<'a>> {
         match self {
             Self::Memory(reader) => reader.read_event_into(buf),
-            Self::File(reader) => reader.read_event_into(buf),
+            Self::Entry(reader) => reader.read_event_into(buf),
         }
     }
 
@@ -346,8 +346,179 @@ impl SheetXmlReader {
     ) -> quick_xml::Result<quick_xml::events::BytesText<'a>> {
         match self {
             Self::Memory(reader) => reader.read_text_into(end, buf),
-            Self::File(reader) => reader.read_text_into(end, buf),
+            Self::Entry(reader) => reader.read_text_into(end, buf),
         }
+    }
+}
+
+/// Compressed bytes of one ZIP entry, owned so the sheet part can be inflated
+/// while it is parsed after the archive itself has been released.
+enum EntrySource {
+    File(io::Take<File>),
+    /// A range of the caller's immutable `bytes` object, shared rather than copied.
+    Bytes {
+        data: Py<PyBytes>,
+        pos: usize,
+        end: usize,
+    },
+}
+
+impl Read for EntrySource {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::File(source) => source.read(buf),
+            Self::Bytes { data, pos, end } => Python::attach(|py| {
+                let available = &data.as_bytes(py)[*pos..*end];
+                let n = available.len().min(buf.len());
+                buf[..n].copy_from_slice(&available[..n]);
+                *pos += n;
+                Ok(n)
+            }),
+        }
+    }
+}
+
+/// Archive readers that can hand over one entry's compressed byte range.
+trait IntoEntrySource: Read + Seek + Sized {
+    fn into_entry_source(self, start: u64, len: u64) -> io::Result<EntrySource>;
+}
+
+impl IntoEntrySource for File {
+    fn into_entry_source(mut self, start: u64, len: u64) -> io::Result<EntrySource> {
+        self.seek(SeekFrom::Start(start))?;
+        Ok(EntrySource::File(self.take(len)))
+    }
+}
+
+/// Caller-owned xlsx bytes read through a cursor; the owner is kept so the
+/// sheet entry can stream from the same buffer without a copy.
+struct PyBytesCursor<'a, 'py> {
+    owner: &'a Bound<'py, PyBytes>,
+    cursor: Cursor<&'a [u8]>,
+}
+
+impl<'a, 'py> PyBytesCursor<'a, 'py> {
+    fn new(owner: &'a Bound<'py, PyBytes>) -> Self {
+        Self {
+            owner,
+            cursor: Cursor::new(owner.as_bytes()),
+        }
+    }
+}
+
+impl Read for PyBytesCursor<'_, '_> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.cursor.read(buf)
+    }
+}
+
+impl Seek for PyBytesCursor<'_, '_> {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.cursor.seek(pos)
+    }
+}
+
+impl IntoEntrySource for PyBytesCursor<'_, '_> {
+    fn into_entry_source(self, start: u64, len: u64) -> io::Result<EntrySource> {
+        let total = self.cursor.get_ref().len();
+        let range = usize::try_from(start)
+            .ok()
+            .zip(usize::try_from(len).ok())
+            .and_then(|(start, len)| Some(start..start.checked_add(len)?))
+            .filter(|range| range.end <= total)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "sheet part extends past the end of the package",
+                )
+            })?;
+        Ok(EntrySource::Bytes {
+            data: self.owner.clone().unbind(),
+            pos: range.start,
+            end: range.end,
+        })
+    }
+}
+
+enum EntryDecoder {
+    Stored(EntrySource),
+    Deflated(DeflateDecoder<EntrySource>),
+}
+
+/// Inflates a sheet part from its ZIP entry as it is parsed, so large sheets
+/// need neither a full in-memory copy nor a temp file. Like the zip crate's
+/// entry reader, it fails once output exceeds the declared uncompressed size
+/// and verifies the CRC-32 at the end of the entry.
+struct SheetEntryReader {
+    decoder: EntryDecoder,
+    crc: crc32fast::Hasher,
+    expected_crc: u32,
+    declared_size: u64,
+    produced: u64,
+}
+
+impl SheetEntryReader {
+    fn new(
+        source: EntrySource,
+        method: CompressionMethod,
+        declared_size: u64,
+        expected_crc: u32,
+    ) -> io::Result<Self> {
+        let decoder = match method {
+            CompressionMethod::Stored => EntryDecoder::Stored(source),
+            CompressionMethod::Deflated => EntryDecoder::Deflated(DeflateDecoder::new(source)),
+            other => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    format!("unsupported sheet part compression method: {other}"),
+                ))
+            }
+        };
+        Ok(Self {
+            decoder,
+            crc: crc32fast::Hasher::new(),
+            expected_crc,
+            declared_size,
+            produced: 0,
+        })
+    }
+}
+
+impl Read for SheetEntryReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        // Inflate at most one byte past the declared size, so an oversized
+        // part is detected without producing more of it.
+        let room = self
+            .declared_size
+            .saturating_sub(self.produced)
+            .saturating_add(1);
+        let len = buf.len().min(usize::try_from(room).unwrap_or(usize::MAX));
+        let buf = &mut buf[..len];
+        let n = match &mut self.decoder {
+            EntryDecoder::Stored(source) => source.read(buf)?,
+            EntryDecoder::Deflated(source) => source.read(buf)?,
+        };
+        if n == 0 {
+            if self.crc.clone().finalize() != self.expected_crc {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Invalid checksum",
+                ));
+            }
+            return Ok(0);
+        }
+        self.produced += n as u64;
+        if self.produced > self.declared_size {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "File is larger than its declared uncompressed size",
+            ));
+        }
+        self.crc.update(&buf[..n]);
+        Ok(n)
     }
 }
 
@@ -375,14 +546,14 @@ impl StreamingSheetReader {
     #[staticmethod]
     #[pyo3(signature = (data, sheet, min_row=None, max_row=None, min_col=None, max_col=None))]
     pub fn open_from_bytes(
-        data: &[u8],
+        data: &Bound<'_, PyBytes>,
         sheet: &str,
         min_row: Option<u32>,
         max_row: Option<u32>,
         min_col: Option<u32>,
         max_col: Option<u32>,
     ) -> PyResult<Self> {
-        let zip = ZipArchive::new(Cursor::new(data))
+        let zip = ZipArchive::new(PyBytesCursor::new(data))
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
         Self::from_archive(zip, sheet, min_row, max_row, min_col, max_col)
     }
@@ -633,7 +804,6 @@ impl StreamingSheetReader {
     pub fn close(&mut self) {
         self.exhausted = true;
         self.reader = None;
-        self.temp_file = None;
         self.event_buf.clear();
     }
 
@@ -665,9 +835,9 @@ enum ValueStepResult<'py> {
 }
 
 impl StreamingSheetReader {
-    /// Load shared strings and stage `sheet`'s XML (in memory when small,
-    /// else spooled to a temp file) so the archive can be released.
-    fn from_archive<R: Read + Seek>(
+    /// Load shared strings and stage `sheet`'s XML: in memory when small, else
+    /// inflated from its ZIP entry while rows are read.
+    fn from_archive<R: IntoEntrySource>(
         mut zip: ZipArchive<R>,
         sheet: &str,
         min_row: Option<u32>,
@@ -682,35 +852,37 @@ impl StreamingSheetReader {
         let mut sheet_entry = zip.by_name(&sheet_path).map_err(|e| {
             PyErr::new::<PyIOError, _>(format!("Failed to open sheet part '{sheet_path}': {e}"))
         })?;
-        let (reader, temp_file) = if sheet_entry.size() <= IN_MEMORY_SHEET_XML_LIMIT {
+        let reader = if sheet_entry.size() <= IN_MEMORY_SHEET_XML_LIMIT {
             let mut xml = Vec::with_capacity(sheet_entry.size() as usize);
             sheet_entry
                 .read_to_end(&mut xml)
                 .map_err(|e| PyErr::new::<PyIOError, _>(format!("read sheet XML: {e}")))?;
             let mut reader = XmlReader::from_reader(Cursor::new(xml));
             reader.config_mut().trim_text(false);
-            (SheetXmlReader::Memory(reader), None)
+            SheetXmlReader::Memory(reader)
         } else {
-            let mut temp_file = NamedTempFile::new()
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("streaming temp file: {e}")))?;
-            std::io::copy(&mut sheet_entry, temp_file.as_file_mut())
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("spool sheet XML: {e}")))?;
-            temp_file
-                .as_file_mut()
-                .seek(SeekFrom::Start(0))
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("rewind sheet XML: {e}")))?;
-            let reader_file = temp_file
-                .reopen()
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("reopen sheet XML: {e}")))?;
-            let mut reader = XmlReader::from_reader(BufReader::new(reader_file));
+            let data_start = sheet_entry.data_start().ok_or_else(|| {
+                PyErr::new::<PyIOError, _>(format!("sheet part '{sheet_path}' has no data offset"))
+            })?;
+            let compressed_size = sheet_entry.compressed_size();
+            let method = sheet_entry.compression();
+            let size = sheet_entry.size();
+            let crc32 = sheet_entry.crc32();
+            drop(sheet_entry);
+            let entry = zip
+                .into_inner()
+                .into_entry_source(data_start, compressed_size)
+                .and_then(|source| SheetEntryReader::new(source, method, size, crc32))
+                .map_err(|e| PyErr::new::<PyIOError, _>(format!("open sheet XML: {e}")))?;
+            let mut reader =
+                XmlReader::from_reader(BufReader::with_capacity(SHEET_ENTRY_BUFFER, entry));
             reader.config_mut().trim_text(false);
-            (SheetXmlReader::File(reader), Some(temp_file))
+            SheetXmlReader::Entry(reader)
         };
 
         Ok(Self {
             reader: Some(reader),
             event_buf: Vec::with_capacity(8192),
-            temp_file,
             sst,
             exhausted: false,
             min_row,
@@ -1758,11 +1930,88 @@ mod tests {
         assert_eq!(unescape_xml(b"plain"), "plain");
     }
 
+    fn bytes_source(data: &[u8]) -> EntrySource {
+        pyo3::Python::initialize();
+        Python::attach(|py| EntrySource::Bytes {
+            data: PyBytes::new(py, data).unbind(),
+            pos: 0,
+            end: data.len(),
+        })
+    }
+
+    fn deflated_entry(xml: &[u8]) -> SheetEntryReader {
+        let mut encoder =
+            flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+        std::io::Write::write_all(&mut encoder, xml).unwrap();
+        SheetEntryReader::new(
+            bytes_source(&encoder.finish().unwrap()),
+            CompressionMethod::Deflated,
+            xml.len() as u64,
+            crc32fast::hash(xml),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn sheet_entry_reader_streams_stored_and_deflated_parts() {
+        let xml: Vec<u8> = (0..20_000)
+            .flat_map(|i| format!("<row r=\"{i}\"/>").into_bytes())
+            .collect();
+        let stored = SheetEntryReader::new(
+            bytes_source(&xml),
+            CompressionMethod::Stored,
+            xml.len() as u64,
+            crc32fast::hash(&xml),
+        )
+        .unwrap();
+        for entry in [stored, deflated_entry(&xml)] {
+            let mut out = Vec::new();
+            BufReader::with_capacity(7, entry)
+                .read_to_end(&mut out)
+                .unwrap();
+            assert_eq!(out, xml);
+        }
+    }
+
+    #[test]
+    fn sheet_entry_reader_enforces_declared_size_and_crc() {
+        let xml = b"<worksheet><sheetData/></worksheet>";
+        let mut entry = deflated_entry(xml);
+        entry.declared_size -= 1;
+        let err = io::copy(&mut entry, &mut io::sink()).unwrap_err();
+        assert!(
+            err.to_string().contains("larger than its declared"),
+            "{err}"
+        );
+
+        let mut entry = deflated_entry(xml);
+        entry.expected_crc ^= 1;
+        let err = io::copy(&mut entry, &mut io::sink()).unwrap_err();
+        assert_eq!(err.to_string(), "Invalid checksum");
+    }
+
+    #[test]
+    fn entry_source_rejects_ranges_past_the_package() {
+        pyo3::Python::initialize();
+        Python::attach(|py| {
+            let data = PyBytes::new(py, &[0u8; 8]);
+            let mut source = PyBytesCursor::new(&data).into_entry_source(4, 4).unwrap();
+            let mut out = Vec::new();
+            source.read_to_end(&mut out).unwrap();
+            assert_eq!(out, [0u8; 4]);
+            for (start, len) in [(4, 5), (9, 0), (u64::MAX, 1)] {
+                assert!(PyBytesCursor::new(&data)
+                    .into_entry_source(start, len)
+                    .is_err());
+            }
+        });
+    }
+
     #[test]
     fn streaming_split_references_are_complete_values() {
         pyo3::Python::initialize();
         Python::attach(|py| {
-            for use_file in [false, true] {
+            for use_entry in [false, true] {
                 for (xml, kind, expected) in [
                     ("<c><v>1&#50;3</v></c>", CellTypeAttr::Number, "123"),
                     ("<c><v>&#49;0</v></c>", CellTypeAttr::Shared, "entry 10"),
@@ -1777,11 +2026,12 @@ mod tests {
                         " A & 😀\n B ",
                     ),
                 ] {
-                    let mut file = tempfile::tempfile().unwrap();
-                    let mut reader = if use_file {
-                        std::io::Write::write_all(&mut file, xml.as_bytes()).unwrap();
-                        file.rewind().unwrap();
-                        SheetXmlReader::File(XmlReader::from_reader(BufReader::new(file)))
+                    // A tiny read buffer splits references across refills.
+                    let mut reader = if use_entry {
+                        SheetXmlReader::Entry(XmlReader::from_reader(BufReader::with_capacity(
+                            3,
+                            deflated_entry(xml.as_bytes()),
+                        )))
                     } else {
                         SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(
                             xml.as_bytes().to_vec(),

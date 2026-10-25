@@ -13,6 +13,9 @@ base16ct = { version = "1", features = ["alloc"] }
 cfb = "0.15"
 indexmap = "2.2"
 zip = { version = "9", default-features = false, features = ["deflate", "unreserved"] }
+# Same versions and backend that zip's `deflate` feature already builds.
+flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
+crc32fast = "1.5"
 quick-xml = "0.42"
 chrono = "0.4"
 anyhow = "1"
@@ -42,6 +45,8 @@ extension-module = ["pyo3/extension-module"]
 pyo3 = { version = "0.29", features = ["multiple-pymethods"] }
 indexmap.workspace = true
 zip.workspace = true
+flate2.workspace = true
+crc32fast.workspace = true
 quick-xml.workspace = true
 chrono.workspace = true
 wolfxl-core = { path = "crates/wolfxl-core", version = "0.8" }
