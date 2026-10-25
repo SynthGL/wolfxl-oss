@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::pybacked::PyBackedBytes;
 
 type PyObject = Py<PyAny>;
 
@@ -49,7 +50,7 @@ impl NativeXlsxBook {
     /// Open an XLSX/XLSM workbook from raw bytes.
     #[staticmethod]
     #[pyo3(signature = (data, permissive = false))]
-    pub fn open_from_bytes(data: &[u8], permissive: bool) -> PyResult<Self> {
+    pub fn open_from_bytes(data: PyBackedBytes, permissive: bool) -> PyResult<Self> {
         crate::native_reader_workbook_basics::open_xlsx_bytes(data, permissive)
     }
 
