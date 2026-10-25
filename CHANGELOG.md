@@ -12,9 +12,9 @@
 - Attach a hyperlink on a cell range (`<hyperlink ref="A3:A5">`) to every
   covered cell on load, so `cell.hyperlink.target` and `cell.hyperlink.ref`
   match openpyxl for each cell instead of returning `None`. Open-ended ranges
-  and ranges over 65,536 cells are limited to the sheet's used area; if that
-  area still exceeds 65,536 cells, the hyperlink is attached to the range's
-  first cell with a warning.
+  and ranges over 65,536 cells are limited to the sheet's used area, and the
+  range hyperlinks on one sheet expand to at most 65,536 cells in total; a
+  range that does not fit is attached to its first cell only, with a warning.
 - Skip worksheet images whose data is unsupported or unreadable (for example
   WMF) with a format-specific warning, as openpyxl does, instead of failing
   when `ws._images` is read. Modify-mode saves keep the omitted media, and

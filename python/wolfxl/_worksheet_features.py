@@ -168,50 +168,43 @@ def get_threaded_comments_map(ws: Worksheet) -> dict[str, Any]:
     return result
 
 
-# A range hyperlink covering more cells than this is clipped to the sheet's
-# used area rather than materialising one Hyperlink per addressable cell. If
-# the clipped area is still larger, only the range's first cell is bound.
+# Range hyperlinks on one sheet expand to at most this many cells in total, so
+# memory stays bounded however many ``<hyperlink>`` elements a sheet holds. A
+# range larger than this is first clipped to the sheet's used area; a range
+# that does not fit in what is left of the budget binds only its first cell.
 _MAX_RANGE_HYPERLINK_CELLS = 65_536
 
 
-def _hyperlink_covered_refs(ws: Worksheet, ref: str) -> list[str]:
-    """Return the cell coordinates a ``<hyperlink ref=...>`` entry covers.
+def _hyperlink_span(ws: Worksheet, ref: str) -> tuple[str, tuple[int, int, int, int] | None]:
+    """Return ``(first_cell, bounds)`` for a ``<hyperlink ref=...>`` entry.
 
-    A single-cell ref (and any ref that is not a parseable range) maps to
-    itself. A range such as ``A3:A5`` maps to every cell it covers, as
-    openpyxl binds it on load. Open-ended ranges (``A:A``) and ranges larger
-    than ``_MAX_RANGE_HYPERLINK_CELLS`` are clipped to the sheet's used area;
-    when the clipped area still exceeds the limit, only the range's first cell
-    is returned and a warning names the range.
+    ``bounds`` is ``(min_col, min_row, max_col, max_row)`` for a range, or
+    ``None`` for a single cell or a ref that is not a parseable range (both map
+    to ``ref`` itself). Open-ended ranges (``A:A``) and ranges larger than
+    ``_MAX_RANGE_HYPERLINK_CELLS`` are clipped to the sheet's used area, which
+    can leave an empty span when the range lies outside it.
     """
     if ":" not in ref:
-        return [ref]
+        return ref, None
     from wolfxl.utils.cell import get_column_letter, range_boundaries
 
     try:
         min_col, min_row, max_col, max_row = range_boundaries(ref)
     except (TypeError, ValueError):
-        return [ref]
+        return ref, None
     open_ended = None in (min_col, min_row, max_col, max_row)
     min_col = 1 if min_col is None else min_col
     min_row = 1 if min_row is None else min_row
     if open_ended or (max_col - min_col + 1) * (max_row - min_row + 1) > _MAX_RANGE_HYPERLINK_CELLS:
         max_col = min(ws.max_column, max_col if max_col is not None else ws.max_column)
         max_row = min(ws.max_row, max_row if max_row is not None else ws.max_row)
-    first = f"{get_column_letter(min_col)}{min_row}"
-    cells = max(0, max_col - min_col + 1) * max(0, max_row - min_row + 1)
-    if cells == 0:
-        return [first]
-    if cells > _MAX_RANGE_HYPERLINK_CELLS:
-        import warnings
+    return f"{get_column_letter(min_col)}{min_row}", (min_col, min_row, max_col, max_row)
 
-        warnings.warn(
-            f"hyperlink range {ref} covers {cells:,} used cells, more than "
-            f"{_MAX_RANGE_HYPERLINK_CELLS:,}; attaching it to {first} only",
-            UserWarning,
-            stacklevel=4,
-        )
-        return [first]
+
+def _span_refs(bounds: tuple[int, int, int, int]) -> list[str]:
+    from wolfxl.utils.cell import get_column_letter
+
+    min_col, min_row, max_col, max_row = bounds
     letters = [get_column_letter(col) for col in range(min_col, max_col + 1)]
     return [f"{letter}{row}" for row in range(min_row, max_row + 1) for letter in letters]
 
@@ -231,20 +224,53 @@ def get_hyperlinks_map(ws: Worksheet) -> dict[str, Any]:
     except Exception:
         entries = []
     result: dict[str, Any] = {}
+    budget = _MAX_RANGE_HYPERLINK_CELLS
+    truncated: list[tuple[str, int, str]] = []
     for entry in entries:
         cell_ref = entry.get("cell")
         if not cell_ref:
             continue
+        first, bounds = _hyperlink_span(ws, cell_ref)
+        if bounds is None:
+            covered = [first]
+        else:
+            min_col, min_row, max_col, max_row = bounds
+            cells = max(0, max_col - min_col + 1) * max(0, max_row - min_row + 1)
+            if cells == 0:
+                covered = [first]
+            elif cells > budget:
+                truncated.append((cell_ref, cells, first))
+                covered = [first]
+            else:
+                budget -= cells
+                covered = _span_refs(bounds)
         is_internal = bool(entry.get("internal", False))
         raw_target = entry.get("target")
-        for covered in _hyperlink_covered_refs(ws, cell_ref):
-            result[covered] = Hyperlink(
-                ref=covered,
+        for covered_ref in covered:
+            result[covered_ref] = Hyperlink(
+                ref=covered_ref,
                 target=None if is_internal else raw_target,
                 location=raw_target if is_internal else entry.get("location"),
                 display=entry.get("display") or None,
                 tooltip=entry.get("tooltip") or None,
             )
+    if truncated:
+        import warnings
+
+        ref, cells, first = truncated[0]
+        others = len(truncated) - 1
+        more = (
+            f"; {others:,} more range hyperlink{'s' if others > 1 else ''} also attached to the first cell only"
+            if others
+            else ""
+        )
+        warnings.warn(
+            f"hyperlink range {ref} covers {cells:,} cells, which exceeds what remains of the sheet's "
+            f"{_MAX_RANGE_HYPERLINK_CELLS:,}-cell limit for range hyperlinks; "
+            f"attaching it to {first} only{more}",
+            UserWarning,
+            stacklevel=3,
+        )
     ws._hyperlinks_cache = result  # noqa: SLF001
     return result
 

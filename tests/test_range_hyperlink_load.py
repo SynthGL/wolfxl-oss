@@ -179,3 +179,36 @@ def test_oversized_range_hyperlink_on_full_extent_sheet_binds_first_cell(tmp_pat
     assert list(link_map) == ["A1"]
     assert ws["A1"].hyperlink.target == "http://www.apache.org/"
     assert ws["XFD1048576"].hyperlink is None
+
+
+def test_range_hyperlinks_share_one_cell_budget_per_sheet(tmp_path: Path) -> None:
+    # Each range covers exactly the per-sheet limit (16,384 columns x 4 rows), so
+    # none is clipped on its own; together they must not exceed the limit.
+    ranges = [f"A{4 * k + 1}:XFD{4 * k + 4}" for k in range(3)]
+    links = "".join(f'<hyperlink ref="{ref}" location="Sheet1!A1"/>' for ref in ranges)
+    sheet = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        f'<dimension ref="A1"/><sheetData><row r="1">{_cell("A1", "a")}</row></sheetData>'
+        f"<hyperlinks>{links}</hyperlinks></worksheet>"
+    )
+    path = tmp_path / "many_range_hyperlinks.xlsx"
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", _CONTENT_TYPES)
+        zf.writestr("_rels/.rels", _ROOT_RELS)
+        zf.writestr("xl/workbook.xml", _WORKBOOK)
+        zf.writestr("xl/_rels/workbook.xml.rels", _WORKBOOK_RELS)
+        zf.writestr("xl/worksheets/sheet1.xml", sheet)
+
+    ws = wolfxl.load_workbook(path)["Sheet1"]
+    with pytest.warns(
+        UserWarning, match=r"hyperlink range A5:XFD8 .*attaching it to A5 only; 1 more range"
+    ):
+        link_map = ws._get_hyperlinks_map()
+
+    assert len(link_map) == 65_536 + 2
+    assert link_map["XFD4"].location == "Sheet1!A1"
+    assert link_map["A5"].location == "Sheet1!A1"
+    assert link_map["A9"].location == "Sheet1!A1"
+    assert "B5" not in link_map
