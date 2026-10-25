@@ -12,12 +12,15 @@
 - Attach a hyperlink on a cell range (`<hyperlink ref="A3:A5">`) to every
   covered cell on load, so `cell.hyperlink.target` and `cell.hyperlink.ref`
   match openpyxl for each cell instead of returning `None`. Open-ended ranges
-  and ranges over 65,536 cells are limited to the sheet's used area.
+  and ranges over 65,536 cells are limited to the sheet's used area; if that
+  area still exceeds 65,536 cells, the hyperlink is attached to the range's
+  first cell with a warning.
 - Skip worksheet images whose data is unsupported or unreadable (for example
   WMF) with a format-specific warning, as openpyxl does, instead of failing
   when `ws._images` is read. Modify-mode saves keep the omitted media, and
-  removing or replacing later images still targets the right drawing entries.
-  Invalid images passed to `Image(...)` still raise.
+  removing or replacing later images still targets the right drawing entries,
+  including across repeated in-place saves. Invalid images passed to
+  `Image(...)` still raise.
 - Support pandas' `ExcelWriter(path, engine="openpyxl", mode="a")` after
   `wolfxl.install_as_openpyxl()`: it now adds, replaces
   (`if_sheet_exists="replace"`) and overlays (`"overlay"`) sheets in an

@@ -148,3 +148,34 @@ def test_range_hyperlink_survives_modify_save_roundtrip(
     saved_ws = wolfxl.load_workbook(out)["Sheet1"]
     for coord in ("A1", "A3", "A4", "A5", "C1", "D2"):
         assert _snapshot(saved_ws[coord]) == _snapshot(expected_ws[coord]), coord
+
+
+def test_oversized_range_hyperlink_on_full_extent_sheet_binds_first_cell(tmp_path: Path) -> None:
+    # Cells at A1 and XFD1048576 make the used area the whole grid, so clipping
+    # to it does not bound a sheet-wide hyperlink.
+    sheet = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<dimension ref="A1:XFD1048576"/><sheetData>'
+        f'<row r="1">{_cell("A1", "a")}</row>'
+        f'<row r="1048576">{_cell("XFD1048576", "z")}</row>'
+        "</sheetData>"
+        '<hyperlinks><hyperlink ref="A1:XFD1048576" r:id="rId1"/></hyperlinks></worksheet>'
+    )
+    path = tmp_path / "full_extent_hyperlink.xlsx"
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", _CONTENT_TYPES)
+        zf.writestr("_rels/.rels", _ROOT_RELS)
+        zf.writestr("xl/workbook.xml", _WORKBOOK)
+        zf.writestr("xl/_rels/workbook.xml.rels", _WORKBOOK_RELS)
+        zf.writestr("xl/worksheets/sheet1.xml", sheet)
+        zf.writestr("xl/worksheets/_rels/sheet1.xml.rels", _SHEET_RELS)
+
+    ws = wolfxl.load_workbook(path)["Sheet1"]
+    with pytest.warns(UserWarning, match=r"hyperlink range A1:XFD1048576 .*attaching it to A1 only"):
+        link_map = ws._get_hyperlinks_map()
+
+    assert list(link_map) == ["A1"]
+    assert ws["A1"].hyperlink.target == "http://www.apache.org/"
+    assert ws["XFD1048576"].hyperlink is None

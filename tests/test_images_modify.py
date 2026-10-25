@@ -297,3 +297,30 @@ def test_unreadable_source_warning_names_payload_part() -> None:
 def test_unreadable_user_image_still_raises() -> None:
     with pytest.raises(ValueError, match="could not parse image dimensions"):
         Image(b"unreadable source image")
+
+
+def _three_image_workbook(tmp_path: Path) -> Path:
+    wb = wolfxl.Workbook()
+    ws = wb.active
+    ws.add_image(Image(PNG_PATH), "B2")
+    ws.add_image(Image(PNG_PATH), "D4")
+    ws.add_image(Image(JPG_PATH), "F6")
+    path = tmp_path / "three_images.xlsx"
+    wb.save(path)
+    return path
+
+
+def _saved_anchors(path: Path) -> list[tuple[int, int]]:
+    return [_image_anchor_col_row(image) for image in load_workbook(path).active._images]
+
+
+def test_repeated_in_place_saves_remove_the_selected_images(tmp_path: Path) -> None:
+    path = _three_image_workbook(tmp_path)
+    wb = load_workbook(path, modify=True)
+    ws = wb.active
+    ws.remove_image(0)
+    wb.save(path)
+    ws.remove_image(0)
+    wb.save(path)
+
+    assert _saved_anchors(path) == [(5, 5)]

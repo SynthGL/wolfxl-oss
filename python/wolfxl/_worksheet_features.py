@@ -169,7 +169,8 @@ def get_threaded_comments_map(ws: Worksheet) -> dict[str, Any]:
 
 
 # A range hyperlink covering more cells than this is clipped to the sheet's
-# used area rather than materialising one Hyperlink per addressable cell.
+# used area rather than materialising one Hyperlink per addressable cell. If
+# the clipped area is still larger, only the range's first cell is bound.
 _MAX_RANGE_HYPERLINK_CELLS = 65_536
 
 
@@ -179,7 +180,9 @@ def _hyperlink_covered_refs(ws: Worksheet, ref: str) -> list[str]:
     A single-cell ref (and any ref that is not a parseable range) maps to
     itself. A range such as ``A3:A5`` maps to every cell it covers, as
     openpyxl binds it on load. Open-ended ranges (``A:A``) and ranges larger
-    than ``_MAX_RANGE_HYPERLINK_CELLS`` are clipped to the sheet's used area.
+    than ``_MAX_RANGE_HYPERLINK_CELLS`` are clipped to the sheet's used area;
+    when the clipped area still exceeds the limit, only the range's first cell
+    is returned and a warning names the range.
     """
     if ":" not in ref:
         return [ref]
@@ -195,6 +198,20 @@ def _hyperlink_covered_refs(ws: Worksheet, ref: str) -> list[str]:
     if open_ended or (max_col - min_col + 1) * (max_row - min_row + 1) > _MAX_RANGE_HYPERLINK_CELLS:
         max_col = min(ws.max_column, max_col if max_col is not None else ws.max_column)
         max_row = min(ws.max_row, max_row if max_row is not None else ws.max_row)
+    first = f"{get_column_letter(min_col)}{min_row}"
+    cells = max(0, max_col - min_col + 1) * max(0, max_row - min_row + 1)
+    if cells == 0:
+        return [first]
+    if cells > _MAX_RANGE_HYPERLINK_CELLS:
+        import warnings
+
+        warnings.warn(
+            f"hyperlink range {ref} covers {cells:,} used cells, more than "
+            f"{_MAX_RANGE_HYPERLINK_CELLS:,}; attaching it to {first} only",
+            UserWarning,
+            stacklevel=4,
+        )
+        return [first]
     letters = [get_column_letter(col) for col in range(min_col, max_col + 1)]
     return [f"{letter}{row}" for row in range(min_row, max_row + 1) for letter in letters]
 

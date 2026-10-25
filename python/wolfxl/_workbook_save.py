@@ -416,10 +416,14 @@ def save_modify_mode(wb: Any, filename: str) -> None:
     # AutoFilter dicts.
     wb._flush_pending_autofilters_to_patcher()  # noqa: SLF001
 
-    if same_existing_path(filename, wb._source_path):  # noqa: SLF001
+    in_place = same_existing_path(filename, wb._source_path)  # noqa: SLF001
+    if in_place:
         wb._rust_patcher.save_in_place()  # noqa: SLF001
     else:
         wb._rust_patcher.save(filename)  # noqa: SLF001
+    from wolfxl._worksheet_media import rebase_source_image_indices
+
+    rebase_source_image_indices(wb, in_place=in_place)
     flush_pivot_layout_authoring(wb, filename)
     flush_external_links_authoring(wb, filename)
     flush_source_chart_authoring(wb, filename)
