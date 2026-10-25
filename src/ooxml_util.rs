@@ -2,7 +2,6 @@ use pyo3::exceptions::PyIOError;
 use pyo3::prelude::*;
 
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
 use std::io::{Read, Seek};
 
 use quick_xml::events::{BytesStart, Event};
@@ -223,7 +222,10 @@ pub fn parse_relationship_targets(xml: &str) -> PyResult<HashMap<String, String>
     Ok(out)
 }
 
-pub fn zip_read_to_string(zip: &mut ZipArchive<File>, name: &str) -> PyResult<String> {
+pub fn zip_read_to_string<R: Read + Seek>(
+    zip: &mut ZipArchive<R>,
+    name: &str,
+) -> PyResult<String> {
     match zip.by_name(name) {
         Ok(mut f) => {
             validate_zip_entry_metadata(name, f.size(), f.compressed_size())?;
@@ -251,7 +253,10 @@ pub fn zip_read_to_string(zip: &mut ZipArchive<File>, name: &str) -> PyResult<St
     Ok(out)
 }
 
-pub fn zip_read_to_string_opt(zip: &mut ZipArchive<File>, name: &str) -> PyResult<Option<String>> {
+pub fn zip_read_to_string_opt<R: Read + Seek>(
+    zip: &mut ZipArchive<R>,
+    name: &str,
+) -> PyResult<Option<String>> {
     match zip.by_name(name) {
         Ok(mut f) => {
             validate_zip_entry_metadata(name, f.size(), f.compressed_size())?;
@@ -284,8 +289,8 @@ pub fn zip_read_to_string_opt(zip: &mut ZipArchive<File>, name: &str) -> PyResul
     }
 }
 
-fn resolve_zip_name_case_insensitive(
-    zip: &ZipArchive<File>,
+fn resolve_zip_name_case_insensitive<R: Read + Seek>(
+    zip: &ZipArchive<R>,
     name: &str,
 ) -> PyResult<Option<String>> {
     for candidate in zip.file_names() {

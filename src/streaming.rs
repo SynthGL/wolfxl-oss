@@ -40,11 +40,15 @@ type PyObjectOwned = Py<PyAny>;
 // Keep read_only value scans below openpyxl's peak RSS on ordinary table-sized
 // workbooks; larger sheet XML parts stream through a temp file instead.
 const IN_MEMORY_SHEET_XML_LIMIT: u64 = 1 * 1024 * 1024;
+// Bound the value cells materialized per chunk so wide sheets (up to 16,384
+// columns) stream a few rows at a time instead of 1,024 padded rows.
+const CHUNK_CELL_BUDGET: usize = 65_536;
 
 /// Parse `xl/sharedStrings.xml` into a flat `Vec<String>`. Each entry is
 /// the plain-text concatenation of any nested `<r><t>...</t></r>` runs
-/// (matches Excel/openpyxl's flattening for `Cell.value`).
-fn load_sst(zip: &mut ZipArchive<File>) -> PyResult<Vec<String>> {
+/// (matches Excel/openpyxl's flattening for `Cell.value`). Phonetic runs
+/// (`<rPh>`) annotate the base text and are excluded.
+fn load_sst<R: Read + Seek>(zip: &mut ZipArchive<R>) -> PyResult<Vec<String>> {
     let xml = match ooxml_util::zip_read_to_string_opt(zip, "xl/sharedStrings.xml")? {
         Some(s) => s,
         None => return Ok(Vec::new()),
@@ -57,6 +61,7 @@ fn load_sst(zip: &mut ZipArchive<File>) -> PyResult<Vec<String>> {
     let mut current = String::new();
     let mut in_si = false;
     let mut in_t = false;
+    let mut in_rph = false;
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -65,10 +70,12 @@ fn load_sst(zip: &mut ZipArchive<File>) -> PyResult<Vec<String>> {
                 match name.as_ref().as_bytes() {
                     b"si" => {
                         in_si = true;
+                        in_rph = false;
                         current.clear();
                     }
+                    b"rPh" if in_si => in_rph = true,
                     b"t" => {
-                        if in_si {
+                        if in_si && !in_rph {
                             in_t = true;
                         }
                     }
@@ -85,12 +92,13 @@ fn load_sst(zip: &mut ZipArchive<File>) -> PyResult<Vec<String>> {
                     b"t" => {
                         in_t = false;
                     }
+                    b"rPh" => in_rph = false,
                     _ => {}
                 }
             }
             Ok(Event::Text(t)) => {
                 if in_si && in_t {
-                    current.push_str(&t);
+                    current.push_str(&normalize_xml_eol(&t));
                 }
             }
             Ok(Event::GeneralRef(r)) if in_si && in_t => {
@@ -111,8 +119,22 @@ fn load_sst(zip: &mut ZipArchive<File>) -> PyResult<Vec<String>> {
     Ok(out)
 }
 
+/// XML end-of-line handling (XML 1.0 section 2.11): a literal CR LF pair or
+/// lone CR in character data reads as LF. Character references such as
+/// `&#13;` arrive as separate reference events and keep their CR.
+fn normalize_xml_eol(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.contains('\r') {
+        std::borrow::Cow::Owned(text.replace("\r\n", "\n").replace('\r', "\n"))
+    } else {
+        std::borrow::Cow::Borrowed(text)
+    }
+}
+
 /// Resolve `<sheet name=...>` → ZIP path (`xl/worksheets/sheetN.xml`).
-fn resolve_sheet_xml_path(zip: &mut ZipArchive<File>, sheet: &str) -> PyResult<String> {
+fn resolve_sheet_xml_path<R: Read + Seek>(
+    zip: &mut ZipArchive<R>,
+    sheet: &str,
+) -> PyResult<String> {
     let workbook_xml = ooxml_util::zip_read_to_string(zip, "xl/workbook.xml")?;
     let rels_xml = ooxml_util::zip_read_to_string(zip, "xl/_rels/workbook.xml.rels")?;
     let sheet_rids = ooxml_util::parse_workbook_sheet_rids(&workbook_xml)?;
@@ -150,6 +172,8 @@ pub struct StreamingSheetReader {
     min_col: Option<u32>,
     /// Optional `max_col` bound (1-based, inclusive).
     max_col: Option<u32>,
+    /// Index of the previous `<row>`; a `<row>` without `r` follows it.
+    last_row: u32,
 }
 
 /// One parsed cell, before Python-tuple boxing.
@@ -211,51 +235,25 @@ impl StreamingSheetReader {
     ) -> PyResult<Self> {
         let file = File::open(path)
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open xlsx: {e}")))?;
-        let mut zip = ZipArchive::new(file)
+        let zip = ZipArchive::new(file)
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
-        ooxml_util::validate_zip_archive(&mut zip)?;
+        Self::from_archive(zip, sheet, min_row, max_row, min_col, max_col)
+    }
 
-        let sst = load_sst(&mut zip)?;
-        let sheet_path = resolve_sheet_xml_path(&mut zip, sheet)?;
-        let mut sheet_entry = zip.by_name(&sheet_path).map_err(|e| {
-            PyErr::new::<PyIOError, _>(format!("Failed to open sheet part '{sheet_path}': {e}"))
-        })?;
-        let (reader, temp_file) = if sheet_entry.size() <= IN_MEMORY_SHEET_XML_LIMIT {
-            let mut xml = Vec::with_capacity(sheet_entry.size() as usize);
-            sheet_entry
-                .read_to_end(&mut xml)
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("read sheet XML: {e}")))?;
-            let mut reader = XmlReader::from_reader(Cursor::new(xml));
-            reader.config_mut().trim_text(false);
-            (SheetXmlReader::Memory(reader), None)
-        } else {
-            let mut temp_file = NamedTempFile::new()
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("streaming temp file: {e}")))?;
-            std::io::copy(&mut sheet_entry, temp_file.as_file_mut())
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("spool sheet XML: {e}")))?;
-            temp_file
-                .as_file_mut()
-                .seek(SeekFrom::Start(0))
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("rewind sheet XML: {e}")))?;
-            let reader_file = temp_file
-                .reopen()
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("reopen sheet XML: {e}")))?;
-            let mut reader = XmlReader::from_reader(BufReader::new(reader_file));
-            reader.config_mut().trim_text(false);
-            (SheetXmlReader::File(reader), Some(temp_file))
-        };
-
-        Ok(Self {
-            reader: Some(reader),
-            event_buf: Vec::with_capacity(8192),
-            temp_file,
-            sst,
-            exhausted: false,
-            min_row,
-            max_row,
-            min_col,
-            max_col,
-        })
+    /// Prepare to stream `sheet` from in-memory xlsx bytes (file-like sources).
+    #[staticmethod]
+    #[pyo3(signature = (data, sheet, min_row=None, max_row=None, min_col=None, max_col=None))]
+    pub fn open_from_bytes(
+        data: &[u8],
+        sheet: &str,
+        min_row: Option<u32>,
+        max_row: Option<u32>,
+        min_col: Option<u32>,
+        max_col: Option<u32>,
+    ) -> PyResult<Self> {
+        let zip = ZipArchive::new(Cursor::new(data))
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
+        Self::from_archive(zip, sheet, min_row, max_row, min_col, max_col)
     }
 
     /// Read the next row matching the configured bounds.
@@ -381,10 +379,12 @@ impl StreamingSheetReader {
         let limit = max_rows.max(1);
         let chunk = PyList::empty(py);
         let mut needs_normalise = false;
-        while chunk.len() < limit {
+        let mut cells = 0usize;
+        while chunk.len() < limit && cells < CHUNK_CELL_BUDGET {
             match self.parse_one_value_row(py)? {
                 ValueStepResult::Row(row_idx, values, row_needs_normalise) => {
                     needs_normalise |= row_needs_normalise;
+                    cells += values.len();
                     let row_obj = row_idx.into_py_any(py)?;
                     let item = PyTuple::new(py, [row_obj, values.into_py_any(py)?])?;
                     chunk.append(item)?;
@@ -428,7 +428,8 @@ impl StreamingSheetReader {
         let mut last_row = 0;
         let mut contiguous = true;
 
-        while rows.len() < limit {
+        let mut cells = 0usize;
+        while rows.len() < limit && cells < CHUNK_CELL_BUDGET {
             match self.parse_one_value_row(py)? {
                 ValueStepResult::Row(row_idx, values, row_needs_normalise) => {
                     if rows.is_empty() {
@@ -438,6 +439,7 @@ impl StreamingSheetReader {
                     }
                     last_row = row_idx;
                     needs_normalise |= row_needs_normalise;
+                    cells += values.len();
                     rows.push((row_idx, values));
                 }
                 ValueStepResult::Skip => continue,
@@ -518,6 +520,62 @@ enum ValueStepResult<'py> {
 }
 
 impl StreamingSheetReader {
+    /// Load shared strings and stage `sheet`'s XML (in memory when small,
+    /// else spooled to a temp file) so the archive can be released.
+    fn from_archive<R: Read + Seek>(
+        mut zip: ZipArchive<R>,
+        sheet: &str,
+        min_row: Option<u32>,
+        max_row: Option<u32>,
+        min_col: Option<u32>,
+        max_col: Option<u32>,
+    ) -> PyResult<Self> {
+        ooxml_util::validate_zip_archive(&mut zip)?;
+
+        let sst = load_sst(&mut zip)?;
+        let sheet_path = resolve_sheet_xml_path(&mut zip, sheet)?;
+        let mut sheet_entry = zip.by_name(&sheet_path).map_err(|e| {
+            PyErr::new::<PyIOError, _>(format!("Failed to open sheet part '{sheet_path}': {e}"))
+        })?;
+        let (reader, temp_file) = if sheet_entry.size() <= IN_MEMORY_SHEET_XML_LIMIT {
+            let mut xml = Vec::with_capacity(sheet_entry.size() as usize);
+            sheet_entry
+                .read_to_end(&mut xml)
+                .map_err(|e| PyErr::new::<PyIOError, _>(format!("read sheet XML: {e}")))?;
+            let mut reader = XmlReader::from_reader(Cursor::new(xml));
+            reader.config_mut().trim_text(false);
+            (SheetXmlReader::Memory(reader), None)
+        } else {
+            let mut temp_file = NamedTempFile::new()
+                .map_err(|e| PyErr::new::<PyIOError, _>(format!("streaming temp file: {e}")))?;
+            std::io::copy(&mut sheet_entry, temp_file.as_file_mut())
+                .map_err(|e| PyErr::new::<PyIOError, _>(format!("spool sheet XML: {e}")))?;
+            temp_file
+                .as_file_mut()
+                .seek(SeekFrom::Start(0))
+                .map_err(|e| PyErr::new::<PyIOError, _>(format!("rewind sheet XML: {e}")))?;
+            let reader_file = temp_file
+                .reopen()
+                .map_err(|e| PyErr::new::<PyIOError, _>(format!("reopen sheet XML: {e}")))?;
+            let mut reader = XmlReader::from_reader(BufReader::new(reader_file));
+            reader.config_mut().trim_text(false);
+            (SheetXmlReader::File(reader), Some(temp_file))
+        };
+
+        Ok(Self {
+            reader: Some(reader),
+            event_buf: Vec::with_capacity(8192),
+            temp_file,
+            sst,
+            exhausted: false,
+            min_row,
+            max_row,
+            min_col,
+            max_col,
+            last_row: 0,
+        })
+    }
+
     fn parse_one_row(&mut self, py: Python<'_>) -> PyResult<StepResult> {
         let reader = match self.reader.as_mut() {
             Some(reader) => reader,
@@ -531,7 +589,8 @@ impl StreamingSheetReader {
                 .map_err(|e| PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}")))?;
             match event {
                 Event::Start(e) if e.local_name().as_ref() == "row" => {
-                    let row_idx = parse_row_index_from_start(&e)?;
+                    let row_idx = row_index_from_start(&e, self.last_row)?;
+                    self.last_row = row_idx;
                     drop(e);
                     let cells = read_cells_until_row_end(
                         reader,
@@ -543,7 +602,8 @@ impl StreamingSheetReader {
                     return self.row_result(row_idx, cells);
                 }
                 Event::Empty(e) if e.local_name().as_ref() == "row" => {
-                    let row_idx = parse_row_index_from_start(&e)?;
+                    let row_idx = row_index_from_start(&e, self.last_row)?;
+                    self.last_row = row_idx;
                     return self.row_result(row_idx, Vec::new());
                 }
                 Event::Eof => return Ok(StepResult::Done),
@@ -565,7 +625,8 @@ impl StreamingSheetReader {
                 .map_err(|e| PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}")))?;
             match event {
                 Event::Start(e) if e.local_name().as_ref() == "row" => {
-                    let row_idx = parse_row_index_from_start(&e)?;
+                    let row_idx = row_index_from_start(&e, self.last_row)?;
+                    self.last_row = row_idx;
                     drop(e);
                     if let Some(min) = self.min_row {
                         if row_idx < min {
@@ -591,7 +652,8 @@ impl StreamingSheetReader {
                     return Ok(ValueStepResult::Row(row_idx, values, needs_normalise));
                 }
                 Event::Empty(e) if e.local_name().as_ref() == "row" => {
-                    let row_idx = parse_row_index_from_start(&e)?;
+                    let row_idx = row_index_from_start(&e, self.last_row)?;
+                    self.last_row = row_idx;
                     return self.empty_value_row_result(py, row_idx);
                 }
                 Event::Eof => return Ok(ValueStepResult::Done),
@@ -841,6 +903,7 @@ fn read_cell_contents(
     let mut fast_shared: Option<usize> = None;
     let mut in_f = false;
     let mut in_t = false;
+    let mut in_rph = false;
 
     loop {
         buf.clear();
@@ -865,6 +928,7 @@ fn read_cell_contents(
                         .map_err(|e| {
                             PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}"))
                         })?;
+                    let raw = normalize_xml_eol(&raw);
                     let text = quick_xml::escape::unescape(&raw).map_err(|e| {
                         PyErr::new::<PyIOError, _>(format!("cell text decode: {e}"))
                     })?;
@@ -893,6 +957,11 @@ fn read_cell_contents(
                 }
                 b"f" => in_f = true,
                 b"t" => in_t = true,
+                b"rPh" => in_rph = true,
+                // openpyxl reads a present but empty `<is>` as "".
+                b"is" => {
+                    inline_text.get_or_insert_with(String::new);
+                }
                 _ => {}
             },
             Event::Empty(e) => match e.local_name().as_ref().as_bytes() {
@@ -902,16 +971,19 @@ fn read_cell_contents(
                 b"f" => {
                     f_text.get_or_insert_with(String::new);
                 }
-                b"t" => {
+                b"t" if !in_rph => {
+                    inline_text.get_or_insert_with(String::new);
+                }
+                b"is" => {
                     inline_text.get_or_insert_with(String::new);
                 }
                 _ => {}
             },
             Event::Text(t) => {
                 if in_f {
-                    f_text.get_or_insert_with(String::new).push_str(&t);
-                } else if in_t {
-                    inline_text.get_or_insert_with(String::new).push_str(&t);
+                    f_text.get_or_insert_with(String::new).push_str(&normalize_xml_eol(&t));
+                } else if in_t && !in_rph {
+                    inline_text.get_or_insert_with(String::new).push_str(&normalize_xml_eol(&t));
                 }
             }
             Event::GeneralRef(r) => {
@@ -919,7 +991,7 @@ fn read_cell_contents(
                     .map_err(|e| PyErr::new::<PyIOError, _>(format!("cell text decode: {e}")))?;
                 if in_f {
                     f_text.get_or_insert_with(String::new).push_str(&text);
-                } else if in_t {
+                } else if in_t && !in_rph {
                     inline_text.get_or_insert_with(String::new).push_str(&text);
                 }
             }
@@ -936,12 +1008,21 @@ fn read_cell_contents(
                     } else if let Some(idx) = fast_shared {
                         let formula = f_text.unwrap_or_default();
                         let resolved = sst.get(idx).map_or("", String::as_str);
-                        return Ok((build_formula_dict(py, &formula, resolved)?, "formula"));
+                        let cached = resolved.into_py_any(py)?;
+                        return Ok((build_formula_dict(py, &formula, cached)?, "formula"));
                     }
-                    return build_cell_object(py, t_attr, f_text, v_text.or(inline_text), sst);
+                    // openpyxl reads an inline string only from `<is>` and
+                    // every other type only from `<v>`.
+                    let raw_value = if matches!(t_attr, CellTypeAttr::InlineString) {
+                        inline_text
+                    } else {
+                        v_text
+                    };
+                    return build_cell_object(py, t_attr, f_text, raw_value, sst);
                 }
                 b"f" => in_f = false,
                 b"t" => in_t = false,
+                b"rPh" => in_rph = false,
                 _ => {}
             },
             Event::Eof => {
@@ -1003,24 +1084,32 @@ fn cell_value_attrs_from_start(
     Ok((col.unwrap_or(default_col), cell_type))
 }
 
-fn parse_row_index_from_start(e: &BytesStart<'_>) -> PyResult<u32> {
-    match attr_u32(e, b"r") {
-        Some(row) => Ok(row),
-        None => Err(PyErr::new::<PyIOError, _>(
-            "Streaming reader: <row> missing r= attribute".to_string(),
-        )),
-    }
-}
-
-fn attr_u32(e: &BytesStart<'_>, name: &[u8]) -> Option<u32> {
+/// `row@r`, or the row after `previous` when `r` is absent (openpyxl
+/// `WorkSheetParser.parse_row`). Integral floats such as "3.0" are accepted.
+fn row_index_from_start(e: &BytesStart<'_>, previous: u32) -> PyResult<u32> {
     for attr in e.attributes().with_checks(false).flatten() {
         let key = attr.key.as_ref().as_bytes();
         let local = key.rsplit(|b| *b == b':').next().unwrap_or(key);
-        if local == name {
-            return parse_u32_bytes(attr.value.as_bytes());
+        if local != b"r" {
+            continue;
         }
+        let bytes = attr.value.as_bytes();
+        if let Some(row) = parse_u32_bytes(bytes) {
+            return Ok(row);
+        }
+        let text = String::from_utf8_lossy(bytes);
+        return match text.trim().parse::<f64>() {
+            Ok(value) if value.fract() == 0.0 && value >= 1.0 && value <= f64::from(u32::MAX) => {
+                Ok(value as u32)
+            }
+            _ => Err(PyErr::new::<PyIOError, _>(format!(
+                "Streaming reader: bad row index {text:?}"
+            ))),
+        };
     }
-    None
+    previous.checked_add(1).ok_or_else(|| {
+        PyErr::new::<PyIOError, _>("Streaming reader: implicit row index overflow".to_string())
+    })
 }
 
 fn cell_type_from_bytes(value: &[u8]) -> CellTypeAttr {
@@ -1238,7 +1327,12 @@ fn parse_cell_inner(
     let is_text = extract_is_text(inner);
     let t_attr = cell_type_from_bytes(t_attr.as_bytes());
 
-    build_cell_object(py, &t_attr, f_text, v_text.or(is_text), sst)
+    let raw_value = if matches!(t_attr, CellTypeAttr::InlineString) {
+        is_text
+    } else {
+        v_text
+    };
+    build_cell_object(py, &t_attr, f_text, raw_value, sst)
 }
 
 fn build_cell_object(
@@ -1248,37 +1342,16 @@ fn build_cell_object(
     raw_value: Option<String>,
     sst: &[String],
 ) -> PyResult<(PyObjectOwned, &'static str)> {
+    // Value text as openpyxl reads it: an empty `<v>` is no value.
+    let raw_value =
+        raw_value.filter(|v| !v.is_empty() || matches!(t_attr, CellTypeAttr::InlineString));
+    if let Some(formula) = formula {
+        if !matches!(t_attr, CellTypeAttr::Error) {
+            let cached = cached_value_to_py(py, t_attr, raw_value, sst)?;
+            return Ok((build_formula_dict(py, &formula, cached)?, "formula"));
+        }
+    }
     match t_attr {
-        CellTypeAttr::Shared => {
-            let v = raw_value.unwrap_or_default();
-            let idx: usize = v
-                .parse()
-                .map_err(|_| PyErr::new::<PyValueError, _>(format!("Bad SST index: {v:?}")))?;
-            let resolved = sst.get(idx).map_or("", String::as_str);
-            if let Some(formula) = formula {
-                return Ok((build_formula_dict(py, &formula, resolved)?, "formula"));
-            }
-            Ok((resolved.into_py_any(py)?, "s"))
-        }
-        CellTypeAttr::FormulaString => {
-            let v = raw_value.unwrap_or_default();
-            if let Some(formula) = formula {
-                return Ok((build_formula_dict(py, &formula, &v)?, "formula"));
-            }
-            Ok((v.into_py_any(py)?, "str"))
-        }
-        CellTypeAttr::InlineString => {
-            let v = raw_value.unwrap_or_default();
-            Ok((v.into_py_any(py)?, "inlineStr"))
-        }
-        CellTypeAttr::Bool => {
-            let v = raw_value.unwrap_or_default();
-            let b = matches!(v.trim(), "1" | "true" | "TRUE");
-            if let Some(formula) = formula {
-                return Ok((build_formula_dict(py, &formula, &v)?, "formula"));
-            }
-            Ok((b.into_py_any(py)?, "b"))
-        }
         CellTypeAttr::Error => {
             let v = raw_value.unwrap_or_else(|| "#ERROR!".to_string());
             let d = PyDict::new(py);
@@ -1286,18 +1359,9 @@ fn build_cell_object(
             d.set_item("value", &v)?;
             Ok((d.into_py_any(py)?, "e"))
         }
-        CellTypeAttr::Date => {
-            let v = raw_value.unwrap_or_default();
-            Ok((v.into_py_any(py)?, "d"))
-        }
         CellTypeAttr::Number => {
-            if let Some(formula) = formula {
-                let cached = raw_value.unwrap_or_default();
-                return Ok((build_formula_dict(py, &formula, &cached)?, "formula"));
-            }
-            let v = match raw_value {
-                Some(s) => s,
-                None => return Ok((py.None(), "blank")),
+            let Some(v) = raw_value else {
+                return Ok((py.None(), "blank"));
             };
             if let Ok(i) = v.parse::<i64>() {
                 // Excel-stored ints: surface as int when round-trip safe.
@@ -1308,10 +1372,58 @@ fn build_cell_object(
                 .map_err(|_| PyErr::new::<PyValueError, _>(format!("Bad numeric value: {v:?}")))?;
             Ok((f.into_py_any(py)?, "n"))
         }
+        _ => {
+            let tag = match t_attr {
+                CellTypeAttr::Shared => "s",
+                CellTypeAttr::FormulaString => "str",
+                CellTypeAttr::InlineString => "inlineStr",
+                CellTypeAttr::Bool => "b",
+                _ => "d",
+            };
+            Ok((cached_value_to_py(py, t_attr, raw_value, sst)?, tag))
+        }
     }
 }
 
-fn build_formula_dict(py: Python<'_>, formula: &str, cached: &str) -> PyResult<PyObjectOwned> {
+/// Python value of a cell's `<v>` (or inline `<is>`) text by its type,
+/// following openpyxl's worksheet reader: shared-string indexes may carry
+/// surrounding whitespace, booleans are `bool(int(v))`, numbers are `int`
+/// unless they hold a decimal point or exponent, and missing text is `None`.
+fn cached_value_to_py(
+    py: Python<'_>,
+    t_attr: &CellTypeAttr,
+    raw_value: Option<String>,
+    sst: &[String],
+) -> PyResult<PyObjectOwned> {
+    let Some(v) = raw_value else {
+        return Ok(py.None());
+    };
+    match t_attr {
+        CellTypeAttr::Shared => {
+            let idx: usize = v
+                .trim()
+                .parse()
+                .map_err(|_| PyErr::new::<PyValueError, _>(format!("Bad SST index: {v:?}")))?;
+            Ok(sst.get(idx).map_or("", String::as_str).into_py_any(py)?)
+        }
+        CellTypeAttr::Bool => match v.trim().parse::<i64>() {
+            Ok(n) => Ok((n != 0).into_py_any(py)?),
+            Err(_) => Ok(matches!(v.trim(), "true" | "TRUE").into_py_any(py)?),
+        },
+        CellTypeAttr::Number => Ok(number_text_to_py(py, v.trim().as_bytes())?
+            .map_or_else(|| v.into_py_any(py), Ok)?),
+        CellTypeAttr::FormulaString
+        | CellTypeAttr::InlineString
+        | CellTypeAttr::Error
+        | CellTypeAttr::Date => Ok(v.into_py_any(py)?),
+    }
+}
+
+fn build_formula_dict(
+    py: Python<'_>,
+    formula: &str,
+    cached: PyObjectOwned,
+) -> PyResult<PyObjectOwned> {
     let d = PyDict::new(py);
     let f_with_eq = if formula.starts_with('=') {
         formula.to_string()
@@ -1570,11 +1682,11 @@ mod tests {
             let (value, kind) =
                 read_cell_contents(&mut reader, &mut buf, py, &CellTypeAttr::Number, &[]).unwrap();
             assert_eq!(kind, "formula");
-            let fields = value
-                .extract::<std::collections::HashMap<String, String>>(py)
-                .unwrap();
-            assert_eq!(fields["formula"], "= A1 & \" B \"\n");
-            assert_eq!(fields["cached"], "123");
+            let fields = value.bind(py).cast::<PyDict>().unwrap();
+            let formula: String = fields.get_item("formula").unwrap().unwrap().extract().unwrap();
+            let cached: i64 = fields.get_item("cached").unwrap().unwrap().extract().unwrap();
+            assert_eq!(formula, "= A1 & \" B \"\n");
+            assert_eq!(cached, 123);
         });
     }
 }

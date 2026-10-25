@@ -14,6 +14,7 @@ use quick_xml::Reader as XmlReader;
 ///
 /// Each `<si>` element becomes one entry.  Plain text lives in `<si><t>`;
 /// rich-text runs live in `<si><r><t>`.  Rich-text runs are concatenated.
+/// Phonetic runs (`<rPh>`) annotate the base text and are excluded.
 pub fn parse_shared_strings(xml: &str) -> Vec<String> {
     let mut reader = XmlReader::from_str(xml);
     reader.config_mut().trim_text(false);
@@ -22,6 +23,7 @@ pub fn parse_shared_strings(xml: &str) -> Vec<String> {
     let mut strings: Vec<String> = Vec::new();
     let mut current: Option<String> = None;
     let mut in_t = false; // inside a <t> element
+    let mut in_rph = false;
     let mut node = crate::ooxml_util::XmlTextNode::default();
 
     loop {
@@ -41,7 +43,10 @@ pub fn parse_shared_strings(xml: &str) -> Vec<String> {
                 let tag = e.local_name();
                 if tag.as_ref() == "si" {
                     current = Some(String::new());
-                } else if tag.as_ref() == "t" {
+                    in_rph = false;
+                } else if tag.as_ref() == "rPh" {
+                    in_rph = true;
+                } else if tag.as_ref() == "t" && !in_rph {
                     in_t = true;
                 }
             }
@@ -51,6 +56,8 @@ pub fn parse_shared_strings(xml: &str) -> Vec<String> {
                     strings.push(current.take().unwrap_or_default());
                 } else if tag.as_ref() == "t" {
                     in_t = false;
+                } else if tag.as_ref() == "rPh" {
+                    in_rph = false;
                 }
             }
             Ok(Event::Text(e)) if in_t => node.push_text(&e),
@@ -92,6 +99,20 @@ mod tests {
 </sst>"#;
         let result = parse_shared_strings(xml);
         assert_eq!(result, vec!["Bold Normal"]);
+    }
+
+    #[test]
+    fn phonetic_runs_are_excluded_from_base_text() {
+        let xml = r#"<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <si><t>東京都</t><rPh sb="0" eb="3"><t>トウ&#x30AD;ョウト</t></rPh><phoneticPr fontId="0"/></si>
+  <si><r><t> 東京 &amp; </t></r><r><t>都 </t></r><rPh sb="1" eb="3"><t>トウキョウ</t></rPh></si>
+  <si><t>After</t></si>
+  <si><t>大阪府</t><rPh sb="0" eb="2"><t>オオサカ</t></rPh><rPh sb="2" eb="3"><t>フ</t></rPh></si>
+</sst>"#;
+        assert_eq!(
+            parse_shared_strings(xml),
+            ["東京都", " 東京 & 都 ", "After", "大阪府"]
+        );
     }
 
     #[test]

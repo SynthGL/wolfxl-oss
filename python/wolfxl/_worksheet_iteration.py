@@ -23,11 +23,12 @@ def iter_rows(
     """Iterate worksheet rows with streaming and bulk-read fast paths."""
     workbook = ws._workbook  # noqa: SLF001
     rust_reader = getattr(workbook, "_rust_reader", None)
-    if rust_reader is not None and getattr(workbook, "_source_path", None):
-        from wolfxl._streaming import should_auto_stream, stream_iter_rows
+    if rust_reader is not None:
+        from wolfxl._streaming import should_auto_stream, stream_iter_rows, stream_source
 
-        stream_now = bool(getattr(workbook, "_read_only", False)) or should_auto_stream(ws)
-        if stream_now:
+        if stream_source(workbook) is not None and (
+            bool(getattr(workbook, "_read_only", False)) or should_auto_stream(ws)
+        ):
             return stream_iter_rows(
                 ws,
                 min_row,
@@ -211,17 +212,18 @@ def iter_value_chunks(
         raise ValueError("chunk_size must be >= 1")
 
     workbook = ws._workbook  # noqa: SLF001
-    if getattr(workbook, "_read_only", False) and getattr(workbook, "_source_path", None):
-        from wolfxl._streaming import stream_value_chunks
+    if getattr(workbook, "_read_only", False):
+        from wolfxl._streaming import stream_source, stream_value_chunks
 
-        return stream_value_chunks(
-            ws,
-            min_row=min_row,
-            max_row=max_row,
-            min_col=min_col,
-            max_col=max_col,
-            chunk_size=chunk_size,
-        )
+        if stream_source(workbook) is not None:
+            return stream_value_chunks(
+                ws,
+                min_row=min_row,
+                max_row=max_row,
+                min_col=min_col,
+                max_col=max_col,
+                chunk_size=chunk_size,
+            )
 
     return _chunk_rows(
         iter_rows(

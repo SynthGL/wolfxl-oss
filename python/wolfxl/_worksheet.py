@@ -1731,12 +1731,12 @@ class Worksheet:
             return None
         if self._read_only_dimensions_reset:
             return None
-        path = getattr(self._workbook, "_source_path", None)  # noqa: SLF001
-        if not path:
-            return None
-        from wolfxl._streaming import _source_dimension_bounds
+        from wolfxl._streaming import _source_dimension_bounds, stream_source
 
-        return _source_dimension_bounds(path, self.title)
+        source = stream_source(self._workbook)
+        if not source:
+            return None
+        return _source_dimension_bounds(source, self.title)
 
     def _calculate_read_only_dimension(self, force: bool = False) -> str:
         declared = self._read_only_declared_dimension_bounds()

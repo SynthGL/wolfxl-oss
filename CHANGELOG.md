@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.0.13 - 2026-10-24
+
+### Fixed
+
+- Read rows and cells that omit their `r` reference at the position Excel
+  gives them: such a row follows the previous row, and such a cell follows the
+  previous cell in its row. Normal loads placed these cells at the wrong
+  coordinates, and `read_only=True` loads from a path raised `OSError`.
+- Return only the base text of shared strings that carry phonetic (`rPh`)
+  runs, as openpyxl does. The phonetic reading was appended to the cell value.
+- Return `datetime.time` for cells with a time-only number format in normal
+  loads, including serial 0 (midnight), and keep millisecond precision in
+  dates and times, as openpyxl and `read_only=True` loads already did.
+- Stream `read_only=True` workbooks opened from file objects as well as paths,
+  and cap each streamed chunk at 65,536 cells, so wide sheets read from a file
+  object no longer load whole into memory.
+- Return the same values as openpyxl from `read_only=True` loads: cached
+  formula results keep their stored type (booleans as `bool`, strings as `str`
+  even when they look numeric), line breaks stored as raw CR or CR LF read as
+  `\n`, empty shared-string and value elements read as `None`, and inline
+  strings ignore a stray `<v>` element.
+
 ## 2.0.12 - 2026-10-24
 
 ### Fixed
