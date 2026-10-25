@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 from xml.etree import ElementTree as ET
 import zipfile
 
+from wolfxl._cell_annotations import get_hyperlink
 from wolfxl._utils import a1_to_rowcol
 from wolfxl._utils import column_letter as _column_letter
 from wolfxl._utils import rowcol_to_a1
@@ -57,6 +58,7 @@ AUTO_STREAM_ROW_THRESHOLD = 50_000
 
 _DIMENSION_REF_RE = re.compile(rb"<(?:[A-Za-z0-9_]+:)?dimension\b[^>]*\bref=[\"']([^\"']+)[\"']")
 _ROW_TAG_RE = re.compile(rb"<(?:[A-Za-z0-9_]+:)?row(?:\s|>)")
+_UNSET = object()
 
 
 def stream_source(wb: Any) -> str | bytes | None:
@@ -389,6 +391,15 @@ class StreamingCell:
     @property
     def data_type(self) -> str:
         """Map the SAX ``t=`` token onto openpyxl's ``data_type`` letters."""
+        if self._cell_type == "formula" and self._ws._workbook._data_only:
+            value = self.value
+            if isinstance(value, bool):
+                return "b"
+            if isinstance(value, str):
+                return "s"
+            if isinstance(value, (date, datetime, time)):
+                return "d"
+            return "n"
         if self._cell_type == "n" and isinstance(self.value, (date, datetime, time)):
             return "d"
         return {
@@ -402,6 +413,11 @@ class StreamingCell:
             "formula": "f",
             "blank": "n",
         }.get(self._cell_type, "n")
+
+    @property
+    def hyperlink(self) -> Any:
+        """Return the worksheet hyperlink, including pending unsaved edits."""
+        return get_hyperlink(self, _UNSET)
 
     # ------------------------------------------------------------------
     # Style lookups — share converted stylesheet entries by native style ID.
@@ -632,9 +648,7 @@ def stream_iter_rows(
             counter = mn_r if mn_r is not None else 1
             cmin = mn_c if mn_c is not None else 1
             fixed_cmax = _fixed_cmax()
-            empty_row = (
-                (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else []
-            )
+            empty_row = (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else []
             read_chunk_with_flags = getattr(reader, "read_next_values_chunk_with_flags", None)
             read_compact_chunk_with_flags = getattr(
                 reader, "read_next_values_compact_chunk_with_flags", None
@@ -675,9 +689,7 @@ def stream_iter_rows(
                             yield empty_row
                             counter += 1
                         if needs_normalise:
-                            values = _normalise_streaming_value_tuple(
-                                values, data_only=data_only
-                            )
+                            values = _normalise_streaming_value_tuple(values, data_only=data_only)
                         yield values
                         counter = row_idx + 1
             elif read_chunk is not None:
