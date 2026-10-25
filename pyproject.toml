@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "wolfxl"
-version = "2.0.11"
+version = "2.0.12"
 description = "Edit Excel files without losing formatting; WolfXL 2.0.8 measured 3.0-17.3x faster than openpyxl 3.1.5 on the committed read/write benchmark (small-file gains vary). Openpyxl-compatible API, Rust backend, MIT."
 readme = "PYPI.md"
 requires-python = ">=3.9,!=3.9.0,!=3.9.1"

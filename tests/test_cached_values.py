@@ -81,6 +81,41 @@ def _formula_source(tmp_path, name: str = "source.xlsx"):
     return path
 
 
+@pytest.mark.parametrize("modify", [False, True])
+def test_readme_calculate_roundtrip(tmp_path, modify):
+    source = tmp_path / "report.xlsx"
+    original = wolfxl.Workbook()
+    sheet = original.active
+    sheet.title = "Summary"
+    sheet["B2"] = 1000
+    sheet["B3"] = 950
+    sheet["B4"] = "=SUM(B2:B3)"
+    sheet["B2"].number_format = "#,##0.00"
+    sheet.merge_cells("D1:E1")
+    sheet["D1"] = "Merged heading"
+    original.save(source)
+    original.close()
+
+    workbook = wolfxl.load_workbook(source, modify=modify)
+    workbook["Summary"]["B2"] = 1500
+    assert workbook.calculate()["Summary!B4"] == 2450
+    output = tmp_path / "calculated.xlsx"
+    workbook.save(output)
+    workbook.close()
+
+    for reader in READERS:
+        for data_only in (False, True):
+            saved = reader(output, data_only=data_only)
+            sheet = saved["Summary"]
+            assert sheet["B2"].value == 1500
+            assert sheet["B3"].value == 950
+            assert sheet["B4"].value == (2450 if data_only else "=SUM(B2:B3)")
+            assert sheet["B2"].number_format == "#,##0.00"
+            assert sheet["D1"].value == "Merged heading"
+            assert sheet["E1"].value is None
+            saved.close()
+
+
 @pytest.mark.parametrize("mode", ["write", "read", "modify", "fileobj"])
 def test_calculated_values_survive_save(tmp_path, mode):
     wb = _workbook()
