@@ -548,9 +548,10 @@ def replace_image(ws: Worksheet, index_or_image: int | Any, new_image: Any) -> N
 
 
 def pop_pending_image_deletions(ws: Worksheet) -> list[int]:
-    """Drain queued source-image deletions for *ws* in append order."""
+    """Drain source-image deletions from highest to lowest original index."""
     pending = _PENDING_IMAGE_DELETIONS.pop(id(ws), [])
-    return list(pending)
+    # The patcher applies removals sequentially to the shrinking drawing.
+    return sorted(pending, reverse=True)
 
 
 def has_pending_image_deletions(ws: Worksheet) -> bool:
@@ -566,11 +567,14 @@ def get_images(ws: Worksheet) -> list[Any]:
         return ws._pending_images  # noqa: SLF001
 
     if ws._images_cache is None:  # noqa: SLF001
-        images = [
-            _image_from_payload(payload)
-            for payload in reader.read_images(ws._title)  # noqa: SLF001
-            if isinstance(payload, dict)
-        ]
+        images = []
+        for source_index, payload in enumerate(reader.read_images(ws._title)):  # noqa: SLF001
+            if not isinstance(payload, dict):
+                continue
+            image = _image_from_payload(payload)
+            if image is not None:
+                image._wolfxl_source_image_index = source_index  # noqa: SLF001
+                images.append(image)
         images.extend(ws._pending_images)  # noqa: SLF001
         ws._images_cache = images  # noqa: SLF001
     return ws._images_cache  # noqa: SLF001
@@ -641,21 +645,32 @@ def _source_image_index_for_cache_position(
     cache_index: int,
     images: list[Any],
 ) -> int:
-    pending_ids = {id(image) for image in ws._pending_images}  # noqa: SLF001
-    source_index = 0
-    for idx, image in enumerate(images):
-        if id(image) in pending_ids:
-            continue
-        if idx == cache_index:
+    image = images[cache_index]
+    if _find_identity_index(ws._pending_images, image) is None:  # noqa: SLF001
+        source_index = getattr(image, "_wolfxl_source_image_index", None)
+        if source_index is not None:
             return source_index
-        source_index += 1
     raise ValueError("image selection does not resolve to a source workbook image")
 
 
 def _image_from_payload(payload: dict[str, Any]) -> Any:
     from wolfxl.drawing.image import Image
 
-    image = Image(payload["data"])
+    try:
+        image = Image(payload["data"])
+    except ValueError:
+        import warnings
+
+        image_format = payload.get("ext") or "unknown"
+        part = payload.get("media_path") or payload.get("part_name") or payload.get("path")
+        location = f" ({part})" if part else ""
+        warnings.warn(
+            f"{image_format} image format{location} could not be read so the image "
+            "is being dropped",
+            UserWarning,
+            stacklevel=3,
+        )
+        return None
     image.anchor = _anchor_from_payload(payload.get("anchor"))
     return image
 
