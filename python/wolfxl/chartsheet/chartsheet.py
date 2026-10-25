@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from wolfxl._compat import _iter_openpyxl_attrs, _openpyxl_name_fallback
 from wolfxl.chartsheet.relation import DrawingHF, SheetBackgroundPicture
 from wolfxl.chartsheet.views import ChartsheetViewList
-from wolfxl.drawing.spreadsheet_drawing import SpreadsheetDrawing
 from wolfxl.styles.colors import Color
 from wolfxl.utils.protection import hash_password
 from wolfxl.worksheet.header_footer import HeaderFooter
 from wolfxl.worksheet.page import PageMargins, PrintPageSetup
 from wolfxl.xml.constants import REL_NS, SHEET_MAIN_NS
 from wolfxl.xml.functions import Element, localname
+
+if TYPE_CHECKING:
+    from wolfxl.drawing.spreadsheet_drawing import SpreadsheetDrawing
 
 
 @dataclass
@@ -357,4 +359,15 @@ __all__ = [
     "SheetBackgroundPicture",
 ]
 
-__getattr__ = _openpyxl_name_fallback(globals())
+_name_fallback = _openpyxl_name_fallback(globals())
+
+
+def __getattr__(name: str) -> Any:
+    # Keep this re-export available without loading upstream drawing models
+    # during the ordinary WolfXL import.
+    if name == "SpreadsheetDrawing":
+        from wolfxl.drawing.spreadsheet_drawing import SpreadsheetDrawing
+
+        globals()[name] = SpreadsheetDrawing
+        return SpreadsheetDrawing
+    return _name_fallback(name)

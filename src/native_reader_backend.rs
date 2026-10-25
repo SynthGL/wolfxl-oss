@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::pybacked::PyBackedBytes;
 
 type PyObject = Py<PyAny>;
 
@@ -49,12 +50,33 @@ impl NativeXlsxBook {
     /// Open an XLSX/XLSM workbook from raw bytes.
     #[staticmethod]
     #[pyo3(signature = (data, permissive = false))]
-    pub fn open_from_bytes(data: &[u8], permissive: bool) -> PyResult<Self> {
+    pub fn open_from_bytes(data: PyBackedBytes, permissive: bool) -> PyResult<Self> {
         crate::native_reader_workbook_basics::open_xlsx_bytes(data, permissive)
     }
 
     pub fn sheet_names(&self) -> Vec<String> {
         self.sheet_names.clone()
+    }
+
+    /// `<sheet>` entries left out of `sheet_names` because their `r:id` is
+    /// empty, as `{"name", "sheet_id", "reason"}` dicts.
+    pub fn skipped_sheets(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let result = pyo3::types::PyList::empty(py);
+        for skipped in self.book.skipped_sheets() {
+            let item = pyo3::types::PyDict::new(py);
+            item.set_item("name", &skipped.name)?;
+            item.set_item("sheet_id", skipped.sheet_id.as_deref())?;
+            item.set_item(
+                "reason",
+                match skipped.reason {
+                    wolfxl_reader::SkippedSheetReason::EmptyRelationshipId => {
+                        "empty_relationship_id"
+                    }
+                },
+            )?;
+            result.append(item)?;
+        }
+        Ok(result.into())
     }
 
     pub fn chartsheet_names(&self) -> Vec<String> {

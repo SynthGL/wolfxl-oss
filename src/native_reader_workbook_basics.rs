@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::pybacked::PyBackedBytes;
 use pyo3::types::PyDict;
 
 use wolfxl_reader::{
@@ -31,8 +32,10 @@ pub(crate) fn open_xlsx_path(path: &str, permissive: bool) -> PyResult<NativeXls
     })
 }
 
-pub(crate) fn open_xlsx_bytes(data: &[u8], permissive: bool) -> PyResult<NativeXlsxBook> {
-    let book = NativeReaderBook::open_bytes_permissive(data.to_vec(), permissive)
+pub(crate) fn open_xlsx_bytes(data: PyBackedBytes, permissive: bool) -> PyResult<NativeXlsxBook> {
+    // PyBackedBytes owns the immutable Python bytes, whose storage cannot move
+    // or mutate. The native book and Python streaming source share that owner.
+    let book = NativeReaderBook::open_owned_bytes_permissive(data, permissive)
         .map_err(|e| PyErr::new::<PyIOError, _>(format!("native xlsx open failed: {e}")))?;
     let sheet_names = book.sheet_names().into_iter().map(str::to_string).collect();
     Ok(NativeXlsxBook {

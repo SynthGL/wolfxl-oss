@@ -21,8 +21,9 @@ pub use xlsb::NativeXlsbBook;
 
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{Cursor, Read, Seek};
+use std::io::{BufRead, BufReader, Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::{BytesStart, Event};
@@ -175,6 +176,23 @@ pub struct SheetInfo {
     pub sheet_id: Option<String>,
     pub state: SheetState,
     pub path: String,
+}
+
+/// Why a `<sheet>` entry in `xl/workbook.xml` was left out of [`NativeXlsxBook::sheets`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkippedSheetReason {
+    /// The entry carries `r:id=""`, so it names no workbook relationship and
+    /// has no worksheet part to read.
+    EmptyRelationshipId,
+}
+
+/// A `<sheet>` entry omitted from the sheet list; surfaced through
+/// [`NativeXlsxBook::skipped_sheets`] so the omission is never silent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkippedSheet {
+    pub name: String,
+    pub sheet_id: Option<String>,
+    pub reason: SkippedSheetReason,
 }
 
 /// Excel sheet visibility state.
@@ -1291,6 +1309,7 @@ pub struct RichTextRun {
 pub struct NativeXlsxBook {
     source: WorkbookSource,
     sheets: Vec<SheetInfo>,
+    skipped_sheets: Vec<SkippedSheet>,
     named_ranges: Vec<NamedRange>,
     print_areas: HashMap<String, String>,
     print_titles: HashMap<String, PrintTitlesInfo>,
@@ -1300,7 +1319,7 @@ pub struct NativeXlsxBook {
     workbook_views: Vec<BookViewInfo>,
     custom_doc_properties: Vec<CustomPropertyInfo>,
     doc_properties: HashMap<String, String>,
-    shared_strings: SharedStrings,
+    shared_strings: OnceLock<std::result::Result<SharedStrings, String>>,
     styles: StyleTables,
     date1904: bool,
     /// Workbook-scoped person registry parsed from `xl/persons/personList.xml`.
@@ -1308,10 +1327,16 @@ pub struct NativeXlsxBook {
     persons: Vec<Person>,
 }
 
+// The owner must keep an immutable, stable buffer alive for every borrowed ZIP
+// reader. Python's PyBackedBytes satisfies this without extending a borrow.
+trait WorkbookBytes: AsRef<[u8]> + std::fmt::Debug + Send + Sync {}
+impl<T: AsRef<[u8]> + std::fmt::Debug + Send + Sync> WorkbookBytes for T {}
+
 #[derive(Debug, Clone)]
 enum WorkbookSource {
     Path(PathBuf),
     Bytes(Vec<u8>),
+    SharedBytes(Arc<dyn WorkbookBytes>),
 }
 
 enum ZipSource<'a> {
@@ -1361,6 +1386,16 @@ impl NativeXlsxBook {
         Self::open_source_permissive(WorkbookSource::Bytes(bytes.into()), permissive)
     }
 
+    /// Open bytes through their immutable owner without copying the input.
+    ///
+    /// Cloning a book shares this owner; ZIP cursors borrow only for each read.
+    pub fn open_owned_bytes_permissive(
+        bytes: impl AsRef<[u8]> + std::fmt::Debug + Send + Sync + 'static,
+        permissive: bool,
+    ) -> Result<Self> {
+        Self::open_source_permissive(WorkbookSource::SharedBytes(Arc::new(bytes)), permissive)
+    }
+
     fn open_source_permissive(source: WorkbookSource, permissive: bool) -> Result<Self> {
         let mut zip = zip_from_source(&source)?;
         validate_zip_archive(&mut zip)?;
@@ -1384,11 +1419,11 @@ impl NativeXlsxBook {
         } else {
             sheet_refs
         };
-        let sheets = resolve_sheet_paths(sheet_refs, &rels)?;
-        let shared_strings = match read_part_optional(&mut zip, "xl/sharedStrings.xml")? {
-            Some(xml) => parse_shared_strings(&xml)?,
-            None => SharedStrings::default(),
-        };
+        let (sheets, skipped_sheets) = resolve_sheet_paths(sheet_refs, &rels)?;
+        // Preserve load-time XML admission and errors without retaining the SST
+        // or decompressing its full XML into memory. Text is retained only when
+        // a non-streaming value API needs the table.
+        validate_shared_strings(&mut zip)?;
         let styles = match read_part_optional(&mut zip, "xl/styles.xml")? {
             Some(xml) => parse_style_tables(&xml)?,
             None => StyleTables::default(),
@@ -1422,6 +1457,7 @@ impl NativeXlsxBook {
         Ok(Self {
             source,
             sheets,
+            skipped_sheets,
             named_ranges,
             print_areas,
             print_titles,
@@ -1431,11 +1467,17 @@ impl NativeXlsxBook {
             workbook_views,
             custom_doc_properties,
             doc_properties,
-            shared_strings,
+            shared_strings: OnceLock::new(),
             styles,
             date1904,
             persons,
         })
+    }
+
+    /// `<sheet>` entries omitted because their `r:id` is empty. A sheet whose
+    /// non-empty `r:id` is absent from the workbook rels is an error instead.
+    pub fn skipped_sheets(&self) -> &[SkippedSheet] {
+        &self.skipped_sheets
     }
 
     /// Workbook-scoped persons registry for threaded comments (RFC-068).
@@ -1515,9 +1557,26 @@ impl NativeXlsxBook {
         self.date1904
     }
 
-    /// Shared-string table as plain strings.
-    pub fn shared_strings(&self) -> &[String] {
-        &self.shared_strings.values
+    /// Shared-string table as plain strings, decoded on first value access.
+    pub fn shared_strings(&self) -> Result<&[String]> {
+        self.load_shared_strings()
+            .map(|strings| strings.values.as_slice())
+    }
+
+    fn load_shared_strings(&self) -> Result<&SharedStrings> {
+        self.shared_strings
+            .get_or_init(|| {
+                let result = (|| {
+                    let mut zip = zip_from_source(&self.source)?;
+                    match read_part_optional(&mut zip, "xl/sharedStrings.xml")? {
+                        Some(xml) => parse_shared_strings(&xml),
+                        None => Ok(SharedStrings::default()),
+                    }
+                })();
+                result.map_err(|err: ReaderError| err.to_string())
+            })
+            .as_ref()
+            .map_err(|message| ReaderError::Xml(message.clone()))
     }
 
     /// Resolve a style id to an Excel number format code.
@@ -1622,8 +1681,13 @@ impl NativeXlsxBook {
         let tables = read_tables(&mut zip, &info.path, &xml, rels.as_ref())?;
         let images = read_images(&mut zip, &info.path, rels.as_ref())?;
         let charts = read_charts(&mut zip, &info.path, rels.as_ref())?;
-        let mut data =
-            parse_worksheet(&xml, &self.shared_strings, rels.as_ref(), comments, tables)?;
+        let mut data = parse_worksheet(
+            &xml,
+            self.load_shared_strings()?,
+            rels.as_ref(),
+            comments,
+            tables,
+        )?;
         data.images = images;
         data.charts = charts;
         data.threaded_comments = threaded_comments;
@@ -1640,7 +1704,7 @@ impl NativeXlsxBook {
         };
         let mut zip = zip_from_source(&self.source)?;
         let xml = read_part_required_bytes(&mut zip, &info.path)?;
-        parse_worksheet_value_cells_bytes(&xml, &self.shared_strings)
+        parse_worksheet_value_cells_bytes(&xml, self.load_shared_strings()?)
     }
 
     /// Parse charts attached to a chartsheet tab.
@@ -2266,9 +2330,21 @@ fn sheet_name_from_ref(refers_to: &str) -> Option<String> {
     Some(unquoted.replace("''", "'"))
 }
 
-fn resolve_sheet_paths(sheet_refs: Vec<SheetRef>, rels: &RelsGraph) -> Result<Vec<SheetInfo>> {
+fn resolve_sheet_paths(
+    sheet_refs: Vec<SheetRef>,
+    rels: &RelsGraph,
+) -> Result<(Vec<SheetInfo>, Vec<SkippedSheet>)> {
     let mut sheets = Vec::with_capacity(sheet_refs.len());
+    let mut skipped = Vec::new();
     for sheet in sheet_refs {
+        if sheet.rid.is_empty() {
+            skipped.push(SkippedSheet {
+                name: sheet.name,
+                sheet_id: sheet.sheet_id,
+                reason: SkippedSheetReason::EmptyRelationshipId,
+            });
+            continue;
+        }
         let rel = rels.get(&RelId(sheet.rid.clone())).ok_or_else(|| {
             ReaderError::MissingPart(format!("workbook relationship {}", sheet.rid))
         })?;
@@ -2279,7 +2355,7 @@ fn resolve_sheet_paths(sheet_refs: Vec<SheetRef>, rels: &RelsGraph) -> Result<Ve
             path: join_and_normalize("xl/", &rel.target),
         });
     }
-    Ok(sheets)
+    Ok((sheets, skipped))
 }
 
 fn synthesize_sheet_refs_from_rels(rels: &RelsGraph) -> Vec<SheetRef> {
@@ -2295,8 +2371,24 @@ fn synthesize_sheet_refs_from_rels(rels: &RelsGraph) -> Vec<SheetRef> {
         .collect()
 }
 
+fn validate_shared_strings<R: Read + Seek>(zip: &mut ZipArchive<R>) -> Result<()> {
+    let Some(name) = resolve_zip_part_name(zip, "xl/sharedStrings.xml")? else {
+        return Ok(());
+    };
+    let entry = zip.by_name(&name)?;
+    validate_zip_entry_metadata(&name, entry.size(), entry.compressed_size())?;
+    parse_shared_strings_reader::<_, false>(BufReader::new(entry)).map(|_| ())
+}
+
 fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
-    let mut reader = XmlReader::from_str(xml);
+    parse_shared_strings_reader::<_, true>(xml.as_bytes())
+}
+
+// Both modes use the same XML/reference state machine. Validation discards text
+// and rich runs, while still rejecting malformed XML and undefined entities at
+// the same point as a retained-table read.
+fn parse_shared_strings_reader<R: BufRead, const RETAIN: bool>(input: R) -> Result<SharedStrings> {
+    let mut reader = XmlReader::from_reader(input);
     let mut buf = Vec::new();
     let mut out = SharedStrings::default();
     let mut current = String::new();
@@ -2323,7 +2415,7 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
                     text_buf.clear();
                 }
                 b"rPh" if in_si => in_rph = true,
-                b"r" if in_si && !in_rph => {
+                b"r" if RETAIN && in_si && !in_rph => {
                     saw_r = true;
                     current_run = Some(RichTextRun::default());
                     current_props = None;
@@ -2343,7 +2435,7 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
                 _ => {}
             },
             Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
-                b"si" => {
+                b"si" if RETAIN => {
                     out.values.push(String::new());
                     out.rich_text.push(None);
                 }
@@ -2354,15 +2446,19 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
             },
             Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"si" => {
-                    out.values.push(std::mem::take(&mut current));
-                    out.rich_text.push(saw_r.then(|| std::mem::take(&mut runs)));
+                    if RETAIN {
+                        out.values.push(std::mem::take(&mut current));
+                        out.rich_text.push(saw_r.then(|| std::mem::take(&mut runs)));
+                    }
                     in_si = false;
                 }
                 b"rPh" => in_rph = false,
                 b"t" if in_t => {
-                    current.push_str(&text_buf);
-                    if let Some(run) = current_run.as_mut() {
-                        run.text.push_str(&text_buf);
+                    if RETAIN {
+                        current.push_str(&text_buf);
+                        if let Some(run) = current_run.as_mut() {
+                            run.text.push_str(&text_buf);
+                        }
                     }
                     text_buf.clear();
                     in_t = false;
@@ -2380,17 +2476,21 @@ fn parse_shared_strings(xml: &str) -> Result<SharedStrings> {
                 _ => {}
             },
             Ok(Event::Text(e)) => {
-                if in_si && in_t {
+                if RETAIN && in_si && in_t {
                     text_buf.push_str(&normalize_xml_line_ends(&e));
                 }
             }
             Ok(Event::GeneralRef(e)) => {
                 if in_si && in_t {
-                    text_buf.push_str(resolve_xml_reference(&e, &mut [0; 4])?);
+                    let mut utf8 = [0; 4];
+                    let text = resolve_xml_reference(&e, &mut utf8)?;
+                    if RETAIN {
+                        text_buf.push_str(text);
+                    }
                 }
             }
             Ok(Event::CData(e)) => {
-                if in_si && in_t {
+                if RETAIN && in_si && in_t {
                     text_buf.push_str(&normalize_xml_line_ends(&e));
                 }
             }
@@ -3731,7 +3831,7 @@ fn read_first_sheet_value_cells_source(source: &WorkbookSource) -> Result<Vec<Va
     let rels = RelsGraph::parse(workbook_rels.as_bytes())
         .map_err(|e| ReaderError::Xml(format!("failed to parse workbook rels: {e}")))?;
     let (sheet_refs, ..) = parse_workbook(&workbook_xml)?;
-    let sheets = resolve_sheet_paths(sheet_refs, &rels)?;
+    let (sheets, _) = resolve_sheet_paths(sheet_refs, &rels)?;
     let Some(info) = sheets.first() else {
         return Err(ReaderError::SheetNotFound("first worksheet".to_string()));
     };
@@ -3752,7 +3852,7 @@ fn read_first_sheet_value_summary_source(source: &WorkbookSource) -> Result<Valu
     let rels = RelsGraph::parse(workbook_rels.as_bytes())
         .map_err(|e| ReaderError::Xml(format!("failed to parse workbook rels: {e}")))?;
     let (sheet_refs, ..) = parse_workbook(&workbook_xml)?;
-    let sheets = resolve_sheet_paths(sheet_refs, &rels)?;
+    let (sheets, _) = resolve_sheet_paths(sheet_refs, &rels)?;
     let Some(info) = sheets.first() else {
         return Err(ReaderError::SheetNotFound("first worksheet".to_string()));
     };
@@ -3769,7 +3869,7 @@ fn read_first_sheet_formula_summary_source(source: &WorkbookSource) -> Result<Fo
     let rels = RelsGraph::parse(workbook_rels.as_bytes())
         .map_err(|e| ReaderError::Xml(format!("failed to parse workbook rels: {e}")))?;
     let (sheet_refs, ..) = parse_workbook(&workbook_xml)?;
-    let sheets = resolve_sheet_paths(sheet_refs, &rels)?;
+    let (sheets, _) = resolve_sheet_paths(sheet_refs, &rels)?;
     let Some(info) = sheets.first() else {
         return Err(ReaderError::SheetNotFound("first worksheet".to_string()));
     };
@@ -6695,6 +6795,7 @@ impl ValueCellBuilder {
             CellDataType::Error => {
                 CellValue::Error(String::from_utf8_lossy(&self.value_text).into_owned())
             }
+            CellDataType::FormulaString if self.value_text.is_empty() => CellValue::Empty,
             CellDataType::DateIso | CellDataType::FormulaString => {
                 CellValue::String(String::from_utf8_lossy(&self.value_text).into_owned())
             }
@@ -6879,6 +6980,7 @@ impl CellBuilder {
             CellDataType::Bool => CellValue::Bool(matches!(self.value_text.trim(), "1" | "true")),
             CellDataType::Error => CellValue::Error(self.value_text),
             CellDataType::DateIso => CellValue::String(self.value_text),
+            CellDataType::FormulaString if self.value_text.is_empty() => CellValue::Empty,
             CellDataType::FormulaString => CellValue::String(self.value_text),
             CellDataType::Number | CellDataType::FloatNumber => {
                 let raw = self.value_text.trim();
@@ -6949,6 +7051,9 @@ fn zip_from_source(source: &WorkbookSource) -> Result<ZipArchive<ZipSource<'_>>>
     let reader = match source {
         WorkbookSource::Path(path) => ZipSource::Path(File::open(path)?),
         WorkbookSource::Bytes(bytes) => ZipSource::Bytes(Cursor::new(bytes.as_slice())),
+        WorkbookSource::SharedBytes(bytes) => {
+            ZipSource::Bytes(Cursor::new(bytes.as_ref().as_ref()))
+        }
     };
     ZipArchive::new(reader).map_err(ReaderError::Zip)
 }
@@ -7399,6 +7504,133 @@ mod tests {
     use super::*;
 
     const XLSX_BYTES: &[u8] = include_bytes!("../../../tests/fixtures/sprint_kappa_smoke.xlsx");
+
+    fn shared_string_package(sst: &str) -> Vec<u8> {
+        use std::io::Write;
+        let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, xml) in [
+            (
+                "xl/workbook.xml",
+                r#"<workbook xmlns:r="r"><sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>"#,
+            ),
+            (
+                "xl/_rels/workbook.xml.rels",
+                r#"<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
+            ),
+            (
+                "xl/worksheets/sheet1.xml",
+                r#"<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row></sheetData></worksheet>"#,
+            ),
+            ("xl/sharedStrings.xml", sst),
+        ] {
+            archive
+                .start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            archive.write_all(xml.as_bytes()).unwrap();
+        }
+        archive.finish().unwrap().into_inner()
+    }
+
+    fn workbook_package(workbook_xml: &str) -> Vec<u8> {
+        use std::io::Write;
+        let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, xml) in [
+            ("xl/workbook.xml", workbook_xml),
+            (
+                "xl/_rels/workbook.xml.rels",
+                r#"<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
+            ),
+            (
+                "xl/worksheets/sheet1.xml",
+                r#"<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>kept</t></is></c></row></sheetData></worksheet>"#,
+            ),
+        ] {
+            archive
+                .start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            archive.write_all(xml.as_bytes()).unwrap();
+        }
+        archive.finish().unwrap().into_inner()
+    }
+
+    const EMPTY_RID_WORKBOOK: &str = r#"<workbook xmlns:r="r"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/><sheet name="Module" sheetId="2" r:id=""/></sheets></workbook>"#;
+
+    #[test]
+    fn empty_rid_sheet_is_left_out_of_the_sheet_list() {
+        let book = NativeXlsxBook::open_bytes(workbook_package(EMPTY_RID_WORKBOOK)).unwrap();
+        assert_eq!(book.sheet_names(), ["Sheet1"]);
+        assert_eq!(book.worksheet("Sheet1").unwrap().cells.len(), 1);
+    }
+
+    #[test]
+    fn empty_rid_sheet_is_reported_as_skipped() {
+        let book = NativeXlsxBook::open_bytes(workbook_package(EMPTY_RID_WORKBOOK)).unwrap();
+        assert_eq!(
+            book.skipped_sheets(),
+            [SkippedSheet {
+                name: "Module".to_string(),
+                sheet_id: Some("2".to_string()),
+                reason: SkippedSheetReason::EmptyRelationshipId,
+            }]
+        );
+    }
+
+    #[test]
+    fn non_empty_rid_missing_from_rels_still_fails_with_missing_part() {
+        let bytes = workbook_package(
+            r#"<workbook xmlns:r="r"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/><sheet name="Ghost" sheetId="2" r:id="rId9"/></sheets></workbook>"#,
+        );
+        let err = NativeXlsxBook::open_bytes(bytes).unwrap_err();
+        assert!(
+            matches!(&err, ReaderError::MissingPart(part) if part == "workbook relationship rId9"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn shared_strings_are_lazy_and_resolve_for_both_cell_readers() {
+        let bytes = shared_string_package("<sst><si><t>shared value</t></si></sst>");
+        let book = NativeXlsxBook::open_owned_bytes_permissive(bytes, false).unwrap();
+        assert!(book.shared_strings.get().is_none());
+        assert_eq!(book.sheet_names(), ["Data"]);
+        assert!(book.shared_strings.get().is_none());
+        let cloned = book.clone();
+        let (WorkbookSource::SharedBytes(first), WorkbookSource::SharedBytes(second)) =
+            (&book.source, &cloned.source)
+        else {
+            panic!("owned input was copied")
+        };
+        assert!(Arc::ptr_eq(first, second));
+        let cells = book.worksheet_value_cells("Data").unwrap();
+        assert_eq!(cells[0].value, CellValue::String("shared value".into()));
+        assert!(book.shared_strings.get().is_some());
+        assert_eq!(book.shared_strings().unwrap(), ["shared value"]);
+        // Full sparse-sheet parsing must initialize its own lazy table too.
+        assert!(cloned.shared_strings.get().is_none());
+        let sheet = cloned.worksheet("Data").unwrap();
+        assert_eq!(
+            sheet.cells[0].value,
+            CellValue::String("shared value".into())
+        );
+    }
+
+    #[test]
+    fn shared_string_validation_rejects_errors_without_retaining_text() {
+        for xml in [
+            "<sst><si><t></si></sst>",
+            "<sst><si><t>&unknown;</t></si></sst>",
+        ] {
+            let expected = parse_shared_strings(xml).unwrap_err().to_string();
+            let error = NativeXlsxBook::open_bytes(shared_string_package(xml)).unwrap_err();
+            assert_eq!(error.to_string(), expected);
+        }
+        let parsed = parse_shared_strings_reader::<_, false>(
+            b"<sst><si><t>discarded</t></si></sst>".as_slice(),
+        )
+        .unwrap();
+        assert!(parsed.values.is_empty());
+        assert!(parsed.rich_text.is_empty());
+    }
 
     #[test]
     fn opens_committed_xlsx_fixture() {

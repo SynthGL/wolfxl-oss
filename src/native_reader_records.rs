@@ -296,7 +296,8 @@ pub(crate) fn append_native_record<B: NativeStyleResolver>(
         record.set_item("data_type", "formula")?;
         record.set_item("value", formula)?;
     } else if options.data_only && has_formula && !has_cached_value {
-        record.set_item("data_type", "blank")?;
+        let kind = native_data_type(cell, true, number_format);
+        record.set_item("data_type", if kind == "str" { "str" } else { "blank" })?;
         record.set_item("value", py.None())?;
     } else {
         record.set_item(

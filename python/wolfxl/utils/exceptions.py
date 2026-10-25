@@ -19,16 +19,25 @@ Reference: ``openpyxl.utils.exceptions`` (openpyxl 3.1.x).
 from __future__ import annotations
 
 import builtins
+import importlib.abc
+import sys
 from typing import Any
 
-try:
-    from wolfxl._compat import _REAL_OPENPYXL
-except Exception:  # noqa: BLE001 - fallback during unusual bootstrap paths
-    _REAL_OPENPYXL = None
+from wolfxl import _compat
+
+_UPSTREAM_MODULE = "openpyxl.utils.exceptions"
+_DEFERRED = _compat._real_openpyxl_pending() or (
+    _compat._real_openpyxl_if_imported() is not None
+    and _UPSTREAM_MODULE not in sys.modules
+)
 
 
 def _openpyxl_exception_base(name: str, fallback: type[BaseException]) -> type[BaseException]:
-    exceptions_module: Any = getattr(getattr(_REAL_OPENPYXL, "utils", None), "exceptions", None)
+    if _DEFERRED:
+        # Match the upstream heap-type layout so existing class references
+        # can acquire the real base after openpyxl is imported.
+        return type(f"_Upstream{name}Placeholder", (Exception,), {"__module__": __name__})
+    exceptions_module: Any = sys.modules.get(_UPSTREAM_MODULE)
     candidate = getattr(exceptions_module, name, None)
     return candidate if isinstance(candidate, type) else fallback
 
@@ -101,6 +110,51 @@ if isinstance(_cached_cell_coordinates_exception, type):
     CellCoordinatesException = _cached_cell_coordinates_exception
 else:
     builtins._wolfxl_CellCoordinatesException = CellCoordinatesException
+
+
+class _BindingLoader:
+    """Bind the existing exception class when its upstream module finishes."""
+
+    def __init__(self, loader: Any, binder: _UpstreamBinder) -> None:
+        self._loader = loader
+        self._binder = binder
+
+    def create_module(self, spec: Any) -> Any:
+        return self._loader.create_module(spec)
+
+    def exec_module(self, module: Any) -> None:
+        self._loader.exec_module(module)
+        module.__spec__.loader = module.__loader__ = self._loader
+        self._binder.bind(module)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._loader, name)
+
+
+class _UpstreamBinder(importlib.abc.MetaPathFinder):
+    """One-shot hook preserving exception identity across either import order."""
+
+    def find_spec(self, fullname: str, path: Any = None, target: Any = None) -> Any:
+        if fullname != _UPSTREAM_MODULE:
+            return None
+        for finder in sys.meta_path:
+            find = getattr(finder, "find_spec", None)
+            if finder is self or find is None:
+                continue
+            spec = find(fullname, path, target)
+            if spec is not None and spec.loader is not None:
+                spec.loader = _BindingLoader(spec.loader, self)
+                return spec
+        return None
+
+    def bind(self, module: Any) -> None:
+        upstream = module.CellCoordinatesException
+        CellCoordinatesException.__bases__ = (ValueError, upstream)
+        sys.meta_path.remove(self)
+
+
+if _DEFERRED:
+    sys.meta_path.insert(0, _UpstreamBinder())
 
 
 class ReadOnlyWorkbookException(Exception):

@@ -3,8 +3,8 @@
 //! Activated by `load_workbook(path, read_only=True)` (or auto-trigger when
 //! a sheet has > 50k rows). Walks `xl/worksheets/sheetN.xml` one row at a
 //! time using an incremental XML reader over a bounded in-memory sheet part, or
-//! a disk-spooled sheet part for larger worksheets, resolving shared-string-table
-//! (SST) references upfront. Style metadata is
+//! for larger worksheets over the sheet part inflated from its ZIP entry while
+//! parsing, resolving shared-string-table (SST) references upfront. Style metadata is
 //! exposed as a `style_id` only — Python-side `StreamingCell` resolves the
 //! actual font/fill/etc. via the eager Rust reader code path
 //! (which already loads `xl/styles.xml` and exposes O(1) style lookups).
@@ -15,34 +15,111 @@
 //! - `reader.read_next_row()` → `(row_index_1based, [(col_1based, value, style_id, type), ...])`.
 //! - `reader.read_next_values()` → padded value tuple.
 //! - `reader.read_next_values_row()` → `(row_index_1based, padded value tuple)`.
-//! - `reader.close()` — eagerly closes the XML reader and removes the temp part.
+//! - `reader.close()` — eagerly closes the XML reader and releases the sheet part.
 //!
 //! Memory profile: SST loaded once (typically <10MB even on huge
 //! workbooks); sheet XML uses a bounded in-memory fast path for small/medium
-//! sheets and falls back to temp-file spooling for large sheets.
+//! sheets and inflates large sheets from the ZIP entry as rows are read.
 
 use std::fs::File;
-use std::io::{BufReader, Cursor, Read, Seek, SeekFrom};
+use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom};
 
-use pyo3::exceptions::{PyIOError, PyStopIteration, PyValueError};
+use flate2::read::DeflateDecoder;
+use pyo3::exceptions::{PyIOError, PyMemoryError, PyStopIteration, PyValueError};
+use pyo3::ffi;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyTuple};
+use pyo3::types::{PyBytes, PyDateTime, PyDict, PyFloat, PyInt, PyList, PyTime, PyTuple};
 use pyo3::IntoPyObjectExt;
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader as XmlReader;
-use tempfile::NamedTempFile;
-use zip::ZipArchive;
+use zip::{CompressionMethod, ZipArchive};
 
 use crate::ooxml_util;
 
 type PyObjectOwned = Py<PyAny>;
 // Keep read_only value scans below openpyxl's peak RSS on ordinary table-sized
-// workbooks; larger sheet XML parts stream through a temp file instead.
+// workbooks; larger sheet XML parts inflate from the ZIP entry while parsing.
 const IN_MEMORY_SHEET_XML_LIMIT: u64 = 1 * 1024 * 1024;
+// Read buffer between the entry inflater and the XML reader.
+const SHEET_ENTRY_BUFFER: usize = 64 * 1024;
 // Bound the value cells materialized per chunk so wide sheets (up to 16,384
 // columns) stream a few rows at a time instead of 1,024 padded rows.
 const CHUNK_CELL_BUDGET: usize = 65_536;
+
+// pyo3's `IntoPyObject` for str, ints and floats, `PyList::empty`,
+// `PyDict::new`, and `PyTuple::new` panic when CPython returns NULL, which
+// drops the pending `MemoryError` and raises `PanicException` (a
+// `BaseException`) instead. The constructors below return the pending error
+// so an exhausted allocator surfaces as a catchable `MemoryError`.
+
+/// Take ownership of a new reference, or fetch the pending Python error.
+fn owned_or_err(py: Python<'_>, ptr: *mut ffi::PyObject) -> PyResult<Bound<'_, PyAny>> {
+    // SAFETY: every caller passes the result of a CPython constructor, which is
+    // either NULL or a new strong reference.
+    unsafe { Bound::from_owned_ptr_or_err(py, ptr) }
+}
+
+fn str_to_py(py: Python<'_>, value: &str) -> PyResult<PyObjectOwned> {
+    let len = ffi::Py_ssize_t::try_from(value.len())
+        .map_err(|_| PyMemoryError::new_err("string too large for a Python str"))?;
+    // SAFETY: `value` is valid UTF-8 for `len` bytes.
+    let ptr = unsafe { ffi::PyUnicode_FromStringAndSize(value.as_ptr().cast(), len) };
+    Ok(owned_or_err(py, ptr)?.unbind())
+}
+
+fn u32_to_py(py: Python<'_>, value: u32) -> PyResult<PyObjectOwned> {
+    // SAFETY: plain value constructor.
+    let ptr = unsafe { ffi::PyLong_FromUnsignedLong(std::os::raw::c_ulong::from(value)) };
+    Ok(owned_or_err(py, ptr)?.unbind())
+}
+
+fn i64_to_py(py: Python<'_>, value: i64) -> PyResult<PyObjectOwned> {
+    // SAFETY: plain value constructor.
+    let ptr = unsafe { ffi::PyLong_FromLongLong(value) };
+    Ok(owned_or_err(py, ptr)?.unbind())
+}
+
+fn f64_to_py(py: Python<'_>, value: f64) -> PyResult<PyObjectOwned> {
+    // SAFETY: plain value constructor.
+    let ptr = unsafe { ffi::PyFloat_FromDouble(value) };
+    Ok(owned_or_err(py, ptr)?.unbind())
+}
+
+fn new_list(py: Python<'_>) -> PyResult<Bound<'_, PyList>> {
+    // SAFETY: plain constructor.
+    let ptr = unsafe { ffi::PyList_New(0) };
+    Ok(owned_or_err(py, ptr)?.cast_into::<PyList>()?)
+}
+
+fn new_dict(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+    // SAFETY: plain constructor.
+    let ptr = unsafe { ffi::PyDict_New() };
+    Ok(owned_or_err(py, ptr)?.cast_into::<PyDict>()?)
+}
+
+fn set_dict_item(dict: &Bound<'_, PyDict>, key: &str, value: PyObjectOwned) -> PyResult<()> {
+    dict.set_item(str_to_py(dict.py(), key)?, value)
+}
+
+fn new_tuple<'py>(
+    py: Python<'py>,
+    items: impl ExactSizeIterator<Item = PyObjectOwned>,
+) -> PyResult<Bound<'py, PyTuple>> {
+    let len = ffi::Py_ssize_t::try_from(items.len())
+        .map_err(|_| PyMemoryError::new_err("tuple too large for a Python tuple"))?;
+    // SAFETY: plain constructor.
+    let ptr = unsafe { ffi::PyTuple_New(len) };
+    let tuple = owned_or_err(py, ptr)?.cast_into::<PyTuple>()?;
+    for (index, item) in (0..len).zip(items) {
+        // SAFETY: `index` is in range and `PyTuple_SetItem` steals `item`'s
+        // reference, including on failure.
+        if unsafe { ffi::PyTuple_SetItem(tuple.as_ptr(), index, item.into_ptr()) } != 0 {
+            return Err(PyErr::fetch(py));
+        }
+    }
+    Ok(tuple)
+}
 
 /// Parse `xl/sharedStrings.xml` into a flat `Vec<String>`. Each entry is
 /// the plain-text concatenation of any nested `<r><t>...</t></r>` runs
@@ -158,8 +235,6 @@ pub struct StreamingSheetReader {
     reader: Option<SheetXmlReader>,
     /// Scratch buffer reused for quick-xml events.
     event_buf: Vec<u8>,
-    /// Temp file that owns the decompressed sheet XML while streaming.
-    temp_file: Option<NamedTempFile>,
     /// Shared-strings table loaded upfront from `xl/sharedStrings.xml`.
     sst: Vec<String>,
     /// Whether the reader has been exhausted.
@@ -174,6 +249,138 @@ pub struct StreamingSheetReader {
     max_col: Option<u32>,
     /// Index of the previous `<row>`; a `<row>` without `r` follows it.
     last_row: u32,
+    /// Date conversion configured once per values-only streaming pass.
+    date_styles: DateStyles,
+}
+
+#[derive(Default)]
+struct DateStyles {
+    kinds: Vec<u8>,
+    mac_epoch: bool,
+    timedelta: Option<PyObjectOwned>,
+}
+
+impl DateStyles {
+    fn kind(&self, style_id: Option<u32>) -> u8 {
+        style_id
+            .and_then(|id| self.kinds.get(id as usize))
+            .copied()
+            .unwrap_or(0)
+    }
+
+    fn convert(&self, py: Python<'_>, kind: u8, value: PyObjectOwned) -> PyResult<PyObjectOwned> {
+        let bound = value.bind(py);
+        if !(bound.is_exact_instance_of::<PyFloat>() || bound.is_exact_instance_of::<PyInt>()) {
+            return Ok(value);
+        }
+        if kind == 2 {
+            return match &self.timedelta {
+                Some(convert) => convert.call1(py, (bound,)),
+                None => Ok(value),
+            };
+        }
+        let serial: f64 = bound.extract()?;
+        Ok(excel_serial_to_py(py, serial, self.mac_epoch)?.unwrap_or(value))
+    }
+
+    fn apply(
+        &self,
+        py: Python<'_>,
+        style_id: Option<u32>,
+        value: PyObjectOwned,
+        cell_type: &str,
+        numeric: bool,
+    ) -> PyResult<PyObjectOwned> {
+        let kind = self.kind(style_id);
+        if kind == 0 || !numeric {
+            return Ok(value);
+        }
+        if cell_type == "formula" {
+            let formula = value.bind(py).cast::<PyDict>()?;
+            let key = str_to_py(py, "cached")?;
+            if let Some(cached) = formula.get_item(&key)? {
+                let converted = self.convert(py, kind, cached.unbind())?;
+                formula.set_item(key, converted)?;
+            }
+            return Ok(value);
+        }
+        if cell_type == "n" {
+            self.convert(py, kind, value)
+        } else {
+            Ok(value)
+        }
+    }
+}
+
+/// Match openpyxl's from_excel: millisecond ties-to-even rounding, fractional
+/// serials as time, and the Windows leap-day adjustment below serial 60.
+/// Keep serials outside Python's year range numeric, as the Python fallback does.
+fn excel_serial_to_py(
+    py: Python<'_>,
+    value: f64,
+    mac_epoch: bool,
+) -> PyResult<Option<PyObjectOwned>> {
+    if !value.is_finite() {
+        return Ok(None);
+    }
+    // Python's divmod uses a nonnegative fraction, including for negative days.
+    let fraction = value.rem_euclid(1.0);
+    let millis = (fraction * 86_400.0 * 1_000.0).round_ties_even() as i64;
+    if (0.0..1.0).contains(&value) && millis < 86_400_000 {
+        let secs = (millis / 1_000) as u32;
+        return Ok(Some(
+            PyTime::new(
+                py,
+                (secs / 3_600) as u8,
+                (secs / 60 % 60) as u8,
+                (secs % 60) as u8,
+                (millis % 1_000) as u32 * 1_000,
+                None,
+            )?
+            .into_any()
+            .unbind(),
+        ));
+    }
+    let mut day = value.floor();
+    if !mac_epoch && value > 0.0 && value < 60.0 {
+        day += 1.0;
+    }
+    if day.abs() > 1e9 {
+        return Ok(None);
+    }
+    let epoch = if mac_epoch {
+        chrono::NaiveDate::from_ymd_opt(1904, 1, 1)
+    } else {
+        chrono::NaiveDate::from_ymd_opt(1899, 12, 30)
+    }
+    .expect("valid Excel epoch")
+    .and_hms_opt(0, 0, 0)
+    .expect("valid midnight");
+    let Some(datetime) = chrono::Duration::try_days(day as i64)
+        .and_then(|days| epoch.checked_add_signed(days))
+        .and_then(|date| date.checked_add_signed(chrono::Duration::milliseconds(millis)))
+    else {
+        return Ok(None);
+    };
+    use chrono::{Datelike, Timelike};
+    if !(1..=9999).contains(&datetime.year()) {
+        return Ok(None);
+    }
+    Ok(Some(
+        PyDateTime::new(
+            py,
+            datetime.year(),
+            datetime.month() as u8,
+            datetime.day() as u8,
+            datetime.hour() as u8,
+            datetime.minute() as u8,
+            datetime.second() as u8,
+            datetime.nanosecond() / 1_000,
+            None,
+        )?
+        .into_any()
+        .unbind(),
+    ))
 }
 
 /// One parsed cell, before Python-tuple boxing.
@@ -197,14 +404,14 @@ enum CellTypeAttr {
 
 enum SheetXmlReader {
     Memory(XmlReader<Cursor<Vec<u8>>>),
-    File(XmlReader<BufReader<File>>),
+    Entry(XmlReader<BufReader<SheetEntryReader>>),
 }
 
 impl SheetXmlReader {
     fn read_event_into<'a>(&mut self, buf: &'a mut Vec<u8>) -> quick_xml::Result<Event<'a>> {
         match self {
             Self::Memory(reader) => reader.read_event_into(buf),
-            Self::File(reader) => reader.read_event_into(buf),
+            Self::Entry(reader) => reader.read_event_into(buf),
         }
     }
 
@@ -215,8 +422,179 @@ impl SheetXmlReader {
     ) -> quick_xml::Result<quick_xml::events::BytesText<'a>> {
         match self {
             Self::Memory(reader) => reader.read_text_into(end, buf),
-            Self::File(reader) => reader.read_text_into(end, buf),
+            Self::Entry(reader) => reader.read_text_into(end, buf),
         }
+    }
+}
+
+/// Compressed bytes of one ZIP entry, owned so the sheet part can be inflated
+/// while it is parsed after the archive itself has been released.
+enum EntrySource {
+    File(io::Take<File>),
+    /// A range of the caller's immutable `bytes` object, shared rather than copied.
+    Bytes {
+        data: Py<PyBytes>,
+        pos: usize,
+        end: usize,
+    },
+}
+
+impl Read for EntrySource {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::File(source) => source.read(buf),
+            Self::Bytes { data, pos, end } => Python::attach(|py| {
+                let available = &data.as_bytes(py)[*pos..*end];
+                let n = available.len().min(buf.len());
+                buf[..n].copy_from_slice(&available[..n]);
+                *pos += n;
+                Ok(n)
+            }),
+        }
+    }
+}
+
+/// Archive readers that can hand over one entry's compressed byte range.
+trait IntoEntrySource: Read + Seek + Sized {
+    fn into_entry_source(self, start: u64, len: u64) -> io::Result<EntrySource>;
+}
+
+impl IntoEntrySource for File {
+    fn into_entry_source(mut self, start: u64, len: u64) -> io::Result<EntrySource> {
+        self.seek(SeekFrom::Start(start))?;
+        Ok(EntrySource::File(self.take(len)))
+    }
+}
+
+/// Caller-owned xlsx bytes read through a cursor; the owner is kept so the
+/// sheet entry can stream from the same buffer without a copy.
+struct PyBytesCursor<'a, 'py> {
+    owner: &'a Bound<'py, PyBytes>,
+    cursor: Cursor<&'a [u8]>,
+}
+
+impl<'a, 'py> PyBytesCursor<'a, 'py> {
+    fn new(owner: &'a Bound<'py, PyBytes>) -> Self {
+        Self {
+            owner,
+            cursor: Cursor::new(owner.as_bytes()),
+        }
+    }
+}
+
+impl Read for PyBytesCursor<'_, '_> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.cursor.read(buf)
+    }
+}
+
+impl Seek for PyBytesCursor<'_, '_> {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.cursor.seek(pos)
+    }
+}
+
+impl IntoEntrySource for PyBytesCursor<'_, '_> {
+    fn into_entry_source(self, start: u64, len: u64) -> io::Result<EntrySource> {
+        let total = self.cursor.get_ref().len();
+        let range = usize::try_from(start)
+            .ok()
+            .zip(usize::try_from(len).ok())
+            .and_then(|(start, len)| Some(start..start.checked_add(len)?))
+            .filter(|range| range.end <= total)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "sheet part extends past the end of the package",
+                )
+            })?;
+        Ok(EntrySource::Bytes {
+            data: self.owner.clone().unbind(),
+            pos: range.start,
+            end: range.end,
+        })
+    }
+}
+
+enum EntryDecoder {
+    Stored(EntrySource),
+    Deflated(DeflateDecoder<EntrySource>),
+}
+
+/// Inflates a sheet part from its ZIP entry as it is parsed, so large sheets
+/// need neither a full in-memory copy nor a temp file. Like the zip crate's
+/// entry reader, it fails once output exceeds the declared uncompressed size
+/// and verifies the CRC-32 at the end of the entry.
+struct SheetEntryReader {
+    decoder: EntryDecoder,
+    crc: crc32fast::Hasher,
+    expected_crc: u32,
+    declared_size: u64,
+    produced: u64,
+}
+
+impl SheetEntryReader {
+    fn new(
+        source: EntrySource,
+        method: CompressionMethod,
+        declared_size: u64,
+        expected_crc: u32,
+    ) -> io::Result<Self> {
+        let decoder = match method {
+            CompressionMethod::Stored => EntryDecoder::Stored(source),
+            CompressionMethod::Deflated => EntryDecoder::Deflated(DeflateDecoder::new(source)),
+            other => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    format!("unsupported sheet part compression method: {other}"),
+                ))
+            }
+        };
+        Ok(Self {
+            decoder,
+            crc: crc32fast::Hasher::new(),
+            expected_crc,
+            declared_size,
+            produced: 0,
+        })
+    }
+}
+
+impl Read for SheetEntryReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        // Inflate at most one byte past the declared size, so an oversized
+        // part is detected without producing more of it.
+        let room = self
+            .declared_size
+            .saturating_sub(self.produced)
+            .saturating_add(1);
+        let len = buf.len().min(usize::try_from(room).unwrap_or(usize::MAX));
+        let buf = &mut buf[..len];
+        let n = match &mut self.decoder {
+            EntryDecoder::Stored(source) => source.read(buf)?,
+            EntryDecoder::Deflated(source) => source.read(buf)?,
+        };
+        if n == 0 {
+            if self.crc.clone().finalize() != self.expected_crc {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Invalid checksum",
+                ));
+            }
+            return Ok(0);
+        }
+        self.produced += n as u64;
+        if self.produced > self.declared_size {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "File is larger than its declared uncompressed size",
+            ));
+        }
+        self.crc.update(&buf[..n]);
+        Ok(n)
     }
 }
 
@@ -244,16 +622,31 @@ impl StreamingSheetReader {
     #[staticmethod]
     #[pyo3(signature = (data, sheet, min_row=None, max_row=None, min_col=None, max_col=None))]
     pub fn open_from_bytes(
-        data: &[u8],
+        data: &Bound<'_, PyBytes>,
         sheet: &str,
         min_row: Option<u32>,
         max_row: Option<u32>,
         min_col: Option<u32>,
         max_col: Option<u32>,
     ) -> PyResult<Self> {
-        let zip = ZipArchive::new(Cursor::new(data))
+        let zip = ZipArchive::new(PyBytesCursor::new(data))
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
         Self::from_archive(zip, sheet, min_row, max_row, min_col, max_col)
+    }
+
+    /// Install source-style kinds (0 plain, 1 datetime/time, 2 duration).
+    /// Durations use the retained converter to preserve Python timedelta rounding.
+    pub fn set_date_styles(
+        &mut self,
+        kinds: &Bound<'_, PyBytes>,
+        timedelta_converter: PyObjectOwned,
+        mac_epoch: bool,
+    ) {
+        self.date_styles = DateStyles {
+            kinds: kinds.as_bytes().to_vec(),
+            mac_epoch,
+            timedelta: Some(timedelta_converter),
+        };
     }
 
     /// Read the next row matching the configured bounds.
@@ -267,25 +660,28 @@ impl StreamingSheetReader {
         loop {
             match self.parse_one_row(py)? {
                 StepResult::Row(row_idx, cells) => {
-                    let cell_list = PyList::empty(py);
+                    let cell_list = new_list(py)?;
                     for c in cells {
                         let style_obj = match c.style_id {
-                            Some(s) => s.into_py_any(py)?,
+                            Some(s) => u32_to_py(py, s)?,
                             None => py.None(),
                         };
-                        let tup = PyTuple::new(
+                        let tup = new_tuple(
                             py,
                             [
-                                c.col.into_py_any(py)?,
+                                u32_to_py(py, c.col)?,
                                 c.value,
                                 style_obj,
-                                c.cell_type.into_py_any(py)?,
-                            ],
+                                str_to_py(py, c.cell_type)?,
+                            ]
+                            .into_iter(),
                         )?;
                         cell_list.append(tup)?;
                     }
-                    let outer =
-                        PyTuple::new(py, [row_idx.into_py_any(py)?, cell_list.into_py_any(py)?])?;
+                    let outer = new_tuple(
+                        py,
+                        [u32_to_py(py, row_idx)?, cell_list.into_any().unbind()].into_iter(),
+                    )?;
                     return Ok(Some(outer));
                 }
                 StepResult::Skip => continue,
@@ -321,8 +717,7 @@ impl StreamingSheetReader {
     }
 
     /// Read the next row as `(row_index, value_tuple)` without boxing
-    /// style ids into Python. Used by the values-only path when date-style
-    /// conversion is unnecessary.
+    /// style ids into Python, including configured date-style conversion.
     pub fn read_next_values_row<'py>(
         &mut self,
         py: Python<'py>,
@@ -333,8 +728,11 @@ impl StreamingSheetReader {
         loop {
             match self.parse_one_value_row(py)? {
                 ValueStepResult::Row(row_idx, values, _needs_normalise) => {
-                    let row_obj = row_idx.into_py_any(py)?;
-                    return Ok(Some(PyTuple::new(py, [row_obj, values.into_py_any(py)?])?));
+                    let row_obj = u32_to_py(py, row_idx)?;
+                    return Ok(Some(new_tuple(
+                        py,
+                        [row_obj, values.into_any().unbind()].into_iter(),
+                    )?));
                 }
                 ValueStepResult::Skip => continue,
                 ValueStepResult::Done => {
@@ -377,7 +775,7 @@ impl StreamingSheetReader {
             return Ok(None);
         }
         let limit = max_rows.max(1);
-        let chunk = PyList::empty(py);
+        let chunk = new_list(py)?;
         let mut needs_normalise = false;
         let mut cells = 0usize;
         while chunk.len() < limit && cells < CHUNK_CELL_BUDGET {
@@ -385,8 +783,8 @@ impl StreamingSheetReader {
                 ValueStepResult::Row(row_idx, values, row_needs_normalise) => {
                     needs_normalise |= row_needs_normalise;
                     cells += values.len();
-                    let row_obj = row_idx.into_py_any(py)?;
-                    let item = PyTuple::new(py, [row_obj, values.into_py_any(py)?])?;
+                    let row_obj = u32_to_py(py, row_idx)?;
+                    let item = new_tuple(py, [row_obj, values.into_any().unbind()].into_iter())?;
                     chunk.append(item)?;
                 }
                 ValueStepResult::Skip => continue,
@@ -399,9 +797,9 @@ impl StreamingSheetReader {
         if chunk.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(PyTuple::new(
+            Ok(Some(new_tuple(
                 py,
-                [chunk.into_py_any(py)?, needs_normalise.into_py_any(py)?],
+                [chunk.into_any().unbind(), needs_normalise.into_py_any(py)?].into_iter(),
             )?))
         }
     }
@@ -455,27 +853,31 @@ impl StreamingSheetReader {
         }
 
         let dense_plain = contiguous && !needs_normalise;
-        let items = PyList::empty(py);
+        let items = new_list(py)?;
         if dense_plain {
             for (_row_idx, values) in rows {
                 items.append(values)?;
             }
         } else {
             for (row_idx, values) in rows {
-                let row_obj = row_idx.into_py_any(py)?;
-                items.append(PyTuple::new(py, [row_obj, values.into_py_any(py)?])?)?;
+                let row_obj = u32_to_py(py, row_idx)?;
+                items.append(new_tuple(
+                    py,
+                    [row_obj, values.into_any().unbind()].into_iter(),
+                )?)?;
             }
         }
 
-        Ok(Some(PyTuple::new(
+        Ok(Some(new_tuple(
             py,
             [
-                items.into_py_any(py)?,
+                items.into_any().unbind(),
                 needs_normalise.into_py_any(py)?,
-                first_row.into_py_any(py)?,
-                last_row.into_py_any(py)?,
+                u32_to_py(py, first_row)?,
+                u32_to_py(py, last_row)?,
                 dense_plain.into_py_any(py)?,
-            ],
+            ]
+            .into_iter(),
         )?))
     }
 
@@ -488,7 +890,6 @@ impl StreamingSheetReader {
     pub fn close(&mut self) {
         self.exhausted = true;
         self.reader = None;
-        self.temp_file = None;
         self.event_buf.clear();
     }
 
@@ -520,9 +921,9 @@ enum ValueStepResult<'py> {
 }
 
 impl StreamingSheetReader {
-    /// Load shared strings and stage `sheet`'s XML (in memory when small,
-    /// else spooled to a temp file) so the archive can be released.
-    fn from_archive<R: Read + Seek>(
+    /// Load shared strings and stage `sheet`'s XML: in memory when small, else
+    /// inflated from its ZIP entry while rows are read.
+    fn from_archive<R: IntoEntrySource>(
         mut zip: ZipArchive<R>,
         sheet: &str,
         min_row: Option<u32>,
@@ -537,35 +938,37 @@ impl StreamingSheetReader {
         let mut sheet_entry = zip.by_name(&sheet_path).map_err(|e| {
             PyErr::new::<PyIOError, _>(format!("Failed to open sheet part '{sheet_path}': {e}"))
         })?;
-        let (reader, temp_file) = if sheet_entry.size() <= IN_MEMORY_SHEET_XML_LIMIT {
+        let reader = if sheet_entry.size() <= IN_MEMORY_SHEET_XML_LIMIT {
             let mut xml = Vec::with_capacity(sheet_entry.size() as usize);
             sheet_entry
                 .read_to_end(&mut xml)
                 .map_err(|e| PyErr::new::<PyIOError, _>(format!("read sheet XML: {e}")))?;
             let mut reader = XmlReader::from_reader(Cursor::new(xml));
             reader.config_mut().trim_text(false);
-            (SheetXmlReader::Memory(reader), None)
+            SheetXmlReader::Memory(reader)
         } else {
-            let mut temp_file = NamedTempFile::new()
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("streaming temp file: {e}")))?;
-            std::io::copy(&mut sheet_entry, temp_file.as_file_mut())
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("spool sheet XML: {e}")))?;
-            temp_file
-                .as_file_mut()
-                .seek(SeekFrom::Start(0))
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("rewind sheet XML: {e}")))?;
-            let reader_file = temp_file
-                .reopen()
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("reopen sheet XML: {e}")))?;
-            let mut reader = XmlReader::from_reader(BufReader::new(reader_file));
+            let data_start = sheet_entry.data_start().ok_or_else(|| {
+                PyErr::new::<PyIOError, _>(format!("sheet part '{sheet_path}' has no data offset"))
+            })?;
+            let compressed_size = sheet_entry.compressed_size();
+            let method = sheet_entry.compression();
+            let size = sheet_entry.size();
+            let crc32 = sheet_entry.crc32();
+            drop(sheet_entry);
+            let entry = zip
+                .into_inner()
+                .into_entry_source(data_start, compressed_size)
+                .and_then(|source| SheetEntryReader::new(source, method, size, crc32))
+                .map_err(|e| PyErr::new::<PyIOError, _>(format!("open sheet XML: {e}")))?;
+            let mut reader =
+                XmlReader::from_reader(BufReader::with_capacity(SHEET_ENTRY_BUFFER, entry));
             reader.config_mut().trim_text(false);
-            (SheetXmlReader::File(reader), Some(temp_file))
+            SheetXmlReader::Entry(reader)
         };
 
         Ok(Self {
             reader: Some(reader),
             event_buf: Vec::with_capacity(8192),
-            temp_file,
             sst,
             exhausted: false,
             min_row,
@@ -573,6 +976,7 @@ impl StreamingSheetReader {
             min_col,
             max_col,
             last_row: 0,
+            date_styles: DateStyles::default(),
         })
     }
 
@@ -645,6 +1049,7 @@ impl StreamingSheetReader {
                         &mut self.event_buf,
                         py,
                         &self.sst,
+                        &self.date_styles,
                         row_idx,
                         self.min_col,
                         self.max_col,
@@ -782,6 +1187,7 @@ fn read_values_until_row_end<'py>(
     buf: &mut Vec<u8>,
     py: Python<'py>,
     sst: &[String],
+    date_styles: &DateStyles,
     row_idx: u32,
     min_col: Option<u32>,
     max_col: Option<u32>,
@@ -799,10 +1205,17 @@ fn read_values_until_row_end<'py>(
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}")))?;
         match event {
             Event::Start(e) if e.local_name().as_ref() == "c" => {
-                let (col, t_attr) = cell_value_attrs_from_start(&e, next_col)?;
+                let (col, style_id, t_attr) = cell_value_attrs_from_start(&e, next_col)?;
                 next_col = col.saturating_add(1);
                 drop(e);
                 let (value, cell_type) = read_cell_contents(reader, buf, py, &t_attr, sst)?;
+                let value = date_styles.apply(
+                    py,
+                    style_id,
+                    value,
+                    cell_type,
+                    matches!(t_attr, CellTypeAttr::Number),
+                )?;
                 let pushed =
                     push_bounded_value(py, &mut out, &mut last_col, col, value, min_col, max_col);
                 if pushed && matches!(cell_type, "formula" | "e") {
@@ -810,7 +1223,7 @@ fn read_values_until_row_end<'py>(
                 }
             }
             Event::Empty(e) if e.local_name().as_ref() == "c" => {
-                let (col, _t_attr) = cell_value_attrs_from_start(&e, next_col)?;
+                let (col, _style_id, _t_attr) = cell_value_attrs_from_start(&e, next_col)?;
                 next_col = col.saturating_add(1);
                 push_bounded_value(
                     py,
@@ -877,7 +1290,7 @@ fn finish_value_row<'py>(
     } else if min_col.is_some() && out.is_empty() {
         out.push(py.None());
     }
-    Ok(PyTuple::new(py, out)?)
+    new_tuple(py, out.into_iter())
 }
 
 fn empty_value_row<'py>(
@@ -1007,12 +1420,12 @@ fn read_cell_contents(
                         }
                         if let Some(idx) = fast_shared {
                             let resolved = sst.get(idx).map_or("", String::as_str);
-                            return Ok((resolved.into_py_any(py)?, "s"));
+                            return Ok((str_to_py(py, resolved)?, "s"));
                         }
                     } else if let Some(idx) = fast_shared {
                         let formula = f_text.unwrap_or_default();
                         let resolved = sst.get(idx).map_or("", String::as_str);
-                        let cached = resolved.into_py_any(py)?;
+                        let cached = str_to_py(py, resolved)?;
                         return Ok((build_formula_dict(py, &formula, cached)?, "formula"));
                     }
                     // openpyxl reads an inline string only from `<is>` and
@@ -1068,8 +1481,9 @@ fn cell_attrs_from_start(
 fn cell_value_attrs_from_start(
     e: &BytesStart<'_>,
     default_col: u32,
-) -> PyResult<(u32, CellTypeAttr)> {
+) -> PyResult<(u32, Option<u32>, CellTypeAttr)> {
     let mut col = None;
+    let mut style_id = None;
     let mut cell_type = CellTypeAttr::Number;
     for attr in e.attributes().with_checks(false).flatten() {
         let key = attr.key.as_ref().as_bytes();
@@ -1082,10 +1496,11 @@ fn cell_value_attrs_from_start(
                 );
             }
             b"t" => cell_type = cell_type_from_bytes(attr.value.as_bytes()),
+            b"s" => style_id = parse_u32_bytes(attr.value.as_bytes()),
             _ => {}
         }
     }
-    Ok((col.unwrap_or(default_col), cell_type))
+    Ok((col.unwrap_or(default_col), style_id, cell_type))
 }
 
 /// `row@r`, or the row after `previous` when `r` is absent (openpyxl
@@ -1352,16 +1767,23 @@ fn build_cell_object(
     if let Some(formula) = formula {
         if !matches!(t_attr, CellTypeAttr::Error) {
             let cached = cached_value_to_py(py, t_attr, raw_value, sst)?;
-            return Ok((build_formula_dict(py, &formula, cached)?, "formula"));
+            let payload = build_formula_dict(py, &formula, cached)?;
+            if matches!(t_attr, CellTypeAttr::FormulaString) {
+                payload
+                    .bind(py)
+                    .cast::<PyDict>()?
+                    .set_item("cached_type", "str")?;
+            }
+            return Ok((payload, "formula"));
         }
     }
     match t_attr {
         CellTypeAttr::Error => {
             let v = raw_value.unwrap_or_else(|| "#ERROR!".to_string());
-            let d = PyDict::new(py);
-            d.set_item("type", "error")?;
-            d.set_item("value", &v)?;
-            Ok((d.into_py_any(py)?, "e"))
+            let d = new_dict(py)?;
+            set_dict_item(&d, "type", str_to_py(py, "error")?)?;
+            set_dict_item(&d, "value", str_to_py(py, &v)?)?;
+            Ok((d.into_any().unbind(), "e"))
         }
         CellTypeAttr::Number => {
             let Some(v) = raw_value else {
@@ -1369,12 +1791,12 @@ fn build_cell_object(
             };
             if let Ok(i) = v.parse::<i64>() {
                 // Excel-stored ints: surface as int when round-trip safe.
-                return Ok((i.into_py_any(py)?, "n"));
+                return Ok((i64_to_py(py, i)?, "n"));
             }
             let f: f64 = v
                 .parse()
                 .map_err(|_| PyErr::new::<PyValueError, _>(format!("Bad numeric value: {v:?}")))?;
-            Ok((f.into_py_any(py)?, "n"))
+            Ok((f64_to_py(py, f)?, "n"))
         }
         _ => {
             let tag = match t_attr {
@@ -1408,19 +1830,20 @@ fn cached_value_to_py(
                 .trim()
                 .parse()
                 .map_err(|_| PyErr::new::<PyValueError, _>(format!("Bad SST index: {v:?}")))?;
-            Ok(sst.get(idx).map_or("", String::as_str).into_py_any(py)?)
+            str_to_py(py, sst.get(idx).map_or("", String::as_str))
         }
         CellTypeAttr::Bool => match v.trim().parse::<i64>() {
             Ok(n) => Ok((n != 0).into_py_any(py)?),
             Err(_) => Ok(matches!(v.trim(), "true" | "TRUE").into_py_any(py)?),
         },
-        CellTypeAttr::Number => Ok(
-            number_text_to_py(py, v.trim().as_bytes())?.map_or_else(|| v.into_py_any(py), Ok)?
-        ),
+        CellTypeAttr::Number => match number_text_to_py(py, v.trim().as_bytes())? {
+            Some(number) => Ok(number),
+            None => str_to_py(py, &v),
+        },
         CellTypeAttr::FormulaString
         | CellTypeAttr::InlineString
         | CellTypeAttr::Error
-        | CellTypeAttr::Date => Ok(v.into_py_any(py)?),
+        | CellTypeAttr::Date => str_to_py(py, &v),
     }
 }
 
@@ -1429,16 +1852,16 @@ fn build_formula_dict(
     formula: &str,
     cached: PyObjectOwned,
 ) -> PyResult<PyObjectOwned> {
-    let d = PyDict::new(py);
+    let d = new_dict(py)?;
     let f_with_eq = if formula.starts_with('=') {
         formula.to_string()
     } else {
         format!("={formula}")
     };
-    d.set_item("type", "formula")?;
-    d.set_item("formula", &f_with_eq)?;
-    d.set_item("cached", cached)?;
-    Ok(d.into_py_any(py)?)
+    set_dict_item(&d, "type", str_to_py(py, "formula")?)?;
+    set_dict_item(&d, "formula", str_to_py(py, &f_with_eq)?)?;
+    set_dict_item(&d, "cached", cached)?;
+    Ok(d.into_any().unbind())
 }
 
 fn number_text_to_py(py: Python<'_>, bytes: &[u8]) -> PyResult<Option<PyObjectOwned>> {
@@ -1446,10 +1869,10 @@ fn number_text_to_py(py: Python<'_>, bytes: &[u8]) -> PyResult<Option<PyObjectOw
         return Ok(None);
     };
     if let Ok(i) = text.parse::<i64>() {
-        return Ok(Some(i.into_py_any(py)?));
+        return Ok(Some(i64_to_py(py, i)?));
     }
     if let Ok(f) = text.parse::<f64>() {
-        return Ok(Some(f.into_py_any(py)?));
+        return Ok(Some(f64_to_py(py, f)?));
     }
     Ok(None)
 }
@@ -1601,11 +2024,88 @@ mod tests {
         assert_eq!(unescape_xml(b"plain"), "plain");
     }
 
+    fn bytes_source(data: &[u8]) -> EntrySource {
+        pyo3::Python::initialize();
+        Python::attach(|py| EntrySource::Bytes {
+            data: PyBytes::new(py, data).unbind(),
+            pos: 0,
+            end: data.len(),
+        })
+    }
+
+    fn deflated_entry(xml: &[u8]) -> SheetEntryReader {
+        let mut encoder =
+            flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+        std::io::Write::write_all(&mut encoder, xml).unwrap();
+        SheetEntryReader::new(
+            bytes_source(&encoder.finish().unwrap()),
+            CompressionMethod::Deflated,
+            xml.len() as u64,
+            crc32fast::hash(xml),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn sheet_entry_reader_streams_stored_and_deflated_parts() {
+        let xml: Vec<u8> = (0..20_000)
+            .flat_map(|i| format!("<row r=\"{i}\"/>").into_bytes())
+            .collect();
+        let stored = SheetEntryReader::new(
+            bytes_source(&xml),
+            CompressionMethod::Stored,
+            xml.len() as u64,
+            crc32fast::hash(&xml),
+        )
+        .unwrap();
+        for entry in [stored, deflated_entry(&xml)] {
+            let mut out = Vec::new();
+            BufReader::with_capacity(7, entry)
+                .read_to_end(&mut out)
+                .unwrap();
+            assert_eq!(out, xml);
+        }
+    }
+
+    #[test]
+    fn sheet_entry_reader_enforces_declared_size_and_crc() {
+        let xml = b"<worksheet><sheetData/></worksheet>";
+        let mut entry = deflated_entry(xml);
+        entry.declared_size -= 1;
+        let err = io::copy(&mut entry, &mut io::sink()).unwrap_err();
+        assert!(
+            err.to_string().contains("larger than its declared"),
+            "{err}"
+        );
+
+        let mut entry = deflated_entry(xml);
+        entry.expected_crc ^= 1;
+        let err = io::copy(&mut entry, &mut io::sink()).unwrap_err();
+        assert_eq!(err.to_string(), "Invalid checksum");
+    }
+
+    #[test]
+    fn entry_source_rejects_ranges_past_the_package() {
+        pyo3::Python::initialize();
+        Python::attach(|py| {
+            let data = PyBytes::new(py, &[0u8; 8]);
+            let mut source = PyBytesCursor::new(&data).into_entry_source(4, 4).unwrap();
+            let mut out = Vec::new();
+            source.read_to_end(&mut out).unwrap();
+            assert_eq!(out, [0u8; 4]);
+            for (start, len) in [(4, 5), (9, 0), (u64::MAX, 1)] {
+                assert!(PyBytesCursor::new(&data)
+                    .into_entry_source(start, len)
+                    .is_err());
+            }
+        });
+    }
+
     #[test]
     fn streaming_split_references_are_complete_values() {
         pyo3::Python::initialize();
         Python::attach(|py| {
-            for use_file in [false, true] {
+            for use_entry in [false, true] {
                 for (xml, kind, expected) in [
                     ("<c><v>1&#50;3</v></c>", CellTypeAttr::Number, "123"),
                     ("<c><v>&#49;0</v></c>", CellTypeAttr::Shared, "entry 10"),
@@ -1620,11 +2120,12 @@ mod tests {
                         " A & 😀\n B ",
                     ),
                 ] {
-                    let mut file = tempfile::tempfile().unwrap();
-                    let mut reader = if use_file {
-                        std::io::Write::write_all(&mut file, xml.as_bytes()).unwrap();
-                        file.rewind().unwrap();
-                        SheetXmlReader::File(XmlReader::from_reader(BufReader::new(file)))
+                    // A tiny read buffer splits references across refills.
+                    let mut reader = if use_entry {
+                        SheetXmlReader::Entry(XmlReader::from_reader(BufReader::with_capacity(
+                            3,
+                            deflated_entry(xml.as_bytes()),
+                        )))
                     } else {
                         SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(
                             xml.as_bytes().to_vec(),

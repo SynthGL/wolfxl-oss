@@ -1245,9 +1245,11 @@ dependencies = [
 
 [[package]]
 name = "wolfxl"
-version = "2.0.15"
+version = "2.0.16"
 dependencies = [
  "chrono",
+ "crc32fast",
+ "flate2",
  "indexmap",
  "pyo3",
  "pyo3-build-config",

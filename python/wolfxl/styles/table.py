@@ -5,17 +5,39 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from wolfxl._compat import _OpenpyxlSerialisable, _make_serialisable, _resolve_openpyxl_class
+from wolfxl import _compat
+from wolfxl._compat import _OpenpyxlSerialisable, _resolve_openpyxl_class
 
-TableStyleElement = _resolve_openpyxl_class(__name__, "TableStyleElement") or _make_serialisable(
+
+def _upstream_class(name: str) -> type | None:
+    """Borrow upstream classes only when openpyxl has already been imported."""
+    if _compat._real_openpyxl_if_imported() is None:
+        return None
+    return _resolve_openpyxl_class(__name__, name)
+
+
+TableStyleElement = _upstream_class("TableStyleElement") or type(
     "TableStyleElement",
-    module_name=__name__,
+    (_OpenpyxlSerialisable,),
+    {"__attrs__": ("type", "size", "dxfId"), "tagname": "tableStyleElement"},
 )
-TableStyle = _resolve_openpyxl_class(__name__, "TableStyle") or _make_serialisable(
-    "TableStyle",
-    module_name=__name__,
-)
-_OpenpyxlTableStyleList = _resolve_openpyxl_class(__name__, "TableStyleList")
+TableStyle = _upstream_class("TableStyle")
+if TableStyle is None:
+
+    @dataclass
+    class TableStyle(_OpenpyxlSerialisable):
+        tagname = "tableStyle"
+        __attrs__ = ("name", "pivot", "table", "count")
+        __elements__ = ("tableStyleElement",)
+
+        name: str | None = None
+        pivot: bool | None = None
+        table: bool | None = None
+        count: int | None = None
+        tableStyleElement: list[TableStyleElement] = field(default_factory=list)  # noqa: N815
+
+
+_OpenpyxlTableStyleList = _upstream_class("TableStyleList")
 
 
 if _OpenpyxlTableStyleList is None:

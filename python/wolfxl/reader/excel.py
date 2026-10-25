@@ -40,7 +40,7 @@ def _find_workbook_part(package):
 
 
 class ExcelReader:
-    """Small openpyxl-shaped reader facade used by internal compatibility tests."""
+    """Openpyxl-shaped staged reader over the native workbook and sheet readers."""
 
     def __init__(
         self,
@@ -78,6 +78,9 @@ class ExcelReader:
             self.shared_strings = reader(src)
 
     def read_workbook(self) -> None:
+        # ZipFile's staged reads share a file-like input's cursor.
+        if hasattr(self.fn, "seek"):
+            self.fn.seek(0)
         self.wb = load_workbook(
             self.fn,
             read_only=self.read_only,
@@ -86,6 +89,31 @@ class ExcelReader:
             keep_links=self.keep_links,
             rich_text=self.rich_text,
         )
+        if not self.read_only:
+            # Staged eager consumers require full Cell metadata from iter_rows.
+            self.wb._auto_stream = False
+
+    def read_worksheets(self) -> None:
+        """Expose stored cells to consumers that inspect ``Worksheet._cells``.
+
+        ``read_workbook`` creates native-backed sheet proxies. Ordinary WolfXL
+        reads keep their cells lazy; ExcelReader's eager stage materializes only
+        populated coordinates, never the dimension rectangle. Values, styles,
+        merges and links still resolve through the native-backed cell objects.
+        Read-only workbooks retain their streaming behavior.
+        """
+        if self.wb is None:
+            self.read_workbook()
+        if self.read_only:
+            return
+        for sheet in self.wb.worksheets:
+            for record in sheet.iter_cell_records(
+                include_format=False,
+                include_coordinate=False,
+                include_style_id=False,
+                include_extended_format=False,
+            ):
+                sheet.cell(row=record["row"], column=record["column"])
 
     def read_theme(self) -> None:
         if self.wb is None:
@@ -94,10 +122,15 @@ class ExcelReader:
             self.wb.loaded_theme = self.archive.read(ARC_THEME)
 
     def read(self) -> None:
-        self.read_manifest()
-        self.read_strings()
-        self.read_workbook()
-        self.read_theme()
+        try:
+            self.read_manifest()
+            self.read_strings()
+            self.read_workbook()
+            self.read_theme()
+            self.read_worksheets()
+        finally:
+            if not self.read_only:
+                self.archive.close()
 
     def read_chartsheet(self, sheet, rel) -> None:  # noqa: ANN001
         if self.wb is None:

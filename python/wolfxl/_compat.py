@@ -22,22 +22,19 @@ from xml.etree import ElementTree as ET
 
 
 def _snapshot_real_openpyxl() -> ModuleType | None:
-    """Capture a reference to the upstream openpyxl package at load time.
+    """Capture a reference to the upstream openpyxl package.
 
     When openpyxl is installed, the shim classes borrow ``tagname`` and
     ``__attrs__`` from the upstream definitions so vendored corpus tests
     that check XML serialization match openpyxl's conventions (lowercase
     tagnames such as ``phoneticPr``; attribute names like ``fontId``).
 
-    Two ordering details matter:
-
-    1. ``wolfxl.openpyxl_compat.install_as_openpyxl()`` later deletes every
-       ``openpyxl*`` entry from ``sys.modules``. We capture the root
-       reference now so an attribute walk (``_REAL_OPENPYXL.styles.fonts``)
-       still resolves via Python object refs after that wipe.
-    2. ``pkgutil.walk_packages`` eagerly imports each submodule so it is
-       attached as an attribute on its parent — required for the post-wipe
-       attribute walk to reach leaf modules.
+    ``wolfxl.openpyxl_compat.install_as_openpyxl()`` later deletes every
+    ``openpyxl*`` entry from ``sys.modules``. We keep the root reference so
+    an attribute walk (``_REAL_OPENPYXL.styles.fonts``) still resolves via
+    Python object refs after that wipe. ``install_as_openpyxl`` therefore calls
+    :func:`_prepare_for_openpyxl_alias` first: everything the walk would add
+    to the root must be imported before the wipe.
 
     Returns ``None`` when openpyxl is not installed (production case) or
     when ``sys.modules['openpyxl']`` already points at wolfxl (a previous
@@ -47,15 +44,70 @@ def _snapshot_real_openpyxl() -> ModuleType | None:
     if existing is not None:
         if getattr(existing, "__name__", "").startswith("wolfxl"):
             return None
-        root = existing
-    else:
-        try:
-            root = import_module("openpyxl")
-        except ImportError:
-            return None
-        if getattr(root, "__name__", "").startswith("wolfxl"):
-            return None
+        return existing
+    try:
+        root = import_module("openpyxl")
+    except ImportError:
+        return None
+    if getattr(root, "__name__", "").startswith("wolfxl"):
+        return None
+    return root
 
+
+_UNSET: Any = object()
+_real_root: Any = _UNSET
+_submodules_imported = False
+_class_index: dict[str, type] | None = None
+
+
+def _real_openpyxl_root() -> ModuleType | None:
+    """Return the upstream openpyxl root, importing it on first use.
+
+    The import is deferred from ``import wolfxl`` to the first consumer that
+    needs an upstream class, so a process that never asks for one never loads
+    openpyxl.
+    """
+    global _real_root
+    if _real_root is _UNSET:
+        _real_root = _snapshot_real_openpyxl()
+    return _real_root
+
+
+def _real_openpyxl_if_imported() -> ModuleType | None:
+    """Return the upstream openpyxl root when it is already imported; never imports it.
+
+    ``None`` means "not imported yet" as well as "not installed" and "aliased to
+    wolfxl"; use :func:`_real_openpyxl_pending` to tell the first case apart.
+    """
+    if _real_root is not _UNSET:
+        return _real_root
+    existing = sys.modules.get("openpyxl")
+    if existing is None or getattr(existing, "__name__", "").startswith("wolfxl"):
+        return None
+    return _real_openpyxl_root()
+
+
+def _real_openpyxl_pending() -> bool:
+    """True when upstream openpyxl is installed and nothing has imported it yet."""
+    if _real_root is not _UNSET or "openpyxl" in sys.modules:
+        return False
+    try:
+        return find_spec("openpyxl") is not None
+    except (ImportError, ValueError):
+        return False
+
+
+def _import_real_openpyxl_submodules() -> None:
+    """Import every upstream submodule so each is an attribute of its parent.
+
+    ``pkgutil.walk_packages`` imports each submodule, which attaches it to its
+    parent. The post-wipe attribute walk and the class-name index both need
+    that, but only a lookup that misses the already-imported modules does.
+    """
+    global _submodules_imported
+    if _submodules_imported:
+        return
+    root = _real_openpyxl_root()
     paths = getattr(root, "__path__", None)
     if paths:
         for info in pkgutil.walk_packages(list(paths), prefix=root.__name__ + "."):
@@ -63,10 +115,52 @@ def _snapshot_real_openpyxl() -> ModuleType | None:
                 import_module(info.name)
             except Exception:  # noqa: BLE001 - any import failure is non-fatal
                 pass
-    return root
+    _submodules_imported = True
 
 
-_REAL_OPENPYXL: ModuleType | None = _snapshot_real_openpyxl()
+def _prepare_for_openpyxl_alias() -> None:
+    """Finish the upstream snapshot before ``openpyxl*`` leaves ``sys.modules``.
+
+    Called by ``install_as_openpyxl``. After it installs the alias an upstream
+    import resolves to wolfxl, so the root, every submodule and the class-name
+    index (which scans ``sys.modules``) must already exist by then.
+    """
+    if _real_openpyxl_root() is not None:
+        _import_real_openpyxl_submodules()
+        _openpyxl_class_index()
+
+
+class _RealOpenpyxl:
+    """The upstream openpyxl root; imports the remaining submodules on a missing attribute."""
+
+    __slots__ = ("_root",)
+
+    def __init__(self, root: ModuleType) -> None:
+        object.__setattr__(self, "_root", root)
+
+    def __getattr__(self, name: str) -> Any:
+        root = object.__getattribute__(self, "_root")
+        try:
+            return getattr(root, name)
+        except AttributeError:
+            _import_real_openpyxl_submodules()
+            return getattr(root, name)
+
+
+_real_view: _RealOpenpyxl | None = None
+
+
+def __getattr__(name: str) -> Any:
+    """Serve ``_REAL_OPENPYXL`` (``None`` or the upstream root view) on demand."""
+    global _real_view
+    if name != "_REAL_OPENPYXL":
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    root = _real_openpyxl_root()
+    if root is None:
+        return None
+    if _real_view is None:
+        _real_view = _RealOpenpyxl(root)
+    return _real_view
 
 
 def _build_openpyxl_class_index() -> dict[str, type]:
@@ -78,12 +172,14 @@ def _build_openpyxl_class_index() -> dict[str, type]:
     openpyxl defines it in ``worksheet.page``). The index prefers classes
     declared in their owning module over re-exports.
 
-    Built once at module load while openpyxl entries are still present in
-    ``sys.modules`` — ``install_as_openpyxl()`` deletes them later.
+    Built on the first fallback lookup, while openpyxl entries are still
+    present in ``sys.modules``: ``install_as_openpyxl()`` builds it first
+    through :func:`_prepare_for_openpyxl_alias`.
     """
     index: dict[str, type] = {}
-    if _REAL_OPENPYXL is None:
+    if _real_openpyxl_root() is None:
         return index
+    _import_real_openpyxl_submodules()
     for mod_name, module in list(sys.modules.items()):
         if not isinstance(mod_name, str):
             continue
@@ -113,7 +209,21 @@ def _build_openpyxl_class_index() -> dict[str, type]:
     return index
 
 
-_OPENPYXL_CLASS_INDEX: dict[str, type] = _build_openpyxl_class_index()
+def _openpyxl_class_index() -> dict[str, type]:
+    global _class_index
+    if _class_index is None:
+        _class_index = _build_openpyxl_class_index()
+    return _class_index
+
+
+def _walk_attributes(obj: Any, parts: list[str]) -> Any:
+    """Follow ``parts`` as attributes from ``obj``; ``None`` when one is missing."""
+    for part in parts:
+        try:
+            obj = getattr(obj, part)
+        except AttributeError:
+            return None
+    return obj
 
 
 def _resolve_openpyxl_class(module_name: str | None, class_name: str) -> type | None:
@@ -124,24 +234,29 @@ def _resolve_openpyxl_class(module_name: str | None, class_name: str) -> type | 
     coverage. Returns ``None`` when the snapshot is unavailable or no
     matching upstream class exists.
     """
-    if _REAL_OPENPYXL is None:
+    root = _real_openpyxl_root()
+    if root is None:
         return None
     if module_name and module_name.startswith("wolfxl"):
         rest = module_name[len("wolfxl"):].lstrip(".")
-        obj: Any = _REAL_OPENPYXL
-        resolved = True
-        if rest:
-            for part in rest.split("."):
-                try:
-                    obj = getattr(obj, part)
-                except AttributeError:
-                    resolved = False
-                    break
-        if resolved:
+        parts = rest.split(".") if rest else []
+        obj = _walk_attributes(root, parts)
+        if obj is None and not _submodules_imported:
+            # Import just the mirrored upstream module; only a miss on that
+            # imports every submodule.
+            try:
+                import_module(f"{root.__name__}.{rest}")
+            except Exception:  # noqa: BLE001 - any import failure is non-fatal
+                pass
+            obj = _walk_attributes(root, parts)
+            if obj is None:
+                _import_real_openpyxl_submodules()
+                obj = _walk_attributes(root, parts)
+        if obj is not None:
             candidate = getattr(obj, class_name, None)
             if isinstance(candidate, type):
                 return candidate
-    fallback = _OPENPYXL_CLASS_INDEX.get(class_name)
+    fallback = _openpyxl_class_index().get(class_name)
     return fallback if isinstance(fallback, type) else None
 
 

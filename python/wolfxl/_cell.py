@@ -56,8 +56,10 @@ _STYLE_PAYLOAD_CACHE_DISABLED = object()
 _STYLE_PAYLOAD_CACHE_CELL_LIMIT = 100_000
 _EMPTY_STYLE_PAYLOAD: dict[str, Any] = {}
 _EMPTY_STYLE_ENTRY = (
-    _EMPTY_STYLE_PAYLOAD, _format_to_font(_EMPTY_STYLE_PAYLOAD),
-    _format_to_fill(_EMPTY_STYLE_PAYLOAD), "General",
+    _EMPTY_STYLE_PAYLOAD,
+    _format_to_font(_EMPTY_STYLE_PAYLOAD),
+    _format_to_fill(_EMPTY_STYLE_PAYLOAD),
+    "General",
 )
 _PLAIN_VALUE_RETURN_TYPES = frozenset((type(None), bool, int, float, str))
 _STYLE_PAYLOAD_KEYS = frozenset(
@@ -550,9 +552,7 @@ class Cell:
             self._mark_dirty()
             return
         if not isinstance(value, str):
-            raise TypeError(
-                f"cell.style must be a string or None, got {type(value).__name__}"
-            )
+            raise TypeError(f"cell.style must be a string or None, got {type(value).__name__}")
         wb = self._rust_workbook()
         self._ensure_style_slots()
         if wb is None:
@@ -646,9 +646,7 @@ class Cell:
         """
         if value is not None:
             ws = self._ws
-            pending_t = getattr(ws, "_pending_threaded_comments", {}).get(
-                self.coordinate
-            )
+            pending_t = getattr(ws, "_pending_threaded_comments", {}).get(self.coordinate)
             if pending_t is not None:
                 raise ValueError(
                     f"cell {self.coordinate} already has a threaded comment; "
@@ -926,9 +924,7 @@ class Cell:
                 self._mark_format_dirty()
             return value
 
-        raise ValueError(
-            f"Cannot convert object of type {type(value).__name__} to Excel"
-        )
+        raise ValueError(f"Cannot convert object of type {type(value).__name__} to Excel")
 
     def _value_from_pending_formula(self) -> Any:
         """Return pending array/data-table formula value or ``_UNSET``."""
@@ -1348,7 +1344,8 @@ class Cell:
         # extra dict-lookup at most.
         try:
             af_payload = wb._rust_reader.read_cell_array_formula(  # noqa: SLF001
-                self._ws.title, self.coordinate,
+                self._ws.title,
+                self.coordinate,
             )
         except AttributeError:
             af_payload = None
@@ -1371,7 +1368,9 @@ class Cell:
             elif kind == "spill_child":
                 self._formula_type = "array_child"
         payload = wb._rust_reader.read_cell_value(  # noqa: SLF001
-            self._ws.title, self.coordinate, getattr(wb, "_data_only", False),
+            self._ws.title,
+            self.coordinate,
+            getattr(wb, "_data_only", False),
         )
         return _payload_to_python(payload)
 
@@ -1399,6 +1398,7 @@ class Cell:
             return None
         mapping = {
             "string": "s",
+            "str": "str",
             "number": "n",
             "boolean": "b",
             "datetime": "d",
@@ -1470,9 +1470,11 @@ class Cell:
                 return False
             if cache is None:
                 cache = _style_payload_cache_for(ws)
-        entry = (cache.get((self._row, self._col), _EMPTY_STYLE_ENTRY)
-                 if cache is not _STYLE_PAYLOAD_CACHE_DISABLED
-                 else _STYLE_PAYLOAD_CACHE_DISABLED)
+        entry = (
+            cache.get((self._row, self._col), _EMPTY_STYLE_ENTRY)
+            if cache is not _STYLE_PAYLOAD_CACHE_DISABLED
+            else _STYLE_PAYLOAD_CACHE_DISABLED
+        )
         if entry is _STYLE_PAYLOAD_CACHE_DISABLED:
             _disable_style_payload_cache(ws)
             payload = self._read_format_payload()
@@ -1500,7 +1502,8 @@ class Cell:
         if merged_border is not None:
             return merged_border
         payload = reader.read_cell_border(
-            self._ws.title, self.coordinate,
+            self._ws.title,
+            self.coordinate,
         )
         return _border_payload_to_border(payload)
 
@@ -1622,8 +1625,13 @@ def _style_payload_cache_for(ws: Worksheet) -> Any:
         from wolfxl._cell_style_window import StylePayloadWindow
 
         ws._style_payload_cache = StylePayloadWindow(  # noqa: SLF001
-            reader, ws.title, max_row, max_col, _STYLE_PAYLOAD_CACHE_CELL_LIMIT,
-            lambda record: _style_entry_from_record(ws, record), _STYLE_PAYLOAD_CACHE_DISABLED,
+            reader,
+            ws.title,
+            max_row,
+            max_col,
+            _STYLE_PAYLOAD_CACHE_CELL_LIMIT,
+            lambda record: _style_entry_from_record(ws, record),
+            _STYLE_PAYLOAD_CACHE_DISABLED,
             workbook=wb,
         )
         return ws._style_payload_cache  # noqa: SLF001
@@ -1748,6 +1756,7 @@ Cell.__signature__ = _inspect.Signature(
 # Sentinel type for lazy-init detection
 # ======================================================================
 
+
 class _Sentinel:
     """Marker to distinguish 'not yet loaded' from None."""
 
@@ -1771,11 +1780,7 @@ _UNSET = _Sentinel()
 
 def _is_array_formula_like(value: Any) -> bool:
     """Accept openpyxl-shaped ArrayFormula objects across alias modules."""
-    return (
-        getattr(value, "t", None) == "array"
-        and hasattr(value, "ref")
-        and hasattr(value, "text")
-    )
+    return getattr(value, "t", None) == "array" and hasattr(value, "ref") and hasattr(value, "text")
 
 
 def _is_data_table_formula_like(value: Any) -> bool:
@@ -1802,10 +1807,7 @@ def _is_merged_subordinate(cell: Cell) -> bool:
             continue
         if None in (min_col, min_row, max_col, max_row):
             continue
-        if (
-            int(min_row) <= cell.row <= int(max_row)
-            and int(min_col) <= cell.column <= int(max_col)
-        ):
+        if int(min_row) <= cell.row <= int(max_row) and int(min_col) <= cell.column <= int(max_col):
             return not (cell.row == int(min_row) and cell.column == int(min_col))
     return False
 

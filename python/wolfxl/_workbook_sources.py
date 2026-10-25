@@ -494,6 +494,8 @@ def from_bytes(
     """Open an .xlsx blob from memory."""
     from wolfxl import _rust
 
+    # Normalize mutable buffers once. NativeXlsxBook retains this exact immutable
+    # bytes object, also used by streaming and package metadata reads.
     data_bytes = bytes(data)
     reader_cls = _xlsx_reader_class(
         _rust,

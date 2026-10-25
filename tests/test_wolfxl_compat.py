@@ -1960,15 +1960,16 @@ class TestTitleSetter:
         assert "Data" in wb
         assert "Sheet" not in wb
 
-    def test_rename_duplicate_raises(self) -> None:
+    def test_rename_duplicate_dedupes_like_openpyxl(self) -> None:
         from wolfxl import Workbook
 
         wb = Workbook()
         wb.create_sheet("Other")
         ws = wb.active
         assert ws is not None
-        with pytest.raises(ValueError, match="already exists"):
-            ws.title = "Other"
+        ws.title = "Other"
+        assert ws.title == "Other1"
+        assert wb.sheetnames == ["Other1", "Other"]
 
     def test_rename_noop(self) -> None:
         from wolfxl import Workbook

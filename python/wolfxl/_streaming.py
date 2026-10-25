@@ -27,13 +27,12 @@ from typing import TYPE_CHECKING, Any
 from xml.etree import ElementTree as ET
 import zipfile
 
+from wolfxl._cell_annotations import get_hyperlink
 from wolfxl._utils import a1_to_rowcol
 from wolfxl._utils import column_letter as _column_letter
 from wolfxl._utils import rowcol_to_a1
 from wolfxl._zip_safety import read_entry, validate_zipfile
 from wolfxl.utils.datetime import from_excel
-from wolfxl.styles.numbers import is_timedelta_format
-from wolfxl.utils.numbers import is_date_format
 from wolfxl._streaming_styles import (
     _DEFAULT_STYLE,
     cell_border,
@@ -59,6 +58,7 @@ AUTO_STREAM_ROW_THRESHOLD = 50_000
 
 _DIMENSION_REF_RE = re.compile(rb"<(?:[A-Za-z0-9_]+:)?dimension\b[^>]*\bref=[\"']([^\"']+)[\"']")
 _ROW_TAG_RE = re.compile(rb"<(?:[A-Za-z0-9_]+:)?row(?:\s|>)")
+_UNSET = object()
 
 
 def stream_source(wb: Any) -> str | bytes | None:
@@ -214,6 +214,41 @@ def _source_dimension_bounds(
         return None
 
 
+def _source_cell_bounds(source: str | bytes, sheet_title: str) -> tuple[int, int, int, int]:
+    """Scan eager cell/merge bounds without materializing values or an XML tree."""
+    max_row = max_col = row = col = 0
+    with _open_source_zip(source) as zf:
+        validate_zipfile(zf)
+        sheet_path = _sheet_path_from_workbook(zf, sheet_title)
+        if sheet_path is None:
+            raise ValueError(f"Worksheet part not found: {sheet_title}")
+        with zf.open(sheet_path) as stream:
+            parents = []
+            for event, elem in ET.iterparse(stream, events=("start", "end")):
+                name = _local_name(elem.tag)
+                if event == "start":
+                    parents.append(elem)
+                    if name == "row":
+                        row = int(elem.get("r", row + 1))
+                        col = 0
+                    elif name == "c":
+                        ref = elem.get("r")
+                        cell_row, col = a1_to_rowcol(ref) if ref else (row, col + 1)
+                        max_row = max(max_row, cell_row)
+                        max_col = max(max_col, col)
+                    elif name == "mergeCell":
+                        bounds = _bounds_from_dimension_ref(elem.get("ref", ""))
+                        if bounds is not None:
+                            max_row = max(max_row, bounds[2])
+                            max_col = max(max_col, bounds[3])
+                else:
+                    parents.pop()
+                    if parents:
+                        parents[-1].remove(elem)
+                    elem.clear()
+    return 1, 1, max_row, max_col
+
+
 def _source_dimension_max_row(source: str | bytes, sheet_title: str) -> int | None:
     try:
         with _open_source_zip(source) as zf:
@@ -262,30 +297,26 @@ def _cached_formula_value(value: Any) -> Any:
     return value
 
 
-def _maybe_datetime_from_serial(value: Any, num_fmt: str | None) -> Any:
-    """Convert an Excel serial to a ``datetime``/``date``/``time`` when
-    ``num_fmt`` is a date-typed format string (Sprint Λ Pod-γ).
-
-    Mirrors openpyxl's read-only path: numeric cells with a date number
-    format surface as Python datetimes rather than raw serials. Non-date
-    formats and non-numeric values pass through unchanged.
-    """
-    if not isinstance(value, (int, float)) or isinstance(value, bool):
-        return value
-    if not is_date_format(num_fmt):
-        return value
+def _timedelta_from_serial(value: Any) -> Any:
+    """Keep openpyxl's two-stage timedelta rounding and numeric overflow fallback."""
     try:
-        return from_excel(value, timedelta=is_timedelta_format(num_fmt))
-    except Exception:
-        # Out-of-range serial / unrepresentable timedelta — fall back to
-        # the raw serial so the row keeps flowing rather than erroring
-        # mid-iteration. Matches openpyxl's behavior on bad serials.
+        return from_excel(value, timedelta=True)
+    except (OverflowError, ValueError):
         return value
 
 
-def _values_only_needs_style_dates(wb: Any) -> bool:
-    """Return whether streaming value rows need style ids for date conversion."""
-    return bool(getattr(wb, "_date_formats", ()))
+def _install_streaming_date_styles(reader: Any, wb: Any) -> None:
+    """Configure compact value rows once, without per-cell Python style lookups."""
+    date_styles, timedelta_styles = streaming_date_style_ids(wb)
+    if not date_styles:
+        return
+    from wolfxl.utils.datetime import CALENDAR_MAC_1904
+
+    kinds = bytearray(len(getattr(wb, "_cell_styles", ())))
+    for style_id in date_styles:
+        if 0 <= style_id < len(kinds):
+            kinds[style_id] = 2 if style_id in timedelta_styles else 1
+    reader.set_date_styles(bytes(kinds), _timedelta_from_serial, wb.epoch == CALENDAR_MAC_1904)
 
 
 def _normalise_streaming_value_tuple(row: tuple[Any, ...], *, data_only: bool) -> tuple[Any, ...]:
@@ -338,6 +369,14 @@ class StreamingCell:
         object.__setattr__(self, "_row", row)
         object.__setattr__(self, "_col", col)
         data_only = bool(getattr(ws._workbook, "_data_only", False))  # noqa: SLF001
+        if (
+            data_only
+            and cell_type == "formula"
+            and isinstance(value, dict)
+            and value.get("cached") is None
+            and value.get("cached_type") == "str"
+        ):
+            cell_type = "str"
         object.__setattr__(self, "_value", _streaming_value(value, data_only=data_only))
         object.__setattr__(self, "_style_id", style_id)
         object.__setattr__(self, "_cell_type", cell_type)
@@ -395,12 +434,21 @@ class StreamingCell:
     @property
     def data_type(self) -> str:
         """Map the SAX ``t=`` token onto openpyxl's ``data_type`` letters."""
+        if self._cell_type == "formula" and self._ws._workbook._data_only:
+            value = self.value
+            if isinstance(value, bool):
+                return "b"
+            if isinstance(value, str):
+                return "s"
+            if isinstance(value, (date, datetime, time)):
+                return "d"
+            return "n"
         if self._cell_type == "n" and isinstance(self.value, (date, datetime, time)):
             return "d"
         return {
             "n": "n",
             "s": "s",
-            "str": "s",
+            "str": "str" if self._value is None else "s",
             "inlineStr": "s",
             "b": "b",
             "e": "e",
@@ -408,6 +456,11 @@ class StreamingCell:
             "formula": "f",
             "blank": "n",
         }.get(self._cell_type, "n")
+
+    @property
+    def hyperlink(self) -> Any:
+        """Return the worksheet hyperlink, including pending unsaved edits."""
+        return get_hyperlink(self, _UNSET)
 
     # ------------------------------------------------------------------
     # Style lookups — share converted stylesheet entries by native style ID.
@@ -610,6 +663,10 @@ def stream_iter_rows(
         if dimensions is not None:
             forced_bounds = (1, 1, int(dimensions[0]), int(dimensions[1]))
     default_bounds = source_bounds or forced_bounds
+    # Eager openpyxl ignores stale dimensions and row-only formatting.
+    # Keep the read-only contract, including declared trailing blank rows.
+    if not bool(getattr(wb, "_read_only", False)) and (mx_r is None or mx_c is None):
+        default_bounds = _source_cell_bounds(path, ws.title)
     stream_mx_r = (
         mx_r if mx_r is not None else (default_bounds[2] if default_bounds is not None else None)
     )
@@ -617,9 +674,6 @@ def stream_iter_rows(
         mx_c if mx_c is not None else (default_bounds[3] if default_bounds is not None else None)
     )
     reader = _open_stream_reader(path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
-
-    # The hydrated stylesheet has already classified source style IDs.
-    date_styles, timedelta_styles = streaming_date_style_ids(wb)
 
     def _fixed_cmax() -> int | None:
         if mx_c is not None:
@@ -636,154 +690,78 @@ def stream_iter_rows(
 
     try:
         if values_only:
-            if not _values_only_needs_style_dates(wb) and hasattr(reader, "read_next_values_row"):
-                data_only = bool(getattr(wb, "_data_only", False))
-                counter = mn_r if mn_r is not None else 1
-                cmin = mn_c if mn_c is not None else 1
-                fixed_cmax = _fixed_cmax()
-                empty_row = (
-                    (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else []
-                )
-                read_chunk_with_flags = getattr(reader, "read_next_values_chunk_with_flags", None)
-                read_compact_chunk_with_flags = getattr(
-                    reader, "read_next_values_compact_chunk_with_flags", None
-                )
-                read_chunk = getattr(reader, "read_next_values_chunk", None)
-                if read_compact_chunk_with_flags is not None or read_chunk_with_flags is not None:
-                    while True:
-                        if read_compact_chunk_with_flags is not None:
-                            chunk_result = read_compact_chunk_with_flags(1024)
-                        else:
-                            chunk_result = read_chunk_with_flags()
-                        if chunk_result is None:
-                            break
-                        if len(chunk_result) == 5:
-                            (
-                                chunk,
-                                needs_normalise,
-                                first_row,
-                                _last_row,
-                                dense_plain,
-                            ) = chunk_result
-                            if dense_plain:
-                                while counter < first_row:
+            _install_streaming_date_styles(reader, wb)
+            data_only = bool(getattr(wb, "_data_only", False))
+            counter = mn_r if mn_r is not None else 1
+            cmin = mn_c if mn_c is not None else 1
+            fixed_cmax = _fixed_cmax()
+            empty_row = (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else []
+            read_chunk_with_flags = getattr(reader, "read_next_values_chunk_with_flags", None)
+            read_compact_chunk_with_flags = getattr(
+                reader, "read_next_values_compact_chunk_with_flags", None
+            )
+            read_chunk = getattr(reader, "read_next_values_chunk", None)
+            if read_compact_chunk_with_flags is not None or read_chunk_with_flags is not None:
+                while True:
+                    if read_compact_chunk_with_flags is not None:
+                        chunk_result = read_compact_chunk_with_flags(1024)
+                    else:
+                        chunk_result = read_chunk_with_flags()
+                    if chunk_result is None:
+                        break
+                    if len(chunk_result) == 5:
+                        (
+                            chunk,
+                            needs_normalise,
+                            first_row,
+                            _last_row,
+                            dense_plain,
+                        ) = chunk_result
+                        if dense_plain:
+                            while counter < first_row:
+                                yield empty_row
+                                counter += 1
+                            for offset, values in enumerate(chunk):
+                                row_idx = first_row + offset
+                                while counter < row_idx:
                                     yield empty_row
                                     counter += 1
-                                for offset, values in enumerate(chunk):
-                                    row_idx = first_row + offset
-                                    while counter < row_idx:
-                                        yield empty_row
-                                        counter += 1
-                                    yield values
-                                    counter = row_idx + 1
-                                continue
-                        else:
-                            chunk, needs_normalise = chunk_result
-                        for row_idx, values in chunk:
-                            while counter < row_idx:
-                                yield empty_row
-                                counter += 1
-                            if needs_normalise:
-                                values = _normalise_streaming_value_tuple(
-                                    values, data_only=data_only
-                                )
-                            yield values
-                            counter = row_idx + 1
-                elif read_chunk is not None:
-                    while True:
-                        chunk = read_chunk()
-                        if chunk is None:
-                            break
-                        for row_idx, values in chunk:
-                            while counter < row_idx:
-                                yield empty_row
-                                counter += 1
-                            yield _normalise_streaming_value_tuple(values, data_only=data_only)
-                            counter = row_idx + 1
-                else:
-                    while True:
-                        row = reader.read_next_values_row()
-                        if row is None:
-                            break
-                        row_idx, values = row
+                                yield values
+                                counter = row_idx + 1
+                            continue
+                    else:
+                        chunk, needs_normalise = chunk_result
+                    for row_idx, values in chunk:
+                        while counter < row_idx:
+                            yield empty_row
+                            counter += 1
+                        if needs_normalise:
+                            values = _normalise_streaming_value_tuple(values, data_only=data_only)
+                        yield values
+                        counter = row_idx + 1
+            elif read_chunk is not None:
+                while True:
+                    chunk = read_chunk()
+                    if chunk is None:
+                        break
+                    for row_idx, values in chunk:
                         while counter < row_idx:
                             yield empty_row
                             counter += 1
                         yield _normalise_streaming_value_tuple(values, data_only=data_only)
                         counter = row_idx + 1
-                if stream_mx_r is not None:
-                    while counter <= stream_mx_r:
+            else:
+                while True:
+                    row = reader.read_next_values_row()
+                    if row is None:
+                        break
+                    row_idx, values = row
+                    while counter < row_idx:
                         yield empty_row
                         counter += 1
-                return
-
-            counter = mn_r if mn_r is not None else 1
-            # Switch to ``read_next_row`` rather than ``read_next_values``
-            # so we have access to each cell's style_id. The slight extra
-            # work (vs Rust-side tuple padding) is offset by skipping a
-            # second materialization of the tuple in Python.
-            while True:
-                row = reader.read_next_row()
-                if row is None:
-                    break
-                row_idx, cells = row
-                cmin = mn_c if mn_c is not None else 1
-                cmax = _resolved_cmax(cells)
-                fixed_cmax = _fixed_cmax()
-                empty_row = (
-                    (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else []
-                )
-                while counter < row_idx:
-                    yield empty_row
-                    counter += 1
-                if cmax < cmin:
-                    yield ()
+                    yield _normalise_streaming_value_tuple(values, data_only=data_only)
                     counter = row_idx + 1
-                    continue
-                row_out: list[Any] = []
-                cell_idx = 0
-                cell_count = len(cells)
-                for col in range(cmin, cmax + 1):
-                    while cell_idx < cell_count and int(cells[cell_idx][0]) < col:
-                        cell_idx += 1
-                    rec = (
-                        cells[cell_idx]
-                        if cell_idx < cell_count and int(cells[cell_idx][0]) == col
-                        else None
-                    )
-                    if rec is None:
-                        row_out.append(None)
-                        continue
-                    cell_idx += 1
-                    _, value, style_id, _cell_type = rec
-                    py_val = (
-                        _streaming_value(
-                            value,
-                            data_only=bool(getattr(wb, "_data_only", False)),
-                        )
-                        if isinstance(value, dict)
-                        else value
-                    )
-                    if (
-                        isinstance(py_val, (int, float))
-                        and not isinstance(py_val, bool)
-                        and style_id in date_styles
-                    ):
-                        try:
-                            py_val = from_excel(
-                                py_val, epoch=wb.epoch, timedelta=style_id in timedelta_styles
-                            )
-                        except Exception:
-                            pass
-                    row_out.append(py_val)
-                yield tuple(row_out)
-                counter = row_idx + 1
             if stream_mx_r is not None:
-                cmin = mn_c if mn_c is not None else 1
-                fixed_cmax = _fixed_cmax()
-                empty_row = (
-                    (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else []
-                )
                 while counter <= stream_mx_r:
                     yield empty_row
                     counter += 1
@@ -843,19 +821,6 @@ def stream_value_chunks(
     if chunk_size < 1:
         raise ValueError("chunk_size must be >= 1")
     wb = ws._workbook  # noqa: SLF001
-    if _values_only_needs_style_dates(wb):
-        yield from _chunk_value_rows(
-            stream_iter_rows(
-                ws,
-                min_row=min_row,
-                max_row=max_row,
-                min_col=min_col,
-                max_col=max_col,
-                values_only=True,
-            ),
-            chunk_size,
-        )
-        return
 
     path = stream_source(wb)
     if path is None:
@@ -896,6 +861,7 @@ def stream_value_chunks(
 
     reader = _open_stream_reader(path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
     try:
+        _install_streaming_date_styles(reader, wb)
         read_chunk_with_flags = getattr(reader, "read_next_values_chunk_with_flags", None)
         if read_chunk_with_flags is None:
             yield from _chunk_value_rows(
@@ -994,6 +960,8 @@ def _direct_plain_value_chunks(
     """
     if not bool(getattr(wb, "_data_only", False)):
         return None
+    if getattr(wb, "_date_formats", ()):
+        return None
     if max_row is None or max_row > AUTO_STREAM_ROW_THRESHOLD:
         return None
     reader = getattr(wb, "_rust_reader", None)
@@ -1036,6 +1004,8 @@ def should_auto_stream(ws: Worksheet) -> bool:
     and cache the full sheet before streaming can engage.
     """
     wb = ws._workbook  # noqa: SLF001
+    if not getattr(wb, "_auto_stream", True):
+        return False
     path = stream_source(wb)
     if not path:
         return False

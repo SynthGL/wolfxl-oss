@@ -58,6 +58,12 @@ def install_as_openpyxl(*, force: bool = True) -> ModuleType:
             "before importing openpyxl-shaped modules"
         )
 
+    # Preserve real upstream modules before the alias shadows their import
+    # names. Ordinary ``import wolfxl`` never needs this eager snapshot.
+    from wolfxl._compat import _prepare_for_openpyxl_alias
+
+    _prepare_for_openpyxl_alias()
+
     if force:
         _remove_openpyxl_modules()
 
