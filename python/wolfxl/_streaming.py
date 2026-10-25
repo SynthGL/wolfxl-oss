@@ -957,6 +957,8 @@ def should_auto_stream(ws: Worksheet) -> bool:
     and cache the full sheet before streaming can engage.
     """
     wb = ws._workbook  # noqa: SLF001
+    if not getattr(wb, "_auto_stream", True):
+        return False
     path = stream_source(wb)
     if not path:
         return False
