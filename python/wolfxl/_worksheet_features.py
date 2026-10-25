@@ -93,7 +93,8 @@ def get_threaded_comments_map(ws: Worksheet) -> dict[str, Any]:
 
     wb = ws._workbook  # noqa: SLF001
     if wb._rust_reader is None or not hasattr(  # noqa: SLF001
-        wb._rust_reader, "read_threaded_comments"  # noqa: SLF001
+        wb._rust_reader,
+        "read_threaded_comments",  # noqa: SLF001
     ):
         ws._threaded_comments_cache = {}  # noqa: SLF001
         return ws._threaded_comments_cache  # noqa: SLF001
@@ -167,6 +168,37 @@ def get_threaded_comments_map(ws: Worksheet) -> dict[str, Any]:
     return result
 
 
+# A range hyperlink covering more cells than this is clipped to the sheet's
+# used area rather than materialising one Hyperlink per addressable cell.
+_MAX_RANGE_HYPERLINK_CELLS = 65_536
+
+
+def _hyperlink_covered_refs(ws: Worksheet, ref: str) -> list[str]:
+    """Return the cell coordinates a ``<hyperlink ref=...>`` entry covers.
+
+    A single-cell ref (and any ref that is not a parseable range) maps to
+    itself. A range such as ``A3:A5`` maps to every cell it covers, as
+    openpyxl binds it on load. Open-ended ranges (``A:A``) and ranges larger
+    than ``_MAX_RANGE_HYPERLINK_CELLS`` are clipped to the sheet's used area.
+    """
+    if ":" not in ref:
+        return [ref]
+    from wolfxl.utils.cell import get_column_letter, range_boundaries
+
+    try:
+        min_col, min_row, max_col, max_row = range_boundaries(ref)
+    except (TypeError, ValueError):
+        return [ref]
+    open_ended = None in (min_col, min_row, max_col, max_row)
+    min_col = 1 if min_col is None else min_col
+    min_row = 1 if min_row is None else min_row
+    if open_ended or (max_col - min_col + 1) * (max_row - min_row + 1) > _MAX_RANGE_HYPERLINK_CELLS:
+        max_col = min(ws.max_column, max_col if max_col is not None else ws.max_column)
+        max_row = min(ws.max_row, max_row if max_row is not None else ws.max_row)
+    letters = [get_column_letter(col) for col in range(min_col, max_col + 1)]
+    return [f"{letter}{row}" for row in range(min_row, max_row + 1) for letter in letters]
+
+
 def get_hyperlinks_map(ws: Worksheet) -> dict[str, Any]:
     """Return ``{cell_ref: Hyperlink}`` for ``ws``, cached on the worksheet."""
     if ws._hyperlinks_cache is not None:  # noqa: SLF001
@@ -188,13 +220,14 @@ def get_hyperlinks_map(ws: Worksheet) -> dict[str, Any]:
             continue
         is_internal = bool(entry.get("internal", False))
         raw_target = entry.get("target")
-        result[cell_ref] = Hyperlink(
-            ref=cell_ref,
-            target=None if is_internal else raw_target,
-            location=raw_target if is_internal else entry.get("location"),
-            display=entry.get("display") or None,
-            tooltip=entry.get("tooltip") or None,
-        )
+        for covered in _hyperlink_covered_refs(ws, cell_ref):
+            result[covered] = Hyperlink(
+                ref=covered,
+                target=None if is_internal else raw_target,
+                location=raw_target if is_internal else entry.get("location"),
+                display=entry.get("display") or None,
+                tooltip=entry.get("tooltip") or None,
+            )
     ws._hyperlinks_cache = result  # noqa: SLF001
     return result
 
@@ -233,8 +266,7 @@ def get_tables_map(ws: Worksheet) -> Any:
         )
         columns_raw = entry.get("columns") or []
         table_columns = [
-            TableColumn(id=index + 1, name=str(column))
-            for index, column in enumerate(columns_raw)
+            TableColumn(id=index + 1, name=str(column)) for index, column in enumerate(columns_raw)
         ]
         table = Table(
             name=name,
@@ -382,10 +414,7 @@ def get_conditional_formatting(ws: Worksheet) -> Any:
         xml_attrs = xml_rule_attrs.get((sqref, priority), {})
         rule = Rule(
             type=(
-                entry.get("rule_type")
-                or entry.get("type")
-                or xml_attrs.get("type")
-                or "expression"
+                entry.get("rule_type") or entry.get("type") or xml_attrs.get("type") or "expression"
             ),
             operator=entry.get("operator") or xml_attrs.get("operator"),
             formula=formula_list,
@@ -397,9 +426,7 @@ def get_conditional_formatting(ws: Worksheet) -> Any:
             ),
             priority=priority,
             text=(
-                entry.get("text")
-                or xml_attrs.get("text")
-                or _cf_text_from_formula(formula_list)
+                entry.get("text") or xml_attrs.get("text") or _cf_text_from_formula(formula_list)
             ),
             aboveAverage=entry.get("above_average", xml_attrs.get("aboveAverage")),
             percent=entry.get("percent", xml_attrs.get("percent")),
@@ -535,9 +562,7 @@ def _load_differential_styles(wb: Any) -> dict[int, Any]:
     for child in root:
         if _local_name(child.tag) != "dxfs":
             continue
-        for idx, dxf_node in enumerate(
-            node for node in child if _local_name(node.tag) == "dxf"
-        ):
+        for idx, dxf_node in enumerate(node for node in child if _local_name(node.tag) == "dxf"):
             result[idx] = _differential_style_from_tree(dxf_node)
         break
     setattr(wb, "_differential_styles_cache", result)
