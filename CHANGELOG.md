@@ -11,6 +11,7 @@
 - Preserve saved formula caches after date and time calculations while keeping
   formula text, input values and number formats unchanged in normal and modify
   modes.
+- Skip an invalid `<row r="0">` in `read_only=True` loads, as openpyxl and normal loads do. It was returned as an extra first row.
 
 ### Compatibility
 

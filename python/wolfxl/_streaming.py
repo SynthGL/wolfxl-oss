@@ -565,11 +565,12 @@ def _resolve_bounds(
     min_col: int | None,
     max_col: int | None,
 ) -> tuple[int | None, int | None, int | None, int | None]:
-    """Pass-through that just clamps user ``None``s to ``None`` (the Rust
-    layer treats ``None`` as 'unbounded'). Kept as a seam so future
-    sheet-dimension probing can land here without churning callers.
+    """Default ``min_row`` to 1 as openpyxl does, so an invalid
+    ``<row r="0">`` is skipped; other ``None`` bounds stay unbounded for the
+    Rust reader. Kept as a seam so future sheet-dimension probing can land
+    here without churning callers.
     """
-    return min_row, max_row, min_col, max_col
+    return min_row or 1, max_row, min_col, max_col
 
 
 def stream_iter_rows(
