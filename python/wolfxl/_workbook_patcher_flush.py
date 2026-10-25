@@ -135,7 +135,7 @@ def _table_payload(table: Any) -> dict[str, Any]:
 def flush_pending_images_to_patcher(wb: Any) -> None:
     """Drain pending worksheet images into the Rust patcher."""
     from wolfxl._images import image_to_writer_payload
-    from wolfxl._worksheet_media import pop_pending_image_deletions
+    from wolfxl._worksheet_media import pop_pending_image_deletions, record_flushed_image_edits
 
     patcher = wb._rust_patcher  # noqa: SLF001
     if patcher is None:
@@ -143,6 +143,7 @@ def flush_pending_images_to_patcher(wb: Any) -> None:
     for ws in wb._sheets.values():  # noqa: SLF001
         pending_deletions = pop_pending_image_deletions(ws)
         pending = ws._pending_images  # noqa: SLF001
+        record_flushed_image_edits(ws, pending_deletions, pending)
         if not pending_deletions and not pending:
             continue
         for image_index in pending_deletions:

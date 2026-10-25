@@ -38,7 +38,7 @@ pub(crate) fn cell_to_dict(
         CellValue::Number(n) => {
             let d = PyDict::new(py);
             d.set_item("type", "number")?;
-            d.set_item("value", number_to_py(py, *n)?)?;
+            d.set_item("value", number_to_py(py, *n, is_float_number(cell))?)?;
             Ok(d.into())
         }
         CellValue::Bool(b) => cell_with_value(py, "boolean", *b),
@@ -64,7 +64,7 @@ pub(crate) fn cell_to_plain(
         CellValue::Number(n) if is_date_format(number_format) => {
             date_serial_to_py(py, *n, date1904, number_format)
         }
-        CellValue::Number(n) => number_to_py(py, *n),
+        CellValue::Number(n) => number_to_py(py, *n, is_float_number(cell)),
         CellValue::Bool(b) => Ok((*b).into_py_any(py)?),
         CellValue::Error(e) => Ok(e.clone().into_py_any(py)?),
     }
@@ -74,7 +74,7 @@ pub(crate) fn cell_to_plain_unstyled_data_only(py: Python<'_>, cell: &Cell) -> P
     match &cell.value {
         CellValue::Empty => Ok(py.None()),
         CellValue::String(s) => Ok(s.clone().into_py_any(py)?),
-        CellValue::Number(n) => number_to_py(py, *n),
+        CellValue::Number(n) => number_to_py(py, *n, is_float_number(cell)),
         CellValue::Bool(b) => Ok((*b).into_py_any(py)?),
         CellValue::Error(e) => Ok(e.clone().into_py_any(py)?),
     }
@@ -95,7 +95,7 @@ pub(crate) fn native_data_type(
         | CellDataType::InlineString
         | CellDataType::SharedString
         | CellDataType::FormulaString => "string",
-        CellDataType::Number => {
+        CellDataType::Number | CellDataType::FloatNumber => {
             if matches!(cell.value, CellValue::Empty) {
                 "blank"
             } else if is_date_format(number_format) {
@@ -115,8 +115,15 @@ pub(crate) fn ensure_formula_prefix(formula: &str) -> String {
     }
 }
 
-pub(crate) fn number_to_py(py: Python<'_>, value: f64) -> PyResult<PyObject> {
-    if value.is_finite() && value.fract() == 0.0 {
+fn is_float_number(cell: &Cell) -> bool {
+    cell.data_type == CellDataType::FloatNumber
+}
+
+/// Integral numbers read as `int` unless the cell text held a decimal point or
+/// exponent (`float_text`, from `CellDataType::FloatNumber` or `ValueCell`), which
+/// openpyxl's `_cast_number` reads as `float`.
+pub(crate) fn number_to_py(py: Python<'_>, value: f64, float_text: bool) -> PyResult<PyObject> {
+    if !float_text && value.is_finite() && value.fract() == 0.0 {
         let int_value = value as i64;
         if int_value as f64 == value {
             return Ok(int_value.into_py_any(py)?);

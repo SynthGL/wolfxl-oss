@@ -9,6 +9,9 @@ if TYPE_CHECKING:
     from wolfxl._worksheet import Worksheet
 
 _PENDING_IMAGE_DELETIONS: dict[int, list[int]] = {}
+# Source deletions and added images flushed for the next save, so an in-place
+# save can rebase cached source indices onto the rewritten drawing.
+_FLUSHED_IMAGE_EDITS: dict[int, tuple[list[int], list[Any]]] = {}
 
 
 def _is_alias_instance(obj: Any, class_name: str, module_suffix: str) -> bool:
@@ -548,14 +551,49 @@ def replace_image(ws: Worksheet, index_or_image: int | Any, new_image: Any) -> N
 
 
 def pop_pending_image_deletions(ws: Worksheet) -> list[int]:
-    """Drain queued source-image deletions for *ws* in append order."""
+    """Drain source-image deletions from highest to lowest original index."""
     pending = _PENDING_IMAGE_DELETIONS.pop(id(ws), [])
-    return list(pending)
+    # The patcher applies removals sequentially to the shrinking drawing.
+    return sorted(pending, reverse=True)
 
 
 def has_pending_image_deletions(ws: Worksheet) -> bool:
     """Return whether source-image deletions are queued for *ws*."""
     return bool(_PENDING_IMAGE_DELETIONS.get(id(ws)))
+
+
+def record_flushed_image_edits(ws: Worksheet, deletions: list[int], added: list[Any]) -> None:
+    """Remember the image edits handed to the patcher for *ws*'s next save."""
+    _FLUSHED_IMAGE_EDITS.pop(id(ws), None)
+    if ws._images_cache is not None and (deletions or added):  # noqa: SLF001
+        _FLUSHED_IMAGE_EDITS[id(ws)] = (sorted(deletions), list(added))
+
+
+def rebase_source_image_indices(wb: Any, *, in_place: bool) -> None:
+    """Point cached source indices at the drawing a completed save wrote.
+
+    After an in-place save the source package keeps the surviving source
+    images in their original order, so each index drops by the number of
+    deleted images before it. Images added by that save are not addressed as
+    source images. Saving elsewhere leaves the source unchanged, and its
+    original indices remain valid.
+    """
+    from bisect import bisect_left
+
+    for ws in wb._sheets.values():  # noqa: SLF001
+        edits = _FLUSHED_IMAGE_EDITS.pop(id(ws), None)
+        if edits is None or not in_place or ws._images_cache is None:  # noqa: SLF001
+            continue
+        deleted, added = edits
+        added_ids = {id(image) for image in added}
+        for image in ws._images_cache:  # noqa: SLF001
+            source_index = getattr(image, "_wolfxl_source_image_index", None)
+            if source_index is None:
+                continue
+            if id(image) in added_ids:
+                image._wolfxl_source_image_index = None  # noqa: SLF001
+            else:
+                image._wolfxl_source_image_index = source_index - bisect_left(deleted, source_index)  # noqa: SLF001
 
 
 def get_images(ws: Worksheet) -> list[Any]:
@@ -566,11 +604,14 @@ def get_images(ws: Worksheet) -> list[Any]:
         return ws._pending_images  # noqa: SLF001
 
     if ws._images_cache is None:  # noqa: SLF001
-        images = [
-            _image_from_payload(payload)
-            for payload in reader.read_images(ws._title)  # noqa: SLF001
-            if isinstance(payload, dict)
-        ]
+        images = []
+        for source_index, payload in enumerate(reader.read_images(ws._title)):  # noqa: SLF001
+            if not isinstance(payload, dict):
+                continue
+            image = _image_from_payload(payload)
+            if image is not None:
+                image._wolfxl_source_image_index = source_index  # noqa: SLF001
+                images.append(image)
         images.extend(ws._pending_images)  # noqa: SLF001
         ws._images_cache = images  # noqa: SLF001
     return ws._images_cache  # noqa: SLF001
@@ -641,21 +682,32 @@ def _source_image_index_for_cache_position(
     cache_index: int,
     images: list[Any],
 ) -> int:
-    pending_ids = {id(image) for image in ws._pending_images}  # noqa: SLF001
-    source_index = 0
-    for idx, image in enumerate(images):
-        if id(image) in pending_ids:
-            continue
-        if idx == cache_index:
+    image = images[cache_index]
+    if _find_identity_index(ws._pending_images, image) is None:  # noqa: SLF001
+        source_index = getattr(image, "_wolfxl_source_image_index", None)
+        if source_index is not None:
             return source_index
-        source_index += 1
     raise ValueError("image selection does not resolve to a source workbook image")
 
 
 def _image_from_payload(payload: dict[str, Any]) -> Any:
     from wolfxl.drawing.image import Image
 
-    image = Image(payload["data"])
+    try:
+        image = Image(payload["data"])
+    except ValueError:
+        import warnings
+
+        image_format = payload.get("ext") or "unknown"
+        part = payload.get("media_path") or payload.get("part_name") or payload.get("path")
+        location = f" ({part})" if part else ""
+        warnings.warn(
+            f"{image_format} image format{location} could not be read so the image "
+            "is being dropped",
+            UserWarning,
+            stacklevel=3,
+        )
+        return None
     image.anchor = _anchor_from_payload(payload.get("anchor"))
     return image
 

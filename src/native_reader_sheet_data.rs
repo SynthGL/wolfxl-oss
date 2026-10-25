@@ -320,8 +320,7 @@ pub(crate) fn read_sheet_value_chunks_plain_xlsx(
         while scan_idx < cells.len() && cells[scan_idx].row == row {
             let cell = &cells[scan_idx];
             if cell.col >= col_min && cell.col <= col_max {
-                values[(cell.col - col_min) as usize] =
-                    value_cell_to_plain_unstyled(py, &cell.value)?;
+                values[(cell.col - col_min) as usize] = value_cell_to_plain_unstyled(py, cell)?;
             }
             scan_idx += 1;
         }
@@ -420,7 +419,7 @@ fn read_dense_value_chunks_plain(
     for row_cells in cells.chunks(col_count) {
         let mut values: Vec<PyObject> = Vec::with_capacity(col_count);
         for cell in row_cells {
-            values.push(value_cell_to_plain_unstyled(py, &cell.value)?);
+            values.push(value_cell_to_plain_unstyled(py, cell)?);
         }
         pending_rows.push(PyTuple::new(py, values)?.into());
         if pending_rows.len() >= chunk_size {
@@ -434,11 +433,11 @@ fn read_dense_value_chunks_plain(
     Ok(chunks.into())
 }
 
-fn value_cell_to_plain_unstyled(py: Python<'_>, value: &CellValue) -> PyResult<PyObject> {
-    match value {
+fn value_cell_to_plain_unstyled(py: Python<'_>, cell: &ValueCell) -> PyResult<PyObject> {
+    match &cell.value {
         CellValue::Empty => Ok(py.None()),
         CellValue::String(s) => Ok(s.clone().into_py_any(py)?),
-        CellValue::Number(n) => number_to_py(py, *n),
+        CellValue::Number(n) => number_to_py(py, *n, cell.float_text),
         CellValue::Bool(b) => Ok((*b).into_py_any(py)?),
         CellValue::Error(e) => Ok(e.clone().into_py_any(py)?),
     }
