@@ -58,6 +58,27 @@ impl NativeXlsxBook {
         self.sheet_names.clone()
     }
 
+    /// `<sheet>` entries left out of `sheet_names` because their `r:id` is
+    /// empty, as `{"name", "sheet_id", "reason"}` dicts.
+    pub fn skipped_sheets(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let result = pyo3::types::PyList::empty(py);
+        for skipped in self.book.skipped_sheets() {
+            let item = pyo3::types::PyDict::new(py);
+            item.set_item("name", &skipped.name)?;
+            item.set_item("sheet_id", skipped.sheet_id.as_deref())?;
+            item.set_item(
+                "reason",
+                match skipped.reason {
+                    wolfxl_reader::SkippedSheetReason::EmptyRelationshipId => {
+                        "empty_relationship_id"
+                    }
+                },
+            )?;
+            result.append(item)?;
+        }
+        Ok(result.into())
+    }
+
     pub fn chartsheet_names(&self) -> Vec<String> {
         self.book
             .sheets()

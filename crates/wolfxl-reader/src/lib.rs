@@ -178,6 +178,23 @@ pub struct SheetInfo {
     pub path: String,
 }
 
+/// Why a `<sheet>` entry in `xl/workbook.xml` was left out of [`NativeXlsxBook::sheets`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkippedSheetReason {
+    /// The entry carries `r:id=""`, so it names no workbook relationship and
+    /// has no worksheet part to read.
+    EmptyRelationshipId,
+}
+
+/// A `<sheet>` entry omitted from the sheet list; surfaced through
+/// [`NativeXlsxBook::skipped_sheets`] so the omission is never silent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkippedSheet {
+    pub name: String,
+    pub sheet_id: Option<String>,
+    pub reason: SkippedSheetReason,
+}
+
 /// Excel sheet visibility state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SheetState {
@@ -1292,6 +1309,7 @@ pub struct RichTextRun {
 pub struct NativeXlsxBook {
     source: WorkbookSource,
     sheets: Vec<SheetInfo>,
+    skipped_sheets: Vec<SkippedSheet>,
     named_ranges: Vec<NamedRange>,
     print_areas: HashMap<String, String>,
     print_titles: HashMap<String, PrintTitlesInfo>,
@@ -1401,7 +1419,7 @@ impl NativeXlsxBook {
         } else {
             sheet_refs
         };
-        let sheets = resolve_sheet_paths(sheet_refs, &rels)?;
+        let (sheets, skipped_sheets) = resolve_sheet_paths(sheet_refs, &rels)?;
         // Preserve load-time XML admission and errors without retaining the SST
         // or decompressing its full XML into memory. Text is retained only when
         // a non-streaming value API needs the table.
@@ -1439,6 +1457,7 @@ impl NativeXlsxBook {
         Ok(Self {
             source,
             sheets,
+            skipped_sheets,
             named_ranges,
             print_areas,
             print_titles,
@@ -1453,6 +1472,12 @@ impl NativeXlsxBook {
             date1904,
             persons,
         })
+    }
+
+    /// `<sheet>` entries omitted because their `r:id` is empty. A sheet whose
+    /// non-empty `r:id` is absent from the workbook rels is an error instead.
+    pub fn skipped_sheets(&self) -> &[SkippedSheet] {
+        &self.skipped_sheets
     }
 
     /// Workbook-scoped persons registry for threaded comments (RFC-068).
@@ -2305,9 +2330,21 @@ fn sheet_name_from_ref(refers_to: &str) -> Option<String> {
     Some(unquoted.replace("''", "'"))
 }
 
-fn resolve_sheet_paths(sheet_refs: Vec<SheetRef>, rels: &RelsGraph) -> Result<Vec<SheetInfo>> {
+fn resolve_sheet_paths(
+    sheet_refs: Vec<SheetRef>,
+    rels: &RelsGraph,
+) -> Result<(Vec<SheetInfo>, Vec<SkippedSheet>)> {
     let mut sheets = Vec::with_capacity(sheet_refs.len());
+    let mut skipped = Vec::new();
     for sheet in sheet_refs {
+        if sheet.rid.is_empty() {
+            skipped.push(SkippedSheet {
+                name: sheet.name,
+                sheet_id: sheet.sheet_id,
+                reason: SkippedSheetReason::EmptyRelationshipId,
+            });
+            continue;
+        }
         let rel = rels.get(&RelId(sheet.rid.clone())).ok_or_else(|| {
             ReaderError::MissingPart(format!("workbook relationship {}", sheet.rid))
         })?;
@@ -2318,7 +2355,7 @@ fn resolve_sheet_paths(sheet_refs: Vec<SheetRef>, rels: &RelsGraph) -> Result<Ve
             path: join_and_normalize("xl/", &rel.target),
         });
     }
-    Ok(sheets)
+    Ok((sheets, skipped))
 }
 
 fn synthesize_sheet_refs_from_rels(rels: &RelsGraph) -> Vec<SheetRef> {
@@ -3794,7 +3831,7 @@ fn read_first_sheet_value_cells_source(source: &WorkbookSource) -> Result<Vec<Va
     let rels = RelsGraph::parse(workbook_rels.as_bytes())
         .map_err(|e| ReaderError::Xml(format!("failed to parse workbook rels: {e}")))?;
     let (sheet_refs, ..) = parse_workbook(&workbook_xml)?;
-    let sheets = resolve_sheet_paths(sheet_refs, &rels)?;
+    let (sheets, _) = resolve_sheet_paths(sheet_refs, &rels)?;
     let Some(info) = sheets.first() else {
         return Err(ReaderError::SheetNotFound("first worksheet".to_string()));
     };
@@ -3815,7 +3852,7 @@ fn read_first_sheet_value_summary_source(source: &WorkbookSource) -> Result<Valu
     let rels = RelsGraph::parse(workbook_rels.as_bytes())
         .map_err(|e| ReaderError::Xml(format!("failed to parse workbook rels: {e}")))?;
     let (sheet_refs, ..) = parse_workbook(&workbook_xml)?;
-    let sheets = resolve_sheet_paths(sheet_refs, &rels)?;
+    let (sheets, _) = resolve_sheet_paths(sheet_refs, &rels)?;
     let Some(info) = sheets.first() else {
         return Err(ReaderError::SheetNotFound("first worksheet".to_string()));
     };
@@ -3832,7 +3869,7 @@ fn read_first_sheet_formula_summary_source(source: &WorkbookSource) -> Result<Fo
     let rels = RelsGraph::parse(workbook_rels.as_bytes())
         .map_err(|e| ReaderError::Xml(format!("failed to parse workbook rels: {e}")))?;
     let (sheet_refs, ..) = parse_workbook(&workbook_xml)?;
-    let sheets = resolve_sheet_paths(sheet_refs, &rels)?;
+    let (sheets, _) = resolve_sheet_paths(sheet_refs, &rels)?;
     let Some(info) = sheets.first() else {
         return Err(ReaderError::SheetNotFound("first worksheet".to_string()));
     };
@@ -7490,6 +7527,62 @@ mod tests {
             archive.write_all(xml.as_bytes()).unwrap();
         }
         archive.finish().unwrap().into_inner()
+    }
+
+    fn workbook_package(workbook_xml: &str) -> Vec<u8> {
+        use std::io::Write;
+        let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, xml) in [
+            ("xl/workbook.xml", workbook_xml),
+            (
+                "xl/_rels/workbook.xml.rels",
+                r#"<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
+            ),
+            (
+                "xl/worksheets/sheet1.xml",
+                r#"<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>kept</t></is></c></row></sheetData></worksheet>"#,
+            ),
+        ] {
+            archive
+                .start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            archive.write_all(xml.as_bytes()).unwrap();
+        }
+        archive.finish().unwrap().into_inner()
+    }
+
+    const EMPTY_RID_WORKBOOK: &str = r#"<workbook xmlns:r="r"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/><sheet name="Module" sheetId="2" r:id=""/></sheets></workbook>"#;
+
+    #[test]
+    fn empty_rid_sheet_is_left_out_of_the_sheet_list() {
+        let book = NativeXlsxBook::open_bytes(workbook_package(EMPTY_RID_WORKBOOK)).unwrap();
+        assert_eq!(book.sheet_names(), ["Sheet1"]);
+        assert_eq!(book.worksheet("Sheet1").unwrap().cells.len(), 1);
+    }
+
+    #[test]
+    fn empty_rid_sheet_is_reported_as_skipped() {
+        let book = NativeXlsxBook::open_bytes(workbook_package(EMPTY_RID_WORKBOOK)).unwrap();
+        assert_eq!(
+            book.skipped_sheets(),
+            [SkippedSheet {
+                name: "Module".to_string(),
+                sheet_id: Some("2".to_string()),
+                reason: SkippedSheetReason::EmptyRelationshipId,
+            }]
+        );
+    }
+
+    #[test]
+    fn non_empty_rid_missing_from_rels_still_fails_with_missing_part() {
+        let bytes = workbook_package(
+            r#"<workbook xmlns:r="r"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/><sheet name="Ghost" sheetId="2" r:id="rId9"/></sheets></workbook>"#,
+        );
+        let err = NativeXlsxBook::open_bytes(bytes).unwrap_err();
+        assert!(
+            matches!(&err, ReaderError::MissingPart(part) if part == "workbook relationship rId9"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
