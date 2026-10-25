@@ -1896,6 +1896,20 @@ pub(super) fn copy_source_file_phase(patcher: &XlsxPatcher, output_path: &str) -
     })
 }
 
+/// Forget the parts a completed in-place save already wrote into the source.
+///
+/// An in-place save rewrites the file the patcher reads from, so the added
+/// parts, deletions, rels graphs, and content-type ops of that save now live in
+/// the source. Keeping them would make the next save treat the new source
+/// entries as additions (`file_adds` collision) and re-apply stale part bytes
+/// over the current source.
+fn reset_after_in_place_save(patcher: &mut XlsxPatcher) {
+    patcher.file_adds.clear();
+    patcher.file_deletes.clear();
+    patcher.rels_patches.clear();
+    patcher.queued_content_type_ops.clear();
+}
+
 pub(super) fn drain_permissive_seed_file_patches_phase(
     patcher: &mut XlsxPatcher,
     file_patches: &mut HashMap<String, Vec<u8>>,
@@ -2049,7 +2063,7 @@ pub(super) fn rebuild_calc_chain_phase(
 }
 
 pub(super) fn rewrite_zip_phase(
-    patcher: &XlsxPatcher,
+    patcher: &mut XlsxPatcher,
     file_patches: &HashMap<String, Vec<u8>>,
     output_path: &str,
 ) -> PyResult<()> {
@@ -2136,7 +2150,12 @@ pub(super) fn rewrite_zip_phase(
             .map_err(|e| PyIOError::new_err(format!("ZIP finalize error: {e}")))?;
 
         Ok(())
-    })
+    })?;
+    if std::path::Path::new(&patcher.file_path) == std::path::Path::new(output_path) {
+        // The source now contains this save's output; see the helper.
+        reset_after_in_place_save(patcher);
+    }
+    Ok(())
 }
 
 pub(super) fn ensure_calc_chain_metadata(

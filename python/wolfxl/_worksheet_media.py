@@ -12,6 +12,9 @@ _PENDING_IMAGE_DELETIONS: dict[int, list[int]] = {}
 # Source deletions and added images flushed for the next save, so an in-place
 # save can rebase cached source indices onto the rewritten drawing.
 _FLUSHED_IMAGE_EDITS: dict[int, tuple[list[int], list[Any]]] = {}
+# Number of image anchors in each hydrated sheet's source drawing, so images an
+# in-place save adds can be addressed as source images by the next save.
+_SOURCE_IMAGE_TOTALS: dict[int, int] = {}
 
 
 def _is_alias_instance(obj: Any, class_name: str, module_suffix: str) -> bool:
@@ -565,6 +568,10 @@ def has_pending_image_deletions(ws: Worksheet) -> bool:
 def record_flushed_image_edits(ws: Worksheet, deletions: list[int], added: list[Any]) -> None:
     """Remember the image edits handed to the patcher for *ws*'s next save."""
     _FLUSHED_IMAGE_EDITS.pop(id(ws), None)
+    if added and ws._images_cache is None:  # noqa: SLF001
+        # Hydrate while the source drawing and pending adds are both visible, so
+        # an in-place save can keep the added image objects addressable.
+        get_images(ws)
     if ws._images_cache is not None and (deletions or added):  # noqa: SLF001
         _FLUSHED_IMAGE_EDITS[id(ws)] = (sorted(deletions), list(added))
 
@@ -594,6 +601,17 @@ def rebase_source_image_indices(wb: Any, *, in_place: bool) -> None:
                 image._wolfxl_source_image_index = None  # noqa: SLF001
             else:
                 image._wolfxl_source_image_index = source_index - bisect_left(deleted, source_index)  # noqa: SLF001
+        total = _SOURCE_IMAGE_TOTALS.get(id(ws))
+        if total is None:
+            continue
+        # The save appends the added images after the surviving source images,
+        # in the order they were queued.
+        total -= len(deleted)
+        for image in added:
+            if _find_identity_index(ws._images_cache, image) is not None:  # noqa: SLF001
+                image._wolfxl_source_image_index = total  # noqa: SLF001
+            total += 1
+        _SOURCE_IMAGE_TOTALS[id(ws)] = total
 
 
 def get_images(ws: Worksheet) -> list[Any]:
@@ -605,13 +623,15 @@ def get_images(ws: Worksheet) -> list[Any]:
 
     if ws._images_cache is None:  # noqa: SLF001
         images = []
-        for source_index, payload in enumerate(reader.read_images(ws._title)):  # noqa: SLF001
+        payloads = reader.read_images(ws._title)  # noqa: SLF001
+        for source_index, payload in enumerate(payloads):
             if not isinstance(payload, dict):
                 continue
             image = _image_from_payload(payload)
             if image is not None:
                 image._wolfxl_source_image_index = source_index  # noqa: SLF001
                 images.append(image)
+        _SOURCE_IMAGE_TOTALS[id(ws)] = len(payloads)
         images.extend(ws._pending_images)  # noqa: SLF001
         ws._images_cache = images  # noqa: SLF001
     return ws._images_cache  # noqa: SLF001
