@@ -357,7 +357,20 @@ pub(super) fn apply_sheet_deletes_phase(
         zip,
     )?;
     file_patches.insert("xl/workbook.xml".to_string(), workbook_xml);
-    patcher.sheet_order = result.new_order;
+    // `new_order` mirrors the source workbook.xml, which lacks sheets queued
+    // for creation. Keep them at their queued positions for the create phase.
+    let mut new_order = result.new_order;
+    let queued_titles: HashSet<&str> = patcher
+        .queued_sheet_creates
+        .iter()
+        .map(|op| op.title.as_str())
+        .collect();
+    for (index, name) in patcher.sheet_order.iter().enumerate() {
+        if queued_titles.contains(name.as_str()) && !new_order.contains(name) {
+            new_order.insert(index.min(new_order.len()), name.clone());
+        }
+    }
+    patcher.sheet_order = new_order;
     patcher.queued_sheet_deletes.clear();
     patcher.deleted_sheet_paths.clear();
     Ok(())

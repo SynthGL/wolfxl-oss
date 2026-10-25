@@ -76,7 +76,9 @@ def save_workbook(
             save_write_only_mode(wb, filename)
         else:
             save_write_mode(wb, filename)
-    elif getattr(wb, "_rust_reader", None) is not None and getattr(wb, "_source_path", None):
+    elif getattr(wb, "_rust_reader", None) is not None and (
+        getattr(wb, "_source_path", None) or getattr(wb, "_source_bytes", None)
+    ):
         save_read_mode(wb, filename)
     else:
         raise RuntimeError("save requires write or modify mode")
@@ -93,6 +95,7 @@ def save_workbook(
     # workbook in a re-tryable state for the eager path. Write-only
     # mode flips this once and never re-saves.
     wb._saved = True  # noqa: SLF001
+    getattr(wb, "_patcher_pending_created_titles", set()).clear()
     # Mark every WriteOnlyWorksheet closed so subsequent appends raise
     # WorkbookAlreadySaved cleanly.
     if getattr(wb, "_write_only", False):
@@ -136,11 +139,12 @@ def save_workbook_to_fileobj(
 
 
 def save_read_mode(wb: Any, filename: str) -> None:
-    """Save an unmodified path-backed read workbook by copying the source package."""
+    """Save an unmodified source-backed read workbook by copying the source package."""
     import shutil
 
     source_path = getattr(wb, "_source_path", None)
-    if source_path is None:
+    source_bytes = getattr(wb, "_source_bytes", None)
+    if source_path is None and source_bytes is None:
         raise RuntimeError("save requires write or modify mode")
     if _read_mode_has_pending_changes(wb):
         if getattr(wb, "_read_only", False):
@@ -148,10 +152,21 @@ def save_read_mode(wb: Any, filename: str) -> None:
                 "save() on a read_only=True workbook would discard pending changes; "
                 "reopen with modify=True before editing"
             )
-        _promote_read_mode_to_patcher(wb, source_path)
+        if source_path is None:
+            from wolfxl._workbook_sheets import _promote_source_backed_read_workbook
+
+            _promote_source_backed_read_workbook(wb)
+            if wb._rust_patcher is None:  # noqa: SLF001
+                raise RuntimeError("save requires write or modify mode")
+        else:
+            _promote_read_mode_to_patcher(wb, source_path)
         save_modify_mode(wb, filename)
         return
-    shutil.copyfile(source_path, filename)
+    if source_path is None:
+        with open(filename, "wb") as out:
+            out.write(source_bytes)
+    else:
+        shutil.copyfile(source_path, filename)
     normalize_openpyxl_package_shape(wb, filename)
 
 

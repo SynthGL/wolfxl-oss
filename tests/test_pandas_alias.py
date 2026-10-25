@@ -104,6 +104,41 @@ def test_excel_writer_and_read_excel_through_alias(imports: str, tmp_path: Path)
     assert alias_written == expected
 
 
+APPEND = """
+base = pathlib.Path({base!r})
+extra = pd.DataFrame({{"name": ["delta", "epsilon"], "count": [4, 5], "ratio": [2.5, None]}})
+frame.to_excel(base, sheet_name="data", index=False, engine="openpyxl")
+with pd.ExcelWriter(base, engine="openpyxl", mode="a") as writer:
+    extra.to_excel(writer, sheet_name="more", index=False)
+with pd.ExcelWriter(base, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+    extra.to_excel(writer, sheet_name="more", index=False, startrow=1)
+with pd.ExcelWriter(base, engine="openpyxl", mode="a", if_sheet_exists="overlay") as writer:
+    extra.to_excel(writer, sheet_name="data", index=False, header=False, startrow=4)
+print(json.dumps(dump(base)))
+"""
+
+
+def test_excel_writer_append_mode_matches_upstream(tmp_path: Path) -> None:
+    """``ExcelWriter(mode="a")`` reloads the workbook through the alias and re-saves it."""
+    aliased = _run(
+        tmp_path,
+        ALIAS_FIRST,
+        "import pathlib\nimport openpyxl\nassert openpyxl is wolfxl",
+        FRAME,
+        APPEND.format(base=str(tmp_path / "alias-append.xlsx")),
+    )
+    upstream = _run(
+        tmp_path,
+        UPSTREAM,
+        "import pathlib",
+        FRAME,
+        APPEND.format(base=str(tmp_path / "upstream-append.xlsx")),
+    )
+
+    assert set(aliased) == {"data", "more"}
+    assert aliased == upstream
+
+
 def test_alias_reports_api_version_to_pandas_only_and_uninstall_restores(
     tmp_path: Path,
 ) -> None:

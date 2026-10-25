@@ -566,9 +566,12 @@ class Worksheet:
         idx = wb._sheet_names.index(old)  # noqa: SLF001
         _queue_defined_name_sheet_rename(wb, old, value, idx)
         if wb._rust_patcher is not None:  # noqa: SLF001
-            queue_rename = getattr(wb._rust_patcher, "queue_sheet_rename", None)  # noqa: SLF001
-            if queue_rename is not None:
-                queue_rename(old, value)
+            from wolfxl._workbook_sheets import retarget_pending_created_sheet
+
+            if not retarget_pending_created_sheet(wb, old, value, idx):
+                queue_rename = getattr(wb._rust_patcher, "queue_sheet_rename", None)  # noqa: SLF001
+                if queue_rename is not None:
+                    queue_rename(old, value)
         # Update workbook bookkeeping.
         wb._sheet_names[idx] = value  # noqa: SLF001
         wb._sheets[value] = wb._sheets.pop(old)  # noqa: SLF001

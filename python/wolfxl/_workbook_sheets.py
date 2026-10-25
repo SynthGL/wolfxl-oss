@@ -19,6 +19,10 @@ def remove_sheet(wb: Any, worksheet: Worksheet) -> None:
         RuntimeError: If ``wb`` is not in write mode.
         ValueError: If ``worksheet`` is not registered on ``wb``.
     """
+    in_memory_read = wb._rust_patcher is None and wb._rust_writer is None  # noqa: SLF001
+    if in_memory_read and getattr(wb, "_source_path", None) is None:
+        # Streams and bytes (pandas ``ExcelWriter(mode="a")``) edit like openpyxl.
+        _promote_source_backed_read_workbook(wb)
     if wb._rust_writer is None and wb._rust_patcher is None:  # noqa: SLF001
         raise RuntimeError("remove requires write mode or modify mode")
     if not isinstance(worksheet, Worksheet):
@@ -29,6 +33,7 @@ def remove_sheet(wb: Any, worksheet: Worksheet) -> None:
     wb._sheet_names.remove(title)  # noqa: SLF001
     wb._sheets.pop(title)  # noqa: SLF001
     if wb._rust_patcher is not None:  # noqa: SLF001
+        _pending_created_titles(wb).discard(title)
         wb._rust_patcher.queue_sheet_delete(title)  # noqa: SLF001
         return
     wb._active_sheet_dirty = True  # noqa: SLF001
@@ -52,9 +57,10 @@ def create_sheet(wb: Any, title: str | None, index: int | None = None) -> Worksh
     title = _unique_sheet_title(wb, title)
     insert_at = _normalize_insert_index(wb, index)
     if wb._rust_patcher is None and wb._rust_writer is None:  # noqa: SLF001
-        _promote_path_backed_read_workbook(wb)
+        _promote_source_backed_read_workbook(wb)
     if wb._rust_patcher is not None:  # noqa: SLF001
         wb._rust_patcher.queue_sheet_create(title, insert_at)  # noqa: SLF001
+        _pending_created_titles(wb).add(title)
         wb._sheet_names.insert(insert_at, title)  # noqa: SLF001
         ws = Worksheet(wb, title)
         wb._sheets[title] = ws  # noqa: SLF001
@@ -81,14 +87,69 @@ def create_sheet(wb: Any, title: str | None, index: int | None = None) -> Worksh
     return ws
 
 
-def _promote_path_backed_read_workbook(wb: Any) -> None:
-    """Enable lazy openpyxl-style editing for a loaded XLSX workbook."""
-    source_path = getattr(wb, "_source_path", None)
-    if source_path is None or getattr(wb, "_read_only", False):
+def _pending_created_titles(wb: Any) -> set[str]:
+    """Titles of sheets queued on the patcher that the source package lacks."""
+    titles = getattr(wb, "_patcher_pending_created_titles", None)
+    if titles is None:
+        titles = set()
+        wb._patcher_pending_created_titles = titles  # noqa: SLF001
+    return titles
+
+
+def retarget_pending_created_sheet(wb: Any, old: str, new: str, index: int) -> bool:
+    """Rename a sheet the patcher has queued for creation but not yet written.
+
+    The patcher renames only sheets that exist in the source package, so a
+    pending create is re-queued under ``new`` at the same position. pandas'
+    ``ExcelWriter(mode="a")`` does this: ``create_sheet()`` then ``.title = name``.
+
+    Returns:
+        ``True`` when the rename was handled here, ``False`` when ``old`` is a
+        source sheet that the patcher can rename itself.
+    """
+    titles = _pending_created_titles(wb)
+    patcher = wb._rust_patcher  # noqa: SLF001
+    if patcher is None or old not in titles:
+        return False
+    patcher.queue_sheet_delete(old)
+    patcher.queue_sheet_create(new, index)
+    titles.discard(old)
+    titles.add(new)
+    return True
+
+
+def _promote_source_backed_read_workbook(wb: Any) -> None:
+    """Enable lazy openpyxl-style editing for a loaded XLSX workbook.
+
+    Path loads open the patcher on the source file. In-memory loads (bytes,
+    streams, file handles such as the one pandas' ``ExcelWriter(mode="a")``
+    passes) have no file, so the blob is written to a tempfile that the
+    workbook removes on ``close()``.
+    """
+    if getattr(wb, "_read_only", False):
         return
+    source_path = getattr(wb, "_source_path", None)
+    if source_path is None:
+        source_bytes = getattr(wb, "_source_bytes", None)
+        if source_bytes is None or getattr(wb, "_format", None) != "xlsx":
+            return
+        source_path = _write_source_tempfile(wb, source_bytes)
     from wolfxl import _rust
 
     wb._rust_patcher = _rust.XlsxPatcher.open(source_path, False)  # noqa: SLF001
+
+
+def _write_source_tempfile(wb: Any, source_bytes: bytes) -> str:
+    import os
+    import tempfile
+
+    tmp_path = getattr(wb, "_tempfile_path", None)
+    if tmp_path is not None and os.path.exists(tmp_path):
+        return str(tmp_path)
+    with tempfile.NamedTemporaryFile(prefix="wolfxl-", suffix=".xlsx", delete=False) as tmp:
+        tmp.write(source_bytes)
+    wb._tempfile_path = tmp.name  # noqa: SLF001
+    return tmp.name
 
 
 def _unique_sheet_title(wb: Any, title: str | None) -> str:
