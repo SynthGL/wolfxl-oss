@@ -5,11 +5,13 @@ import html as _html
 import re as _re
 from html.parser import HTMLParser as _HTMLParser
 import math as _math
+import sys as _sys
 from collections.abc import Iterable as _Iterable
 from dataclasses import dataclass as _dataclass
 from dataclasses import field as _field
 from typing import TYPE_CHECKING as _TYPE_CHECKING
 from typing import Any as _Any
+from typing import Union as _Union
 
 from wolfxl._compat import (
     _OpenpyxlSerialisable,
@@ -271,14 +273,18 @@ class TextTabStop:
         }
 
 
+# Python 3.9 dataclass fields have no kw_only keyword.
+_KW_ONLY_FIELD = {"kw_only": True} if _sys.version_info >= (3, 10) else {}
+
+
 @_dataclass(frozen=True)
 class _BulletStyle:
     """Bullet colour/font, and either percent-of-text or absolute point size."""
 
-    color: str | None = _field(default=None, kw_only=True)
-    size_percent: float | None = _field(default=None, kw_only=True)
-    size_points: float | None = _field(default=None, kw_only=True)
-    font: str | None = _field(default=None, kw_only=True)
+    color: str | None = _field(default=None, **_KW_ONLY_FIELD)
+    size_percent: float | None = _field(default=None, **_KW_ONLY_FIELD)
+    size_points: float | None = _field(default=None, **_KW_ONLY_FIELD)
+    font: str | None = _field(default=None, **_KW_ONLY_FIELD)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "color", _rgb(self.color, "bullet color"))
@@ -386,7 +392,11 @@ class PictureBullet(_BulletStyle):
         }
 
 
-Bullet = NoBullet | CharacterBullet | AutoNumberedBullet | PictureBullet
+if _sys.version_info >= (3, 10):
+    Bullet = NoBullet | CharacterBullet | AutoNumberedBullet | PictureBullet
+else:
+    # Python 3.9 cannot evaluate PEP 604 unions at runtime.
+    Bullet = _Union[NoBullet, CharacterBullet, AutoNumberedBullet, PictureBullet]
 _BULLET_TYPES = (NoBullet, CharacterBullet, AutoNumberedBullet, PictureBullet)
 
 
