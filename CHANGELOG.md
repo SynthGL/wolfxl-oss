@@ -1,5 +1,55 @@
 # Changelog
 
+## 2.0.16 - Unreleased
+
+### Fixed
+
+- Return the same cells as openpyxl from streamed reads: every cell from
+  `load_workbook` (normal and `read_only`, path or file object) has
+  `.hyperlink`, formula cells loaded with `data_only=True` report the data type
+  of their cached value (`n`, `s`, `b` or `e`), and a formula whose cached
+  string is empty reads as `None` with data type `str`.
+- Yield the same rows as openpyxl when a sheet's `<dimension>` or empty row
+  records reach past its last cell: `iter_rows()` without bounds now stops where
+  openpyxl stops in normal and `read_only` loads, while explicit `max_row` and
+  `max_col` bounds still pad with empty cells.
+- Open workbooks whose `workbook.xml` lists a sheet with an empty relationship
+  id (`<sheet r:id="">`), skipping that entry as openpyxl does instead of
+  failing with `missing workbook part`. A sheet whose relationship id is set
+  but missing from the workbook relationships still raises.
+- Raise `MemoryError` when memory runs out while streaming rows, for example on
+  a hostile shared-strings table. This previously raised `PanicException`,
+  which derives from `BaseException` and escaped `except Exception` handlers.
+- Save in place again after an in-place save that added an image: editing
+  cells, adding an image or removing one no longer fails with a Rust panic, and
+  the image added by the earlier save can be removed.
+- Rename a worksheet to a name the workbook already uses the way openpyxl does:
+  assigning `ws.title` an existing name (matched case-insensitively) picks the
+  next free name (`Data` becomes `Data1`) instead of raising `ValueError`, and
+  renaming a sheet to its own title stays a no-op. pandas'
+  `ExcelWriter(path, engine="openpyxl", mode="a", if_sheet_exists="new")` now
+  works after `wolfxl.install_as_openpyxl()`.
+- Support Docling's Excel converter after `wolfxl.install_as_openpyxl()`:
+  `openpyxl.reader.excel.ExcelReader` rewinds file-like inputs and supports the
+  staged `read_workbook()` and `read_worksheets()` calls, exposing stored cells
+  without materializing the sheet's declared dimension, so Docling extracts the
+  same cell values as with openpyxl.
+
+### Changed
+
+- Import no openpyxl module during `import wolfxl` when openpyxl is installed.
+  The compatibility shims read openpyxl's tag names and attributes on first
+  use instead.
+- Keep one copy of the input for `read_only` loads from bytes or file objects,
+  and parse `sharedStrings.xml` only when a non-streaming API needs it.
+- Inflate streamed sheet XML from the ZIP entry while parsing instead of
+  spooling sheets over 1 MiB to a temporary file. ZIP safety checks and size and
+  ratio limits still apply.
+- Convert date, time and duration cells in Rust for streamed
+  `iter_rows(values_only=True)` instead of in a per-cell Python loop, with the
+  same values and types as openpyxl for the 1900 and 1904 date systems;
+  out-of-range serials stay numeric.
+
 ## 2.0.15 - 2026-10-25
 
 ### Fixed
