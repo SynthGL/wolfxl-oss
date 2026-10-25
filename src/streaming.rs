@@ -26,7 +26,7 @@ use std::io::{BufReader, Cursor, Read, Seek, SeekFrom};
 
 use pyo3::exceptions::{PyIOError, PyStopIteration, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyTuple};
+use pyo3::types::{PyBytes, PyDateTime, PyDict, PyFloat, PyInt, PyList, PyTime, PyTuple};
 use pyo3::IntoPyObjectExt;
 
 use quick_xml::events::{BytesStart, Event};
@@ -174,6 +174,137 @@ pub struct StreamingSheetReader {
     max_col: Option<u32>,
     /// Index of the previous `<row>`; a `<row>` without `r` follows it.
     last_row: u32,
+    /// Date conversion configured once per values-only streaming pass.
+    date_styles: DateStyles,
+}
+
+#[derive(Default)]
+struct DateStyles {
+    kinds: Vec<u8>,
+    mac_epoch: bool,
+    timedelta: Option<PyObjectOwned>,
+}
+
+impl DateStyles {
+    fn kind(&self, style_id: Option<u32>) -> u8 {
+        style_id
+            .and_then(|id| self.kinds.get(id as usize))
+            .copied()
+            .unwrap_or(0)
+    }
+
+    fn convert(&self, py: Python<'_>, kind: u8, value: PyObjectOwned) -> PyResult<PyObjectOwned> {
+        let bound = value.bind(py);
+        if !(bound.is_exact_instance_of::<PyFloat>() || bound.is_exact_instance_of::<PyInt>()) {
+            return Ok(value);
+        }
+        if kind == 2 {
+            return match &self.timedelta {
+                Some(convert) => convert.call1(py, (bound,)),
+                None => Ok(value),
+            };
+        }
+        let serial: f64 = bound.extract()?;
+        Ok(excel_serial_to_py(py, serial, self.mac_epoch)?.unwrap_or(value))
+    }
+
+    fn apply(
+        &self,
+        py: Python<'_>,
+        style_id: Option<u32>,
+        value: PyObjectOwned,
+        cell_type: &str,
+        numeric: bool,
+    ) -> PyResult<PyObjectOwned> {
+        let kind = self.kind(style_id);
+        if kind == 0 || !numeric {
+            return Ok(value);
+        }
+        if cell_type == "formula" {
+            let formula = value.bind(py).cast::<PyDict>()?;
+            if let Some(cached) = formula.get_item("cached")? {
+                let converted = self.convert(py, kind, cached.unbind())?;
+                formula.set_item("cached", converted)?;
+            }
+            return Ok(value);
+        }
+        if cell_type == "n" {
+            self.convert(py, kind, value)
+        } else {
+            Ok(value)
+        }
+    }
+}
+
+/// Match openpyxl's from_excel: millisecond ties-to-even rounding, fractional
+/// serials as time, and the Windows leap-day adjustment below serial 60.
+/// Keep serials outside Python's year range numeric, as the Python fallback does.
+fn excel_serial_to_py(
+    py: Python<'_>,
+    value: f64,
+    mac_epoch: bool,
+) -> PyResult<Option<PyObjectOwned>> {
+    if !value.is_finite() {
+        return Ok(None);
+    }
+    // Python's divmod uses a nonnegative fraction, including for negative days.
+    let fraction = value.rem_euclid(1.0);
+    let millis = (fraction * 86_400.0 * 1_000.0).round_ties_even() as i64;
+    if (0.0..1.0).contains(&value) && millis < 86_400_000 {
+        let secs = (millis / 1_000) as u32;
+        return Ok(Some(
+            PyTime::new(
+                py,
+                (secs / 3_600) as u8,
+                (secs / 60 % 60) as u8,
+                (secs % 60) as u8,
+                (millis % 1_000) as u32 * 1_000,
+                None,
+            )?
+            .into_any()
+            .unbind(),
+        ));
+    }
+    let mut day = value.floor();
+    if !mac_epoch && value > 0.0 && value < 60.0 {
+        day += 1.0;
+    }
+    if day.abs() > 1e9 {
+        return Ok(None);
+    }
+    let epoch = if mac_epoch {
+        chrono::NaiveDate::from_ymd_opt(1904, 1, 1)
+    } else {
+        chrono::NaiveDate::from_ymd_opt(1899, 12, 30)
+    }
+    .expect("valid Excel epoch")
+    .and_hms_opt(0, 0, 0)
+    .expect("valid midnight");
+    let Some(datetime) = chrono::Duration::try_days(day as i64)
+        .and_then(|days| epoch.checked_add_signed(days))
+        .and_then(|date| date.checked_add_signed(chrono::Duration::milliseconds(millis)))
+    else {
+        return Ok(None);
+    };
+    use chrono::{Datelike, Timelike};
+    if !(1..=9999).contains(&datetime.year()) {
+        return Ok(None);
+    }
+    Ok(Some(
+        PyDateTime::new(
+            py,
+            datetime.year(),
+            datetime.month() as u8,
+            datetime.day() as u8,
+            datetime.hour() as u8,
+            datetime.minute() as u8,
+            datetime.second() as u8,
+            datetime.nanosecond() / 1_000,
+            None,
+        )?
+        .into_any()
+        .unbind(),
+    ))
 }
 
 /// One parsed cell, before Python-tuple boxing.
@@ -256,6 +387,21 @@ impl StreamingSheetReader {
         Self::from_archive(zip, sheet, min_row, max_row, min_col, max_col)
     }
 
+    /// Install source-style kinds (0 plain, 1 datetime/time, 2 duration).
+    /// Durations use the retained converter to preserve Python timedelta rounding.
+    pub fn set_date_styles(
+        &mut self,
+        kinds: &Bound<'_, PyBytes>,
+        timedelta_converter: PyObjectOwned,
+        mac_epoch: bool,
+    ) {
+        self.date_styles = DateStyles {
+            kinds: kinds.as_bytes().to_vec(),
+            mac_epoch,
+            timedelta: Some(timedelta_converter),
+        };
+    }
+
     /// Read the next row matching the configured bounds.
     ///
     /// Returns `None` when the stream is exhausted. Otherwise returns
@@ -321,8 +467,7 @@ impl StreamingSheetReader {
     }
 
     /// Read the next row as `(row_index, value_tuple)` without boxing
-    /// style ids into Python. Used by the values-only path when date-style
-    /// conversion is unnecessary.
+    /// style ids into Python, including configured date-style conversion.
     pub fn read_next_values_row<'py>(
         &mut self,
         py: Python<'py>,
@@ -573,6 +718,7 @@ impl StreamingSheetReader {
             min_col,
             max_col,
             last_row: 0,
+            date_styles: DateStyles::default(),
         })
     }
 
@@ -645,6 +791,7 @@ impl StreamingSheetReader {
                         &mut self.event_buf,
                         py,
                         &self.sst,
+                        &self.date_styles,
                         row_idx,
                         self.min_col,
                         self.max_col,
@@ -782,6 +929,7 @@ fn read_values_until_row_end<'py>(
     buf: &mut Vec<u8>,
     py: Python<'py>,
     sst: &[String],
+    date_styles: &DateStyles,
     row_idx: u32,
     min_col: Option<u32>,
     max_col: Option<u32>,
@@ -799,10 +947,17 @@ fn read_values_until_row_end<'py>(
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}")))?;
         match event {
             Event::Start(e) if e.local_name().as_ref() == "c" => {
-                let (col, t_attr) = cell_value_attrs_from_start(&e, next_col)?;
+                let (col, style_id, t_attr) = cell_value_attrs_from_start(&e, next_col)?;
                 next_col = col.saturating_add(1);
                 drop(e);
                 let (value, cell_type) = read_cell_contents(reader, buf, py, &t_attr, sst)?;
+                let value = date_styles.apply(
+                    py,
+                    style_id,
+                    value,
+                    cell_type,
+                    matches!(t_attr, CellTypeAttr::Number),
+                )?;
                 let pushed =
                     push_bounded_value(py, &mut out, &mut last_col, col, value, min_col, max_col);
                 if pushed && matches!(cell_type, "formula" | "e") {
@@ -810,7 +965,7 @@ fn read_values_until_row_end<'py>(
                 }
             }
             Event::Empty(e) if e.local_name().as_ref() == "c" => {
-                let (col, _t_attr) = cell_value_attrs_from_start(&e, next_col)?;
+                let (col, _style_id, _t_attr) = cell_value_attrs_from_start(&e, next_col)?;
                 next_col = col.saturating_add(1);
                 push_bounded_value(
                     py,
@@ -1068,8 +1223,9 @@ fn cell_attrs_from_start(
 fn cell_value_attrs_from_start(
     e: &BytesStart<'_>,
     default_col: u32,
-) -> PyResult<(u32, CellTypeAttr)> {
+) -> PyResult<(u32, Option<u32>, CellTypeAttr)> {
     let mut col = None;
+    let mut style_id = None;
     let mut cell_type = CellTypeAttr::Number;
     for attr in e.attributes().with_checks(false).flatten() {
         let key = attr.key.as_ref().as_bytes();
@@ -1082,10 +1238,11 @@ fn cell_value_attrs_from_start(
                 );
             }
             b"t" => cell_type = cell_type_from_bytes(attr.value.as_bytes()),
+            b"s" => style_id = parse_u32_bytes(attr.value.as_bytes()),
             _ => {}
         }
     }
-    Ok((col.unwrap_or(default_col), cell_type))
+    Ok((col.unwrap_or(default_col), style_id, cell_type))
 }
 
 /// `row@r`, or the row after `previous` when `r` is absent (openpyxl
