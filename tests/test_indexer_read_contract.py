@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import io
 import tracemalloc
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -26,16 +26,19 @@ SHEET_CT = "application/vnd.openxmlformats-officedocument.spreadsheetml.workshee
 
 STYLES = (
     f'<styleSheet xmlns="{NS}">'
-    '<numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy-mm-dd hh:mm:ss.000"/></numFmts>'
+    '<numFmts count="2"><numFmt numFmtId="164" formatCode="yyyy-mm-dd hh:mm:ss.000"/>'
+    '<numFmt numFmtId="165" formatCode="[mm]:ss"/></numFmts>'
     '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
     '<fills count="2"><fill><patternFill patternType="none"/></fill>'
     '<fill><patternFill patternType="gray125"/></fill></fills>'
     '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-    '<cellXfs count="3">'
+    '<cellXfs count="5">'
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
     '<xf numFmtId="21" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
     '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+    '<xf numFmtId="46" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+    '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
     "</cellXfs>"
     '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
     "</styleSheet>"
@@ -183,6 +186,39 @@ def test_time_formats_and_sub_second_precision_match_openpyxl(
         (time(6, 0, 0, 500000),),
         (datetime(2012, 11, 11, 23, 59, 58, 995000),),
         (datetime(2012, 11, 11, 12, 0),),
+    ]
+
+
+@pytest.mark.parametrize("read_only", MODES)
+@pytest.mark.parametrize("source", SOURCES)
+def test_duration_formats_read_as_timedelta_below_one_day(
+    tmp_path: Path, source: str, read_only: bool
+) -> None:
+    # Style 3 is built-in format 46 ([h]:mm:ss); style 4 is [mm]:ss. openpyxl
+    # returns datetime.timedelta for duration formats, including serials in
+    # [0, 1), which a time-of-day format would read as datetime.time.
+    data = _package(
+        '<row r="1"><c r="A1" s="3"><v>0</v></c></row>'
+        '<row r="2"><c r="A2" s="3"><v>0.5</v></c></row>'
+        '<row r="3"><c r="A3" s="3"><v>1.25</v></c></row>'
+        '<row r="4"><c r="A4" s="4"><v>0.5</v></c></row>'
+    )
+    if source == "path":
+        target = tmp_path / "book.xlsx"
+        target.write_bytes(data)
+        src: object = str(target)
+    else:
+        src = io.BytesIO(data)
+    wb = wolfxl.load_workbook(src, read_only=read_only)
+    try:
+        values = [row[0].value for row in wb.active.iter_rows()]
+    finally:
+        wb.close()
+    assert values == [
+        timedelta(0),
+        timedelta(hours=12),
+        timedelta(days=1, hours=6),
+        timedelta(hours=12),
     ]
 
 
