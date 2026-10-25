@@ -5,10 +5,14 @@ from __future__ import annotations
 import datetime
 import os
 import tempfile
+import zipfile
+from xml.etree import ElementTree as ET
 
+import openpyxl
 import pytest
 from wolfxl.calc._evaluator import WorkbookEvaluator
 from wolfxl.calc._functions import ExcelError
+from wolfxl.utils.datetime import CALENDAR_MAC_1904
 
 import wolfxl
 
@@ -966,3 +970,293 @@ class TestNamedRanges:
             ]
         finally:
             loaded.close()
+
+
+# 2024-01-01 as an Excel serial in the 1900 and 1904 date systems.
+_JAN_1_2024 = {False: 45292, True: 43830}
+_SHEET_NS = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+
+
+def _date_input_workbook(date1904: bool) -> wolfxl.Workbook:
+    wb = wolfxl.Workbook()
+    if date1904:
+        wb.epoch = CALENDAR_MAC_1904
+    ws = wb.active
+    ws["A1"] = datetime.date(2024, 1, 1)
+    ws["A2"] = datetime.datetime(2024, 1, 1, 18, 0)
+    ws["A3"] = datetime.time(6, 0)
+    ws["A4"] = datetime.timedelta(hours=36)
+    ws["A5"] = True
+    return wb
+
+
+def _calculate_column_b(wb: wolfxl.Workbook, formulas: list[str]) -> list[object]:
+    ws = wb.active
+    for row, formula in enumerate(formulas, start=1):
+        ws[f"B{row}"] = formula
+    ev = WorkbookEvaluator()
+    ev.load(wb)
+    results = ev.calculate()
+    return [results[f"Sheet!B{row}"] for row in range(1, len(formulas) + 1)]
+
+
+class TestDateCellSerials:
+    """Date, datetime, time and duration cells read as Excel serial numbers."""
+
+    @pytest.mark.parametrize("date1904", [False, True])
+    def test_arithmetic_and_comparison(self, date1904: bool) -> None:
+        base = _JAN_1_2024[date1904]
+        expected = {
+            "=A1": base,
+            "=A1+1": base + 1,
+            "=A1=DATE(2024,1,1)": True,
+            "=A2": base + 0.75,
+            "=A2-A1": 0.75,
+            "=A2+A3": base + 1,
+            "=A3": 0.25,
+            "=A3*24": 6.0,
+            "=A4": 1.5,
+            "=A4*24": 36.0,
+            "=A1+A4": base + 1.5,
+            "=A1<A2": True,
+            "=A2>A1+1": False,
+            '=A1&"d"': f"{base}d",
+        }
+        wb = _date_input_workbook(date1904)
+        assert _calculate_column_b(wb, list(expected)) == list(expected.values())
+
+    def test_bool_and_stored_values_unchanged(self) -> None:
+        wb = _date_input_workbook(False)
+        wb.active["B1"] = "=A5"
+        ev = WorkbookEvaluator()
+        ev.load(wb)
+        assert ev.calculate()["Sheet!B1"] is True
+        # The evaluator's input map mirrors the workbook's raw cell values.
+        assert ev._cell_values["Sheet!A1"] == datetime.date(2024, 1, 1)
+        assert ev._cell_values["Sheet!A3"] == datetime.time(6, 0)
+        assert ev._cell_values["Sheet!A4"] == datetime.timedelta(hours=36)
+        assert wb.active["A1"].value == datetime.date(2024, 1, 1)
+
+    @pytest.mark.parametrize("date1904", [False, True])
+    def test_date_functions(self, date1904: bool) -> None:
+        base = _JAN_1_2024[date1904]
+        expected = {
+            "=YEAR(A2)": 2024,
+            "=MONTH(A1)": 1,
+            "=DAY(A2)": 1,
+            "=HOUR(A2)": 18,
+            "=HOUR(A3)": 6,
+            "=MINUTE(A3)": 0,
+            "=DAYS(A2,A1)": 0,
+            "=EDATE(A1,1)": base + 31,
+            "=EOMONTH(A1,0)": base + 30,
+            '=TEXT(A1,"mm/dd/yyyy")': "01/01/2024",
+            '=TEXT(A2,"yyyy-mm-dd")': "2024-01-01",
+            "=MAX(A1:A2)": base + 0.75,
+            "=MIN(A1:A2)": base,
+        }
+        wb = _date_input_workbook(date1904)
+        assert _calculate_column_b(wb, list(expected)) == list(expected.values())
+
+    @pytest.mark.parametrize("date1904", [False, True])
+    def test_lookups_and_criteria(self, date1904: bool) -> None:
+        wb = wolfxl.Workbook()
+        if date1904:
+            wb.epoch = CALENDAR_MAC_1904
+        ws = wb.active
+        ws["A1"] = datetime.date(2024, 1, 1)
+        ws["A2"] = datetime.datetime(2024, 1, 2)
+        ws["A3"] = datetime.date(2024, 1, 3)
+        for row, (label, amount) in enumerate([("a", 10), ("b", 20), ("c", 30)], start=1):
+            ws[f"C{row}"] = label
+            ws[f"D{row}"] = amount
+        expected = {
+            "=VLOOKUP(DATE(2024,1,2),A1:C3,3,FALSE)": "b",
+            "=VLOOKUP(DATE(2024,1,2)+0.5,A1:C3,3)": "b",
+            "=MATCH(DATE(2024,1,3),A1:A3,0)": 3,
+            "=XLOOKUP(DATE(2024,1,1),A1:A3,C1:C3)": "a",
+            '=COUNTIF(A1:A3,">="&DATE(2024,1,2))': 2,
+            '=SUMIF(A1:A3,">"&DATE(2024,1,1),D1:D3)': 50,
+            "=A2=DATE(2024,1,2)": True,
+        }
+        for row, formula in enumerate(expected, start=1):
+            ws[f"F{row}"] = formula
+        ev = WorkbookEvaluator()
+        ev.load(wb)
+        results = ev.calculate()
+        assert [results[f"Sheet!F{row}"] for row in range(1, len(expected) + 1)] == list(
+            expected.values()
+        )
+
+    def test_dates_before_march_1900_follow_lotus_serials(self) -> None:
+        wb = wolfxl.Workbook()
+        ws = wb.active
+        ws["A1"] = datetime.date(1900, 1, 1)
+        ws["A2"] = datetime.date(1900, 2, 28)
+        ws["A3"] = datetime.date(1900, 3, 1)
+        expected = {
+            "=A1": 1,
+            "=A2": 59,
+            "=A3": 61,  # serial 60 is Excel's phantom 1900-02-29
+            "=A3-A2": 2,
+            "=A2=DATE(1900,2,28)": True,
+            "=A3=DATE(1900,3,1)": True,
+            "=YEAR(A1)": 1900,
+            "=DAY(A2)": 28,
+            "=MONTH(A3)": 3,
+            "=DAY(A3)": 1,
+        }
+        assert _calculate_column_b(wb, list(expected)) == list(expected.values())
+
+    @pytest.mark.parametrize("date1904", [False, True])
+    def test_recalculate_date_perturbations(self, date1904: bool) -> None:
+        base = _JAN_1_2024[date1904]
+        wb = wolfxl.Workbook()
+        if date1904:
+            wb.epoch = CALENDAR_MAC_1904
+        ws = wb.active
+        ws["A1"] = "=DATE(2024,1,1)"
+        ws["A2"] = datetime.date(2024, 1, 1)
+        ws["A3"] = "=A2+1"
+        ws["A5"] = "=A1=A2"
+        ws["A6"] = datetime.time(6, 0)
+        ws["B6"] = "=A6*24"
+        ev = WorkbookEvaluator()
+        ev.load(wb)
+        results = ev.calculate()
+        assert (results["Sheet!A3"], results["Sheet!A5"], results["Sheet!B6"]) == (
+            base + 1,
+            True,
+            6.0,
+        )
+
+        perturbations = {
+            "Sheet!A2": datetime.date(2024, 2, 1),
+            "Sheet!A6": datetime.timedelta(hours=30),
+        }
+        recalc = ev.recalculate(perturbations)
+        assert recalc.perturbations == perturbations
+        assert {d.cell_ref: d.new_value for d in recalc.deltas} == {
+            "Sheet!A3": base + 32,
+            "Sheet!A5": False,
+            "Sheet!B6": 30.0,
+        }
+
+        recalc = ev.recalculate({"Sheet!A2": datetime.datetime(2024, 1, 1, 12, 0)})
+        assert {d.cell_ref: d.new_value for d in recalc.deltas} == {"Sheet!A3": base + 1.5}
+        recalc = ev.recalculate({"Sheet!A2": datetime.date(2024, 1, 1)})
+        assert {d.cell_ref: d.new_value for d in recalc.deltas} == {
+            "Sheet!A3": base + 1,
+            "Sheet!A5": True,
+        }
+
+    @pytest.mark.parametrize("modify", [False, True])
+    @pytest.mark.parametrize("date1904", [False, True])
+    def test_calculate_saves_numeric_caches(self, tmp_path, date1904: bool, modify: bool) -> None:
+        """Date inputs keep caches fresh; formulas, values and formats are untouched."""
+        base = _JAN_1_2024[date1904]
+        source = tmp_path / "source.xlsx"
+        original = openpyxl.Workbook()
+        if date1904:
+            original.epoch = CALENDAR_MAC_1904  # equal to openpyxl's MAC_EPOCH
+        ws = original.active
+        ws.title = "Sheet"
+        ws["A1"] = "=DATE(2024,1,1)"
+        ws["A2"] = datetime.date(2024, 1, 1)
+        ws["A2"].number_format = "yyyy-mm-dd"
+        ws["A3"] = "=A2+1"
+        ws["A5"] = "=A1=A2"
+        ws["A6"] = datetime.timedelta(hours=12)
+        ws["A6"].number_format = "[h]:mm:ss"
+        ws["B6"] = "=A6*24"
+        ws["A7"] = datetime.time(6, 30)
+        ws["A7"].number_format = "hh:mm:ss"
+        ws["B7"] = "=A7*24"
+        ws["A8"] = datetime.datetime(2024, 1, 1, 18)
+        ws["A8"].number_format = "yyyy-mm-dd hh:mm:ss"
+        ws["B8"] = "=A8-A2"
+        ws["B9"] = "=A2+A7"
+        original.save(source)
+
+        wb = wolfxl.load_workbook(source, modify=modify)
+        try:
+            assert wb.active["A6"].value == datetime.timedelta(hours=12)
+            assert wb.active["A7"].value == datetime.time(6, 30)
+            results = wb.calculate()
+            assert results["Sheet!A1"] == base
+            assert results["Sheet!A3"] == base + 1
+            assert results["Sheet!A5"] is True
+            assert results["Sheet!B6"] == 12.0
+            assert results["Sheet!B7"] == pytest.approx(6.5)
+            assert results["Sheet!B8"] == pytest.approx(0.75)
+            assert results["Sheet!B9"] == pytest.approx(base + 6.5 / 24)
+            # A what-if perturbation never reaches the saved caches.
+            wb.recalculate({"Sheet!A2": datetime.date(2024, 2, 1)})
+            output = tmp_path / "calculated.xlsx"
+            wb.save(output)
+        finally:
+            wb.close()
+
+        with zipfile.ZipFile(output) as package:
+            root = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+        cells = {cell.get("r"): cell for cell in root.findall(".//s:c", _SHEET_NS)}
+        assert cells["A1"].find("s:v", _SHEET_NS).text == str(base)
+        assert cells["A3"].find("s:f", _SHEET_NS).text == "A2+1"
+        assert cells["A3"].find("s:v", _SHEET_NS).text == str(base + 1)
+        assert cells["A3"].get("t") is None
+        assert cells["A5"].get("t") == "b"
+        assert cells["A5"].find("s:v", _SHEET_NS).text == "1"
+        assert cells["B6"].find("s:v", _SHEET_NS).text == "12"
+        assert float(cells["B7"].find("s:v", _SHEET_NS).text) == pytest.approx(6.5)
+        assert float(cells["B8"].find("s:v", _SHEET_NS).text) == pytest.approx(0.75)
+        assert float(cells["B9"].find("s:v", _SHEET_NS).text) == pytest.approx(base + 6.5 / 24)
+
+        saved = openpyxl.load_workbook(output)
+        try:
+            sheet = saved["Sheet"]
+            assert saved.epoch == original.epoch
+            assert sheet["A2"].value == datetime.datetime(2024, 1, 1)
+            assert sheet["A2"].number_format == "yyyy-mm-dd"
+            assert sheet["A3"].value == "=A2+1"
+            assert sheet["A6"].value == datetime.timedelta(hours=12)
+            assert sheet["A6"].number_format == "[h]:mm:ss"
+            assert sheet["B6"].value == "=A6*24"
+            assert sheet["A7"].value == datetime.time(6, 30)
+            assert sheet["A7"].number_format == "hh:mm:ss"
+            assert sheet["A8"].value == datetime.datetime(2024, 1, 1, 18)
+            assert sheet["A8"].number_format == "yyyy-mm-dd hh:mm:ss"
+            assert sheet["B7"].value == "=A7*24"
+            assert sheet["B8"].value == "=A8-A2"
+            assert sheet["B9"].value == "=A2+A7"
+        finally:
+            saved.close()
+
+        cached = openpyxl.load_workbook(output, data_only=True)
+        try:
+            sheet = cached["Sheet"]
+            assert sheet["A1"].value == base
+            assert sheet["A3"].value == base + 1
+            assert sheet["A5"].value is True
+            assert sheet["B6"].value == 12
+            assert sheet["B7"].value == pytest.approx(6.5)
+            assert sheet["B8"].value == pytest.approx(0.75)
+            assert sheet["B9"].value == pytest.approx(base + 6.5 / 24)
+        finally:
+            cached.close()
+
+    @pytest.mark.parametrize("modify", [False, True])
+    @pytest.mark.parametrize("date1904", [False, True])
+    def test_date_plus_time_with_optional_calc(self, tmp_path, date1904: bool, modify: bool) -> None:
+        """TIME stays in the existing optional backend, not the built-in registry."""
+        pytest.importorskip("formulas")
+        source = tmp_path / "date-plus-time.xlsx"
+        original = openpyxl.Workbook()
+        if date1904:
+            original.epoch = CALENDAR_MAC_1904
+        original.active["A1"] = datetime.date(2024, 1, 1)
+        original.active["A1"].number_format = "yyyy-mm-dd"
+        original.active["B1"] = "=A1+TIME(6,30,0)"
+        original.save(source)
+        with wolfxl.load_workbook(source, modify=modify) as wb:
+            result = wb.calculate()
+            assert result["Sheet!B1"] == pytest.approx(_JAN_1_2024[date1904] + 6.5 / 24)
