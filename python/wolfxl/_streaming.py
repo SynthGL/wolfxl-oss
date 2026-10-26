@@ -215,37 +215,15 @@ def _source_dimension_bounds(
 
 
 def _source_cell_bounds(source: str | bytes, sheet_title: str) -> tuple[int, int, int, int]:
-    """Scan eager cell/merge bounds without materializing values or an XML tree."""
-    max_row = max_col = row = col = 0
-    with _open_source_zip(source) as zf:
-        validate_zipfile(zf)
-        sheet_path = _sheet_path_from_workbook(zf, sheet_title)
-        if sheet_path is None:
-            raise ValueError(f"Worksheet part not found: {sheet_title}")
-        with zf.open(sheet_path) as stream:
-            parents = []
-            for event, elem in ET.iterparse(stream, events=("start", "end")):
-                name = _local_name(elem.tag)
-                if event == "start":
-                    parents.append(elem)
-                    if name == "row":
-                        row = int(elem.get("r", row + 1))
-                        col = 0
-                    elif name == "c":
-                        ref = elem.get("r")
-                        cell_row, col = a1_to_rowcol(ref) if ref else (row, col + 1)
-                        max_row = max(max_row, cell_row)
-                        max_col = max(max_col, col)
-                    elif name == "mergeCell":
-                        bounds = _bounds_from_dimension_ref(elem.get("ref", ""))
-                        if bounds is not None:
-                            max_row = max(max_row, bounds[2])
-                            max_col = max(max_col, bounds[3])
-                else:
-                    parents.pop()
-                    if parents:
-                        parents[-1].remove(elem)
-                    elem.clear()
+    """Eager cell/merge bounds, scanned natively without decoding values."""
+    from wolfxl import _rust
+
+    if isinstance(source, (bytes, bytearray)):
+        max_row, max_col = _rust.StreamingSheetReader.cell_bounds_from_bytes(
+            bytes(source), sheet_title
+        )
+    else:
+        max_row, max_col = _rust.StreamingSheetReader.cell_bounds(source, sheet_title)
     return 1, 1, max_row, max_col
 
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.17 - 2026-10-26
+
+### Fixed
+
+- Restore the speed of `iter_rows()` without bounds in normal loads of large
+  sheets, which 2.0.16 slowed down when it stopped trusting a sheet's
+  `<dimension>`. WolfXL now finds the last cell and merged range with a Rust
+  scan of the sheet XML instead of parsing the whole sheet in Python before the
+  first row. On a 200,000-row by 8-column sheet (Linux x86_64, Python 3.12,
+  median of 7 runs), the first row arrives in 0.28 s instead of 2.84 s and a
+  full `iter_rows(values_only=True)` pass takes 0.60 s instead of 3.16 s. Rows
+  and values are unchanged, and explicit `max_row` and `max_col` bounds still
+  skip the scan.
+
 ## 2.0.16 - 2026-10-25
 
 ### Fixed
