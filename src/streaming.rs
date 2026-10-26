@@ -1612,16 +1612,24 @@ fn scan_cell_bounds<B: io::BufRead>(xml: B) -> PyResult<(u32, u32)> {
     }
 }
 
-/// Raw value of the attribute whose local name is `name`.
+/// Value of the attribute whose local name is `name`, with character and
+/// entity references decoded as an XML parser reports it; a value that does
+/// not decode is returned raw and fails reference parsing downstream.
 fn local_attr<'a>(e: &'a BytesStart<'_>, name: &str) -> Option<std::borrow::Cow<'a, str>> {
-    e.attributes()
+    let value = e
+        .attributes()
         .with_checks(false)
         .flatten()
         .find_map(|attr| {
             let key = attr.key.as_ref();
             let local = key.rsplit(':').next().unwrap_or(key);
             (local == name).then_some(attr.value)
-        })
+        })?;
+    let decoded = match quick_xml::escape::unescape(&value) {
+        Ok(std::borrow::Cow::Owned(text)) => Some(text),
+        _ => None,
+    };
+    Some(decoded.map_or(value, std::borrow::Cow::Owned))
 }
 
 /// `(row, col)` of a reference matching `[A-Za-z]+[0-9]+`, the form
@@ -2337,5 +2345,7 @@ mod tests {
         assert!(
             scan_cell_bounds(&br#"<sheetData><row><c r="A1B"/></row></sheetData>"#[..]).is_err()
         );
+        let encoded = br#"<sheetData><row r="1"><c r="A5000&#49;"/></row></sheetData><mergeCells><mergeCell ref="A1:C&#x37;"/></mergeCells>"#;
+        assert_eq!(scan_cell_bounds(&encoded[..]).unwrap(), (50001, 3));
     }
 }
