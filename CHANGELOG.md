@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.18 - 2026-10-26
+
+### Fixed
+
+- Save `date` and `datetime` values written in modify mode
+  (`load_workbook(path, modify=True)`). 2.0.17 raised
+  `ValueError: Unknown cell type: 'datetime'` on save. Dates are now stored as
+  Excel serials in the workbook's epoch (1900 or 1904) with a `yyyy-mm-dd` or
+  `yyyy-mm-dd h:mm:ss` number format, matching openpyxl, and a
+  timezone-aware `datetime` raises the same `TypeError` as openpyxl.
+- Add new number formats in modify mode to workbooks whose styles contain an
+  empty `<numFmts count="0"/>` collection, as openpyxl writes them. Before,
+  setting two or more new number formats in one save left the cells pointing
+  at number formats that were never written, so openpyxl failed to read the
+  saved file.
+
 ## 2.0.17 - 2026-10-26
 
 ### Fixed

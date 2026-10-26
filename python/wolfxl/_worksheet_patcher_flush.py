@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from wolfxl._utils import rowcol_to_a1
+from wolfxl.utils.datetime import to_excel
 
 if TYPE_CHECKING:
     from wolfxl._worksheet import Worksheet
@@ -36,10 +37,11 @@ def flush_to_patcher(
     dirty_value_keys = set(dirty_values)
     for row, col in sorted(dirty_value_keys):
         coord = rowcol_to_a1(row, col)
+        value = dirty_values[(row, col)]
         patcher.queue_value(  # noqa: SLF001
             ws._title,  # noqa: SLF001
             coord,
-            python_value_to_payload(dirty_values[(row, col)]),
+            _normalize_patcher_value_payload(ws, value, python_value_to_payload(value)),
         )
 
     for row, col in ws._dirty:  # noqa: SLF001
@@ -77,7 +79,11 @@ def flush_to_patcher(
                 patcher.queue_rich_text_value(ws._title, coord, runs_payload)  # noqa: SLF001
             else:
                 payload = _payload_for_cell(cell, value, python_value_to_payload)
-                patcher.queue_value(ws._title, coord, payload)  # noqa: SLF001
+                patcher.queue_value(  # noqa: SLF001
+                    ws._title,  # noqa: SLF001
+                    coord,
+                    _normalize_patcher_value_payload(ws, value, payload),
+                )
 
         if cell._format_dirty:  # noqa: SLF001
             fmt: dict[str, Any] = {}
@@ -139,3 +145,19 @@ def _payload_for_cell(
     if explicit == "n":
         return {"type": "number", "value": value}
     return python_value_to_payload(value)
+
+
+def _normalize_patcher_value_payload(
+    ws: Worksheet,
+    value: Any,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Convert naive date/time payloads to Excel serials for ``XlsxPatcher``."""
+    if payload.get("type") in {"date", "datetime", "time"}:
+        if getattr(value, "tzinfo", None) is not None:
+            raise TypeError(
+                "Excel does not support timezones in datetimes. "
+                "The tzinfo in the datetime/time object must be set to None."
+            )
+        return {"type": "number", "value": to_excel(value, ws._workbook.epoch)}  # noqa: SLF001
+    return payload

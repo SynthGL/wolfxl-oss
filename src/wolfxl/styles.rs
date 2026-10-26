@@ -349,24 +349,42 @@ pub fn xf_to_xml(
 /// Insert a new element just before the closing tag of a section.
 ///
 /// E.g. insert `<font>...</font>` before `</fonts>` and bump the `count`.
+/// A self-closing section such as `<numFmts count="0"/>` (as openpyxl writes
+/// it) is expanded to an open/close pair around the new element.
 pub fn inject_into_section(xml: &str, section_tag: &str, new_element: &str) -> (String, u32) {
     let close_tag = format!("</{section_tag}>");
     let open_prefix = format!("<{section_tag}");
 
-    // Find the closing tag position
-    let Some(close_pos) = xml.find(&close_tag) else {
-        // Section doesn't exist — shouldn't happen for well-formed styles.xml
-        return (xml.to_string(), 0);
-    };
-
     // Find the opening tag to update count attribute
-    let Some(open_pos) = xml.find(&open_prefix) else {
+    let Some(open_pos) = xml
+        .match_indices(&open_prefix)
+        .map(|(pos, _)| pos)
+        .find(|&pos| {
+            matches!(
+                xml.as_bytes().get(pos + open_prefix.len()),
+                Some(b' ' | b'\t' | b'\r' | b'\n' | b'>' | b'/')
+            )
+        })
+    else {
         return (xml.to_string(), 0);
     };
-
-    // Parse existing count
-    let open_end = xml[open_pos..].find('>').unwrap_or(0) + open_pos;
+    let Some(open_len) = xml[open_pos..].find('>') else {
+        return (xml.to_string(), 0);
+    };
+    let open_end = open_pos + open_len;
     let open_tag_str = &xml[open_pos..=open_end];
+    let self_closing = open_tag_str.ends_with("/>");
+
+    // Find the closing tag position
+    let close_pos = if self_closing {
+        open_end + 1
+    } else {
+        let Some(close_offset) = xml[open_end..].find(&close_tag) else {
+            // Section doesn't close — shouldn't happen for well-formed styles.xml
+            return (xml.to_string(), 0);
+        };
+        open_end + close_offset
+    };
 
     let existing_count = extract_count_attr(open_tag_str).unwrap_or(0);
     let new_count = existing_count + 1;
@@ -378,9 +396,21 @@ pub fn inject_into_section(xml: &str, section_tag: &str, new_element: &str) -> (
     // Reconstruct XML
     let mut result = String::with_capacity(xml.len() + new_element.len() + 32);
     result.push_str(&xml[..open_pos]);
-    result.push_str(&updated_open);
-    result.push_str(&xml[open_end + 1..close_pos]);
-    result.push_str(new_element);
+    if self_closing {
+        result.push_str(
+            updated_open
+                .strip_suffix("/>")
+                .unwrap_or(&updated_open)
+                .trim_end(),
+        );
+        result.push('>');
+        result.push_str(new_element);
+        result.push_str(&close_tag);
+    } else {
+        result.push_str(&updated_open);
+        result.push_str(&xml[open_end + 1..close_pos]);
+        result.push_str(new_element);
+    }
     result.push_str(&xml[close_pos..]);
 
     (result, new_index)
@@ -673,6 +703,22 @@ mod tests {
         assert!(id >= 164);
         assert!(updated.contains("$#,##0.00"));
         assert!(updated.contains("<numFmts count=\"1\">"));
+    }
+
+    #[test]
+    fn custom_num_fmts_fill_self_closing_section_and_get_distinct_ids() {
+        // openpyxl writes an empty collection as `<numFmts count="0" />`.
+        let xml =
+            r#"<styleSheet><numFmts count="0" /><fonts count="1"><font/></fonts></styleSheet>"#;
+        let (once, date_id) = find_or_create_num_fmt(xml, "yyyy-mm-dd");
+        assert_eq!(date_id, 164);
+        assert!(once.contains(
+            r#"<numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/></numFmts><fonts"#
+        ));
+        let (twice, datetime_id) = find_or_create_num_fmt(&once, "yyyy-mm-dd h:mm:ss");
+        assert_eq!(datetime_id, 165);
+        assert!(twice.contains(r#"<numFmts count="2">"#));
+        assert_eq!(find_or_create_num_fmt(&twice, "yyyy-mm-dd").1, 164);
     }
 
     #[test]
