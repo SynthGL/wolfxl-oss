@@ -1589,7 +1589,9 @@ fn scan_cell_bounds<B: io::BufRead>(xml: B) -> PyResult<(u32, u32)> {
             "c" => {
                 let (cell_row, cell_col) = match local_attr(&e, "r").filter(|r| !r.is_empty()) {
                     Some(reference) => parse_a1_cell(reference.as_bytes()).ok_or_else(|| {
-                        PyErr::new::<PyValueError, _>(format!("Invalid A1 reference: {reference:?}"))
+                        PyErr::new::<PyValueError, _>(format!(
+                            "Invalid A1 reference: {reference:?}"
+                        ))
                     })?,
                     None => (row, col.saturating_add(1)),
                 };
@@ -1598,8 +1600,8 @@ fn scan_cell_bounds<B: io::BufRead>(xml: B) -> PyResult<(u32, u32)> {
                 max_col = max_col.max(cell_col);
             }
             "mergeCell" => {
-                if let Some((merge_row, merge_col)) =
-                    local_attr(&e, "ref").and_then(|reference| merge_range_max(reference.as_bytes()))
+                if let Some((merge_row, merge_col)) = local_attr(&e, "ref")
+                    .and_then(|reference| merge_range_max(reference.as_bytes()))
                 {
                     max_row = max_row.max(merge_row);
                     max_col = max_col.max(merge_col);
@@ -1612,11 +1614,14 @@ fn scan_cell_bounds<B: io::BufRead>(xml: B) -> PyResult<(u32, u32)> {
 
 /// Raw value of the attribute whose local name is `name`.
 fn local_attr<'a>(e: &'a BytesStart<'_>, name: &str) -> Option<std::borrow::Cow<'a, str>> {
-    e.attributes().with_checks(false).flatten().find_map(|attr| {
-        let key = attr.key.as_ref();
-        let local = key.rsplit(':').next().unwrap_or(key);
-        (local == name).then_some(attr.value)
-    })
+    e.attributes()
+        .with_checks(false)
+        .flatten()
+        .find_map(|attr| {
+            let key = attr.key.as_ref();
+            let local = key.rsplit(':').next().unwrap_or(key);
+            (local == name).then_some(attr.value)
+        })
 }
 
 /// `(row, col)` of a reference matching `[A-Za-z]+[0-9]+`, the form
@@ -2329,6 +2334,8 @@ mod tests {
         let xml = br#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:Z900"/><sheetData><row r="1"><c r="A1"><v>1</v></c><c><v>2</v></c><c r=""/></row><row><c r="b4"/></row><row r="9" s="2" customFormat="1"/></sheetData><mergeCells><mergeCell ref="$B$5:B6"/><mergeCell ref="bad"/></mergeCells></worksheet>"#;
         assert_eq!(scan_cell_bounds(&xml[..]).unwrap(), (6, 3));
         assert_eq!(scan_cell_bounds(&b"<worksheet/>"[..]).unwrap(), (0, 0));
-        assert!(scan_cell_bounds(&br#"<sheetData><row><c r="A1B"/></row></sheetData>"#[..]).is_err());
+        assert!(
+            scan_cell_bounds(&br#"<sheetData><row><c r="A1B"/></row></sheetData>"#[..]).is_err()
+        );
     }
 }
