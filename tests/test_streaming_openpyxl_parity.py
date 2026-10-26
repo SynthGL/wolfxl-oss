@@ -186,3 +186,28 @@ def test_trailing_rows_follow_load_mode(
     finally:
         actual.close()
         expected.close()
+
+
+@pytest.mark.parametrize("file_object", [False, True])
+@pytest.mark.parametrize("values_only", [False, True])
+def test_eager_stream_extends_to_merged_range(tmp_path, file_object, values_only):
+    book = openpyxl.Workbook()
+    book.active["A1"] = "first"
+    book.active["C3"] = "last"
+    book.active.merge_cells("D2:E50002")
+    path = tmp_path / "merged-tail.xlsx"
+    book.save(path)
+    expected = openpyxl.load_workbook(path)
+    actual = wolfxl.load_workbook(_source(path, file_object))
+    try:
+        assert _streaming.should_auto_stream(actual.active)
+
+        def values(sheet):
+            for row in sheet.iter_rows(values_only=values_only):
+                yield tuple(row) if values_only else tuple(cell.value for cell in row)
+
+        for result, reference in zip(values(actual.active), values(expected.active), strict=True):
+            assert result == reference
+    finally:
+        actual.close()
+        expected.close()

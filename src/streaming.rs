@@ -634,6 +634,26 @@ impl StreamingSheetReader {
         Self::from_archive(zip, sheet, min_row, max_row, min_col, max_col)
     }
 
+    /// `(max_row, max_col)` covered by `sheet`'s cells and merged ranges in the
+    /// xlsx at `path`: the extent an eager openpyxl load reports, which ignores
+    /// the declared dimension and row-only formatting records.
+    #[staticmethod]
+    pub fn cell_bounds(path: &str, sheet: &str) -> PyResult<(u32, u32)> {
+        let file = File::open(path)
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open xlsx: {e}")))?;
+        let zip = ZipArchive::new(file)
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
+        archive_cell_bounds(zip, sheet)
+    }
+
+    /// [`Self::cell_bounds`] for in-memory xlsx bytes (file-like sources).
+    #[staticmethod]
+    pub fn cell_bounds_from_bytes(data: &Bound<'_, PyBytes>, sheet: &str) -> PyResult<(u32, u32)> {
+        let zip = ZipArchive::new(PyBytesCursor::new(data))
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
+        archive_cell_bounds(zip, sheet)
+    }
+
     /// Install source-style kinds (0 plain, 1 datetime/time, 2 duration).
     /// Durations use the retained converter to preserve Python timedelta rounding.
     pub fn set_date_styles(
@@ -1531,6 +1551,104 @@ fn row_index_from_start(e: &BytesStart<'_>, previous: u32) -> PyResult<u32> {
     })
 }
 
+fn archive_cell_bounds<R: Read + Seek>(
+    mut zip: ZipArchive<R>,
+    sheet: &str,
+) -> PyResult<(u32, u32)> {
+    ooxml_util::validate_zip_archive(&mut zip)?;
+    let sheet_path = resolve_sheet_xml_path(&mut zip, sheet)?;
+    let entry = zip.by_name(&sheet_path).map_err(|e| {
+        PyErr::new::<PyIOError, _>(format!("Failed to open sheet part '{sheet_path}': {e}"))
+    })?;
+    scan_cell_bounds(BufReader::with_capacity(SHEET_ENTRY_BUFFER, entry))
+}
+
+/// Largest row and column of any `<c>` (at its reference, else one column
+/// past the previous cell of the row) or `<mergeCell>` range, mirroring where
+/// openpyxl's eager reader places cells. Cell values are never decoded.
+fn scan_cell_bounds<B: io::BufRead>(xml: B) -> PyResult<(u32, u32)> {
+    let mut reader = XmlReader::from_reader(xml);
+    let mut buf = Vec::with_capacity(8192);
+    let (mut max_row, mut max_col) = (0u32, 0u32);
+    let (mut row, mut col) = (0u32, 0u32);
+    loop {
+        buf.clear();
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("Cell bounds scan XML: {e}")))?;
+        let e = match event {
+            Event::Start(e) | Event::Empty(e) => e,
+            Event::Eof => return Ok((max_row, max_col)),
+            _ => continue,
+        };
+        match e.local_name().as_ref() {
+            "row" => {
+                row = row_index_from_start(&e, row)?;
+                col = 0;
+            }
+            "c" => {
+                let (cell_row, cell_col) = match local_attr(&e, "r").filter(|r| !r.is_empty()) {
+                    Some(reference) => parse_a1_cell(reference.as_bytes()).ok_or_else(|| {
+                        PyErr::new::<PyValueError, _>(format!("Invalid A1 reference: {reference:?}"))
+                    })?,
+                    None => (row, col.saturating_add(1)),
+                };
+                col = cell_col;
+                max_row = max_row.max(cell_row);
+                max_col = max_col.max(cell_col);
+            }
+            "mergeCell" => {
+                if let Some((merge_row, merge_col)) =
+                    local_attr(&e, "ref").and_then(|reference| merge_range_max(reference.as_bytes()))
+                {
+                    max_row = max_row.max(merge_row);
+                    max_col = max_col.max(merge_col);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Raw value of the attribute whose local name is `name`.
+fn local_attr<'a>(e: &'a BytesStart<'_>, name: &str) -> Option<std::borrow::Cow<'a, str>> {
+    e.attributes().with_checks(false).flatten().find_map(|attr| {
+        let key = attr.key.as_ref();
+        let local = key.rsplit(':').next().unwrap_or(key);
+        (local == name).then_some(attr.value)
+    })
+}
+
+/// `(row, col)` of a reference matching `[A-Za-z]+[0-9]+`, the form
+/// `wolfxl._utils.a1_to_rowcol` accepts.
+fn parse_a1_cell(bytes: &[u8]) -> Option<(u32, u32)> {
+    let letters = bytes.iter().take_while(|b| b.is_ascii_alphabetic()).count();
+    if letters == 0 {
+        return None;
+    }
+    let (col_part, row_part) = bytes.split_at(letters);
+    let mut col = 0u32;
+    for &byte in col_part {
+        col = col
+            .checked_mul(26)?
+            .checked_add(u32::from(byte.to_ascii_uppercase() - b'A' + 1))?;
+    }
+    Some((parse_u32_bytes(row_part)?, col))
+}
+
+/// Bottom-right corner of a merged range such as `A1:C3` or `$B$2`; `None`
+/// for a malformed range, which openpyxl's bounds also skip.
+fn merge_range_max(reference: &[u8]) -> Option<(u32, u32)> {
+    let cleaned: Vec<u8> = reference.iter().copied().filter(|&b| b != b'$').collect();
+    let (first, last) = match cleaned.iter().position(|&b| b == b':') {
+        Some(split) => (&cleaned[..split], &cleaned[split + 1..]),
+        None => (&cleaned[..], &cleaned[..]),
+    };
+    let (first_row, first_col) = parse_a1_cell(first)?;
+    let (last_row, last_col) = parse_a1_cell(last)?;
+    Some((first_row.max(last_row), first_col.max(last_col)))
+}
+
 fn cell_type_from_bytes(value: &[u8]) -> CellTypeAttr {
     match value {
         b"s" => CellTypeAttr::Shared,
@@ -2204,5 +2322,13 @@ mod tests {
             assert_eq!(formula, "= A1 & \" B \"\n");
             assert_eq!(cached, 123);
         });
+    }
+
+    #[test]
+    fn cell_bounds_follow_cells_and_merges_not_dimension() {
+        let xml = br#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:Z900"/><sheetData><row r="1"><c r="A1"><v>1</v></c><c><v>2</v></c><c r=""/></row><row><c r="b4"/></row><row r="9" s="2" customFormat="1"/></sheetData><mergeCells><mergeCell ref="$B$5:B6"/><mergeCell ref="bad"/></mergeCells></worksheet>"#;
+        assert_eq!(scan_cell_bounds(&xml[..]).unwrap(), (6, 3));
+        assert_eq!(scan_cell_bounds(&b"<worksheet/>"[..]).unwrap(), (0, 0));
+        assert!(scan_cell_bounds(&br#"<sheetData><row><c r="A1B"/></row></sheetData>"#[..]).is_err());
     }
 }
