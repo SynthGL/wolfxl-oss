@@ -4,8 +4,8 @@ build-backend = "maturin"
 
 [project]
 name = "wolfxl"
-version = "2.0.18"
-description = "Edit Excel files without losing formatting; WolfXL 2.0.8 measured 3.0-17.3x faster than openpyxl 3.1.5 on the committed read/write benchmark (small-file gains vary). Openpyxl-compatible API, Rust backend, MIT."
+version = "2.0.19"
+description = "Openpyxl-compatible Excel library with a Rust backend: speed up openpyxl code with one import change and edit .xlsx templates without losing formatting, conditional formatting, or data validation. WolfXL 2.0.8 measured 3.0-17.3x faster than openpyxl 3.1.5 on the committed read/write benchmark (small-file gains vary). MIT."
 readme = "PYPI.md"
 requires-python = ">=3.9,!=3.9.0,!=3.9.1"
 dependencies = ["defusedxml>=0.7.1,<1.0"]
@@ -17,6 +17,10 @@ keywords = [
     "xlsm",
     "openpyxl",
     "openpyxl-alternative",
+    "openpyxl-replacement",
+    "excel-template",
+    "conditional-formatting",
+    "data-validation",
     "edit-xlsx-in-place",
     "preserve-formatting",
     "excel-formulas",

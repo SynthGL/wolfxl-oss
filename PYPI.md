@@ -1,19 +1,31 @@
 # WolfXL Community
 
-**Edit existing Excel files from Python without losing formatting, with an openpyxl-compatible API. MIT licensed. In the committed historical read/write benchmark, WolfXL 2.0.8 measured 3.0-17.3x faster than openpyxl 3.1.5 (small-file gains vary).**
+**An openpyxl-compatible Excel library for Python with a Rust backend. Edit existing `.xlsx` templates without losing formatting, conditional formatting, or data validation. MIT licensed. In the committed historical read/write benchmark, WolfXL 2.0.8 measured 3.0-17.3x faster than openpyxl 3.1.5 (small-file gains vary).**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
 implemented in Rust. Modify mode saves the cells you change and keeps the rest
 of the file, and `calculate()` covers common Excel functions in Python.
+Most openpyxl code runs after a one-line import change, so it is the first
+thing to try when an openpyxl script is too slow.
 
 WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported workbook creation, reading, writing, streaming exports, and existing-workbook edits. It is a free product, not a trial.
 
 ## Install
 
 ```bash
-python -m pip install wolfxl==2.0.18
+python -m pip install wolfxl==2.0.19
 ```
+
+## Which library for which Excel job
+
+| Job | Use |
+| --- | --- |
+| An openpyxl script is too slow | WolfXL: change `from openpyxl import ...` to `from wolfxl import ...` |
+| Fill or edit a styled template and keep its formatting, conditional formats, data validation, charts, and sparklines | WolfXL modify mode: `load_workbook(path, modify=True)` |
+| Compute formula results in Python | WolfXL `calculate()` for common functions; Commercial for Excel-matched results |
+| Only read cell values, as fast as possible, into a DataFrame | python-calamine, fastexcel, or polars |
+| Only write new files, never read or edit them | XlsxWriter, or WolfXL if you also read or edit |
 
 ## Edit an existing workbook
 
