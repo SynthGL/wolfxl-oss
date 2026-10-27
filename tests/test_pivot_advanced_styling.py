@@ -418,6 +418,6 @@ def test_pt_styling_combined_with_calc_items():
     table_d = pt.to_rust_dict()
     xml = serialize_pivot_table_dict(cache_d, table_d)
     s = xml.decode()
-    assert "<calculatedItems" in s
+    assert '<item x="2" f="1"/>' in s
     assert "<formats" in s
     assert "<conditionalFormats" in s

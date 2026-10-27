@@ -87,10 +87,7 @@ def test_all_five_advanced_pivot_features_survive_save(tmp_path: Path) -> None:
     # add_pivot_cache triggers.
     cache.group_field("revenue", start=0, end=300, interval=50)
 
-    # 3.3 Calculated item on the table — Pod 3 emit shape uses
-    # ``fld="N"`` which openpyxl 3.1 strictness doesn't like; we skip
-    # the openpyxl reopen but still verify the bytes hit the table
-    # part XML below.
+    # 3.3 Calculated item; Excel stores it on the cache.
     pt.add_calculated_item(
         field="region", item_name="ALL", formula="North + South"
     )
@@ -149,25 +146,16 @@ def test_all_five_advanced_pivot_features_survive_save(tmp_path: Path) -> None:
         f"no <x14:slicerList> on any sheet: {[b[:300] for b in sheet_blobs]}"
     )
 
-    # ---- Pivot-table XML carries calc-item + format markers ------------
-    # (Pod 3's emit may diverge from openpyxl's strict reader; we
-    # check the wire bytes directly so Pod 3 sub-feature drift is
-    # observable here.)
-    table_xmls = [
-        zipfile.ZipFile(dst, "r").read(p).decode("utf-8")
-        for p in tables
-    ]
-    # Calc item OR format directive must appear somewhere across the
-    # tables (Pod 3 nuance: the calc item lives on the pivot table,
-    # not on the cache).
-    blob = "".join(table_xmls)
-    assert "calculatedItem" in blob or "<format" in blob, blob[:1500]
+    # ---- Calc item on the cache, flagged on the table; format marker ---
+    cache_xml = zipfile.ZipFile(dst, "r").read(cache_defs[0]).decode("utf-8")
+    assert '<s v="ALL" f="1"/>' in cache_xml, cache_xml[:1500]
+    assert 'formula="region[North] + region[South]"' in cache_xml
+    blob = "".join(
+        zipfile.ZipFile(dst, "r").read(p).decode("utf-8") for p in tables
+    )
+    assert 'f="1"' in blob and "<format" in blob, blob[:1500]
 
-    # ---- openpyxl can read most parts back out -------------------------
-    # We don't assert full strict-mode reload because Pod 3 emit
-    # shape diverges from openpyxl 3.1.x in a couple of spots
-    # (calculatedItem `fld` attribute, x14:slicerCaches extension).
-    # Permissive: ensure ZIP integrity + all parts are well-formed.
+    # ---- ZIP integrity -------------------------------------------------
     with zipfile.ZipFile(dst, "r") as z:
         bad = z.testzip()
         assert bad is None, f"corrupt ZIP entry: {bad}"

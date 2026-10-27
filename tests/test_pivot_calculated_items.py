@@ -1,53 +1,55 @@
-"""RFC-061 Sub-feature 3.3 — Calculated items (~25 tests)."""
+"""Calculated items: cache-scoped emit and rendered values (issue #64)."""
 
 from __future__ import annotations
 
+import zipfile
+
 import pytest
 
+import wolfxl
+from wolfxl import Workbook
 from wolfxl.chart.reference import Reference
-from wolfxl.pivot import (
-    CalculatedItem,
-    PivotCache,
-    PivotTable,
-)
+from wolfxl.pivot import CalculatedItem, PivotCache, PivotTable
+from wolfxl.pivot._calc import qualify_item_formula
+
+ROWS = [
+    ("region", "product", "revenue"),
+    ("North", "A", 100.0),
+    ("South", "A", 200.0),
+    ("North", "B", 150.0),
+    ("East", "B", 50.0),
+    ("South", "B", 25.0),
+]
 
 
-class _StubCell:
-    def __init__(self, v):
-        self.value = v
-
-
-class _StubWorksheet:
-    def __init__(self, title, data):
-        self.title = title
-        self._data = data
-
-    def __getitem__(self, addr):
-        return _StubCell(self._data.get(addr))
-
-
-def _materialized_cache():
-    data = {
-        "A1": "region", "B1": "revenue",
-        "A2": "east",   "B2": 100.0,
-        "A3": "west",   "B3": 200.0,
-        "A4": "east",   "B4": 150.0,
-    }
-    ws = _StubWorksheet("Sheet1", data)
-    src = Reference(worksheet=ws, min_col=1, min_row=1, max_col=2, max_row=4)
-    pc = PivotCache(source=src)
-    pc._cache_id = 0
-    pc._materialize(ws)
-    return pc
-
-
-def _pivot_table(cache):
-    return PivotTable(
-        cache=cache,
-        location="F2",
-        rows=["region"],
-        data=[("revenue", "sum")],
+def _save(tmp_path, items, **table):
+    wb = Workbook()
+    ws = wb.active
+    for row in ROWS:
+        ws.append(row)
+    pc = PivotCache(
+        source=Reference(worksheet=ws, min_col=1, min_row=1, max_col=3, max_row=len(ROWS))
     )
+    cache = wb.add_pivot_cache(pc)
+    for item in items:
+        cache.add_calculated_item(*item)
+    table.setdefault("data", ["revenue"])
+    ws.add_pivot_table(PivotTable(cache=cache, location="F2", **table))
+    path = tmp_path / "calc_items.xlsx"
+    wb.save(path)
+    return path
+
+
+def _parts(path):
+    with zipfile.ZipFile(path) as z:
+        cache = z.read("xl/pivotCache/pivotCacheDefinition1.xml").decode()
+        table = z.read("xl/pivotTables/pivotTable1.xml").decode()
+    return cache, table
+
+
+def _grid(path, ref):
+    ws = wolfxl.load_workbook(path).active
+    return [[c.value for c in row] for row in ws[ref]]
 
 
 # ---------------------------------------------------------------------------
@@ -55,226 +57,176 @@ def _pivot_table(cache):
 # ---------------------------------------------------------------------------
 
 
-def test_calc_item_requires_field_name():
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"field_name": "", "item_name": "x", "formula": "a + b"},
+        {"field_name": "region", "item_name": "", "formula": "a + b"},
+        {"field_name": "region", "item_name": "x", "formula": ""},
+        {"field_name": "region", "item_name": "x", "formula": "(a + b"},
+        {"field_name": "region", "item_name": "x", "formula": '= "hi'},
+    ],
+)
+def test_calc_item_rejects_malformed_definition(kwargs):
     with pytest.raises(ValueError):
-        CalculatedItem(field_name="", item_name="x", formula="a + b")
-
-
-def test_calc_item_requires_item_name():
-    with pytest.raises(ValueError):
-        CalculatedItem(field_name="region", item_name="", formula="a + b")
-
-
-def test_calc_item_requires_formula():
-    with pytest.raises(ValueError):
-        CalculatedItem(field_name="region", item_name="combo", formula="")
-
-
-def test_calc_item_balanced_parens_required():
-    with pytest.raises(ValueError):
-        CalculatedItem(field_name="r", item_name="x", formula="(a + b")
-
-
-def test_calc_item_to_rust_dict_strips_equals():
-    ci = CalculatedItem(field_name="region", item_name="ew", formula="= east + west")
-    d = ci.to_rust_dict()
-    assert d["field_name"] == "region"
-    assert d["item_name"] == "ew"
-    assert not d["formula"].startswith("=")
-
-
-def test_calc_item_to_rust_dict_no_equals():
-    ci = CalculatedItem(field_name="r", item_name="x", formula="a + b")
-    d = ci.to_rust_dict()
-    assert d["formula"] == "a + b"
+        CalculatedItem(**kwargs)
 
 
 # ---------------------------------------------------------------------------
-# PivotTable.add_calculated_item
+# Emit: Excel's cache-scoped shape
 # ---------------------------------------------------------------------------
 
 
-def test_pt_add_calculated_item():
-    pc = _materialized_cache()
-    pt = _pivot_table(pc)
-    ci = pt.add_calculated_item("region", "east_west", "= east + west")
-    assert isinstance(ci, CalculatedItem)
-    assert ci.field_name == "region"
-    assert ci.item_name == "east_west"
-    assert pt.calculated_items == [ci]
+def test_calc_item_is_emitted_on_the_cache(tmp_path):
+    path = _save(tmp_path, [("region", "Both", "= North + South")], rows=["region"])
+    cache, table = _parts(path)
+
+    assert '<s v="Both" f="1"/>' in cache
+    assert (
+        '<calculatedItems count="1"><calculatedItem formula="region[North] + region[South]">'
+        '<pivotArea cacheIndex="1" outline="0" fieldPosition="0"><references count="1">'
+        '<reference field="0" count="1"><x v="3"/></reference></references></pivotArea>'
+        "</calculatedItem></calculatedItems>"
+    ) in cache
+    assert '<item x="3" f="1"/>' in table
+    assert "<calculatedItems" not in table
 
 
-def test_pt_add_multiple_calc_items():
-    pc = _materialized_cache()
-    pt = _pivot_table(pc)
-    pt.add_calculated_item("region", "a", "= east + west")
-    pt.add_calculated_item("region", "b", "= east - west")
-    assert len(pt.calculated_items) == 2
-
-
-def test_pt_calc_items_in_to_rust_dict():
-    pc = _materialized_cache()
-    pt = _pivot_table(pc)
-    pt.add_calculated_item("region", "ew", "= east + west")
-    d = pt.to_rust_dict()
-    assert "calculated_items" in d
-    assert len(d["calculated_items"]) == 1
-    assert d["calculated_items"][0]["item_name"] == "ew"
-
-
-def test_pt_no_calc_items_emits_empty_list():
-    pc = _materialized_cache()
-    pt = _pivot_table(pc)
-    d = pt.to_rust_dict()
-    assert d["calculated_items"] == []
-
-
-# ---------------------------------------------------------------------------
-# PyO3 round-trip
-# ---------------------------------------------------------------------------
-
-
-def test_serialize_pivot_table_with_calc_items():
-    from wolfxl._rust import serialize_pivot_table_dict
-
-    pc = _materialized_cache()
-    pt = _pivot_table(pc)
-    pt.add_calculated_item("region", "ew", "east + west")
-    cache_d = pc.to_rust_dict()
-    table_d = pt.to_rust_dict()
-    xml = serialize_pivot_table_dict(cache_d, table_d)
-    s = xml.decode()
-    assert "<calculatedItems" in s
-    assert "<calculatedItem " in s
-    assert 'name="ew"' in s
-    assert 'formula="east + west"' in s
-
-
-def test_serialize_pivot_table_calc_items_count():
-    from wolfxl._rust import serialize_pivot_table_dict
-
-    pc = _materialized_cache()
-    pt = _pivot_table(pc)
-    pt.add_calculated_item("region", "a", "east + west")
-    pt.add_calculated_item("region", "b", "east - west")
-    cache_d = pc.to_rust_dict()
-    table_d = pt.to_rust_dict()
-    xml = serialize_pivot_table_dict(cache_d, table_d)
-    s = xml.decode()
-    assert s.count("<calculatedItem ") == 2
-
-
-def test_serialize_pivot_table_no_calc_items_no_block():
-    from wolfxl._rust import serialize_pivot_table_dict
-
-    pc = _materialized_cache()
-    pt = _pivot_table(pc)
-    cache_d = pc.to_rust_dict()
-    table_d = pt.to_rust_dict()
-    xml = serialize_pivot_table_dict(cache_d, table_d)
-    s = xml.decode()
-    assert "<calculatedItems" not in s
-
-
-def test_serialize_pivot_table_calc_items_byte_stable():
-    from wolfxl._rust import serialize_pivot_table_dict
-
-    pc = _materialized_cache()
-    pt = _pivot_table(pc)
-    pt.add_calculated_item("region", "ew", "east + west")
-    cache_d = pc.to_rust_dict()
-    table_d = pt.to_rust_dict()
-    a = serialize_pivot_table_dict(cache_d, table_d)
-    b = serialize_pivot_table_dict(cache_d, table_d)
-    assert a == b
-
-
-# ---------------------------------------------------------------------------
-# Edge cases
-# ---------------------------------------------------------------------------
-
-
-def test_calc_item_with_complex_formula():
-    ci = CalculatedItem(
-        field_name="region",
-        item_name="weighted",
-        formula="= east * 0.6 + west * 0.4",
+def test_pivot_table_add_calculated_item_registers_on_cache(tmp_path):
+    wb = Workbook()
+    ws = wb.active
+    for row in ROWS:
+        ws.append(row)
+    pc = PivotCache(
+        source=Reference(worksheet=ws, min_col=1, min_row=1, max_col=3, max_row=len(ROWS))
     )
-    assert ci.to_rust_dict()["item_name"] == "weighted"
+    cache = wb.add_pivot_cache(pc)
+    pt = PivotTable(cache=cache, location="F2", rows=["region"], data=["revenue"])
+    ci = pt.add_calculated_item("region", "Both", "North + South")
+    assert cache.calculated_items == [ci]
 
 
-def test_calc_item_formula_with_quotes():
-    ci = CalculatedItem(
-        field_name="r",
-        item_name="x",
-        formula='= IF(a > 0, "yes", "no")',
+@pytest.mark.parametrize(
+    ("field", "item"),
+    [("nope", "X"), ("region", "north"), ("region", "North")],
+)
+def test_calc_item_rejects_unknown_field_and_duplicate_item(tmp_path, field, item):
+    with pytest.raises(ValueError):
+        _save(tmp_path, [(field, item, "North + South")], rows=["region"])
+
+
+@pytest.mark.parametrize(
+    ("expr", "expected"),
+    [
+        ("North + South", "region[North] + region[South]"),
+        ("north*2", "region[North]*2"),
+        ("'New York' - North", "region['New York'] - region[North]"),
+        ("region[North] + North", "region[North] + region[North]"),
+        ("SUM(North) + Other", "SUM(region[North]) + Other"),
+        ('IF(North > 0, "North", 0)', 'IF(region[North] > 0, "North", 0)'),
+        ("1e2 + North", "1e2 + region[North]"),
+    ],
+)
+def test_qualify_item_formula(expr, expected):
+    items = {"north": "North", "south": "South", "new york": "New York"}
+    assert qualify_item_formula(expr, "region", items) == expected
+
+
+def test_qualify_item_formula_quotes_field_names():
+    assert (
+        qualify_item_formula("Shipped", "Order Status", {"shipped": "Shipped"})
+        == "'Order Status'[Shipped]"
     )
-    assert "yes" in ci.formula
 
 
-def test_calc_item_unicode_in_name():
-    ci = CalculatedItem(field_name="r", item_name="α", formula="a + b")
-    assert ci.item_name == "α"
+# ---------------------------------------------------------------------------
+# Rendered values (matched against Excel refresh output)
+# ---------------------------------------------------------------------------
 
 
-def test_calc_item_chained_to_rust_dict_order():
-    pc = _materialized_cache()
-    pt = _pivot_table(pc)
-    pt.add_calculated_item("region", "a", "x + 1")
-    pt.add_calculated_item("region", "b", "y * 2")
-    pt.add_calculated_item("region", "c", "a - b")
-    d = pt.to_rust_dict()
-    names = [ci["item_name"] for ci in d["calculated_items"]]
-    assert names == ["a", "b", "c"]
+def test_calc_item_renders_after_regular_items_and_in_grand_total(tmp_path):
+    path = _save(tmp_path, [("region", "Both", "North + South")], rows=["region"])
+    assert _grid(path, "F2:G7") == [
+        ["Row Labels", "Sum of revenue"],
+        ["North", 250],
+        ["South", 225],
+        ["East", 50],
+        ["Both", 475],
+        ["Grand Total", 1000],
+    ]
+    cache, _ = _parts(path)
+    assert 'refreshOnLoad="0"' in cache
 
 
-def test_calc_item_returns_for_chaining():
-    pc = _materialized_cache()
-    pt = _pivot_table(pc)
-    ci = pt.add_calculated_item("region", "x", "= a + b")
-    assert ci in pt.calculated_items
+def test_nonlinear_calc_item_applies_formula_to_item_sums(tmp_path):
+    path = _save(tmp_path, [("region", "Ratio", "North / South")], rows=["region"])
+    grid = _grid(path, "F3:G7")
+    assert grid[3][0] == "Ratio"
+    assert grid[3][1] == pytest.approx(250 / 225)
+    assert grid[4][1] == pytest.approx(525 + 250 / 225)
 
 
-def test_calc_item_xml_escapes_special_chars():
-    from wolfxl._rust import serialize_pivot_table_dict
-
-    pc = _materialized_cache()
-    pt = _pivot_table(pc)
-    pt.add_calculated_item("region", "x", "a < b & c > d")
-    cache_d = pc.to_rust_dict()
-    table_d = pt.to_rust_dict()
-    xml = serialize_pivot_table_dict(cache_d, table_d)
-    s = xml.decode()
-    assert "&lt;" in s
-    assert "&amp;" in s
-    assert "&gt;" in s
+def test_calc_item_on_outer_row_field_expands_children(tmp_path):
+    path = _save(
+        tmp_path, [("region", "Both", "North + South")], rows=["region", "product"]
+    )
+    grid = _grid(path, "F3:G14")
+    both = [row[0] for row in grid].index("Both")
+    assert grid[both : both + 3] == [["Both", 475], ["A", 300], ["B", 175]]
+    assert grid[-1] == ["Grand Total", 1000]
 
 
-def test_calc_item_formula_unbalanced_paren_rejects():
-    with pytest.raises(ValueError):
-        CalculatedItem(field_name="r", item_name="x", formula="(a + b")
+def test_calc_item_on_column_field(tmp_path):
+    path = _save(
+        tmp_path,
+        [("region", "Both", "North + South")],
+        rows=["product"],
+        cols=["region"],
+    )
+    grid = _grid(path, "F3:K6")
+    assert grid[0] == ["Row Labels", "North", "South", "East", "Both", "Grand Total"]
+    assert grid[1] == ["A", 100, 200, None, 300, 600]
+    assert grid[3] == ["Grand Total", 250, 225, 50, 475, 1000]
 
 
-def test_calc_item_formula_unterminated_string_rejects():
-    with pytest.raises(ValueError):
-        CalculatedItem(field_name="r", item_name="x", formula='= "hi')
+def test_calc_item_on_field_outside_layout_refreshes_on_load(tmp_path):
+    path = _save(tmp_path, [("region", "Both", "North + South")], rows=["product"])
+    cache, _ = _parts(path)
+    assert 'refreshOnLoad="1"' in cache
 
 
-def test_calc_item_dict_roundtrip_preserves_field_name():
-    ci = CalculatedItem(field_name="region", item_name="x", formula="= a + b")
-    d = ci.to_rust_dict()
-    assert d["field_name"] == "region"
+def test_unsupported_calc_item_formula_is_left_to_excel(tmp_path):
+    path = _save(
+        tmp_path, [("region", "X", "SUM(North, South)")], rows=["region"]
+    )
+    cache, _ = _parts(path)
+    assert 'refreshOnLoad="1"' in cache
+    assert 'formula="SUM(region[North], region[South])"' in cache
+    grid = _grid(path, "F3:G7")
+    assert grid[3] == ["X", None]
 
 
-def test_calc_item_with_arithmetic_only():
-    ci = CalculatedItem(field_name="r", item_name="x", formula="= 100 + 200")
-    assert ci.to_rust_dict()["formula"] == " 100 + 200"
+def test_calc_item_on_number_field_is_left_to_excel(tmp_path):
+    path = _save(
+        tmp_path,
+        [("revenue", "Spread", "revenue[200] - revenue[100]")],
+        rows=["revenue"],
+    )
+    cache, _ = _parts(path)
+    assert '<s v="Spread" f="1"/>' in cache
+    assert 'refreshOnLoad="1"' in cache
 
 
-def test_pt_calc_item_does_not_affect_data_fields():
-    pc = _materialized_cache()
-    pt = _pivot_table(pc)
-    pt.add_calculated_item("region", "ew", "= east + west")
-    d = pt.to_rust_dict()
-    # Should still have the original data fields untouched.
-    assert len(d["data_fields"]) == 1
+@pytest.mark.parametrize(
+    "items",
+    [
+        [("region", "Loop", "North + Loop")],
+        [("region", "P", "North + Q"), ("region", "Q", "South + P")],
+    ],
+)
+def test_self_referencing_calc_items_are_left_to_excel(tmp_path, items):
+    path = _save(tmp_path, items, rows=["region"])
+    cache, _ = _parts(path)
+    assert 'refreshOnLoad="1"' in cache
+    grid = _grid(path, "F3:G5")
+    assert grid[0] == ["North", 250]

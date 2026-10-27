@@ -5,8 +5,8 @@
 
 use super::{esc_attr, fmt_num, push_attr, push_attr_if, xml_decl};
 use crate::model::cache::{
-    CacheField, CacheValue, CalculatedField, DateGroup, FieldGroup, FieldGroupKind, PivotCache,
-    RangeGroup, SharedItems, WorksheetSource,
+    CacheField, CacheValue, CalculatedField, CalculatedItem, DateGroup, FieldGroup, FieldGroupKind,
+    PivotCache, RangeGroup, SharedItems, WorksheetSource,
 };
 
 /// Emit the pivotCacheDefinition XML. The `r:id` for the records part
@@ -45,14 +45,9 @@ pub fn pivot_cache_definition_xml(pc: &PivotCache, records_rid: Option<&str>) ->
     out.push('>');
 
     emit_cache_source(&mut out, &pc.source);
-    emit_cache_fields(&mut out, &pc.fields, &pc.field_groups);
-
-    // RFC-061 §3.2 — `<calculatedItems>` block carries calc-field
-    // formulas inside the cache definition. The `fld` attribute
-    // points at the index into `<cacheFields>` where the calc field
-    // was inserted (calc fields tail the regular fields).
-    if !pc.calculated_fields.is_empty() {
-        emit_calculated_fields(&mut out, &pc.calculated_fields, pc.fields.len() as u32);
+    emit_cache_fields(&mut out, pc);
+    if !pc.calculated_items.is_empty() {
+        emit_calculated_items(&mut out, &pc.calculated_items);
     }
 
     out.push_str("</pivotCacheDefinition>");
@@ -75,30 +70,47 @@ fn emit_cache_source(out: &mut String, src: &WorksheetSource) {
     out.push_str("</cacheSource>");
 }
 
-fn emit_cache_fields(out: &mut String, fields: &[CacheField], groups: &[FieldGroup]) {
+/// `<cacheFields>`: the source fields, then one formula-only field per
+/// calculated field (`databaseField="0"`, no shared items).
+fn emit_cache_fields(out: &mut String, pc: &PivotCache) {
     out.push_str("<cacheFields");
-    push_attr(out, "count", &fields.len().to_string());
+    push_attr(
+        out,
+        "count",
+        &(pc.fields.len() + pc.calculated_fields.len()).to_string(),
+    );
     out.push('>');
-    for (idx, f) in fields.iter().enumerate() {
+    for (idx, f) in pc.fields.iter().enumerate() {
         // Collect ALL groups keyed off this cache field index. For
         // recursive grouping (year → quarter → month) Excel emits
         // multiple <fieldGroup> elements nested in the same
         // cacheField, with `par=` pointing at the previous one.
-        let field_groups: Vec<&FieldGroup> = groups
+        let field_groups: Vec<&FieldGroup> = pc
+            .field_groups
             .iter()
             .filter(|g| g.field_index == idx as u32)
             .collect();
-        emit_cache_field(out, f, &field_groups);
+        let calculated: Vec<u32> = pc
+            .calculated_items
+            .iter()
+            .filter(|ci| ci.field_index == idx as u32)
+            .map(|ci| ci.item_index)
+            .collect();
+        emit_cache_field(out, f, &field_groups, &calculated);
+    }
+    for cf in &pc.calculated_fields {
+        emit_calculated_field(out, cf);
     }
     out.push_str("</cacheFields>");
 }
 
-fn emit_cache_field(out: &mut String, f: &CacheField, groups: &[&FieldGroup]) {
+/// `calculated` lists the shared-item indices that are calculated items.
+fn emit_cache_field(out: &mut String, f: &CacheField, groups: &[&FieldGroup], calculated: &[u32]) {
     out.push_str("<cacheField");
     push_attr(out, "name", &f.name);
     push_attr(out, "numFmtId", &f.num_fmt_id.to_string());
     out.push('>');
-    emit_shared_items(out, &f.shared_items);
+    emit_shared_items(out, &f.shared_items, calculated);
     for g in groups {
         emit_field_group(out, g);
     }
@@ -158,21 +170,39 @@ fn emit_numeric_range_pr(out: &mut String, r: &RangeGroup) {
     out.push_str("/>");
 }
 
-fn emit_calculated_fields(out: &mut String, fields: &[CalculatedField], base_offset: u32) {
+fn emit_calculated_field(out: &mut String, cf: &CalculatedField) {
+    out.push_str("<cacheField");
+    push_attr(out, "name", &cf.name);
+    push_attr(out, "numFmtId", "0");
+    push_attr(out, "formula", &cf.formula);
+    push_attr(out, "databaseField", "0");
+    out.push_str("/>");
+}
+
+/// `<calculatedItems>`: each item's formula plus a pivot area naming
+/// the shared item it computes.
+fn emit_calculated_items(out: &mut String, items: &[CalculatedItem]) {
     out.push_str("<calculatedItems");
-    push_attr(out, "count", &fields.len().to_string());
+    push_attr(out, "count", &items.len().to_string());
     out.push('>');
-    for (i, cf) in fields.iter().enumerate() {
-        let fld = base_offset + i as u32;
+    for ci in items {
         out.push_str("<calculatedItem");
-        push_attr(out, "fld", &fld.to_string());
-        push_attr(out, "formula", &cf.formula);
-        out.push_str("/>");
+        push_attr(out, "formula", &ci.formula);
+        out.push_str("><pivotArea");
+        push_attr(out, "cacheIndex", "1");
+        push_attr(out, "outline", "0");
+        push_attr(out, "fieldPosition", "0");
+        out.push_str("><references count=\"1\"><reference");
+        push_attr(out, "field", &ci.field_index.to_string());
+        push_attr(out, "count", "1");
+        out.push_str("><x");
+        push_attr(out, "v", &ci.item_index.to_string());
+        out.push_str("/></reference></references></pivotArea></calculatedItem>");
     }
     out.push_str("</calculatedItems>");
 }
 
-fn emit_shared_items(out: &mut String, si: &SharedItems) {
+fn emit_shared_items(out: &mut String, si: &SharedItems, calculated: &[u32]) {
     out.push_str("<sharedItems");
     // OOXML omits these attrs when they're at default value. We emit
     // explicitly for clarity in the supported flag set; openpyxl's
@@ -215,8 +245,8 @@ fn emit_shared_items(out: &mut String, si: &SharedItems) {
             push_attr(out, "count", &items.len().to_string());
         }
         out.push('>');
-        for v in items {
-            emit_shared_value(out, v);
+        for (i, v) in items.iter().enumerate() {
+            emit_shared_value(out, v, calculated.contains(&(i as u32)));
         }
         out.push_str("</sharedItems>");
     } else {
@@ -227,39 +257,40 @@ fn emit_shared_items(out: &mut String, si: &SharedItems) {
     }
 }
 
-fn emit_shared_value(out: &mut String, v: &CacheValue) {
+/// `calculated` marks a calculated item (`f="1"`).
+fn emit_shared_value(out: &mut String, v: &CacheValue, calculated: bool) {
     match v {
         CacheValue::String(s) => {
-            out.push_str("<s");
-            out.push_str(" v=\"");
+            out.push_str("<s v=\"");
             esc_attr(s, out);
-            out.push_str("\"/>");
+            out.push('"');
         }
         CacheValue::Number(n) => {
-            out.push_str("<n");
-            out.push_str(" v=\"");
+            out.push_str("<n v=\"");
             out.push_str(&fmt_num(*n));
-            out.push_str("\"/>");
+            out.push('"');
         }
         CacheValue::Boolean(b) => {
             out.push_str("<b v=\"");
             out.push_str(if *b { "1" } else { "0" });
-            out.push_str("\"/>");
+            out.push('"');
         }
         CacheValue::Date(d) => {
             out.push_str("<d v=\"");
             esc_attr(d, out);
-            out.push_str("\"/>");
+            out.push('"');
         }
         CacheValue::Missing => {
-            out.push_str("<m/>");
+            out.push_str("<m");
         }
         CacheValue::Error(s) => {
             out.push_str("<e v=\"");
             esc_attr(s, out);
-            out.push_str("\"/>");
+            out.push('"');
         }
     }
+    push_attr_if(out, calculated, "f", "1");
+    out.push_str("/>");
 }
 
 #[cfg(test)]

@@ -6,8 +6,8 @@
 use super::{push_attr, push_attr_if, xml_decl};
 use crate::model::cache::PivotCache;
 use crate::model::table::{
-    AxisItem, CalculatedItem, DataField, Format, Location, PageField, PivotArea,
-    PivotConditionalFormat, PivotField, PivotItem, PivotTable, PivotTableStyleInfo,
+    AxisItem, DataField, Format, Location, PageField, PivotArea, PivotConditionalFormat,
+    PivotField, PivotItem, PivotTable, PivotTableStyleInfo,
 };
 
 /// Emit pivotTable XML. The `cache` is needed to resolve cache-field
@@ -137,33 +137,9 @@ pub fn pivot_table_xml(pt: &PivotTable, cache: &PivotCache) -> Vec<u8> {
     if let Some(si) = &pt.style_info {
         emit_style_info(&mut out, si);
     }
-    if !pt.calculated_items.is_empty() {
-        emit_calculated_items(&mut out, &pt.calculated_items);
-    }
 
     out.push_str("</pivotTableDefinition>");
     out.into_bytes()
-}
-
-fn emit_calculated_items(out: &mut String, items: &[CalculatedItem]) {
-    // Pivot table XML carries calc items as a separate group; the
-    // `<calculatedItems>` block lives at the same level as
-    // `<pivotTableStyleInfo>` etc. Item-side schema mirrors the
-    // calc-fields schema in the cache.
-    out.push_str("<calculatedItems");
-    push_attr(out, "count", &items.len().to_string());
-    out.push('>');
-    for ci in items {
-        out.push_str("<calculatedItem");
-        push_attr(out, "name", &ci.item_name);
-        push_attr(out, "formula", &ci.formula);
-        out.push_str("><pivotArea");
-        push_attr(out, "type", "data");
-        push_attr(out, "outline", "0");
-        push_attr(out, "fieldPosition", "0");
-        out.push_str("/></calculatedItem>");
-    }
-    out.push_str("</calculatedItems>");
 }
 
 fn emit_formats(out: &mut String, formats: &[Format]) {
@@ -289,7 +265,13 @@ fn emit_pivot_field(out: &mut String, f: &PivotField, cache: &PivotCache, idx: u
         push_attr(out, "count", &items.len().to_string());
         out.push('>');
         for it in &items {
-            emit_pivot_item(out, it);
+            let calculated = it.x.is_some_and(|x| {
+                cache
+                    .calculated_items
+                    .iter()
+                    .any(|ci| ci.field_index as usize == idx && ci.item_index == x)
+            });
+            emit_pivot_item(out, it, calculated);
         }
         out.push_str("</items>");
         out.push_str("</pivotField>");
@@ -326,7 +308,8 @@ fn derive_items_from_cache(cache: &PivotCache, idx: usize) -> Option<Vec<PivotIt
     Some(out)
 }
 
-fn emit_pivot_item(out: &mut String, it: &PivotItem) {
+/// `calculated` marks a calculated item (`f="1"`).
+fn emit_pivot_item(out: &mut String, it: &PivotItem, calculated: bool) {
     out.push_str("<item");
     if let Some(x) = it.x {
         push_attr(out, "x", &x.to_string());
@@ -336,6 +319,7 @@ fn emit_pivot_item(out: &mut String, it: &PivotItem) {
     }
     push_attr_if(out, it.h, "h", "1");
     push_attr_if(out, it.s, "s", "1");
+    push_attr_if(out, calculated, "f", "1");
     if let Some(n) = &it.n {
         push_attr(out, "n", n);
     }
@@ -616,7 +600,6 @@ mod tests {
             created_version: 6,
             updated_version: 6,
             min_refreshable_version: 3,
-            calculated_items: vec![],
             formats: vec![],
             conditional_formats: vec![],
         }

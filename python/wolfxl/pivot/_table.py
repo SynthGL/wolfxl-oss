@@ -376,8 +376,6 @@ class PivotTable:
         # page filters included.
         self._rendered_cells: dict[tuple[int, int], Any] = {}
         self._footprint: tuple[int, int, int, int] | None = None
-        # Calculated items (table-scoped).
-        self.calculated_items: list[Any] = []
         # Pivot-area Format / CF directives (table-scoped).
         self.formats: list[Any] = []
         self.conditional_formats: list[Any] = []
@@ -521,16 +519,18 @@ class PivotTable:
             renders_show_data_as,
         )
 
-        # 1. Resolve cache-field indices for each axis.
-        cache_fields = self.cache.fields
-        cache_field_count = len(cache_fields)
-        row_indices = [self.cache.field_index(rf.name) for rf in self._row_field_specs]
-        col_indices = [self.cache.field_index(cf.name) for cf in self._col_field_specs]
+        # 1. Resolve cache-field indices for each axis. Calculated fields
+        #    follow the source fields.
+        cache = self.cache
+        cache_fields = cache.fields
+        cache_field_count = len(cache.field_names)
+        row_indices = [cache.field_index(rf.name) for rf in self._row_field_specs]
+        col_indices = [cache.field_index(cf.name) for cf in self._col_field_specs]
         page_indices = [
-            self.cache.field_index(pf.name) for pf in self._page_field_specs
+            cache.field_index(pf.name) for pf in self._page_field_specs
         ]
         data_field_indices = [
-            self.cache.field_index(df.name) for df in self._data_field_specs
+            cache.field_index(df.name) for df in self._data_field_specs
         ]
 
         # 2. Validate no field on multiple axes.
@@ -542,6 +542,11 @@ class PivotTable:
                 "PivotTable: a cache field appears on multiple axes"
             )
         for i in all_axis_indices:
+            if i >= len(cache_fields):
+                raise ValueError(
+                    f"PivotTable: calculated field {cache.field_names[i]!r} "
+                    "can only be used as a data field"
+                )
             if cache_fields[i].shared_items.items is None:
                 raise ValueError(
                     f"PivotTable: field {cache_fields[i].name!r} has too many "
@@ -572,12 +577,13 @@ class PivotTable:
 
         # 4. Render the compact layout from the cache records, keeping only
         #    records that match each page field's selected item.
-        lookups: dict[int, dict[tuple, int]] = {
-            i: {
-                (v.kind, v.value): n
-                for n, v in enumerate(cache_fields[i].shared_items.items)
-            }
+        field_items = {
+            i: cache.field_items(i)
             for i in set(row_indices + col_indices + page_indices)
+        }
+        lookups: dict[int, dict[tuple, int]] = {
+            i: {(v.kind, v.value): n for n, v in enumerate(items)}
+            for i, items in field_items.items()
         }
 
         def item_index(cell: "CacheValue", field_index: int) -> int:
@@ -596,31 +602,40 @@ class PivotTable:
             )
         ]
 
+        data_specs = [
+            self._data_spec(DataSpec, data_field_indices[i], df)
+            for i, df in enumerate(self._data_field_specs)
+        ]
+        calc_specs, calc_unrendered = self._calc_item_specs(
+            field_items, row_indices + col_indices
+        )
         layout = compute_layout(
             records=records,
             item_index=item_index,
-            shared_items=[f.shared_items.items for f in cache_fields],
+            shared_items=[
+                field_items.get(i, f.shared_items.items)
+                for i, f in enumerate(cache_fields)
+            ],
             row_fields=row_indices,
             col_fields=col_indices,
-            data=[
-                DataSpec(
-                    field_index=data_field_indices[i],
-                    function=df.function,
-                    caption=df.resolved_display_name(),
-                    show_data_as=df.show_data_as,
-                )
-                for i, df in enumerate(self._data_field_specs)
-            ],
+            data=data_specs,
             row_grand_totals=self.row_grand_totals,
             col_grand_totals=self.col_grand_totals,
             grand_total_caption=self.grand_total_caption,
             data_caption=self.data_caption,
+            calculated_items=calc_specs,
         )
-        # Excel computes base-relative "show values as" options (difference,
-        # running total, ...) itself; refresh the cache on open so they
-        # appear without a manual refresh.
-        if any(
-            not renders_show_data_as(df.show_data_as) for df in self._data_field_specs
+        # Excel computes what WolfXL does not render (base-relative "show
+        # values as" options, unsupported calculated formulas) itself;
+        # refresh the cache on open so those values appear without a
+        # manual refresh.
+        if (
+            layout.unrendered
+            or calc_unrendered
+            or any(
+                not renders_show_data_as(df.show_data_as)
+                for df in self._data_field_specs
+            )
         ):
             self.cache.refresh_on_load = True
 
@@ -713,6 +728,134 @@ class PivotTable:
             )
         return int(m.group(2)), _col_to_index(m.group(1))
 
+    def _data_spec(self, spec_cls: Any, index: int, df: "DataField") -> Any:
+        """Layout spec for one data field; calculated fields carry a formula."""
+        from ._calc import (
+            UnsupportedFormula,
+            evaluate,
+            parse_formula,
+            references,
+            substitute,
+        )
+
+        cache = self.cache
+        spec = {
+            "field_index": index,
+            "function": df.function,
+            "caption": df.resolved_display_name(),
+            "show_data_as": df.show_data_as,
+        }
+        n_source = len(cache.fields)
+        if index < n_source:
+            return spec_cls(**spec)
+        by_name = {f.name.casefold(): n for n, f in enumerate(cache.fields)}
+        calc = {cf.name.casefold(): cf.formula for cf in cache.calculated_fields}
+
+        def expand(key: str, seen: frozenset[str]) -> Any:
+            # A calculated field may read other calculated fields; inline
+            # their formulas so the result reads source fields only.
+            if key in seen:
+                raise UnsupportedFormula(calc[key])
+            seen = seen | {key}
+            return substitute(
+                parse_formula(calc[key]),
+                lambda f, name: expand(name.casefold(), seen)
+                if f is None and name.casefold() in calc
+                else None,
+            )
+
+        try:
+            node = expand(cache.calculated_fields[index - n_source].name.casefold(), frozenset())
+            refs = references(node)
+            if any(f is not None or n.casefold() not in by_name for f, n in refs):
+                raise UnsupportedFormula(cache.calculated_fields[index - n_source].formula)
+        except UnsupportedFormula:
+            return spec_cls(**spec, calculated=True)
+
+        def formula(resolve: Any) -> Any:
+            return evaluate(node, lambda _f, name: resolve(by_name[name.casefold()]))
+
+        return spec_cls(
+            **spec,
+            calculated=True,
+            inputs=tuple(sorted({by_name[n.casefold()] for _, n in refs})),
+            formula=formula,
+        )
+
+    def _calc_item_specs(
+        self, field_items: dict[int, Any], axis_indices: list[int]
+    ) -> tuple[list[Any], bool]:
+        """Layout specs for the cache's calculated items on row/col fields.
+
+        Returns ``(specs, unrendered)``; ``unrendered`` is true when a
+        calculated item belongs to a field off the row and column axes,
+        whose effect on totals WolfXL leaves to Excel.
+        """
+        from ._calc import UnsupportedFormula, evaluate, parse_formula, references
+        from ._layout import CalcItemSpec, item_label
+
+        cache = self.cache
+        specs: list[Any] = []
+        unrendered = False
+        positions = cache._calculated_item_positions()  # noqa: SLF001
+        for (fi, ii), ci in zip(positions, cache.calculated_items):
+            if fi not in axis_indices:
+                unrendered = True
+                continue
+            # Formulas name items by their text; number, date and boolean
+            # items are left for Excel to resolve.
+            labels: dict[str, int] = {}
+            for n, v in enumerate(field_items[fi]):
+                label = item_label(v)
+                if isinstance(label, str):
+                    labels.setdefault(label.casefold(), n)
+            field_name = cache.fields[fi].name.casefold()
+            try:
+                node = parse_formula(ci.formula)
+                refs = references(node)
+                if any(
+                    (f is not None and f.casefold() != field_name)
+                    or n.casefold() not in labels
+                    for f, n in refs
+                ):
+                    raise UnsupportedFormula(ci.formula)
+            except UnsupportedFormula:
+                specs.append(CalcItemSpec(fi, ii, frozenset(), None))
+                continue
+
+            def evaluate_item(resolve: Any, node: Any = node, labels: Any = labels) -> Any:
+                return evaluate(node, lambda _f, name: resolve(labels[name.casefold()]))
+
+            specs.append(
+                CalcItemSpec(
+                    fi, ii, frozenset(labels[n.casefold()] for _, n in refs), evaluate_item
+                )
+            )
+        # Calculated items that read themselves, directly or through other
+        # calculated items, have no value; Excel rejects such formulas.
+        by_item = {(s.field_index, s.item_index): s for s in specs}
+
+        def cyclic(spec: Any) -> bool:
+            stack = [(spec.field_index, r) for r in spec.refs]
+            seen: set[tuple[int, int]] = set()
+            while stack:
+                key = stack.pop()
+                if key == (spec.field_index, spec.item_index):
+                    return True
+                if key in seen or key not in by_item:
+                    continue
+                seen.add(key)
+                stack.extend((key[0], r) for r in by_item[key].refs)
+            return False
+
+        specs = [
+            CalcItemSpec(s.field_index, s.item_index, frozenset(), None)
+            if s.evaluate is not None and cyclic(s)
+            else s
+            for s in specs
+        ]
+        return specs, unrendered
+
     @staticmethod
     def _selected_page_item(pf: Any, cache_field: Any) -> int | None:
         """Shared-item index a page field filters on, or None for "(All)"."""
@@ -729,6 +872,7 @@ class PivotTable:
         """
         if self._footprint is None:
             return
+        self.cache._rendered = True  # noqa: SLF001
         first_row, first_col, last_row, last_col = self._footprint
         for row in range(first_row, last_row + 1):
             for col in range(first_col, last_col + 1):
@@ -751,21 +895,15 @@ class PivotTable:
         item_name: str,
         formula: str,
     ):
-        """Add a calculated item to a specific field of this pivot table.
+        """Add a calculated item to ``field`` of this table's cache.
 
-        Calc items live inside pivot table XML, NOT cache XML.
-        Excel evaluates the formula on open — wolfxl does not
-        pre-evaluate.
+        Excel stores calculated items on the pivot cache, so every pivot
+        table built on the same cache shows the item. Same as
+        :meth:`PivotCache.add_calculated_item`.
 
         Returns the registered :class:`CalculatedItem`.
         """
-        from ._calc import CalculatedItem
-
-        ci = CalculatedItem(
-            field_name=field, item_name=item_name, formula=formula
-        )
-        self.calculated_items.append(ci)
-        return ci
+        return self.cache.add_calculated_item(field, item_name, formula)
 
     # ------------------------------------------------------------------
     # Pivot-area Format / CF directives
@@ -873,10 +1011,6 @@ class PivotTable:
             "created_version": 6,
             "updated_version": 6,
             "min_refreshable_version": 3,
-            # Extensions: calc items + pivot-scoped formats / CF.
-            "calculated_items": [
-                ci.to_rust_dict() for ci in self.calculated_items
-            ],
             "formats": [f.to_rust_dict() for f in self.formats],
             "conditional_formats": [
                 cf.to_rust_dict() for cf in self.conditional_formats
