@@ -204,3 +204,29 @@ def test_unsupported_calc_item_formula_is_left_to_excel(tmp_path):
     assert 'formula="SUM(region[North], region[South])"' in cache
     grid = _grid(path, "F3:G7")
     assert grid[3] == ["X", None]
+
+
+def test_calc_item_on_number_field_is_left_to_excel(tmp_path):
+    path = _save(
+        tmp_path,
+        [("revenue", "Spread", "revenue[200] - revenue[100]")],
+        rows=["revenue"],
+    )
+    cache, _ = _parts(path)
+    assert '<s v="Spread" f="1"/>' in cache
+    assert 'refreshOnLoad="1"' in cache
+
+
+@pytest.mark.parametrize(
+    "items",
+    [
+        [("region", "Loop", "North + Loop")],
+        [("region", "P", "North + Q"), ("region", "Q", "South + P")],
+    ],
+)
+def test_self_referencing_calc_items_are_left_to_excel(tmp_path, items):
+    path = _save(tmp_path, items, rows=["region"])
+    cache, _ = _parts(path)
+    assert 'refreshOnLoad="1"' in cache
+    grid = _grid(path, "F3:G5")
+    assert grid[0] == ["North", 250]

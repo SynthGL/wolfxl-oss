@@ -802,9 +802,13 @@ class PivotTable:
             if fi not in axis_indices:
                 unrendered = True
                 continue
+            # Formulas name items by their text; number, date and boolean
+            # items are left for Excel to resolve.
             labels: dict[str, int] = {}
             for n, v in enumerate(field_items[fi]):
-                labels.setdefault(item_label(v).casefold(), n)
+                label = item_label(v)
+                if isinstance(label, str):
+                    labels.setdefault(label.casefold(), n)
             field_name = cache.fields[fi].name.casefold()
             try:
                 node = parse_formula(ci.formula)
@@ -827,6 +831,29 @@ class PivotTable:
                     fi, ii, frozenset(labels[n.casefold()] for _, n in refs), evaluate_item
                 )
             )
+        # Calculated items that read themselves, directly or through other
+        # calculated items, have no value; Excel rejects such formulas.
+        by_item = {(s.field_index, s.item_index): s for s in specs}
+
+        def cyclic(spec: Any) -> bool:
+            stack = [(spec.field_index, r) for r in spec.refs]
+            seen: set[tuple[int, int]] = set()
+            while stack:
+                key = stack.pop()
+                if key == (spec.field_index, spec.item_index):
+                    return True
+                if key in seen or key not in by_item:
+                    continue
+                seen.add(key)
+                stack.extend((key[0], r) for r in by_item[key].refs)
+            return False
+
+        specs = [
+            CalcItemSpec(s.field_index, s.item_index, frozenset(), None)
+            if s.evaluate is not None and cyclic(s)
+            else s
+            for s in specs
+        ]
         return specs, unrendered
 
     @staticmethod
