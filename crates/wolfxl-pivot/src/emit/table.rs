@@ -104,13 +104,23 @@ pub fn pivot_table_xml(pt: &PivotTable, cache: &PivotCache) -> Vec<u8> {
     emit_location(&mut out, &pt.location);
     emit_pivot_fields(&mut out, &pt.pivot_fields, cache);
 
-    if !pt.row_field_indices.is_empty() {
-        emit_row_fields(&mut out, &pt.row_field_indices);
-        emit_row_items(&mut out, &pt.row_items);
+    // Two or more data fields add the `Values` pseudo-field (x="-2") as the
+    // innermost field on the data axis; Excel reports the table as corrupt
+    // without it.
+    let multi_data = pt.data_fields.len() > 1;
+    let values_on_rows = multi_data && pt.data_on_rows;
+    let values_on_cols = multi_data && !pt.data_on_rows;
+    if !pt.row_field_indices.is_empty() || values_on_rows {
+        emit_axis_fields(&mut out, "rowFields", &pt.row_field_indices, values_on_rows);
     }
-    if !pt.col_field_indices.is_empty() {
-        emit_col_fields(&mut out, &pt.col_field_indices);
-        emit_col_items(&mut out, &pt.col_items);
+    if !pt.row_items.is_empty() {
+        emit_axis_items(&mut out, "rowItems", &pt.row_items);
+    }
+    if !pt.col_field_indices.is_empty() || values_on_cols {
+        emit_axis_fields(&mut out, "colFields", &pt.col_field_indices, values_on_cols);
+    }
+    if !pt.col_items.is_empty() {
+        emit_axis_items(&mut out, "colItems", &pt.col_items);
     }
     if !pt.page_fields.is_empty() {
         emit_page_fields(&mut out, &pt.page_fields);
@@ -332,48 +342,38 @@ fn emit_pivot_item(out: &mut String, it: &PivotItem) {
     out.push_str("/>");
 }
 
-fn emit_row_fields(out: &mut String, indices: &[u32]) {
-    out.push_str("<rowFields");
-    push_attr(out, "count", &indices.len().to_string());
+/// `<rowFields>`/`<colFields>`. `values` appends the `Values` pseudo-field.
+fn emit_axis_fields(out: &mut String, tag: &str, indices: &[u32], values: bool) {
+    out.push('<');
+    out.push_str(tag);
+    let count = indices.len() + usize::from(values);
+    push_attr(out, "count", &count.to_string());
     out.push('>');
     for &i in indices {
         out.push_str("<field");
-        push_attr(out, "x", &(i as i32).to_string());
+        push_attr(out, "x", &i.to_string());
         out.push_str("/>");
     }
-    out.push_str("</rowFields>");
-}
-
-fn emit_col_fields(out: &mut String, indices: &[u32]) {
-    out.push_str("<colFields");
-    push_attr(out, "count", &indices.len().to_string());
+    if values {
+        out.push_str("<field x=\"-2\"/>");
+    }
+    out.push_str("</");
+    out.push_str(tag);
     out.push('>');
-    for &i in indices {
-        out.push_str("<field");
-        push_attr(out, "x", &(i as i32).to_string());
-        out.push_str("/>");
-    }
-    out.push_str("</colFields>");
 }
 
-fn emit_row_items(out: &mut String, items: &[AxisItem]) {
-    out.push_str("<rowItems");
+/// `<rowItems>`/`<colItems>`.
+fn emit_axis_items(out: &mut String, tag: &str, items: &[AxisItem]) {
+    out.push('<');
+    out.push_str(tag);
     push_attr(out, "count", &items.len().to_string());
     out.push('>');
     for it in items {
         emit_axis_item(out, it);
     }
-    out.push_str("</rowItems>");
-}
-
-fn emit_col_items(out: &mut String, items: &[AxisItem]) {
-    out.push_str("<colItems");
-    push_attr(out, "count", &items.len().to_string());
+    out.push_str("</");
+    out.push_str(tag);
     out.push('>');
-    for it in items {
-        emit_axis_item(out, it);
-    }
-    out.push_str("</colItems>");
 }
 
 fn emit_axis_item(out: &mut String, it: &AxisItem) {
@@ -386,6 +386,10 @@ fn emit_axis_item(out: &mut String, it: &AxisItem) {
     }
     if let Some(i) = it.i {
         push_attr(out, "i", &i.to_string());
+    }
+    if it.indices.is_empty() {
+        out.push_str("/>");
+        return;
     }
     out.push('>');
     for &x in &it.indices {
@@ -660,6 +664,54 @@ mod tests {
         let xml = pivot_table_xml(&pt, &cache);
         let s = std::str::from_utf8(&xml).unwrap();
         assert!(s.contains("<i t=\"grand\">"));
+    }
+
+    #[test]
+    fn multiple_data_fields_add_values_col_field() {
+        let cache = dummy_cache();
+        let mut pt = dummy_table();
+        let mut count = pt.data_fields[0].clone();
+        count.name = "Count of revenue".into();
+        count.function = DataFunction::Count;
+        pt.data_fields.push(count);
+        pt.col_items = vec![
+            AxisItem {
+                indices: vec![0],
+                t: None,
+                r: None,
+                i: None,
+            },
+            AxisItem {
+                indices: vec![1],
+                t: None,
+                r: None,
+                i: Some(1),
+            },
+        ];
+        let xml = pivot_table_xml(&pt, &cache);
+        let s = std::str::from_utf8(&xml).unwrap();
+        assert!(
+            s.contains(r#"<colFields count="1"><field x="-2"/></colFields><colItems count="2"><i><x/></i><i i="1"><x v="1"/></i></colItems>"#),
+            "{s}"
+        );
+        assert!(!s.contains(r#"<rowFields count="2""#), "{s}");
+    }
+
+    #[test]
+    fn empty_axis_item_self_closes() {
+        let cache = dummy_cache();
+        let mut pt = dummy_table();
+        pt.row_field_indices.clear();
+        pt.row_items = vec![AxisItem {
+            indices: vec![],
+            t: None,
+            r: None,
+            i: None,
+        }];
+        let xml = pivot_table_xml(&pt, &cache);
+        let s = std::str::from_utf8(&xml).unwrap();
+        assert!(!s.contains("<rowFields"), "{s}");
+        assert!(s.contains(r#"<rowItems count="1"><i/></rowItems>"#), "{s}");
     }
 
     #[test]

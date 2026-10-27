@@ -50,7 +50,7 @@ def add_chart(ws: Worksheet, chart: Any, anchor: Any = None) -> None:
 
 
 def add_pivot_table(ws: Worksheet, pivot_table: Any) -> None:
-    """Queue a pivot table for modify-mode save processing."""
+    """Queue a pivot table for save and render its values into ``ws``."""
     from wolfxl.pivot import PivotTable as _PivotTable
 
     if not isinstance(pivot_table, _PivotTable):
@@ -69,8 +69,8 @@ def add_pivot_table(ws: Worksheet, pivot_table: Any) -> None:
             "workbook yet. Call Workbook.add_pivot_cache(cache) "
             "before Worksheet.add_pivot_table(pt)."
         )
-    if hasattr(pivot_table, "_compute_layout"):
-        pivot_table._compute_layout()
+    pivot_table._compute_layout()
+    pivot_table._write_rendered_cells(ws)
     ws._pending_pivot_tables.append(pivot_table)  # noqa: SLF001
 
 
