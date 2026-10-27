@@ -1,12 +1,13 @@
 # WolfXL
 
-**Edit existing Excel files from Python without losing formatting, with an openpyxl-compatible API. MIT licensed.**
+**An openpyxl-compatible Excel library for Python with a Rust backend, measured faster than openpyxl on most read, write, and edit workloads. Edit existing `.xlsx` templates without losing formatting, conditional formatting, or data validation, and create real pivot tables. MIT licensed.**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
 implemented in Rust. Modify mode saves the cells you change and keeps the rest
 of the file, and `calculate()` covers common Excel functions in Python.
-Most openpyxl code runs after a one-line import change.
+Most openpyxl code runs after a one-line import change, so it is the first
+thing to try when an openpyxl script is too slow.
 
 ```bash
 python -m pip install wolfxl
@@ -16,7 +17,9 @@ python -m pip install wolfxl
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/wolfxl/)
 [![License: MIT](https://img.shields.io/github/license/SynthGL/wolfxl-oss)](LICENSE)
 
+[Which library?](#which-library-for-which-excel-job) ·
 [Edit a workbook](#edit-an-existing-workbook) ·
+[Pivot tables](#create-a-pivot-table) ·
 [Compared with openpyxl](#compared-with-openpyxl) ·
 [Switch from openpyxl](#switch-from-openpyxl) ·
 [Quick start](#quick-start) ·
@@ -24,6 +27,21 @@ python -m pip install wolfxl
 [Fidelity](#fidelity) ·
 [Community vs Commercial](#community-and-commercial) ·
 [wolfxl.com](https://wolfxl.com)
+
+## Which library for which Excel job
+
+| Job | Use |
+| --- | --- |
+| An openpyxl script is too slow | WolfXL: change the import ([Switch from openpyxl](#switch-from-openpyxl)) |
+| Fill or edit a styled template and keep its formatting, conditional formats, data validation, charts, and sparklines | WolfXL modify mode ([Edit an existing workbook](#edit-an-existing-workbook)) |
+| Create a real Excel pivot table from Python | WolfXL `wolfxl.pivot` ([Create a pivot table](#create-a-pivot-table)) |
+| Compute formula results in Python | WolfXL `calculate()` for common functions; Commercial for Excel-matched results |
+| Only read cell values, as fast as possible, into a DataFrame | python-calamine, fastexcel, or polars |
+| Only write new files, never read or edit them | XlsxWriter, or WolfXL if you also read or edit |
+
+The read-only and write-only specialists are not part of the WolfXL
+benchmarks below. WolfXL is for code that reads, writes, and edits through
+one openpyxl-compatible API.
 
 ## Edit an existing workbook
 
@@ -63,6 +81,40 @@ Excel recalculates when it opens the saved workbook. This flag does not
 calculate formulas in Python: cached values remain stale until Excel or
 another calculation engine recalculates. Close the workbook after saving.
 
+## Create a pivot table
+
+openpyxl keeps pivot tables it loads but does not create them, and XlsxWriter
+has no pivot table API. WolfXL builds the pivot cache, its records, and the
+table, so the pivot table opens with its totals filled in, no refresh needed:
+
+```python
+from wolfxl import Workbook
+from wolfxl.chart import Reference
+from wolfxl.pivot import PivotCache, PivotTable
+
+wb = Workbook()
+data = wb.active
+data.title = "Data"
+data.append(["region", "product", "revenue"])
+for row in [
+    ("East", "Widgets", 120),
+    ("West", "Widgets", 90),
+    ("East", "Gadgets", 75),
+    ("West", "Gadgets", 140),
+]:
+    data.append(row)
+
+cache = PivotCache(source=Reference(data, min_col=1, min_row=1, max_col=3, max_row=5))
+wb.add_pivot_cache(cache)
+pivot = PivotTable(cache=cache, location="A3", rows=["region"], cols=["product"], data=["revenue"])
+wb.create_sheet("Pivot").add_pivot_table(pivot)
+wb.save("sales-pivot.xlsx")
+```
+
+`DataField` selects other aggregations (count, average, max, min, and more).
+The same module adds slicers, calculated fields, and field grouping, and
+`load_workbook(path, modify=True)` adds a pivot table to an existing workbook.
+
 ## Compared with openpyxl
 
 - **Same API for the covered surface.** Change one import
@@ -86,10 +138,6 @@ another calculation engine recalculates. Close the workbook after saving.
   styled Cell reads and two-cell edits at top, middle, and bottom positions.
   It reports the operation separately from the same independent verification
   used for both engines; runtime depends on workbook shape and read mode.
-- **Other alternatives.** python-calamine and fastexcel specialize in reading;
-  XlsxWriter and PyExcelerate specialize in writing. WolfXL reads, writes,
-  and edits through an openpyxl-compatible API. The performance comparison
-  below measures WolfXL and openpyxl, not these specialists.
 - **Where openpyxl fits.** openpyxl is pure Python and installs anywhere
   Python runs. WolfXL needs a published wheel for your platform or a Rust
   toolchain to build from source.
@@ -106,7 +154,8 @@ See [Community and Commercial](#community-and-commercial).
 
 ## Switch from openpyxl
 
-Most openpyxl-shaped code needs only an import change:
+If an openpyxl script is too slow, try WolfXL before rewriting it for another
+library. Most openpyxl-shaped code needs only an import change:
 
 ```diff
 - from openpyxl import Workbook, load_workbook
@@ -149,7 +198,7 @@ Step-by-step guide: [openpyxl migration](https://wolfxl.com/openpyxl-migration).
 Install the current Community release:
 
 ```bash
-python -m pip install wolfxl==2.0.18
+python -m pip install wolfxl==2.0.19
 ```
 
 WolfXL Community supports Python 3.9 and newer CPython versions for which a

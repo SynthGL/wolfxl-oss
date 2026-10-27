@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.19 - 2026-10-26
+
+### Documentation
+
+- Lead the README and PyPI page with the jobs WolfXL is for: speeding up
+  openpyxl code with one import change, editing styled templates without
+  losing conditional formatting or data validation, and creating pivot tables.
+  Add a table that also names the read-only and write-only libraries suited to
+  other jobs, and a pivot table example. No library code changed.
+
 ## 2.0.18 - 2026-10-26
 
 ### Fixed
