@@ -481,18 +481,19 @@ def test_pivot_table_location_widens_from_anchor():
         data=["revenue"],
     )
     d = pt.to_rust_dict()
-    # Anchor "F2" should widen to a range.
-    assert ":" in d["location"]["ref"]
-    assert d["location"]["ref"].startswith("F2:")
+    # Caption row + quarter row + North/South + grand; label + Q1/Q2 + grand.
+    assert d["location"]["ref"] == "F2:I6"
+    assert d["location"]["first_data_row"] == 2
+    assert d["location"]["first_data_col"] == 1
 
 
-def test_pivot_table_location_explicit_range_preserved():
+def test_pivot_table_location_range_resized_from_top_left():
     pc = _build_sample_pivot_cache()
     pt = PivotTable(
         cache=pc, location="F2:Z100", rows=["region"], data=["revenue"]
     )
     d = pt.to_rust_dict()
-    assert d["location"]["ref"] == "F2:Z100"
+    assert d["location"]["ref"] == "F2:G5"
 
 
 def test_pivot_table_aggregation_sum():
@@ -501,16 +502,11 @@ def test_pivot_table_aggregation_sum():
         cache=pc, location="F2", rows=["region"], data=[("revenue", "sum")]
     )
     pt._compute_layout()
-    # North = 100 + 150 = 250.0
-    # South = 200 + 250 = 450.0
-    # The aggregated value is keyed by (row_key, col_key, data_field_idx).
-    # row_keys here are 1-tuples of region's shared-items index.
-    # We have to find which region-index maps to which row_key.
-    # Sanity: total of all aggregated values = 700.
-    total = sum(
-        v for v in pt._aggregated_values.values() if v is not None
-    )
-    assert total == pytest.approx(700.0)
+    cells = pt._rendered_cells
+    assert [cells[(r, 6)] for r in range(2, 6)] == [
+        "Row Labels", "North", "South", "Grand Total",
+    ]
+    assert [cells[(r, 7)] for r in range(3, 6)] == [250.0, 450.0, 700.0]
 
 
 def test_pivot_table_multi_aggregator():

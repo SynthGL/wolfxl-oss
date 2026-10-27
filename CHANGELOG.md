@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.0.20 - 2026-10-26
+
+### Fixed
+
+- Pivot tables created with `wolfxl.pivot` now open in Microsoft Excel
+  without a repair prompt, in both write mode and modify mode (#63). Before,
+  every such workbook failed to open because `<pivotCaches>` was written
+  before `<calcPr>` in `workbook.xml`, which the workbook schema forbids.
+- The pivot range now shows its labels, values, subtotals and grand totals
+  when the file is first opened, laid out as Excel's compact form lays them
+  out, so a refresh in Excel leaves the range unchanged. Before, the cells were
+  blank until the user clicked Refresh. This also covers nested row and column
+  fields, two or more data fields (Excel's "Values" field), blank source
+  values, and page fields.
+- `location` is now the anchor of the pivot: WolfXL sizes the range from its
+  top-left cell, and an explicit range such as `"F2:G9"` is resized to fit.
+  Page fields sit above the table with one spacer row, as Excel places them;
+  when there is no room above the anchor, the table moves down.
+- Placing a field on the row, column or page axis now raises `ValueError`
+  when its values are too many to enumerate as shared items, instead of
+  writing a pivot that Excel cannot open. Use the field as a data field or
+  group it with `PivotCache.group_field()`.
+
 ## 2.0.19 - 2026-10-26
 
 ### Documentation

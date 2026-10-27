@@ -1016,9 +1016,9 @@ pub struct QueuedSlicerAdd {
 }
 
 // ---------------------------------------------------------------------------
-// Workbook.xml `<pivotCaches>` splice — mirrors
-// `defined_names::merge_defined_names`. Inserts after `</sheets>` and
-// before `<definedNames>` (per ECMA-376 §18.2.27 child grammar).
+// Workbook.xml `<pivotCaches>` splice. CT_Workbook (ECMA-376 §18.2.27) is a
+// strict sequence and Excel rejects the whole workbook as corrupt when
+// `pivotCaches` appears before `calcPr`.
 // ---------------------------------------------------------------------------
 
 /// One queued workbook-rel entry for the `<pivotCaches>` block.
@@ -1029,21 +1029,11 @@ pub struct PivotCacheRef {
 }
 
 /// Splice `<pivotCaches>` into `xl/workbook.xml`. If a block already
-/// exists, append the new entries to it; otherwise insert a fresh
-/// block immediately after `</sheets>` (CT_Workbook §18.2.27 ordering:
-/// `sheets` (#10) → `functionGroups` (#11) → `externalReferences` (#12)
-/// → `definedNames` (#13) → `calcPr` (#14) → `oleSize` (#15)
-/// → `customWorkbookViews` (#16) → `pivotCaches` (#17) → … etc.).
-///
-/// CRITICAL nuance: ECMA-376 actually orders `pivotCaches` AFTER
-/// `customWorkbookViews` (#16) and BEFORE `smartTagPr` (#18). In
-/// practice most workbooks have neither `<customWorkbookViews>` nor
-/// `<smartTagPr>`, so inserting after `</sheets>` (or after
-/// `</definedNames>` if present) is what real Excel-emitted files do.
-/// We follow that convention here for byte-stability with openpyxl.
-///
-/// The simplest tolerant placement: insert just AFTER `</definedNames>`
-/// if present, else just AFTER `</sheets>`. Empty `entries` is a no-op.
+/// exists, append the new entries to it; otherwise insert a fresh block
+/// at its CT_Workbook sequence position: after `definedNames`, `calcPr`,
+/// `oleSize` and `customWorkbookViews`, before `smartTagPr`,
+/// `smartTagTypes`, `webPublishing`, `fileRecoveryPr`,
+/// `webPublishObjects` and `extLst`. Empty `entries` is a no-op.
 pub fn splice_pivot_caches(
     workbook_xml: &[u8],
     entries: &[PivotCacheRef],
@@ -1095,16 +1085,10 @@ pub fn splice_pivot_caches(
         return Ok(out.into_bytes());
     }
 
-    // No existing block — insert a fresh one. Prefer placement
-    // immediately after `</definedNames>` if present, otherwise
-    // immediately after `</sheets>`.
-    let inject_at = if let Some(p) = s.find("</definedNames>") {
-        p + "</definedNames>".len()
-    } else if let Some(p) = s.find("</sheets>") {
-        p + "</sheets>".len()
-    } else {
-        return Err("workbook.xml has neither </sheets> nor </definedNames>".into());
-    };
+    // No existing block: insert a fresh one before the first CT_Workbook
+    // child that the schema orders after `pivotCaches`, or before the
+    // closing root tag.
+    let inject_at = pivot_caches_insert_offset(s)?;
 
     let block = format!("<pivotCaches>{rendered}</pivotCaches>");
     let mut out = String::with_capacity(s.len() + block.len());
@@ -1112,6 +1096,55 @@ pub fn splice_pivot_caches(
     out.push_str(&block);
     out.push_str(&s[inject_at..]);
     Ok(out.into_bytes())
+}
+
+/// CT_Workbook children that the schema sequence places after `pivotCaches`.
+fn follows_pivot_caches(local_name: &[u8]) -> bool {
+    matches!(
+        local_name,
+        b"smartTagPr"
+            | b"smartTagTypes"
+            | b"webPublishing"
+            | b"fileRecoveryPr"
+            | b"webPublishObjects"
+            | b"extLst"
+    )
+}
+
+/// Byte offset at which a new `<pivotCaches>` block keeps workbook.xml in
+/// CT_Workbook order.
+fn pivot_caches_insert_offset(s: &str) -> Result<usize, String> {
+    use quick_xml::events::Event;
+
+    let mut reader = quick_xml::Reader::from_str(s);
+    let mut depth = 0usize;
+    loop {
+        let before = reader.buffer_position() as usize;
+        match reader
+            .read_event()
+            .map_err(|e| format!("workbook.xml: {e}"))?
+        {
+            Event::Start(element) => {
+                if depth == 1 && follows_pivot_caches(element.local_name().as_ref().as_bytes()) {
+                    return Ok(before);
+                }
+                depth += 1;
+            }
+            Event::Empty(element) => {
+                if depth == 1 && follows_pivot_caches(element.local_name().as_ref().as_bytes()) {
+                    return Ok(before);
+                }
+            }
+            Event::End(_) => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Ok(before);
+                }
+            }
+            Event::Eof => return Err("workbook.xml has no closing workbook tag".into()),
+            _ => {}
+        }
+    }
 }
 
 fn add_workbook_relationship_namespace(s: &str) -> Result<String, String> {
@@ -1251,7 +1284,7 @@ mod tests {
         );
         assert!(s.contains("<pivotCaches>"));
         assert!(s.contains("</pivotCaches>"));
-        // Inserted right after </sheets>.
+        // Inserted after </sheets>, before the closing root tag.
         let after_sheets = s.find("</sheets>").unwrap();
         let pivots_at = s.find("<pivotCaches>").unwrap();
         assert!(pivots_at > after_sheets);
@@ -1304,6 +1337,38 @@ mod tests {
         let dn_end = s.find("</definedNames>").unwrap() + "</definedNames>".len();
         let pivots_at = s.find("<pivotCaches>").unwrap();
         assert!(pivots_at >= dn_end);
+    }
+
+    /// Excel reports the whole workbook as corrupt when `pivotCaches`
+    /// precedes `calcPr` (ECMA-376 §18.2.27 sequence).
+    #[test]
+    fn splice_pivot_caches_follows_calc_pr_and_precedes_ext_lst() {
+        let xml = br#"<workbook><sheets/><definedNames/><calcPr calcId="124519" fullCalcOnLoad="1"/><customWorkbookViews/><extLst><ext uri="{x}"/></extLst></workbook>"#;
+        let entries = vec![PivotCacheRef {
+            cache_id: 0,
+            rid: "rId4".into(),
+        }];
+        let out = splice_pivot_caches(xml, &entries).unwrap();
+        let s = std::str::from_utf8(&out).unwrap();
+        let pivots_at = s.find("<pivotCaches>").unwrap();
+        assert!(pivots_at > s.find("<calcPr").unwrap(), "{s}");
+        assert!(pivots_at > s.find("<customWorkbookViews/>").unwrap(), "{s}");
+        assert!(pivots_at < s.find("<extLst>").unwrap(), "{s}");
+    }
+
+    #[test]
+    fn splice_pivot_caches_without_trailing_children_goes_last() {
+        let xml = br#"<workbook><sheets/><calcPr calcId="171027"/></workbook>"#;
+        let entries = vec![PivotCacheRef {
+            cache_id: 0,
+            rid: "rId4".into(),
+        }];
+        let out = splice_pivot_caches(xml, &entries).unwrap();
+        let s = std::str::from_utf8(&out).unwrap();
+        assert!(
+            s.ends_with(r#"<calcPr calcId="171027"/><pivotCaches><pivotCache cacheId="0" r:id="rId4"/></pivotCaches></workbook>"#),
+            "{s}"
+        );
     }
 
     #[test]

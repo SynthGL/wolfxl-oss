@@ -470,6 +470,20 @@ class PivotCache:
     def _infer_cache_field(
         self, name: str, values: list[Any]
     ) -> CacheField:
+        field = self._infer_cache_field_items(name, values)
+        si = field.shared_items
+        if si.items is not None and any(v is None for v in values):
+            # Excel enumerates blanks as a trailing ``<m/>`` shared item so
+            # records index it like any other item and pivot axes can show
+            # a "(blank)" row.
+            si.items.append(CacheValue.missing())
+            si.count = len(si.items)
+            si.contains_blank = True
+        return field
+
+    def _infer_cache_field_items(
+        self, name: str, values: list[Any]
+    ) -> CacheField:
         # Classify per-value type; pick dominant.
         kinds = [self._classify(v) for v in values]
         non_missing = [k for k in kinds if k != "missing"]
@@ -852,7 +866,7 @@ class PivotCache:
             cells = []
             for col_i, cv in enumerate(row):
                 lookup = index_lookups[col_i]
-                if lookup is not None and cv.kind != "missing":
+                if lookup is not None:
                     key = (cv.kind, cv.value)
                     if key in lookup:
                         cells.append({"kind": "index", "value": lookup[key]})

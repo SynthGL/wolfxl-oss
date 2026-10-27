@@ -1,0 +1,350 @@
+"""Compact-form pivot layout: axis items, location, and rendered cells.
+
+Excel stores a pivot table twice: the ``pivotTableDefinition`` part
+describes the layout (``rowItems``/``colItems``/``location``) and the
+worksheet holds the rendered values. Excel validates the two against
+each other on open and does not re-render a pivot until the user
+refreshes it, so both must describe the same compact-form grid that
+Excel itself would produce.
+
+Grid conventions (matched against Excel 16 refresh output):
+
+* Row fields render compact: every level gets its own row, the parent
+  row carries the subtotal, and the grand total row comes last.
+* Column fields render one header row per field; a field with a real
+  field nested under it gets ``"<item> Total"`` subtotal columns.
+* Two or more data fields add the ``Values`` pseudo-field (index -2) as
+  the innermost column field.
+* Item order follows the cache's shared-items order, and items without
+  records are hidden.
+"""
+
+from __future__ import annotations
+
+import statistics
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Sequence
+
+GRAND_TOTAL_CAPTION = "Grand Total"
+ROW_HEADER_CAPTION = "Row Labels"
+COL_HEADER_CAPTION = "Column Labels"
+BLANK_ITEM_CAPTION = "(blank)"
+ALL_ITEMS_CAPTION = "(All)"
+
+
+@dataclass
+class DataSpec:
+    """One data field: cache field index, aggregator, and caption."""
+
+    field_index: int
+    function: str
+    caption: str
+
+
+@dataclass
+class PivotLayout:
+    """Excel-consistent layout for one pivot table.
+
+    Cell offsets are relative to the table's top-left cell (the
+    ``location`` anchor). Page-field cells are relative to the same
+    anchor and therefore have negative row offsets.
+    """
+
+    row_items: list[dict]
+    col_items: list[dict]
+    height: int
+    width: int
+    first_data_row: int
+    first_data_col: int
+    cells: dict[tuple[int, int], Any] = field(default_factory=dict)
+
+
+class _Accumulator:
+    __slots__ = ("numbers", "non_blank")
+
+    def __init__(self) -> None:
+        self.numbers: list[float] = []
+        self.non_blank = 0
+
+
+def aggregate(acc: _Accumulator, function: str) -> float | None:
+    """Apply an Excel pivot aggregator; ``None`` renders as an empty cell."""
+    nums = acc.numbers
+    if function == "count":
+        return float(acc.non_blank)
+    if function == "countNums":
+        return float(len(nums))
+    if not nums:
+        return None
+    if function == "sum":
+        return float(sum(nums))
+    if function == "average":
+        return float(sum(nums) / len(nums))
+    if function == "max":
+        return float(max(nums))
+    if function == "min":
+        return float(min(nums))
+    if function == "product":
+        product = 1.0
+        for n in nums:
+            product *= n
+        return product
+    if function == "stdDev":
+        return statistics.stdev(nums) if len(nums) > 1 else None
+    if function == "stdDevp":
+        return statistics.pstdev(nums)
+    if function == "var":
+        return statistics.variance(nums) if len(nums) > 1 else None
+    if function == "varp":
+        return statistics.pvariance(nums)
+    raise ValueError(f"Unknown aggregator function: {function!r}")
+
+
+def item_label(value: Any) -> Any:
+    """Cell value Excel shows for a shared item."""
+    if value is None or value.kind == "missing":
+        return BLANK_ITEM_CAPTION
+    if value.kind == "date":
+        try:
+            return datetime.fromisoformat(value.value)
+        except ValueError:
+            return value.value
+    return value.value
+
+
+def _repeat_count(path: tuple, previous: tuple | None) -> int:
+    """Leading entries shared with the previous axis item (``<i r>``).
+
+    At least one entry is always written, so a child row that follows its
+    parent row repeats the parent's full path.
+    """
+    if previous is None:
+        return 0
+    limit = min(len(path) - 1, len(previous))
+    r = 0
+    while r < limit and path[r] == previous[r]:
+        r += 1
+    return r
+
+
+def _axis_item(
+    path: tuple, previous: tuple | None, *, t: str | None = None, i: int | None = None
+) -> dict:
+    r = _repeat_count(path, previous)
+    return {
+        "indices": [int(x) for x in path[r:]],
+        "t": t,
+        "r": r or None,
+        "i": i or None,
+    }
+
+
+def _children(keys: Sequence[tuple], depth: int) -> dict[tuple, list[int]]:
+    """Map each key prefix to its sorted child indices."""
+    tree: dict[tuple, set[int]] = {}
+    for key in keys:
+        for level in range(depth):
+            tree.setdefault(key[:level], set()).add(key[level])
+    return {prefix: sorted(kids) for prefix, kids in tree.items()}
+
+
+def compute_layout(
+    *,
+    records: Sequence[Sequence[Any]],
+    item_index: Any,
+    shared_items: Sequence[Sequence[Any] | None],
+    row_fields: Sequence[int],
+    col_fields: Sequence[int],
+    data: Sequence[DataSpec],
+    row_grand_totals: bool,
+    col_grand_totals: bool,
+    grand_total_caption: str | None,
+    data_caption: str,
+) -> PivotLayout:
+    """Compute axis items, location metadata, and rendered cells.
+
+    ``item_index(record_cell, field_index)`` maps a record cell to its
+    shared-items index for an axis field.
+    """
+    n_rows, n_cols, n_data = len(row_fields), len(col_fields), len(data)
+    multi_data = n_data > 1
+    grand_caption = grand_total_caption or GRAND_TOTAL_CAPTION
+
+    # 1. Accumulate every (row prefix, col prefix) bucket in one pass.
+    buckets: dict[tuple[tuple, tuple], list[_Accumulator]] = {}
+    row_keys: set[tuple] = set()
+    col_keys: set[tuple] = set()
+    for record in records:
+        rk = tuple(item_index(record[f], f) for f in row_fields)
+        ck = tuple(item_index(record[f], f) for f in col_fields)
+        row_keys.add(rk)
+        col_keys.add(ck)
+        cells = [
+            record[d.field_index] if d.field_index < len(record) else None
+            for d in data
+        ]
+        for rl in range(n_rows + 1):
+            for cl in range(n_cols + 1):
+                accs = buckets.get((rk[:rl], ck[:cl]))
+                if accs is None:
+                    accs = [_Accumulator() for _ in data]
+                    buckets[(rk[:rl], ck[:cl])] = accs
+                for acc, cell in zip(accs, cells):
+                    if cell is None or cell.kind == "missing":
+                        continue
+                    acc.non_blank += 1
+                    if cell.kind == "number":
+                        acc.numbers.append(cell.value)
+
+    def value(row_path: tuple, col_path: tuple, di: int) -> float | None:
+        accs = buckets.get((row_path, col_path))
+        if accs is None:
+            return None
+        return aggregate(accs[di], data[di].function)
+
+    def label(field_index: int, item: int) -> Any:
+        items = shared_items[field_index]
+        if items is None or item >= len(items):
+            return BLANK_ITEM_CAPTION
+        return item_label(items[item])
+
+    # 2. Row lines: compact form, one line per tree node, parents first.
+    row_tree = _children(sorted(row_keys), n_rows)
+    row_lines: list[tuple[tuple, str | None]] = []
+
+    def walk_rows(prefix: tuple) -> None:
+        for kid in row_tree.get(prefix, []):
+            path = prefix + (kid,)
+            row_lines.append((path, None))
+            if len(path) < n_rows:
+                walk_rows(path)
+
+    if n_rows:
+        walk_rows(())
+        if row_grand_totals:
+            row_lines.append(((), "grand"))
+
+    row_items: list[dict] = []
+    previous: tuple | None = None
+    for path, kind in row_lines:
+        if kind == "grand":
+            row_items.append({"indices": [0], "t": "grand", "r": None, "i": None})
+            previous = None
+        else:
+            row_items.append(_axis_item(path, previous))
+            previous = path
+    if not row_items:
+        row_items.append({"indices": [], "t": None, "r": None, "i": None})
+
+    # 3. Column lines: leaves, outer-field subtotals, then grand totals.
+    #    Each line is (col path, data index, kind, subtotal level).
+    col_tree = _children(sorted(col_keys), n_cols)
+    col_lines: list[tuple[tuple, int, str | None]] = []
+    data_range = range(n_data)
+
+    def walk_cols(prefix: tuple) -> None:
+        if len(prefix) == n_cols:
+            col_lines.extend((prefix, di, None) for di in data_range)
+            return
+        for kid in col_tree.get(prefix, []):
+            path = prefix + (kid,)
+            walk_cols(path)
+            if len(path) < n_cols:
+                col_lines.extend((path, di, "default") for di in data_range)
+
+    if n_cols or multi_data:
+        walk_cols(())
+        if n_cols and col_grand_totals:
+            col_lines.extend(((), di, "grand") for di in data_range)
+    else:
+        col_lines.append(((), 0, None))
+
+    col_items: list[dict] = []
+    col_repeats: list[int] = []
+    previous = None
+    for path, di, kind in col_lines:
+        full = path + (di,) if multi_data and kind is None else path
+        if kind == "grand":
+            col_items.append({"indices": [0], "t": "grand", "r": None, "i": di or None})
+            col_repeats.append(0)
+            previous = None
+            continue
+        if not full:
+            col_items.append({"indices": [], "t": None, "r": None, "i": None})
+            col_repeats.append(0)
+            continue
+        item = _axis_item(full, previous, t=kind, i=di if multi_data else None)
+        col_items.append(item)
+        col_repeats.append(item["r"] or 0)
+        previous = full
+
+    # 4. Geometry. Every column-axis field (including Values) adds a header
+    #    row below the caption row. The label column holds row items, or
+    #    the single data caption when only column fields are present.
+    n_col_levels = n_cols + (1 if multi_data else 0)
+    has_label_col = bool(n_rows) or (bool(n_cols) and not multi_data)
+    header_rows = 1 + n_col_levels
+    first_data_col = 1 if has_label_col else 0
+    data_rows = len(row_lines) if n_rows else 1
+    layout = PivotLayout(
+        row_items=row_items,
+        col_items=col_items,
+        height=header_rows + data_rows,
+        width=first_data_col + len(col_lines),
+        first_data_row=header_rows,
+        first_data_col=first_data_col,
+    )
+    cells = layout.cells
+
+    # 5. Header block.
+    def col_caption(di: int) -> str:
+        return data[di].caption
+
+    if n_col_levels:
+        if n_rows and not multi_data:
+            cells[(0, 0)] = col_caption(0)
+        cells[(0, first_data_col)] = COL_HEADER_CAPTION if n_cols else data_caption
+        if n_rows:
+            cells[(header_rows - 1, 0)] = ROW_HEADER_CAPTION
+        for j, (path, di, kind) in enumerate(col_lines):
+            col = first_data_col + j
+            if kind == "grand":
+                cells[(1, col)] = (
+                    f"Total {col_caption(di)}" if multi_data else grand_caption
+                )
+                continue
+            start = col_repeats[j]
+            for level in range(start, len(path)):
+                item = label(col_fields[level], path[level])
+                if kind == "default" and level == len(path) - 1:
+                    item = (
+                        f"{item} {col_caption(di)}" if multi_data else f"{item} Total"
+                    )
+                cells[(1 + level, col)] = item
+            if multi_data and kind is None:
+                cells[(header_rows - 1, col)] = col_caption(di)
+    else:
+        if n_rows:
+            cells[(0, 0)] = ROW_HEADER_CAPTION
+        for j, (_path, di, _kind) in enumerate(col_lines):
+            cells[(0, first_data_col + j)] = col_caption(di)
+
+    # 6. Data block.
+    data_lines: list[tuple[tuple, str | None]] = row_lines if n_rows else [((), None)]
+    for i, (row_path, kind) in enumerate(data_lines):
+        row = header_rows + i
+        if n_rows:
+            cells[(row, 0)] = (
+                grand_caption
+                if kind == "grand"
+                else label(row_fields[len(row_path) - 1], row_path[-1])
+            )
+        elif has_label_col and not multi_data:
+            cells[(row, 0)] = col_caption(0)
+        for j, (col_path, di, _kind) in enumerate(col_lines):
+            v = value(row_path, col_path, di)
+            if v is not None:
+                cells[(row, first_data_col + j)] = v
+
+    return layout

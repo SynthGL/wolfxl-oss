@@ -2,17 +2,16 @@
 
 Mirrors :class:`openpyxl.pivot.table.TableDefinition`.
 
-The aggregation layer (computing ``<rowItems>`` / ``<colItems>``
-pre-aggregated values) is implemented in
-:meth:`PivotTable._compute_layout`, which walks the cache's records
-and computes per-(row, col) aggregated values per data field. The
-values are emitted into the OOXML so Excel doesn't need to refresh
-on open.
+:meth:`PivotTable._compute_layout` walks the cache's records and
+renders the compact-form grid Excel would produce (see
+:mod:`wolfxl.pivot._layout`): ``<rowItems>``/``<colItems>``, the
+``<location>`` footprint, and the cell values written to the host
+worksheet, so the table displays without a refresh.
 """
 
 from __future__ import annotations
 
-import statistics
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Iterable, Sequence
 
@@ -372,9 +371,8 @@ class PivotTable:
         self._data_field_dicts: list[dict] | None = None
         self._row_items: list[dict] | None = None
         self._col_items: list[dict] | None = None
-        self._aggregated_values: dict[
-            tuple[tuple, tuple, int], float | None
-        ] = {}
+        # Rendered cells as ((row, col) 1-based absolute) -> value.
+        self._rendered_cells: dict[tuple[int, int], Any] = {}
         # Calculated items (table-scoped).
         self.calculated_items: list[Any] = []
         # Pivot-area Format / CF directives (table-scoped).
@@ -506,15 +504,17 @@ class PivotTable:
     # ------------------------------------------------------------------
 
     def _compute_layout(self) -> None:
-        """Walk cache records, build pivot fields, axis indices, items,
-        and aggregated values.
+        """Resolve fields, render the compact layout, and size the location.
 
         Must be called after :attr:`cache` has been materialized via
         :meth:`Workbook.add_pivot_cache`. Worksheet.add_pivot_table()
         invokes this before serializing.
         """
+        from ._layout import ALL_ITEMS_CAPTION, DataSpec, compute_layout, item_label
+
         # 1. Resolve cache-field indices for each axis.
-        cache_field_count = len(self.cache.fields)
+        cache_fields = self.cache.fields
+        cache_field_count = len(cache_fields)
         row_indices = [self.cache.field_index(rf.name) for rf in self._row_field_specs]
         col_indices = [self.cache.field_index(cf.name) for cf in self._col_field_specs]
         page_indices = [
@@ -532,6 +532,14 @@ class PivotTable:
             raise ValueError(
                 "PivotTable: a cache field appears on multiple axes"
             )
+        for i in all_axis_indices:
+            if cache_fields[i].shared_items.items is None:
+                raise ValueError(
+                    f"PivotTable: field {cache_fields[i].name!r} has too many "
+                    "unique values to enumerate as shared items, so it cannot "
+                    "be placed on the row, column, or page axis; use it as a "
+                    "data field or group it with PivotCache.group_field()"
+                )
 
         # 3. Build pivot_fields (one per cache field).
         pivot_fields: list[PivotField] = []
@@ -553,9 +561,36 @@ class PivotTable:
                 )
             )
 
-        # 4. Pre-compute row/col axis items and aggregated values.
-        row_items, col_items, agg = self._pre_compute(
-            row_indices, col_indices, data_field_indices
+        # 4. Render the compact layout from the cache records.
+        lookups: dict[int, dict[tuple, int]] = {
+            i: {
+                (v.kind, v.value): n
+                for n, v in enumerate(cache_fields[i].shared_items.items)
+            }
+            for i in set(row_indices + col_indices)
+        }
+
+        def item_index(cell: "CacheValue", field_index: int) -> int:
+            return lookups[field_index][(cell.kind, cell.value)]
+
+        layout = compute_layout(
+            records=self.cache._records or [],  # noqa: SLF001
+            item_index=item_index,
+            shared_items=[f.shared_items.items for f in cache_fields],
+            row_fields=row_indices,
+            col_fields=col_indices,
+            data=[
+                DataSpec(
+                    field_index=data_field_indices[i],
+                    function=df.function,
+                    caption=df.resolved_display_name(),
+                )
+                for i, df in enumerate(self._data_field_specs)
+            ],
+            row_grand_totals=self.row_grand_totals,
+            col_grand_totals=self.col_grand_totals,
+            grand_total_caption=self.grand_total_caption,
+            data_caption=self.data_caption,
         )
 
         # 5. Build data-field dicts.
@@ -584,211 +619,66 @@ class PivotTable:
             for i, pf in enumerate(self._page_field_specs)
         ]
 
-        # 7. Persist.
+        # 7. Place the table. The location anchor is the table's top-left
+        #    cell; page filters sit above it with one spacer row, and the
+        #    table moves down when the anchor leaves no room for them.
+        top, left = self._anchor_cell()
+        n_pages = len(page_indices)
+        if n_pages:
+            top = max(top, n_pages + 2)
+        from wolfxl.chart.reference import _index_to_col
+
+        self.location.ref = (
+            f"{_index_to_col(left)}{top}:"
+            f"{_index_to_col(left + layout.width - 1)}{top + layout.height - 1}"
+        )
+        # Compact layouts use firstHeaderRow="1" regardless of axis shape.
+        self.location.first_header_row = 1
+        self.location.first_data_row = layout.first_data_row
+        self.location.first_data_col = layout.first_data_col
+        self.location.row_page_count = n_pages or None
+        self.location.col_page_count = 1 if n_pages else None
+
+        rendered = {
+            (top + r, left + c): v for (r, c), v in layout.cells.items()
+        }
+        for i, (field_index, pf) in enumerate(
+            zip(page_indices, self._page_field_specs)
+        ):
+            row = top - n_pages - 1 + i
+            items = cache_fields[field_index].shared_items.items
+            selected = ALL_ITEMS_CAPTION
+            if pf.item_index is not None and 0 <= pf.item_index < len(items):
+                selected = item_label(items[pf.item_index])
+            rendered[(row, left)] = cache_fields[field_index].name
+            rendered[(row, left + 1)] = selected
+
+        # 8. Persist.
         self._pivot_fields = pivot_fields
         self._row_field_indices = row_indices
         self._col_field_indices = col_indices
         self._page_field_dicts = page_field_dicts
         self._data_field_dicts = data_field_dicts
-        self._row_items = row_items
-        self._col_items = col_items
-        self._aggregated_values = agg
+        self._row_items = layout.row_items
+        self._col_items = layout.col_items
+        self._rendered_cells = rendered
 
-        # 8. Widen the location ref to fit the actual pivot table size.
-        self._widen_location()
+    def _anchor_cell(self) -> tuple[int, int]:
+        """1-based (row, column) of the location's top-left cell."""
+        from wolfxl.chart.reference import _col_to_index
 
-    def _pre_compute(
-        self,
-        row_indices: list[int],
-        col_indices: list[int],
-        data_field_indices: list[int],
-    ) -> tuple[list[dict], list[dict], dict]:
-        """Walk records; bucket into (row_key, col_key) → list per data field.
-        Compute axis_items for rows + cols, aggregated values per bucket.
-        """
-        # Pre-fetch shared-items index lookups for fast classification.
-        # (Already pre-computed in `cache.to_rust_records_dict()` but we
-        # need them in tuple form here.)
-        cache_records = self.cache._records or []
-        cache_fields = self.cache._fields or []
-
-        def axis_key(record_row: list, axis_indices: list[int]) -> tuple:
-            return tuple(
-                self._index_for_record_cell(record_row[i], cache_fields[i])
-                for i in axis_indices
-            )
-
-        # Bucket: (row_key, col_key) → [list_of_values_per_data_field]
-        buckets: dict[tuple, list[list[float]]] = {}
-        row_keys_seen: list[tuple] = []
-        col_keys_seen: list[tuple] = []
-        seen_rows: set = set()
-        seen_cols: set = set()
-
-        for rec in cache_records:
-            rk = axis_key(rec, row_indices) if row_indices else ()
-            ck = axis_key(rec, col_indices) if col_indices else ()
-            if rk not in seen_rows:
-                seen_rows.add(rk)
-                row_keys_seen.append(rk)
-            if ck not in seen_cols:
-                seen_cols.add(ck)
-                col_keys_seen.append(ck)
-
-            bucket = buckets.setdefault(
-                (rk, ck), [[] for _ in data_field_indices]
-            )
-            for di, dfi in enumerate(data_field_indices):
-                cell = rec[dfi]
-                # Only numeric values contribute to most aggregators.
-                if cell.kind == "number":
-                    bucket[di].append(cell.value)
-                elif cell.kind == "boolean":
-                    bucket[di].append(1.0 if cell.value else 0.0)
-
-        # Order row/col keys deterministically — by first-appearance.
-        row_keys_seen.sort(key=lambda k: tuple(0 if x is None else x for x in k))
-        col_keys_seen.sort(key=lambda k: tuple(0 if x is None else x for x in k))
-
-        # Compute aggregated values.
-        agg: dict[tuple[tuple, tuple, int], float | None] = {}
-        for (rk, ck), bucket in buckets.items():
-            for di, vals in enumerate(bucket):
-                fn = self._data_field_specs[di].function
-                agg[(rk, ck, di)] = self._aggregate(vals, fn)
-
-        # Build row_items (one per row key + the grand-total row).
-        row_items: list[dict] = []
-        for rk in row_keys_seen:
-            row_items.append(
-                {
-                    "indices": [int(x) if x is not None else 0 for x in rk],
-                    "t": None,
-                    "r": None,
-                    "i": None,
-                }
-            )
-        if self.row_grand_totals and row_indices:
-            row_items.append(
-                {
-                    "indices": [0] * max(len(row_indices), 1),
-                    "t": "grand",
-                    "r": None,
-                    "i": None,
-                }
-            )
-
-        # Build col_items.
-        col_items: list[dict] = []
-        for ck in col_keys_seen:
-            col_items.append(
-                {
-                    "indices": [int(x) if x is not None else 0 for x in ck],
-                    "t": None,
-                    "r": None,
-                    "i": None,
-                }
-            )
-        if self.col_grand_totals and col_indices:
-            col_items.append(
-                {
-                    "indices": [0] * max(len(col_indices), 1),
-                    "t": "grand",
-                    "r": None,
-                    "i": None,
-                }
-            )
-
-        return row_items, col_items, agg
-
-    @staticmethod
-    def _index_for_record_cell(cell: "CacheValue", cache_field) -> int | None:
-        """Convert a record cell into the cache field's shared-items
-        index, or ``None`` if missing."""
-
-        if cell.kind == "missing":
-            return None
-        si = cache_field.shared_items
-        if si.items is None:
-            # No enumeration; cell value is its own key. Fall back to
-            # hash for grouping consistency.
-            return hash((cell.kind, cell.value)) % (10**9)
-        for i, v in enumerate(si.items):
-            if v.kind == cell.kind and v.value == cell.value:
-                return i
-        return None
-
-    @staticmethod
-    def _aggregate(values: list[float], fn: str) -> float | None:
-        """Apply the named aggregator to a list of values. Empty list → None."""
-        if not values:
-            if fn == DataFunction.COUNT or fn == DataFunction.COUNT_NUMS:
-                return 0.0
-            return None
-        if fn == DataFunction.SUM:
-            return float(sum(values))
-        if fn == DataFunction.COUNT or fn == DataFunction.COUNT_NUMS:
-            return float(len(values))
-        if fn == DataFunction.AVERAGE:
-            return float(sum(values) / len(values))
-        if fn == DataFunction.MAX:
-            return float(max(values))
-        if fn == DataFunction.MIN:
-            return float(min(values))
-        if fn == DataFunction.PRODUCT:
-            p = 1.0
-            for v in values:
-                p *= v
-            return p
-        if fn == DataFunction.STD_DEV:
-            return statistics.stdev(values) if len(values) > 1 else 0.0
-        if fn == DataFunction.STD_DEVP:
-            return statistics.pstdev(values)
-        if fn == DataFunction.VAR:
-            return statistics.variance(values) if len(values) > 1 else 0.0
-        if fn == DataFunction.VARP:
-            return statistics.pvariance(values)
-        raise ValueError(f"Unknown aggregator function: {fn!r}")
-
-    # ------------------------------------------------------------------
-    # Location widening
-    # ------------------------------------------------------------------
-
-    def _widen_location(self) -> None:
-        """If the user passed a single anchor like ``"F2"``, widen the
-        ``Location.ref`` to fit the pivot's actual row/col footprint.
-
-        Footprint = header rows + ≥1 data row + ≥1 data col."""
-        from wolfxl.chart.reference import _index_to_col, _col_to_index
-
-        ref = self.location.ref
-        if ":" in ref:
-            return  # user provided explicit range; trust them.
-
-        # Parse anchor (e.g. "F2").
-        import re
-
-        m = re.match(r"^([A-Z]+)(\d+)$", ref)
+        anchor = self.location.ref.split(":", 1)[0].replace("$", "").upper()
+        m = re.match(r"^([A-Z]+)(\d+)$", anchor)
         if not m:
-            raise ValueError(f"Cannot parse PivotTable.location ref={ref!r}")
-        col_letter, row_num = m.group(1), int(m.group(2))
-        col_idx = _col_to_index(col_letter)
+            raise ValueError(
+                f"Cannot parse PivotTable.location ref={self.location.ref!r}"
+            )
+        return int(m.group(2)), _col_to_index(m.group(1))
 
-        n_rows = max(1, len(self._row_items or []))
-        n_cols = max(1, len(self._col_items or []))
-        n_data_fields = len(self._data_field_specs)
-
-        # +1 for header row, +1 for data caption row.
-        height = 2 + n_rows
-        # +1 for label column, +n_cols * n_data_fields for data cols.
-        width = 1 + max(1, n_cols * n_data_fields)
-
-        new_col_letter = _index_to_col(col_idx + width - 1)
-        new_row_num = row_num + height - 1
-        self.location.ref = f"{ref}:{new_col_letter}{new_row_num}"
-        self.location.first_data_row = 1
-        self.location.first_data_col = 1
-        self.location.first_header_row = 0
+    def _write_rendered_cells(self, ws: Any) -> None:
+        """Write the rendered pivot values into the host worksheet."""
+        for (row, col), value in self._rendered_cells.items():
+            ws.cell(row=row, column=col, value=value)
 
     # ------------------------------------------------------------------
     # to_rust_dict
