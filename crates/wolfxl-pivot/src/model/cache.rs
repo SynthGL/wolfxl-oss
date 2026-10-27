@@ -90,16 +90,29 @@ pub enum CacheValue {
 
 /// RFC-061 §10.3 — calculated cache field.
 ///
-/// Lives at the cache level (sister to `CacheField`); emitted as a
-/// `<calculatedItem>` inside the cache definition's `<calculatedItems>`
-/// block. Excel evaluates the formula on open — wolfxl never
-/// pre-computes calc-field values into records (per RFC-061 §8).
+/// Emitted as an extra `<cacheField formula="…" databaseField="0"/>`
+/// after the source fields, so its cache-field index is
+/// `fields.len() + position`. Records carry no cells for it. Excel
+/// evaluates the formula itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CalculatedField {
     pub name: String,
     pub formula: String,
     /// Data type hint: "string" | "number" | "boolean" | "date".
     pub data_type: String,
+}
+
+/// Calculated item on a source field (cache-scoped; every pivot
+/// table on the cache shows it).
+///
+/// The item itself is a trailing shared item of `field_index`
+/// at `item_index`; this entry carries its formula and is emitted
+/// in the cache definition's `<calculatedItems>` block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CalculatedItem {
+    pub field_index: u32,
+    pub item_index: u32,
+    pub formula: String,
 }
 
 /// RFC-061 §10.5 — typed cache-side field group (date / range /
@@ -176,6 +189,8 @@ pub struct PivotCache {
     pub records_part_path: Option<String>,
     /// RFC-061 §2.2 — calculated cache fields (cache-scoped).
     pub calculated_fields: Vec<CalculatedField>,
+    /// Calculated items on source fields (cache-scoped).
+    pub calculated_items: Vec<CalculatedItem>,
     /// RFC-061 §2.4 — cache-side field groups (date / range).
     pub field_groups: Vec<FieldGroup>,
 }
@@ -195,6 +210,7 @@ impl PivotCache {
             refreshed_by: "wolfxl".to_string(),
             records_part_path: None,
             calculated_fields: Vec::new(),
+            calculated_items: Vec::new(),
             field_groups: Vec::new(),
         }
     }
@@ -217,13 +233,31 @@ impl PivotCache {
             }
             _ => {}
         }
-        // Unique field names.
-        let mut seen: Vec<&str> = Vec::with_capacity(self.fields.len());
-        for f in &self.fields {
-            if seen.contains(&f.name.as_str()) {
-                return Err(format!("duplicate cache field name: {}", f.name));
+        // Unique field names, calculated fields included.
+        let mut seen: Vec<&str> =
+            Vec::with_capacity(self.fields.len() + self.calculated_fields.len());
+        let names = self
+            .fields
+            .iter()
+            .map(|f| f.name.as_str())
+            .chain(self.calculated_fields.iter().map(|f| f.name.as_str()));
+        for name in names {
+            if seen.contains(&name) {
+                return Err(format!("duplicate cache field name: {name}"));
             }
-            seen.push(&f.name);
+            seen.push(name);
+        }
+        for ci in &self.calculated_items {
+            let items = self
+                .fields
+                .get(ci.field_index as usize)
+                .and_then(|f| f.shared_items.items.as_ref());
+            if items.is_none_or(|items| ci.item_index as usize >= items.len()) {
+                return Err(format!(
+                    "calculated item {} of field {} has no shared item",
+                    ci.item_index, ci.field_index
+                ));
+            }
         }
         Ok(())
     }

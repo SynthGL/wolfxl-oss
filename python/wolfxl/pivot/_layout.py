@@ -17,6 +17,8 @@ Grid conventions (matched against Excel 16 refresh output):
   the innermost column field.
 * Item order follows the cache's shared-items order, and items without
   records are hidden.
+* Calculated items follow the regular items; totals include them.
+  Calculated fields apply their formula to the field sums of each cell.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ from __future__ import annotations
 import statistics
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 GRAND_TOTAL_CAPTION = "Grand Total"
 ROW_HEADER_CAPTION = "Row Labels"
@@ -46,13 +48,40 @@ def renders_show_data_as(show_data_as: str | None) -> bool:
 
 @dataclass
 class DataSpec:
-    """One data field: cache field index, aggregator, caption, display mode."""
+    """One data field: cache field index, aggregator, caption, display mode.
+
+    A calculated field sets ``calculated``; ``inputs`` lists the source
+    fields its formula reads, and ``formula(resolve)`` evaluates it with
+    ``resolve(field_index)`` giving that field's sum in the cell.
+    ``formula`` is ``None`` when WolfXL cannot evaluate the formula.
+    """
 
     field_index: int
     function: str
     caption: str
     show_data_as: str | None = None
+    calculated: bool = False
+    inputs: tuple[int, ...] = ()
+    formula: Callable[[Callable[[int], Any]], Any] | None = None
 
+
+@dataclass
+class CalcItemSpec:
+    """A calculated item of an axis field.
+
+    ``refs`` are the item indices its formula reads; ``evaluate(resolve)``
+    computes it with ``resolve(item_index)`` giving that item's value.
+    ``evaluate`` is ``None`` when WolfXL cannot evaluate the formula.
+    """
+
+    field_index: int
+    item_index: int
+    refs: frozenset[int]
+    evaluate: Callable[[Callable[[int], Any]], Any] | None
+
+
+class _Unrenderable(Exception):
+    """A cell value WolfXL leaves for Excel to compute."""
 
 @dataclass
 class PivotLayout:
@@ -70,6 +99,8 @@ class PivotLayout:
     first_data_row: int
     first_data_col: int
     cells: dict[tuple[int, int], Any] = field(default_factory=dict)
+    # True when some cells were left for Excel to compute on refresh.
+    unrendered: bool = False
 
 
 class _Accumulator:
@@ -173,17 +204,24 @@ def compute_layout(
     col_grand_totals: bool,
     grand_total_caption: str | None,
     data_caption: str,
+    calculated_items: Sequence[CalcItemSpec] = (),
 ) -> PivotLayout:
     """Compute axis items, location metadata, and rendered cells.
 
     ``item_index(record_cell, field_index)`` maps a record cell to its
-    shared-items index for an axis field.
+    shared-items index for an axis field. ``calculated_items`` lists the
+    calculated items of row and column fields.
     """
     n_rows, n_cols, n_data = len(row_fields), len(col_fields), len(data)
     multi_data = n_data > 1
     grand_caption = grand_total_caption or GRAND_TOTAL_CAPTION
 
-    # 1. Accumulate every (row prefix, col prefix) bucket in one pass.
+    # 1. Accumulate every (row prefix, col prefix) bucket in one pass, one
+    #    accumulator per measured source field.
+    measured = sorted(
+        {f for d in data for f in (d.inputs if d.calculated else (d.field_index,))}
+    )
+    slot = {f: n for n, f in enumerate(measured)}
     buckets: dict[tuple[tuple, tuple], list[_Accumulator]] = {}
     row_keys: set[tuple] = set()
     col_keys: set[tuple] = set()
@@ -192,15 +230,12 @@ def compute_layout(
         ck = tuple(item_index(record[f], f) for f in col_fields)
         row_keys.add(rk)
         col_keys.add(ck)
-        cells = [
-            record[d.field_index] if d.field_index < len(record) else None
-            for d in data
-        ]
+        cells = [record[f] if f < len(record) else None for f in measured]
         for rl in range(n_rows + 1):
             for cl in range(n_cols + 1):
                 accs = buckets.get((rk[:rl], ck[:cl]))
                 if accs is None:
-                    accs = [_Accumulator() for _ in data]
+                    accs = [_Accumulator() for _ in measured]
                     buckets[(rk[:rl], ck[:cl])] = accs
                 for acc, cell in zip(accs, cells):
                     if cell is None or cell.kind == "missing":
@@ -209,13 +244,88 @@ def compute_layout(
                     if cell.kind == "number":
                         acc.numbers.append(cell.value)
 
-    def value(row_path: tuple, col_path: tuple, di: int) -> float | None:
+    # Calculated items add axis keys next to the items they read, keyed by
+    # axis level: {level: {item_index: spec}}.
+    def calc_levels(fields: Sequence[int], keys: set[tuple]) -> dict[int, dict]:
+        levels: dict[int, dict[int, CalcItemSpec]] = {}
+        for spec in calculated_items:
+            if spec.field_index not in fields:
+                continue
+            level = list(fields).index(spec.field_index)
+            levels.setdefault(level, {})[spec.item_index] = spec
+            for key in list(keys):
+                if not spec.refs or key[level] in spec.refs:
+                    keys.add(key[:level] + (spec.item_index,) + key[level + 1 :])
+        return levels
+
+    row_calc = calc_levels(row_fields, row_keys)
+    col_calc = calc_levels(col_fields, col_keys)
+    row_tree = _children(sorted(row_keys), n_rows)
+    col_tree = _children(sorted(col_keys), n_cols)
+
+    def field_value(row_path: tuple, col_path: tuple, f: int, function: str) -> Any:
+        """Aggregate of source field ``f`` in a cell, calculated items included."""
+        for on_rows, path, levels in (
+            (True, row_path, row_calc),
+            (False, col_path, col_calc),
+        ):
+            for level, specs in levels.items():
+                if level < len(path) and path[level] in specs:
+                    spec = specs[path[level]]
+                    if spec.evaluate is None or function != "sum":
+                        raise _Unrenderable
+
+                    def resolve(item: int, path=path, level=level, on_rows=on_rows) -> Any:
+                        sub = path[:level] + (item,) + path[level + 1 :]
+                        v = field_value(
+                            sub if on_rows else row_path,
+                            col_path if on_rows else sub,
+                            f,
+                            function,
+                        )
+                        return 0.0 if v is None else v
+
+                    return spec.evaluate(resolve)
+        # A total over an axis level with calculated items sums the items
+        # it shows, calculated ones included.
+        for on_rows, path, levels, tree in (
+            (True, row_path, row_calc, row_tree),
+            (False, col_path, col_calc, col_tree),
+        ):
+            if levels and len(path) <= max(levels):
+                if function != "sum":
+                    raise _Unrenderable
+                total: Any = None
+                for kid in tree.get(path, []):
+                    sub = path + (kid,)
+                    v = field_value(
+                        sub if on_rows else row_path,
+                        col_path if on_rows else sub,
+                        f,
+                        function,
+                    )
+                    if isinstance(v, str):
+                        return v
+                    if v is not None:
+                        total = v if total is None else total + v
+                return total
         accs = buckets.get((row_path, col_path))
         if accs is None:
             return None
-        return aggregate(accs[di], data[di].function)
+        return aggregate(accs[slot[f]], function)
 
-    def shown(row_path: tuple, col_path: tuple, di: int) -> float | None:
+    def value(row_path: tuple, col_path: tuple, di: int) -> Any:
+        d = data[di]
+        if not d.calculated:
+            return field_value(row_path, col_path, d.field_index, d.function)
+        if d.formula is None or d.function != "sum":
+            raise _Unrenderable
+        sums = {f: field_value(row_path, col_path, f, "sum") for f in d.inputs}
+        if d.inputs and all(v is None for v in sums.values()):
+            return None
+        return d.formula(lambda f: 0.0 if sums[f] is None else sums[f])
+
+    def shown(row_path: tuple, col_path: tuple, di: int) -> Any:
         """``value`` after the data field's "show values as" option.
 
         Excel shows 0 rather than an empty cell for an empty intersection
@@ -241,7 +351,13 @@ def compute_layout(
             col_total = value((), col_path, di)
             if total is None or row_total is None or col_total is None:
                 return None
+            for part in (v, total, row_total, col_total):
+                if isinstance(part, str):
+                    return part
             numerator, denominator = v * total, row_total * col_total
+        for part in (numerator, denominator):
+            if isinstance(part, str):
+                return part
         if not denominator:
             return None
         return numerator / denominator
@@ -253,7 +369,6 @@ def compute_layout(
         return item_label(items[item])
 
     # 2. Row lines: compact form, one line per tree node, parents first.
-    row_tree = _children(sorted(row_keys), n_rows)
     row_lines: list[tuple[tuple, str | None]] = []
 
     def walk_rows(prefix: tuple) -> None:
@@ -282,7 +397,6 @@ def compute_layout(
 
     # 3. Column lines: leaves, outer-field subtotals, then grand totals.
     #    Each line is (col path, data index, kind, subtotal level).
-    col_tree = _children(sorted(col_keys), n_cols)
     col_lines: list[tuple[tuple, int, str | None]] = []
     data_range = range(n_data)
 
@@ -386,7 +500,11 @@ def compute_layout(
         elif has_label_col and not multi_data:
             cells[(row, 0)] = col_caption(0)
         for j, (col_path, di, _kind) in enumerate(col_lines):
-            v = shown(row_path, col_path, di)
+            try:
+                v = shown(row_path, col_path, di)
+            except _Unrenderable:
+                layout.unrendered = True
+                continue
             if v is not None:
                 cells[(row, first_data_col + j)] = v
 

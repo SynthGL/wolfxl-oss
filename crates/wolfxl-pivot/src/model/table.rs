@@ -298,8 +298,6 @@ pub struct PivotTable {
     pub created_version: u8,
     pub updated_version: u8,
     pub min_refreshable_version: u8,
-    /// RFC-061 §2.3 — calculated items (table-scoped).
-    pub calculated_items: Vec<CalculatedItem>,
     /// RFC-061 §2.5 — pivot-area Format directives.
     pub formats: Vec<Format>,
     /// RFC-061 §2.5 — pivot-scoped CF.
@@ -341,17 +339,6 @@ impl PivotTable {
         }
         Ok(())
     }
-}
-
-/// RFC-061 §10.4 — calculated item (table-scoped).
-///
-/// Lives inside the pivot table XML, NOT cache XML. Excel evaluates
-/// the formula on open.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CalculatedItem {
-    pub field_name: String,
-    pub item_name: String,
-    pub formula: String,
 }
 
 /// RFC-061 §10.6 — pivot-area selector.
@@ -449,7 +436,6 @@ mod tests {
             created_version: 6,
             updated_version: 6,
             min_refreshable_version: 3,
-            calculated_items: vec![],
             formats: vec![],
             conditional_formats: vec![],
         }

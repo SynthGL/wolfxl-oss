@@ -5,11 +5,10 @@ styling through the full save → openpyxl-read pipeline. Asserts
 that the parts wolfxl emits remain ZIP-valid and that openpyxl can
 load the workbook without raising.
 
-NOTE: openpyxl 3.1.x is strict about a couple of Pod 3 emit shapes
-(``<calculatedItem fld="N">`` and the ``<x14:slicerCaches>``
-extension). This test stays at the structural level (parts present,
+NOTE: openpyxl 3.1.x does not interpret the ``<x14:slicerCaches>``
+extension. This test stays at the structural level (parts present,
 ZIP valid, no raise) rather than asserting full schema-level
-equivalence — that work is pre-existing Pod 3 territory.
+equivalence.
 """
 from __future__ import annotations
 
@@ -182,18 +181,8 @@ def test_save_then_openpyxl_load_does_not_raise(tmp_path: Path) -> None:
     dst = tmp_path / "dst.xlsx"
     _make_pivot_source(src)
     _build_slicer_workbook(src, dst)
-    # openpyxl 3.1.x has a strict reader for some Pod 3 emit shapes;
-    # we tolerate either path: a clean load, OR a TypeError on a
-    # specific calculatedItem attribute. What we forbid is the ZIP
-    # being unreadable.
-    try:
-        op_wb = openpyxl.load_workbook(dst)
-        op_wb.close()
-    except TypeError as exc:
-        # Pod 3 calc-item ``fld="N"`` is the only known strict-mode
-        # divergence; surface a meaningful failure if the message
-        # changes shape.
-        assert "fld" in str(exc) or "calculatedItem" in str(exc), exc
+    op_wb = openpyxl.load_workbook(dst)
+    op_wb.close()
 
 
 def test_workbook_extlst_roundtrip_preserves_existing_extensions(

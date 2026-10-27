@@ -1493,6 +1493,7 @@ def _pivot_fingerprint(archive: zipfile.ZipFile, parts: set[str]) -> dict[str, l
             ("rels", rels_by_owner.get(part, [])),
             ("fields", _pivot_cache_fields(root)),
             ("calculated_fields", _pivot_calculated_fields(root)),
+            ("calculated_items", _pivot_calculated_items(root)),
             ("field_groups", _pivot_field_groups(root)),
         ]
     return out

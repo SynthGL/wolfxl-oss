@@ -337,10 +337,13 @@ class PivotCache:
         # Set by _materialize() (called by add_pivot_cache).
         self._fields: list[CacheField] | None = None
         self._records: list[list[CacheValue]] | None = None
-        # Calculated fields + field groups. Both are cache-scoped
-        # (deep-clone aliases via the parent cache).
+        # Calculated fields, calculated items, and field groups are all
+        # cache-scoped (every pivot table on the cache sees them).
         self.calculated_fields: list[Any] = []
+        self.calculated_items: list[Any] = []
         self.field_groups: list[Any] = []
+        # Set once a pivot table has rendered cells from this cache.
+        self._rendered = False
 
     @property
     def cache_id(self) -> int:
@@ -362,21 +365,71 @@ class PivotCache:
 
     @property
     def field_names(self) -> list[str]:
-        return [f.name for f in self.fields]
+        """Source field names followed by calculated field names."""
+        return [f.name for f in self.fields] + [
+            cf.name for cf in self.calculated_fields
+        ]
 
     def field_index(self, name: str) -> int:
         """Look up a field by name; raises ``KeyError`` if not found.
 
         Used by :class:`PivotTable` to resolve string field names
-        (``rows=["region"]``) to indices.
+        (``rows=["region"]``) to indices. Calculated fields follow the
+        source fields, so their indices start at ``len(fields)``.
         """
-        for i, f in enumerate(self.fields):
-            if f.name == name:
-                return i
+        names = self.field_names
+        if name in names:
+            return names.index(name)
         raise KeyError(
             f"PivotCache has no field named {name!r}; "
-            f"available: {self.field_names}"
+            f"available: {names}"
         )
+
+    def field_items(self, index: int) -> list[CacheValue] | None:
+        """Shared items of source field ``index``, calculated items last.
+
+        ``None`` when the field's values are not enumerated.
+        """
+        items = self.fields[index].shared_items.items
+        if items is None:
+            return None
+        extra = [
+            CacheValue.string(ci.item_name)
+            for ci in self.calculated_items
+            if ci.field_name == self.fields[index].name
+        ]
+        return list(items) + extra if extra else items
+
+    def _calculated_item_positions(self) -> list[tuple[int, int]]:
+        """``(field_index, item_index)`` of each calculated item, validated."""
+        names = [f.name for f in self.fields]
+        positions = []
+        taken: dict[int, set[str]] = {}
+        for ci in self.calculated_items:
+            if ci.field_name not in names:
+                raise ValueError(
+                    f"calculated item {ci.item_name!r}: cache has no source "
+                    f"field named {ci.field_name!r}; available: {names}"
+                )
+            fi = names.index(ci.field_name)
+            items = self.fields[fi].shared_items.items
+            if items is None:
+                raise ValueError(
+                    f"calculated item {ci.item_name!r}: field {ci.field_name!r} "
+                    "has too many unique values to enumerate its items"
+                )
+            # Excel matches item names case-insensitively.
+            labels = taken.setdefault(
+                fi, {str(v.value).casefold() for v in items}
+            )
+            if ci.item_name.casefold() in labels:
+                raise ValueError(
+                    f"calculated item {ci.item_name!r} duplicates an item of "
+                    f"field {ci.field_name!r}"
+                )
+            labels.add(ci.item_name.casefold())
+            positions.append((fi, len(items) + sum(1 for f, _ in positions if f == fi)))
+        return positions
 
     # ------------------------------------------------------------------
     # Materialization — walk the source range, infer types, build
@@ -686,17 +739,47 @@ class PivotCache:
     ):
         """Add a calculated field to this cache.
 
-        Excel evaluates the formula on open — wolfxl does not
-        pre-evaluate values. The formula uses pivot field names as
-        bare identifiers (``"= revenue - cost"``).
+        The formula uses source field names as bare or ``'quoted'``
+        identifiers (``"= revenue - cost"``). Use the field as a data
+        field by name: ``PivotTable(..., data=["margin"])``.
 
         Returns the registered :class:`CalculatedField` for chaining.
         """
         from ._calc import CalculatedField
 
+        taken = [cf.name for cf in self.calculated_fields]
+        if self._fields is not None:
+            taken += [f.name for f in self._fields]
+        if name in taken:
+            raise ValueError(f"PivotCache already has a field named {name!r}")
         cf = CalculatedField(name=name, formula=formula, data_type=data_type)
         self.calculated_fields.append(cf)
         return cf
+
+    def add_calculated_item(self, field: str, item_name: str, formula: str):
+        """Add a calculated item to source field ``field``.
+
+        The formula references the field's items by name
+        (``"= North + South"``). Every pivot table on this cache shows
+        the item wherever ``field`` is on the row or column axis.
+
+        Returns the registered :class:`CalculatedItem`.
+        """
+        from ._calc import CalculatedItem
+
+        ci = CalculatedItem(field_name=field, item_name=item_name, formula=formula)
+        self.calculated_items.append(ci)
+        if self._fields is not None:
+            try:
+                self._calculated_item_positions()
+            except ValueError:
+                self.calculated_items.pop()
+                raise
+        if self._rendered:
+            # Pivot tables already placed show the cache without this
+            # item; have Excel rebuild them on open.
+            self.refresh_on_load = True
+        return ci
 
     # ------------------------------------------------------------------
     # Field grouping (date / range)
@@ -747,6 +830,10 @@ class PivotCache:
             )
 
         field_index = self.field_index(field)
+        if field_index >= len(self.fields):
+            raise ValueError(
+                f"PivotCache.group_field: {field!r} is a calculated field"
+            )
         parent_index = self.field_index(parent) if parent else None
 
         if by is not None:
@@ -820,24 +907,57 @@ class PivotCache:
             raise RuntimeError(
                 "PivotCache._materialize not yet called"
             )
+        positions = self._calculated_item_positions()
+        fields = [f.to_rust_dict() for f in self._fields]
+        for fi in {fi for fi, _ in positions}:
+            si = fields[fi]["shared_items"]
+            items = self.field_items(fi) or []
+            si["items"] = [v.to_rust_dict() for v in items]
+            si["count"] = len(items)
+            si["contains_mixed_types"] = (
+                si["contains_mixed_types"] or si["contains_number"] or si["contains_date"]
+            )
+            si["contains_semi_mixed_types"] = True
+            si["contains_string"] = True
         return {
             "cache_id": self._cache_id,
             "source": self.source_to_rust_dict(),
-            "fields": [f.to_rust_dict() for f in self._fields],
+            "fields": fields,
             "refresh_on_load": self.refresh_on_load,
             "refreshed_version": 6,
             "created_version": 6,
             "min_refreshable_version": 3,
             "refreshed_by": self.refreshed_by,
             "records_part_path": None,  # set by patcher
-            # Extensions: calculated fields + field groups.
+            # Extensions: calculated fields/items + field groups.
             "calculated_fields": [
                 cf.to_rust_dict() for cf in self.calculated_fields
+            ],
+            "calculated_items": [
+                {
+                    "field_index": fi,
+                    "item_index": ii,
+                    "formula": self._qualified_item_formula(fi, ci),
+                }
+                for (fi, ii), ci in zip(positions, self.calculated_items)
             ],
             "field_groups": [
                 fg.to_rust_dict() for fg in self.field_groups
             ],
         }
+
+    def _qualified_item_formula(self, field_index: int, ci: Any) -> str:
+        """``ci``'s formula with item names written ``Field[Item]``, as Excel stores it."""
+        from ._calc import qualify_item_formula
+
+        items = {
+            v.value.casefold(): v.value
+            for v in self.field_items(field_index) or []
+            if v.kind == "string"
+        }
+        return qualify_item_formula(
+            ci.expression, self.fields[field_index].name, items
+        )
 
     def to_rust_records_dict(self) -> dict:
         """Records dict for the Rust emitter.

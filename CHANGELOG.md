@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Pivot tables with calculated fields or calculated items now open in
+  Microsoft Excel without a repair prompt and show their values on first open
+  (#64). A calculated field is written as a formula cache field, and a
+  calculated item is written on the pivot cache as Excel stores it, with its
+  formula naming items as `Field[Item]`. Before, a calculated field made Excel
+  repair the workbook and a calculated item was dropped.
+- Calculated items now render after the field's regular items and count
+  toward subtotals and grand totals, on row and column fields. Calculated
+  fields render their formula over each cell's field sums, including formulas
+  that read other calculated fields. Formulas WolfXL does not evaluate, such as
+  ones that call functions, are left blank and the cache is marked to refresh
+  on load so Excel fills them in.
+- Calculated items now belong to the pivot cache, so every pivot table on the
+  cache shows them. `PivotCache.add_calculated_item()` adds one;
+  `PivotTable.add_calculated_item()` remains and adds it to the table's cache;
+  read the items from `PivotCache.calculated_items`, which replaces
+  `PivotTable.calculated_items`. Placing a calculated field on the row, column
+  or page axis raises `ValueError`, as Excel only allows calculated fields as
+  data fields.
+
 ## 2.0.20 - 2026-10-26
 
 ### Fixed

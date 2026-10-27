@@ -170,65 +170,77 @@ def test_pivot_cache_with_no_calc_fields_emits_empty_list():
 # ---------------------------------------------------------------------------
 
 
-def test_serialize_pivot_cache_with_calc_field():
+def test_serialize_calc_field_as_formula_cache_field():
     from wolfxl._rust import serialize_pivot_cache_dict
 
     pc = _materialized_cache()
-    pc.add_calculated_field("profit", "revenue - cost")
-    d = pc.to_rust_dict()
-    xml = serialize_pivot_cache_dict(d)
-    s = xml.decode()
-    assert "<calculatedItems" in s
-    assert 'count="1"' in s
-    assert "<calculatedItem" in s
-    assert 'formula="revenue - cost"' in s
-
-
-def test_serialize_pivot_cache_calc_field_fld_index():
-    from wolfxl._rust import serialize_pivot_cache_dict
-
-    pc = _materialized_cache()
-    # 3 cache fields → calc field at fld=3
-    pc.add_calculated_field("profit", "revenue - cost")
-    d = pc.to_rust_dict()
-    xml = serialize_pivot_cache_dict(d)
-    s = xml.decode()
-    assert 'fld="3"' in s
-
-
-def test_serialize_pivot_cache_no_calc_field_no_block():
-    from wolfxl._rust import serialize_pivot_cache_dict
-
-    pc = _materialized_cache()
-    d = pc.to_rust_dict()
-    xml = serialize_pivot_cache_dict(d)
-    s = xml.decode()
+    pc.add_calculated_field("profit", "= revenue - cost")
+    s = serialize_pivot_cache_dict(pc.to_rust_dict()).decode()
+    assert '<cacheFields count="4">' in s
+    assert (
+        '<cacheField name="profit" numFmtId="0" formula=" revenue - cost" '
+        'databaseField="0"/></cacheFields>'
+    ) in s
     assert "<calculatedItems" not in s
 
 
-def test_serialize_pivot_cache_multiple_calc_fields():
-    from wolfxl._rust import serialize_pivot_cache_dict
-
+def test_calc_field_name_must_be_unique():
     pc = _materialized_cache()
     pc.add_calculated_field("profit", "revenue - cost")
-    pc.add_calculated_field("margin", "profit / revenue")
-    d = pc.to_rust_dict()
-    xml = serialize_pivot_cache_dict(d)
-    s = xml.decode()
-    # Count standalone `<calculatedItem ` (note trailing space) — the
-    # `<calculatedItems>` wrapper would otherwise be counted.
-    assert s.count("<calculatedItem ") == 2
+    for name in ("profit", "revenue"):
+        with pytest.raises(ValueError):
+            pc.add_calculated_field(name, "revenue * 2")
 
 
-def test_serialize_pivot_cache_calc_field_byte_stable():
-    from wolfxl._rust import serialize_pivot_cache_dict
+def _save_workbook(tmp_path, fields, **table):
+    from wolfxl import Workbook
+    from wolfxl.pivot import PivotTable
 
-    pc = _materialized_cache()
-    pc.add_calculated_field("profit", "revenue - cost")
-    d = pc.to_rust_dict()
-    a = serialize_pivot_cache_dict(d)
-    b = serialize_pivot_cache_dict(d)
-    assert a == b
+    wb = Workbook()
+    ws = wb.active
+    for row in [
+        ("region", "revenue", "cost"),
+        ("North", 100.0, 40.0),
+        ("South", 200.0, 90.0),
+        ("North", 150.0, 60.0),
+        ("East", 50.0, 10.0),
+    ]:
+        ws.append(row)
+    cache = wb.add_pivot_cache(
+        PivotCache(source=Reference(worksheet=ws, min_col=1, min_row=1, max_col=3, max_row=5))
+    )
+    for name, formula in fields:
+        cache.add_calculated_field(name, formula)
+    ws.add_pivot_table(PivotTable(cache=cache, location="F2", **table))
+    path = tmp_path / "calc_fields.xlsx"
+    wb.save(path)
+    return path
+
+
+def test_calc_field_renders_formula_over_field_sums(tmp_path):
+    import wolfxl
+
+    path = _save_workbook(
+        tmp_path,
+        [("profit", "revenue - cost"), ("margin", "profit / revenue")],
+        rows=["region"],
+        data=["revenue", "profit", "margin"],
+    )
+    ws = wolfxl.load_workbook(path).active
+    grid = [[c.value for c in row] for row in ws["F3:I7"]]
+    assert grid[0] == ["Row Labels", "Sum of revenue", "Sum of profit", "Sum of margin"]
+    assert grid[1][:3] == ["North", 250, 150]
+    assert grid[1][3] == pytest.approx(150 / 250)
+    # Totals apply the formula to the summed inputs, not sum the rows.
+    assert grid[4][:3] == ["Grand Total", 500, 300]
+    assert grid[4][3] == pytest.approx(300 / 500)
+
+
+def test_calc_field_cannot_be_an_axis_field(tmp_path):
+    with pytest.raises(ValueError, match="data field"):
+        _save_workbook(
+            tmp_path, [("profit", "revenue - cost")], rows=["profit"], data=["revenue"]
+        )
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])

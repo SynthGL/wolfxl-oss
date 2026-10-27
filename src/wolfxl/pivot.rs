@@ -44,15 +44,15 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use wolfxl_pivot::model::cache::{
-    CacheField, CacheValue, CalculatedField, DateGroup, FieldGroup, FieldGroupKind, PivotCache,
-    RangeGroup, SharedItems, WorksheetSource,
+    CacheField, CacheValue, CalculatedField, CalculatedItem, DateGroup, FieldGroup, FieldGroupKind,
+    PivotCache, RangeGroup, SharedItems, WorksheetSource,
 };
 use wolfxl_pivot::model::records::{CacheRecord, RecordCell};
 use wolfxl_pivot::model::slicer::Slicer;
 use wolfxl_pivot::model::slicer_cache::{SlicerCache, SlicerItem, SlicerSortOrder};
 use wolfxl_pivot::model::table::{
-    AxisItem, AxisType, CalculatedItem, DataField, Format, Location, PageField, PivotArea,
-    PivotConditionalFormat, PivotField, PivotItem, PivotTable, PivotTableStyleInfo,
+    AxisItem, AxisType, DataField, Format, Location, PageField, PivotArea, PivotConditionalFormat,
+    PivotField, PivotItem, PivotTable, PivotTableStyleInfo,
 };
 use wolfxl_pivot::parse as pp;
 
@@ -145,6 +145,25 @@ pub fn parse_pivot_cache_dict(d: &Bound<'_, PyDict>) -> PyResult<PivotCache> {
                 out.push(parse_calculated_field(pd)?);
             }
             pc.calculated_fields = out;
+        }
+    }
+
+    // Calculated items on source fields (cache-scoped).
+    if let Some(v) = d.get_item("calculated_items")? {
+        if !v.is_none() {
+            let list: Vec<Bound<'_, PyAny>> = v.extract()?;
+            let mut out = Vec::with_capacity(list.len());
+            for vv in &list {
+                let pd = vv
+                    .cast::<PyDict>()
+                    .map_err(|_| PyValueError::new_err("calculated_items[*] must be dict"))?;
+                out.push(CalculatedItem {
+                    field_index: extract_u32(pd, "field_index", 0)?,
+                    item_index: extract_u32(pd, "item_index", 0)?,
+                    formula: extract_str(pd, "formula", "")?,
+                });
+            }
+            pc.calculated_items = out;
         }
     }
 
@@ -341,8 +360,6 @@ pub fn parse_pivot_table_dict(d: &Bound<'_, PyDict>) -> PyResult<PivotTable> {
         _ => None,
     };
 
-    // RFC-061 Sub-feature 3.3 — calculated items.
-    let calculated_items = parse_calculated_items_list(d, "calculated_items")?;
     // RFC-061 Sub-feature 3.5 — formats + conditional formats.
     let formats = parse_formats_list(d, "formats")?;
     let conditional_formats = parse_pivot_cfs_list(d, "conditional_formats")?;
@@ -377,33 +394,11 @@ pub fn parse_pivot_table_dict(d: &Bound<'_, PyDict>) -> PyResult<PivotTable> {
         created_version: extract_u32(d, "created_version", 6)? as u8,
         updated_version: extract_u32(d, "updated_version", 6)? as u8,
         min_refreshable_version: extract_u32(d, "min_refreshable_version", 3)? as u8,
-        calculated_items,
         formats,
         conditional_formats,
     };
     pt.validate().map_err(PyValueError::new_err)?;
     Ok(pt)
-}
-
-fn parse_calculated_items_list(d: &Bound<'_, PyDict>, key: &str) -> PyResult<Vec<CalculatedItem>> {
-    match d.get_item(key)? {
-        Some(v) if !v.is_none() => {
-            let list: Vec<Bound<'_, PyAny>> = v.extract()?;
-            let mut out = Vec::with_capacity(list.len());
-            for vv in &list {
-                let pd = vv
-                    .cast::<PyDict>()
-                    .map_err(|_| PyValueError::new_err(format!("{key}[*] must be dict")))?;
-                out.push(CalculatedItem {
-                    field_name: extract_str(pd, "field_name", "")?,
-                    item_name: extract_str(pd, "item_name", "")?,
-                    formula: extract_str(pd, "formula", "")?,
-                });
-            }
-            Ok(out)
-        }
-        _ => Ok(Vec::new()),
-    }
 }
 
 fn parse_pivot_area(d: &Bound<'_, PyDict>) -> PyResult<PivotArea> {
