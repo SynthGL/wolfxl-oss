@@ -16,7 +16,7 @@ import pytest
 
 from wolfxl import Workbook, load_workbook
 from wolfxl.chart.reference import Reference
-from wolfxl.pivot import PivotCache, PivotTable
+from wolfxl.pivot import PageField, PivotCache, PivotTable
 
 ROWS = [
     ("region", "quarter", "customer", "revenue"),
@@ -154,6 +154,23 @@ def test_page_field_sits_above_table_and_shifts_it_down():
         ["South", 675.0],
         ["East", 50.0],
         ["Grand Total", 1150.0],
+    ]
+
+
+def test_selected_page_item_filters_rendered_values():
+    _, ws, pt = _pivot(
+        rows=["region"], page=[PageField("customer", item_index=0)], data=["revenue"]
+    )
+    # Excel reports TableRange1 F3:G6 and TableRange2 F1:G6; East has no
+    # Acme records, so the filter hides it.
+    assert pt.location.ref == "F3:G6"
+    assert _grid(ws, "F1:G6") == [
+        ["customer", "Acme"],
+        [None, None],
+        ["Row Labels", "Sum of revenue"],
+        ["North", 275.0],
+        ["South", 200.0],
+        ["Grand Total", 475.0],
     ]
 
 

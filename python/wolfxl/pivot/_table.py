@@ -538,7 +538,7 @@ class PivotTable:
                     f"PivotTable: field {cache_fields[i].name!r} has too many "
                     "unique values to enumerate as shared items, so it cannot "
                     "be placed on the row, column, or page axis; use it as a "
-                    "data field or group it with PivotCache.group_field()"
+                    "data field instead"
                 )
 
         # 3. Build pivot_fields (one per cache field).
@@ -561,20 +561,34 @@ class PivotTable:
                 )
             )
 
-        # 4. Render the compact layout from the cache records.
+        # 4. Render the compact layout from the cache records, keeping only
+        #    records that match each page field's selected item.
         lookups: dict[int, dict[tuple, int]] = {
             i: {
                 (v.kind, v.value): n
                 for n, v in enumerate(cache_fields[i].shared_items.items)
             }
-            for i in set(row_indices + col_indices)
+            for i in set(row_indices + col_indices + page_indices)
         }
 
         def item_index(cell: "CacheValue", field_index: int) -> int:
             return lookups[field_index][(cell.kind, cell.value)]
 
+        page_filters = [
+            (field_index, pf.item_index)
+            for field_index, pf in zip(page_indices, self._page_field_specs)
+            if self._selected_page_item(pf, cache_fields[field_index]) is not None
+        ]
+        records = [
+            record
+            for record in self.cache._records or []  # noqa: SLF001
+            if all(
+                item_index(record[f], f) == selected for f, selected in page_filters
+            )
+        ]
+
         layout = compute_layout(
-            records=self.cache._records or [],  # noqa: SLF001
+            records=records,
             item_index=item_index,
             shared_items=[f.shared_items.items for f in cache_fields],
             row_fields=row_indices,
@@ -646,12 +660,13 @@ class PivotTable:
             zip(page_indices, self._page_field_specs)
         ):
             row = top - n_pages - 1 + i
-            items = cache_fields[field_index].shared_items.items
-            selected = ALL_ITEMS_CAPTION
-            if pf.item_index is not None and 0 <= pf.item_index < len(items):
-                selected = item_label(items[pf.item_index])
+            selected = self._selected_page_item(pf, cache_fields[field_index])
             rendered[(row, left)] = cache_fields[field_index].name
-            rendered[(row, left + 1)] = selected
+            rendered[(row, left + 1)] = (
+                ALL_ITEMS_CAPTION
+                if selected is None
+                else item_label(cache_fields[field_index].shared_items.items[selected])
+            )
 
         # 8. Persist.
         self._pivot_fields = pivot_fields
@@ -674,6 +689,14 @@ class PivotTable:
                 f"Cannot parse PivotTable.location ref={self.location.ref!r}"
             )
         return int(m.group(2)), _col_to_index(m.group(1))
+
+    @staticmethod
+    def _selected_page_item(pf: Any, cache_field: Any) -> int | None:
+        """Shared-item index a page field filters on, or None for "(All)"."""
+        items = cache_field.shared_items.items
+        if pf.item_index is not None and 0 <= pf.item_index < len(items):
+            return pf.item_index
+        return None
 
     def _write_rendered_cells(self, ws: Any) -> None:
         """Write the rendered pivot values into the host worksheet."""

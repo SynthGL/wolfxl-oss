@@ -13,15 +13,15 @@
   out, so a refresh in Excel leaves the range unchanged. Before, the cells were
   blank until the user clicked Refresh. This also covers nested row and column
   fields, two or more data fields (Excel's "Values" field), blank source
-  values, and page fields.
+  values, and page fields, including a page field set to one item.
 - `location` is now the anchor of the pivot: WolfXL sizes the range from its
   top-left cell, and an explicit range such as `"F2:G9"` is resized to fit.
   Page fields sit above the table with one spacer row, as Excel places them;
   when there is no room above the anchor, the table moves down.
 - Placing a field on the row, column or page axis now raises `ValueError`
   when its values are too many to enumerate as shared items, instead of
-  writing a pivot that Excel cannot open. Use the field as a data field or
-  group it with `PivotCache.group_field()`.
+  writing a pivot that Excel cannot open. Such a field can still be a data
+  field.
 
 ## 2.0.19 - 2026-10-26
 
