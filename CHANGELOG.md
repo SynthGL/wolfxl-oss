@@ -14,6 +14,12 @@
   blank until the user clicked Refresh. This also covers nested row and column
   fields, two or more data fields (Excel's "Values" field), blank source
   values, and page fields, including a page field set to one item.
+  Data fields shown as a percentage of the total, row or column, or as an
+  index, render the values Excel shows. Running totals, differences and other
+  options measured against a base field or item are left blank and the cache
+  is marked to refresh on load, so Excel fills them in on refresh. Rendering
+  replaces anything already in the pivot range, so earlier cell values cannot
+  pass for pivot results.
 - `location` is now the anchor of the pivot: WolfXL sizes the range from its
   top-left cell, and an explicit range such as `"F2:G9"` is resized to fit.
   Page fields sit above the table with one spacer row, as Excel places them;

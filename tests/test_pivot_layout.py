@@ -16,7 +16,7 @@ import pytest
 
 from wolfxl import Workbook, load_workbook
 from wolfxl.chart.reference import Reference
-from wolfxl.pivot import PageField, PivotCache, PivotTable
+from wolfxl.pivot import DataField, PageField, PivotCache, PivotTable
 
 ROWS = [
     ("region", "quarter", "customer", "revenue"),
@@ -49,6 +49,11 @@ def _pivot(source=ROWS, location="F2", **kw):
 def _grid(ws, ref):
     """Values in ``ref`` as rows, with empty cells as ``None``."""
     return [[cell.value for cell in row] for row in ws[ref]]
+
+
+def _flat(ws, ref):
+    """Values in ``ref`` in row-major order."""
+    return [value for row in _grid(ws, ref) for value in row]
 
 
 def _part(path, name):
@@ -172,6 +177,67 @@ def test_selected_page_item_filters_rendered_values():
         ["South", 200.0],
         ["Grand Total", 475.0],
     ]
+
+
+def test_percent_of_total_renders_shares_and_zero_for_empty_cells():
+    _, ws, _ = _pivot(
+        rows=["region"],
+        cols=["quarter"],
+        data=[DataField("revenue", show_data_as="percentOfTotal")],
+    )
+    assert _flat(ws, "G4:J7") == pytest.approx(
+        [
+            *(0.086956521739, 0.130434782609, 0.152173913043, 0.369565217391),
+            *(0.173913043478, 0.217391304348, 0.195652173913, 0.586956521739),
+            *(0.04347826087, 0.0, 0.0, 0.04347826087),
+            *(0.304347826087, 0.347826086957, 0.347826086957, 1.0),
+        ]
+    )
+
+
+def test_index_matches_excel():
+    _, ws, _ = _pivot(
+        rows=["region"], cols=["quarter"], data=[DataField("revenue", show_data_as="index")]
+    )
+    assert _flat(ws, "G4:J7") == pytest.approx(
+        [
+            *(0.773109243697, 1.014705882353, 1.183823529412, 1.0),
+            *(0.973544973545, 1.064814814815, 0.958333333333, 1.0),
+            *(3.285714285714, 0.0, 0.0, 1.0),
+            *(1.0, 1.0, 1.0, 1.0),
+        ]
+    )
+
+
+def test_base_relative_show_data_as_is_left_for_excel_to_refresh():
+    _, ws, pt = _pivot(
+        rows=["region"],
+        cols=["quarter"],
+        data=[DataField("revenue", show_data_as="runTotal", base_field=1)],
+    )
+    assert _grid(ws, "F4:J4") == [["North", None, None, None, None]]
+    assert pt.cache.refresh_on_load is True
+
+
+def test_rendering_clears_existing_values_inside_the_pivot_range():
+    wb = Workbook()
+    ws = wb.active
+    ref = _populate(ws, ROWS)
+    ws["G6"] = 999  # North / Globex / Q1 has no records.
+    ws["F13"] = "below the pivot"
+    cache = wb.add_pivot_cache(PivotCache(source=ref))
+    ws.add_pivot_table(
+        PivotTable(
+            cache=cache,
+            location="F2",
+            rows=["region", "customer"],
+            cols=["quarter"],
+            data=["revenue"],
+        )
+    )
+    assert ws["G6"].value is None
+    assert ws["F13"].value == "below the pivot"
+
 
 
 def test_blank_axis_value_renders_blank_item(tmp_path):

@@ -33,13 +33,25 @@ BLANK_ITEM_CAPTION = "(blank)"
 ALL_ITEMS_CAPTION = "(All)"
 
 
+# "Show values as" options that depend only on the rendered grid's own
+# totals. The base-relative ones (difference, percent, percentDiff,
+# runTotal) are left for Excel to compute on open.
+GRID_SHOW_DATA_AS = frozenset({"percentOfTotal", "percentOfRow", "percentOfCol", "index"})
+
+
+def renders_show_data_as(show_data_as: str | None) -> bool:
+    """Whether WolfXL renders values for this ``show_data_as`` option."""
+    return show_data_as in (None, "normal") or show_data_as in GRID_SHOW_DATA_AS
+
+
 @dataclass
 class DataSpec:
-    """One data field: cache field index, aggregator, and caption."""
+    """One data field: cache field index, aggregator, caption, display mode."""
 
     field_index: int
     function: str
     caption: str
+    show_data_as: str | None = None
 
 
 @dataclass
@@ -203,6 +215,37 @@ def compute_layout(
             return None
         return aggregate(accs[di], data[di].function)
 
+    def shown(row_path: tuple, col_path: tuple, di: int) -> float | None:
+        """``value`` after the data field's "show values as" option.
+
+        Excel shows 0 rather than an empty cell for an empty intersection
+        under the grid-relative options.
+        """
+        v = value(row_path, col_path, di)
+        how = data[di].show_data_as
+        if how in (None, "normal"):
+            return v
+        if how not in GRID_SHOW_DATA_AS:
+            return None
+        if v is None:
+            v = 0.0
+        total = value((), (), di)
+        if how == "percentOfTotal":
+            numerator, denominator = v, total
+        elif how == "percentOfRow":
+            numerator, denominator = v, value(row_path, (), di)
+        elif how == "percentOfCol":
+            numerator, denominator = v, value((), col_path, di)
+        else:  # index
+            row_total = value(row_path, (), di)
+            col_total = value((), col_path, di)
+            if total is None or row_total is None or col_total is None:
+                return None
+            numerator, denominator = v * total, row_total * col_total
+        if not denominator:
+            return None
+        return numerator / denominator
+
     def label(field_index: int, item: int) -> Any:
         items = shared_items[field_index]
         if items is None or item >= len(items):
@@ -343,7 +386,7 @@ def compute_layout(
         elif has_label_col and not multi_data:
             cells[(row, 0)] = col_caption(0)
         for j, (col_path, di, _kind) in enumerate(col_lines):
-            v = value(row_path, col_path, di)
+            v = shown(row_path, col_path, di)
             if v is not None:
                 cells[(row, first_data_col + j)] = v
 

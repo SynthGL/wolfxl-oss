@@ -371,8 +371,11 @@ class PivotTable:
         self._data_field_dicts: list[dict] | None = None
         self._row_items: list[dict] | None = None
         self._col_items: list[dict] | None = None
-        # Rendered cells as ((row, col) 1-based absolute) -> value.
+        # Rendered cells as ((row, col) 1-based absolute) -> value, and the
+        # (first row, first col, last row, last col) rectangle they cover,
+        # page filters included.
         self._rendered_cells: dict[tuple[int, int], Any] = {}
+        self._footprint: tuple[int, int, int, int] | None = None
         # Calculated items (table-scoped).
         self.calculated_items: list[Any] = []
         # Pivot-area Format / CF directives (table-scoped).
@@ -510,7 +513,13 @@ class PivotTable:
         :meth:`Workbook.add_pivot_cache`. Worksheet.add_pivot_table()
         invokes this before serializing.
         """
-        from ._layout import ALL_ITEMS_CAPTION, DataSpec, compute_layout, item_label
+        from ._layout import (
+            ALL_ITEMS_CAPTION,
+            DataSpec,
+            compute_layout,
+            item_label,
+            renders_show_data_as,
+        )
 
         # 1. Resolve cache-field indices for each axis.
         cache_fields = self.cache.fields
@@ -598,6 +607,7 @@ class PivotTable:
                     field_index=data_field_indices[i],
                     function=df.function,
                     caption=df.resolved_display_name(),
+                    show_data_as=df.show_data_as,
                 )
                 for i, df in enumerate(self._data_field_specs)
             ],
@@ -606,6 +616,13 @@ class PivotTable:
             grand_total_caption=self.grand_total_caption,
             data_caption=self.data_caption,
         )
+        # Excel computes base-relative "show values as" options (difference,
+        # running total, ...) itself; refresh the cache on open so they
+        # appear without a manual refresh.
+        if any(
+            not renders_show_data_as(df.show_data_as) for df in self._data_field_specs
+        ):
+            self.cache.refresh_on_load = True
 
         # 5. Build data-field dicts.
         data_field_dicts = [
@@ -677,6 +694,12 @@ class PivotTable:
         self._row_items = layout.row_items
         self._col_items = layout.col_items
         self._rendered_cells = rendered
+        self._footprint = (
+            top - n_pages - 1 if n_pages else top,
+            left,
+            top + layout.height - 1,
+            left + max(layout.width, 2 if n_pages else 1) - 1,
+        )
 
     def _anchor_cell(self) -> tuple[int, int]:
         """1-based (row, column) of the location's top-left cell."""
@@ -699,9 +722,20 @@ class PivotTable:
         return None
 
     def _write_rendered_cells(self, ws: Any) -> None:
-        """Write the rendered pivot values into the host worksheet."""
-        for (row, col), value in self._rendered_cells.items():
-            ws.cell(row=row, column=col, value=value)
+        """Write the rendered pivot into the host worksheet.
+
+        Every cell in the footprint is assigned, so values already in the
+        range cannot pass for pivot results.
+        """
+        if self._footprint is None:
+            return
+        first_row, first_col, last_row, last_col = self._footprint
+        for row in range(first_row, last_row + 1):
+            for col in range(first_col, last_col + 1):
+                value = self._rendered_cells.get((row, col))
+                cell = ws.cell(row=row, column=col)
+                if value is not None or cell.value is not None:
+                    cell.value = value
 
     # ------------------------------------------------------------------
     # to_rust_dict
