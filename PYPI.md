@@ -1,6 +1,6 @@
 # WolfXL Community
 
-**An openpyxl-compatible Excel library for Python with a Rust backend. Edit existing `.xlsx` templates without losing formatting, conditional formatting, or data validation, and create real pivot tables. MIT licensed. In the committed historical read/write benchmark, WolfXL 2.0.8 measured 3.0-17.3x faster than openpyxl 3.1.5 (small-file gains vary).**
+**An openpyxl-compatible Excel library for Python with a Rust backend. Edit existing `.xlsx` templates without losing formatting, conditional formatting, or data validation. MIT licensed. In the committed historical read/write benchmark, WolfXL 2.0.8 measured 3.0-17.3x faster than openpyxl 3.1.5 (small-file gains vary).**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
@@ -23,7 +23,6 @@ python -m pip install wolfxl==2.0.19
 | --- | --- |
 | An openpyxl script is too slow | WolfXL: change `from openpyxl import ...` to `from wolfxl import ...` |
 | Fill or edit a styled template and keep its formatting, conditional formats, data validation, charts, and sparklines | WolfXL modify mode: `load_workbook(path, modify=True)` |
-| Create a real Excel pivot table from Python | WolfXL `wolfxl.pivot` |
 | Compute formula results in Python | WolfXL `calculate()` for common functions; Commercial for Excel-matched results |
 | Only read cell values, as fast as possible, into a DataFrame | python-calamine, fastexcel, or polars |
 | Only write new files, never read or edit them | XlsxWriter, or WolfXL if you also read or edit |
@@ -46,39 +45,6 @@ and package parts within the documented boundaries; add `keep_vba=True` for
 supported formula results into the saved file's cached values; calculate again
 after further edits, before saving.
 [Edit Excel in Python without losing formatting](https://wolfxl.com/openpyxl-preservation?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09).
-
-## Create a pivot table
-
-openpyxl keeps pivot tables it loads but does not create them, and XlsxWriter
-has no pivot table API. WolfXL builds the pivot cache, its records, and the
-table, so the pivot table opens with its totals filled in, no refresh needed:
-
-```python
-from wolfxl import Workbook
-from wolfxl.chart import Reference
-from wolfxl.pivot import PivotCache, PivotTable
-
-wb = Workbook()
-data = wb.active
-data.title = "Data"
-data.append(["region", "product", "revenue"])
-for row in [
-    ("East", "Widgets", 120),
-    ("West", "Widgets", 90),
-    ("East", "Gadgets", 75),
-    ("West", "Gadgets", 140),
-]:
-    data.append(row)
-
-cache = PivotCache(source=Reference(data, min_col=1, min_row=1, max_col=3, max_row=5))
-wb.add_pivot_cache(cache)
-pivot = PivotTable(cache=cache, location="A3", rows=["region"], cols=["product"], data=["revenue"])
-wb.create_sheet("Pivot").add_pivot_table(pivot)
-wb.save("sales-pivot.xlsx")
-```
-
-`DataField` selects other aggregations (count, average, max, min, and more),
-and `load_workbook(path, modify=True)` adds a pivot table to an existing workbook.
 
 ## Compared with openpyxl
 
