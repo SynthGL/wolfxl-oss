@@ -496,10 +496,9 @@ fn analyze_sheet_bounds(data: &wolfxl_reader::WorksheetData) -> Option<SheetBoun
         }
     }
 
-    let bounds = match bounds {
-        Some(bounds) => bounds,
-        None => data.dimension.as_deref().and_then(parse_range_1based)?,
-    };
+    // No stored cells or merges means no used range; ignore the declared
+    // `<dimension>` so empty sheets read as zero rows.
+    let bounds = bounds?;
     let (min_row, min_col, max_row, max_col) = bounds;
     if min_row != 1 || min_col != 1 || max_row == 0 || max_col == 0 {
         dense_a1 = false;

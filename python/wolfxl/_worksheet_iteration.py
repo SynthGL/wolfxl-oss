@@ -7,6 +7,7 @@ from operator import itemgetter
 from typing import TYPE_CHECKING, Any
 
 from wolfxl._utils import rowcol_to_a1
+from wolfxl._worksheet_bounds import read_dimension_bounds
 
 if TYPE_CHECKING:
     from wolfxl._worksheet import Worksheet
@@ -38,6 +39,9 @@ def iter_rows(
                 values_only=values_only,
             )
 
+    if _is_unbounded_empty(ws, min_row, max_row, min_col, max_col):
+        return iter(())
+
     if values_only and rust_reader is not None:
         return iter_rows_bulk(ws, min_row, max_row, min_col, max_col)
 
@@ -51,24 +55,31 @@ def iter_rows(
             data_only=getattr(workbook, "_data_only", False),
         )
 
-    if (
-        min_row is None
-        and max_row is None
-        and min_col is None
-        and max_col is None
-        and rust_reader is None
-        and not ws._cells  # noqa: SLF001
-        and not ws._append_buffer  # noqa: SLF001
-        and not ws._bulk_writes  # noqa: SLF001
-    ):
-        return iter(())
-
     row_min = min_row or 1
     row_max = max_row or ws._bounds_max_row()  # noqa: SLF001
     col_min = min_col or 1
     col_max = max_col or ws._bounds_max_col()  # noqa: SLF001
 
     return _iter_materialized_rows(ws, row_min, row_max, col_min, col_max, values_only)
+
+
+def _is_unbounded_empty(
+    ws: Worksheet,
+    min_row: int | None,
+    max_row: int | None,
+    min_col: int | None,
+    max_col: int | None,
+) -> bool:
+    """True for an unbounded scan of a sheet with no stored or pending cells.
+
+    openpyxl iterates such a sheet as empty, even though ``max_row`` and
+    ``max_column`` report 1.
+    """
+    if min_row is not None or max_row is not None or min_col is not None or max_col is not None:
+        return False
+    if ws._cells:  # noqa: SLF001
+        return False
+    return read_dimension_bounds(ws) is None
 
 
 def _iter_materialized_rows(
@@ -150,6 +161,9 @@ def iter_cols(
     values_only: bool = False,
 ) -> Iterator[tuple[Any, ...]]:
     """Iterate worksheet columns with a bulk-read fast path when possible."""
+    if _is_unbounded_empty(ws, min_row, max_row, min_col, max_col):
+        return
+
     if values_only and getattr(ws._workbook, "_rust_reader", None) is not None:  # noqa: SLF001
         yield from iter_cols_bulk(ws, min_col, max_col, min_row, max_row)
         return
@@ -166,18 +180,6 @@ def iter_cols(
             max_row,
             data_only=getattr(ws._workbook, "_data_only", False),  # noqa: SLF001
         )
-        return
-
-    if (
-        min_row is None
-        and max_row is None
-        and min_col is None
-        and max_col is None
-        and getattr(ws._workbook, "_rust_reader", None) is None  # noqa: SLF001
-        and not ws._cells  # noqa: SLF001
-        and not ws._append_buffer  # noqa: SLF001
-        and not ws._bulk_writes  # noqa: SLF001
-    ):
         return
 
     row_min = min_row or 1
