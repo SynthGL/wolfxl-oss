@@ -829,9 +829,8 @@ impl NativeXlsxBook {
                 update_bounds(&mut bounds, max_row, max_col);
             }
         }
-        if bounds.is_none() {
-            bounds = data.dimension.as_deref().and_then(parse_range_1based);
-        }
+        // A sheet with no stored cells or merges has no used range, even when
+        // its declared `<dimension>` claims one; openpyxl iterates it as empty.
         Ok(bounds)
     }
 
@@ -903,9 +902,8 @@ impl NativeXlsbBook {
                 update_bounds(&mut bounds, max_row, max_col);
             }
         }
-        if bounds.is_none() {
-            bounds = data.dimension.as_deref().and_then(parse_range_1based);
-        }
+        // Same contract as the xlsx reader: declared dimensions never invent
+        // a used range for a sheet with no stored cells or merges.
         Ok(bounds)
     }
 

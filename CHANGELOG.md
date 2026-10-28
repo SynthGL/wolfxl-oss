@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.0.23 - 2026-10-28
+
+### Fixed
+
+- Iterating a worksheet that has no cells now yields no rows, matching
+  openpyxl. Before, `ws.values`, `ws.iter_rows()`, and `ws.iter_cols()`
+  without bounds yielded one row of `None` for an empty sheet, in normal and
+  `read_only=True` mode.
+- A sheet whose declared `<dimension>` is larger than its stored cells no
+  longer reports or iterates the declared range in normal mode: `max_row`,
+  `max_column`, `dimensions`, and unbounded iteration follow the stored cells,
+  as in openpyxl. In `read_only=True` mode, an unbounded scan stops at the
+  last stored row instead of padding blank rows up to the declared dimension.
+  Explicit `min_row`/`max_row` bounds still yield every row in the range.
+
 ## 2.0.22 - 2026-10-27
 
 ### Changed

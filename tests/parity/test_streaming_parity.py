@@ -14,6 +14,8 @@ are out of scope for Pod-β — see the Phase 3 KNOWN_GAPS row.
 from __future__ import annotations
 
 import datetime as dt
+import re
+import zipfile
 from pathlib import Path
 
 import openpyxl
@@ -186,3 +188,57 @@ def test_streaming_cell_value_datetime_matches_openpyxl(parity_xlsx: Path) -> No
         f"{type(wx_a3.value).__name__} ({wx_a3.value!r})"
     )
     assert wx_a3.value == op_a3.value
+
+
+# ---------------------------------------------------------------------------
+# Declared ``<dimension>`` larger than the stored rows. openpyxl ignores it for
+# unbounded scans: a sheet with no cells yields nothing, and read-only mode
+# stops at the last stored row. (Explicit read-only ``max_row`` padding is a
+# deliberate wolfxl contract, pinned in ``test_streaming_blank_cells.py``.)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def stale_dimension_xlsx(tmp_path: Path) -> Path:
+    wb = openpyxl.Workbook()
+    data = wb.active
+    data.title = "Data"
+    data["A1"] = 1
+    data["B2"] = 2
+    wb.create_sheet("Empty")
+    plain = tmp_path / "plain.xlsx"
+    wb.save(plain)
+
+    declared = {"xl/worksheets/sheet1.xml": b"A1:C5", "xl/worksheets/sheet2.xml": b"A1:C3"}
+    path = tmp_path / "stale-dimension.xlsx"
+    with zipfile.ZipFile(plain) as src, zipfile.ZipFile(path, "w") as dst:
+        for item in src.infolist():
+            payload = src.read(item.filename)
+            if item.filename in declared:
+                payload, count = re.subn(
+                    rb'<dimension ref="[^"]*"',
+                    b'<dimension ref="' + declared[item.filename] + b'"',
+                    payload,
+                )
+                assert count == 1
+            dst.writestr(item, payload)
+    return path
+
+
+@pytest.mark.parametrize("read_only", [True, False])
+@pytest.mark.parametrize("sheet", ["Data", "Empty"])
+def test_unbounded_scan_ignores_declared_dimension(
+    stale_dimension_xlsx: Path, read_only: bool, sheet: str
+) -> None:
+    op_ws = openpyxl.load_workbook(stale_dimension_xlsx, read_only=read_only)[sheet]
+    wx_ws = wolfxl.load_workbook(stale_dimension_xlsx, read_only=read_only)[sheet]
+
+    assert list(wx_ws.values) == list(op_ws.values)
+    assert list(wx_ws.iter_rows(values_only=True)) == list(op_ws.iter_rows(values_only=True))
+    assert [tuple(c.value for c in row) for row in wx_ws.iter_rows()] == [
+        tuple(c.value for c in row) for row in op_ws.iter_rows()
+    ]
+    assert (wx_ws.max_row, wx_ws.max_column) == (op_ws.max_row, op_ws.max_column)
+    assert wx_ws.calculate_dimension() == op_ws.calculate_dimension()
+    if not read_only:
+        assert list(wx_ws.iter_cols(values_only=True)) == list(op_ws.iter_cols(values_only=True))

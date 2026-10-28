@@ -243,6 +243,9 @@ pub struct StreamingSheetReader {
     min_row: Option<u32>,
     /// Optional `max_row` bound (1-based, inclusive). Iteration stops past this.
     max_row: Option<u32>,
+    /// Whether iteration stopped at a `<row>` beyond `max_row`. openpyxl's
+    /// read-only iterator pads trailing blank rows only in that case.
+    stopped_past_max_row: bool,
     /// Optional `min_col` bound (1-based, inclusive).
     min_col: Option<u32>,
     /// Optional `max_col` bound (1-based, inclusive).
@@ -906,6 +909,11 @@ impl StreamingSheetReader {
         self.exhausted
     }
 
+    /// True once iteration stopped at a `<row>` beyond the `max_row` bound.
+    pub fn stopped_past_max_row(&self) -> bool {
+        self.stopped_past_max_row
+    }
+
     /// Eagerly drop the in-memory XML buffer (releases peak RSS).
     pub fn close(&mut self) {
         self.exhausted = true;
@@ -993,6 +1001,7 @@ impl StreamingSheetReader {
             exhausted: false,
             min_row,
             max_row,
+            stopped_past_max_row: false,
             min_col,
             max_col,
             last_row: 0,
@@ -1061,6 +1070,7 @@ impl StreamingSheetReader {
                     if let Some(max) = self.max_row {
                         if row_idx > max {
                             self.exhausted = true;
+                            self.stopped_past_max_row = true;
                             return Ok(ValueStepResult::Done);
                         }
                     }
@@ -1100,6 +1110,7 @@ impl StreamingSheetReader {
         if let Some(max) = self.max_row {
             if row_idx > max {
                 self.exhausted = true;
+                self.stopped_past_max_row = true;
                 return Ok(ValueStepResult::Done);
             }
         }
@@ -1119,6 +1130,7 @@ impl StreamingSheetReader {
         if let Some(max) = self.max_row {
             if row_idx > max {
                 self.exhausted = true;
+                self.stopped_past_max_row = true;
                 return Ok(StepResult::Done);
             }
         }

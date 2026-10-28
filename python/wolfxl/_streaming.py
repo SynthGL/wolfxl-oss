@@ -739,7 +739,7 @@ def stream_iter_rows(
                         counter += 1
                     yield _normalise_streaming_value_tuple(values, data_only=data_only)
                     counter = row_idx + 1
-            if stream_mx_r is not None:
+            if stream_mx_r is not None and _pad_trailing_rows(wb, reader, mx_r):
                 while counter <= stream_mx_r:
                     yield empty_row
                     counter += 1
@@ -778,12 +778,26 @@ def stream_iter_rows(
                         row_out.append(StreamingCell(ws, row_idx, col, value, style_id, cell_type))
                 yield tuple(row_out)
                 counter = row_idx + 1
-            if stream_mx_r is not None:
+            if stream_mx_r is not None and _pad_trailing_rows(wb, reader, mx_r):
                 cmin = mn_c if mn_c is not None else 1
                 fixed_cmax = _fixed_cmax()
                 yield from _blank_rows(ws, blank_cell, counter, stream_mx_r + 1, cmin, fixed_cmax)
     finally:
         reader.close()
+
+
+def _pad_trailing_rows(wb: Any, reader: Any, explicit_max_row: int | None) -> bool:
+    """Whether to pad blank rows from the last streamed row up to ``max_row``.
+
+    An explicit ``max_row`` always pads, as does the auto-streamed eager path
+    (eager openpyxl materializes every cell in the range). When ``max_row``
+    comes from the declared ``<dimension>``, follow openpyxl's read-only
+    iterator: pad only if the sheet has a ``<row>`` past it. A sheet whose
+    rows end early, including one with no rows at all, yields only its rows.
+    """
+    if explicit_max_row is not None or not bool(getattr(wb, "_read_only", False)):
+        return True
+    return bool(reader.stopped_past_max_row())
 
 
 def stream_value_chunks(
