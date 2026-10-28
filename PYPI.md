@@ -1,6 +1,6 @@
 # WolfXL Community
 
-**An openpyxl-compatible Excel library for Python with a Rust backend. Edit existing `.xlsx` templates without losing formatting, conditional formatting, or data validation. MIT licensed. In the committed historical read/write benchmark, WolfXL 2.0.8 measured 3.0-17.3x faster than openpyxl 3.1.5 (small-file gains vary).**
+**An openpyxl-compatible Excel library for Python with a Rust backend. Edit existing `.xlsx` templates without losing formatting, conditional formatting, or data validation. MIT licensed. In the committed read/write benchmark, WolfXL 2.0.21 measured 6.7-12.0x faster than openpyxl 3.1.5 (small-file gains vary).**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
@@ -14,7 +14,7 @@ WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported 
 ## Install
 
 ```bash
-python -m pip install wolfxl==2.0.21
+python -m pip install wolfxl==2.0.22
 ```
 
 ## Which library for which Excel job
@@ -70,25 +70,34 @@ after further edits, before saving.
   functions only, in Python. Need results that match Excel? Commercial
   includes a native engine verified on 704 Excel-calculated cases
   ([pricing](https://wolfxl.com/pricing?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09)).
-- **Large files.** The [current receipts](https://github.com/SynthGL/wolfxl-oss/blob/main/benchmarks/results/2026-10-02-community-2.0.8-vs-openpyxl-3.1.5.md)
-  record seconds and peak memory for large-workbook reads, writes, and edits.
+- **Large files.** The [current receipts](https://github.com/SynthGL/wolfxl-oss/blob/58498c5f533353338514a84d5889501b51ed0b7d/benchmarks/results/2026-10-27-ecosystem-full-linux-epyc.md)
+  record seconds and peak memory for large-workbook reads and writes, and the
+  [edit receipts](https://github.com/SynthGL/wolfxl-oss/blob/58498c5f533353338514a84d5889501b51ed0b7d/benchmarks/results/2026-10-27-community-2.0.21-modify-linux-epyc.md)
+  record existing-workbook edits.
 - **Where openpyxl fits.** openpyxl is pure Python and installs anywhere
   Python runs. WolfXL needs a published wheel for your platform or a Rust
   toolchain to build from source.
 
 ## Performance, measured
 
-WolfXL 2.0.8 versus openpyxl 3.1.5 on Apple M5 Pro, macOS 26.5.1,
-Python 3.13.9, median of five rounds: read and write speedups range from
-3.0x on styled reads to 17.3x on multi-sheet bulk writes. The bulk paths
-use a different API shape from openpyxl's per-row or per-cell calls.
-End-to-end edit ratios are 2.4-2.7x and include verification with openpyxl;
-they are not included in the read/write headline.
+WolfXL 2.0.21 versus openpyxl 3.1.5 on an AMD EPYC 9655 (16 virtual CPUs),
+Linux, Python 3.13.15, median of five rounds: read and write speedups range
+from 6.7x on mixed-type writes to 12.0x on unique-string writes, with 11.1x on
+a 1.6-million-cell streaming read (`read_only=True` for both libraries) and
+10.9x on a 1.6-million-cell plain write. WolfXL writes use the bulk
+`write_rows()` call; openpyxl writes use `append()` per row.
+
+Editing two cells in an existing workbook and saving it measured 27.4x faster
+for a 10,000-row file and 35.8x for a 200,000-row file. Including the
+harness's reload with openpyxl to verify the edit, the end-to-end ratios are
+2.5x for both files; they are not included in the read/write headline.
 
 All samples, workload boundaries, and reproduction commands are in the
-[current results](https://github.com/SynthGL/wolfxl-oss/blob/main/benchmarks/results/2026-10-02-community-2.0.8-vs-openpyxl-3.1.5.md).
-These measurements are not a guarantee for every workbook and do not compare
-read speed with python-calamine or other read-only libraries.
+[ecosystem results](https://github.com/SynthGL/wolfxl-oss/blob/58498c5f533353338514a84d5889501b51ed0b7d/benchmarks/results/2026-10-27-ecosystem-full-linux-epyc.md)
+and the [edit results](https://github.com/SynthGL/wolfxl-oss/blob/58498c5f533353338514a84d5889501b51ed0b7d/benchmarks/results/2026-10-27-community-2.0.21-modify-linux-epyc.md).
+These measurements are not a guarantee for every workbook. In the same run,
+fastexcel and Polars (which wraps fastexcel) read the large file slightly
+faster, and DuckDB wrote the mixed-type file faster.
 Small-file gains vary: the separate [officelibs small-feature benchmark](https://officelibs.com/excel/)
 reports about 1.7x for reads and 2.4x for writes, outside this range.
 

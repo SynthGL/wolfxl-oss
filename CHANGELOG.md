@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.22 - 2026-10-27
+
+### Changed
+
+- The package summary and PyPI page now cite the WolfXL 2.0.21 versus
+  openpyxl 3.1.5 benchmark on Linux (6.7-12.0x faster on reads and writes)
+  instead of the 2.0.8 results. No library code changed.
+
 ## 2.0.21 - 2026-10-27
 
 ### Fixed
