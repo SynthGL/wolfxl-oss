@@ -96,8 +96,8 @@ All samples, workload boundaries, and reproduction commands are in the
 [ecosystem results](https://github.com/SynthGL/wolfxl-oss/blob/58498c5f533353338514a84d5889501b51ed0b7d/benchmarks/results/2026-10-27-ecosystem-full-linux-epyc.md)
 and the [edit results](https://github.com/SynthGL/wolfxl-oss/blob/58498c5f533353338514a84d5889501b51ed0b7d/benchmarks/results/2026-10-27-community-2.0.21-modify-linux-epyc.md).
 These measurements are not a guarantee for every workbook. In the same run,
-fastexcel read the large file slightly faster, and DuckDB wrote the mixed-type
-file faster.
+fastexcel and Polars (which wraps fastexcel) read the large file slightly
+faster, and DuckDB wrote the mixed-type file faster.
 Small-file gains vary: the separate [officelibs small-feature benchmark](https://officelibs.com/excel/)
 reports about 1.7x for reads and 2.4x for writes, outside this range.
 
