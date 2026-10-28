@@ -1,0 +1,759 @@
+{
+ "metadata": {
+  "timestamp_utc": "2026-10-28T02:22:14.417248+00:00",
+  "git_commit": "405465b04e67f844ef1013e755e1f25f7d2d59bc",
+  "git_branch": "HEAD",
+  "git_dirty": false,
+  "python": "3.13.15",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "processor": "",
+  "machine": "x86_64",
+  "cpu_brand": null,
+  "wolfxl_version": "2.0.21",
+  "openpyxl_version": "3.1.5",
+  "rounds": 5,
+  "pid": 5185,
+  "provenance": {
+   "harness_source_commit": "405465b04e67f844ef1013e755e1f25f7d2d59bc",
+   "harness_sha256": {
+    "benchmarks/benchmark_python_excel_ecosystem.py": "5c3a1d0b9db966317476a32f34c9cf1f38207f0188a6c66b6afa69fed919b8e5",
+    "benchmarks/benchmark_openpyxl_vs_wolfxl.py": "b452bb84a16489bbf1828358cc3f4f9808bfa63cbc767af9b6bca6fed4d08bf9"
+   },
+   "python": "3.13.15",
+   "python_executable_sha256": "bb4d05c1f88e8568985e8704afe1822e82700a54bad9317c05c8eb96d3186701",
+   "lscpu": {
+    "lscpu": [
+     {
+      "field": "Architecture:",
+      "data": "x86_64"
+     },
+     {
+      "field": "CPU op-mode(s):",
+      "data": "32-bit, 64-bit"
+     },
+     {
+      "field": "Address sizes:",
+      "data": "52 bits physical, 57 bits virtual"
+     },
+     {
+      "field": "Byte Order:",
+      "data": "Little Endian"
+     },
+     {
+      "field": "CPU(s):",
+      "data": "16"
+     },
+     {
+      "field": "On-line CPU(s) list:",
+      "data": "0-15"
+     },
+     {
+      "field": "Vendor ID:",
+      "data": "AuthenticAMD"
+     },
+     {
+      "field": "Model name:",
+      "data": "AMD EPYC 9655 96-Core Processor"
+     },
+     {
+      "field": "CPU family:",
+      "data": "26"
+     },
+     {
+      "field": "Model:",
+      "data": "2"
+     },
+     {
+      "field": "Thread(s) per core:",
+      "data": "1"
+     },
+     {
+      "field": "Core(s) per socket:",
+      "data": "1"
+     },
+     {
+      "field": "Socket(s):",
+      "data": "16"
+     },
+     {
+      "field": "Stepping:",
+      "data": "1"
+     },
+     {
+      "field": "BogoMIPS:",
+      "data": "5192.20"
+     },
+     {
+      "field": "Flags:",
+      "data": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl xtopology cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr wbnoinvd arat avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d arch_capabilities"
+     },
+     {
+      "field": "Hypervisor vendor:",
+      "data": "KVM"
+     },
+     {
+      "field": "Virtualization type:",
+      "data": "full"
+     },
+     {
+      "field": "L1d cache:",
+      "data": "1 MiB (16 instances)"
+     },
+     {
+      "field": "L1i cache:",
+      "data": "1 MiB (16 instances)"
+     },
+     {
+      "field": "L2 cache:",
+      "data": "8 MiB (16 instances)"
+     },
+     {
+      "field": "L3 cache:",
+      "data": "256 MiB (16 instances)"
+     },
+     {
+      "field": "NUMA node(s):",
+      "data": "1"
+     },
+     {
+      "field": "NUMA node0 CPU(s):",
+      "data": "0-15"
+     },
+     {
+      "field": "Vulnerability Gather data sampling:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Ghostwrite:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Indirect target selection:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Itlb multihit:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability L1tf:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Mds:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Meltdown:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Mmio stale data:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Old microcode:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Reg file data sampling:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Retbleed:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Spec rstack overflow:",
+      "data": "Mitigation; IBPB on VMEXIT only"
+     },
+     {
+      "field": "Vulnerability Spec store bypass:",
+      "data": "Mitigation; Speculative Store Bypass disabled via prctl"
+     },
+     {
+      "field": "Vulnerability Spectre v1:",
+      "data": "Mitigation; usercopy/swapgs barriers and __user pointer sanitization"
+     },
+     {
+      "field": "Vulnerability Spectre v2:",
+      "data": "Mitigation; Enhanced / Automatic IBRS; IBPB conditional; STIBP disabled; PBRSB-eIBRS Not affected; BHI Not affected"
+     },
+     {
+      "field": "Vulnerability Srbds:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Tsa:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Tsx async abort:",
+      "data": "Not affected"
+     },
+     {
+      "field": "Vulnerability Vmscape:",
+      "data": "Not affected"
+     }
+    ]
+   },
+   "packages": {
+    "defusedxml": {
+     "version": "0.7.1",
+     "installed_record_sha256": "8d83b6f0c94380f24506bd6d01e9a3a8858aac7a9118bc9e7dee21e6b566d13c",
+     "native_binary_sha256": {}
+    },
+    "duckdb": {
+     "version": "1.5.5",
+     "installed_record_sha256": "dc38e08d30add13f3f206fe5e1fd569644fb84664ebe741535cae8dfce7c3c7e",
+     "native_binary_sha256": {
+      "_duckdb.cpython-313-x86_64-linux-gnu.so": "0d9a57f40692e66967458706bc84a1bc1c08cb4e1ef5ac86738aa97699fc6dcd"
+     }
+    },
+    "et_xmlfile": {
+     "version": "2.0.0",
+     "installed_record_sha256": "0f0861905c07d20c301567320c32950ef93b01084295cc11d54ba9705eb269bb",
+     "native_binary_sha256": {}
+    },
+    "fastexcel": {
+     "version": "0.20.2",
+     "installed_record_sha256": "661b18dd3f7ff88d49ed7b9d870b7983e4872d29685fdc819df9d2eefdea51e2",
+     "native_binary_sha256": {
+      "fastexcel/_fastexcel.abi3.so": "28f013724f186105632510239417b770c6d4a40f99758938d7588fec0e2ea678"
+     }
+    },
+    "Jinja2": {
+     "version": "3.1.6",
+     "installed_record_sha256": "4551b3fb657b85a9f01e961c0f8a235da65d758149b619400211964b3ac02bdc",
+     "native_binary_sha256": {}
+    },
+    "lml": {
+     "version": "0.2.0",
+     "installed_record_sha256": "346b3b6208d8eb5b96dca64b155cfc2ab46b4ee2938f217e51bf83902800d611",
+     "native_binary_sha256": {}
+    },
+    "MarkupSafe": {
+     "version": "3.0.4",
+     "installed_record_sha256": "c00aea66bcba50b57a09ac3aac1e95d00326c3165115dab5f2d1e4aa7f9efd7c",
+     "native_binary_sha256": {
+      "markupsafe/_speedups.cpython-313-x86_64-linux-gnu.so": "46affb4bc066cb554d529dc9ea9a0302a0ffb55ddc52ad293dd378fb270be2bd"
+     }
+    },
+    "numpy": {
+     "version": "2.5.4",
+     "installed_record_sha256": "a9d15dcc27e045abe47002e8490c650ef242a51b67fa8391111cd0908ea81b25",
+     "native_binary_sha256": {
+      "numpy.libs/libscipy_openblas64_-f48b354e.so": "432e1c1739731468ba305771af96773939e43016643e2d630f58cb45b6670e96",
+      "numpy/_core/_multiarray_tests.cpython-313-x86_64-linux-gnu.so": "1356878f9ef15f62174af09a30be36c8048bfdd49fbff0b9df828d0f9eff2fa0",
+      "numpy/_core/_multiarray_umath.cpython-313-x86_64-linux-gnu.so": "405abe5c8f52c1d15b71bafbd155693237b6e1742bc598638b7fc0626bcc1576",
+      "numpy/_core/_operand_flag_tests.cpython-313-x86_64-linux-gnu.so": "4e2d3b29ee6d7920ebda8f4facf18c4c240c0dafb618d9921a388d37d58df31d",
+      "numpy/_core/_rational_tests.cpython-313-x86_64-linux-gnu.so": "e47d9ec683d4ef02549244eddb688740c73d191981930ed439ecee63bfd65990",
+      "numpy/_core/_simd.cpython-313-x86_64-linux-gnu.so": "e64b6191bb182af06f03e3e7102b4165aa3c35c0e9ef3d94b79ba28bd378765b",
+      "numpy/_core/_struct_ufunc_tests.cpython-313-x86_64-linux-gnu.so": "9db6dd6dd5c3ef59ed0428e8195e05edb792ba9c2dea64b683c6511c9839c775",
+      "numpy/_core/_umath_tests.cpython-313-x86_64-linux-gnu.so": "fed2c94267e9dea0c7364733314a75c1a8b12b7cd9d6ec68ffeed98de2346c3a",
+      "numpy/fft/_pocketfft_umath.cpython-313-x86_64-linux-gnu.so": "37eea6cf4de15ba3cc9487e704bbd306de65bf804310b1067f1b11d1e50a9de8",
+      "numpy/linalg/_umath_linalg.cpython-313-x86_64-linux-gnu.so": "f15d9f7f32bd87fc0082e3d4eb46304b0fafbfd27bae712811c0bae20cf3d563",
+      "numpy/linalg/lapack_lite.cpython-313-x86_64-linux-gnu.so": "32b56703f2639f07073eec950a5dbe0ccd397ece5c1d82f7cc2505166b019699",
+      "numpy/random/_bounded_integers.cpython-313-x86_64-linux-gnu.so": "45ef8d6c1a65f9bf287190e2c0f5297ec6dfed9411ff942789fb27f82d5dfa05",
+      "numpy/random/_common.cpython-313-x86_64-linux-gnu.so": "2b01ada16f10eafd2ed578d1fd1cf637d476120f224d3846c882529f00b30892",
+      "numpy/random/_generator.cpython-313-x86_64-linux-gnu.so": "2a6dcb8d65ff603c7943b642e04a37356774a96dc32de3dc8b59171938408391",
+      "numpy/random/_mt19937.cpython-313-x86_64-linux-gnu.so": "8a6b3ec2095ac4cc0c52655f41e1e3e76f5c3da891a3dfe2d4729897d012da9a",
+      "numpy/random/_pcg64.cpython-313-x86_64-linux-gnu.so": "1573dafacd3740c81255c3b22c9bb1cfe3cbe6d904f77801382ec19b2af74fc2",
+      "numpy/random/_philox.cpython-313-x86_64-linux-gnu.so": "a1c1c7f655cfbd4ed4f6fa1c8fad23da50dcaec0e192e9e9b012c47be23516ed",
+      "numpy/random/_sfc64.cpython-313-x86_64-linux-gnu.so": "d8f2aa1f3e52abee15858e6bbad2b1acdf92888d3f0e83c1a30552e7d366cb86",
+      "numpy/random/bit_generator.cpython-313-x86_64-linux-gnu.so": "30b89d04a78a753a0ff494324638e633e8b6111ab258123e4288114acaacefea",
+      "numpy/random/mtrand.cpython-313-x86_64-linux-gnu.so": "05fa55a19653596f138a172b03f4846ea6f85c96696ebf7a635564dc9e792f28"
+     }
+    },
+    "openpyxl": {
+     "version": "3.1.5",
+     "installed_record_sha256": "89fb27b7b9ef96f6871e5f400b8aedf1f569856ac2594f0cf48ff0fbcd04ece0",
+     "native_binary_sha256": {}
+    },
+    "pandas": {
+     "version": "3.0.5",
+     "installed_record_sha256": "e9ba5610142346491f808af3ed84b371105e227ddb43d5b761bff583c2c990f3",
+     "native_binary_sha256": {
+      "pandas/_libs/_cyutility.cpython-313-x86_64-linux-gnu.so": "d8bbfd2ec3c76de1fa179169e0f6aee57b844a25464beb9165067c68ca7b4d56",
+      "pandas/_libs/algos.cpython-313-x86_64-linux-gnu.so": "980e97e276ff065377ef11d0146a2ddee5a80c0d8ade4457da1ae2b7308c611d",
+      "pandas/_libs/arrays.cpython-313-x86_64-linux-gnu.so": "3dbd70efe2e99804db0e420de1a98ad8c0b0f79320647d8d643f96cf02e3f9d4",
+      "pandas/_libs/byteswap.cpython-313-x86_64-linux-gnu.so": "d094aa742947e7c171e6f5380235bc702135f033f387b157ea38e94ffe90d791",
+      "pandas/_libs/groupby.cpython-313-x86_64-linux-gnu.so": "dab2cf8938ea30af328b7e8dbdcbdd9e150fb56da21a0aecfb5ef330b3358a69",
+      "pandas/_libs/hashing.cpython-313-x86_64-linux-gnu.so": "85b6c84d43b7016baf3644adb23d410d38ee2e4a864c58cd3a30981c75645a7b",
+      "pandas/_libs/hashtable.cpython-313-x86_64-linux-gnu.so": "232b66077551eae1d69fb3ef4fe46dacd9f1ed6ba05c68b72ebe95abd0f87ba9",
+      "pandas/_libs/index.cpython-313-x86_64-linux-gnu.so": "1709649735c9bf1613de5560ea1215413cf815cc43c51390d8733600153411b1",
+      "pandas/_libs/indexing.cpython-313-x86_64-linux-gnu.so": "a57a912085c6f7644b50796b8059d4afffebee081a260475d7d953e5bd9fca7c",
+      "pandas/_libs/internals.cpython-313-x86_64-linux-gnu.so": "c54ad140255d6baba8cd48cf040a0cf129ea3a607573b0e1efdf6eca54c64b35",
+      "pandas/_libs/interval.cpython-313-x86_64-linux-gnu.so": "02a29cdfb048babe5bb13f6963678efb96a7c9aebf4c8d53b8402b3e40b7ebf7",
+      "pandas/_libs/join.cpython-313-x86_64-linux-gnu.so": "bc99b5c896c14f23e1a631b690808427eb6dc3519801c950974b73be04baf77a",
+      "pandas/_libs/json.cpython-313-x86_64-linux-gnu.so": "3881d7edd518ff1d5e405433c694a71ba894c94a1b64157c1084105df1b1f44d",
+      "pandas/_libs/lib.cpython-313-x86_64-linux-gnu.so": "d40d3d115350d98aac2ace082a757d25eae12f2ad0c5f6bc5cc052f4d6436221",
+      "pandas/_libs/missing.cpython-313-x86_64-linux-gnu.so": "c675c8ab68cb98cc8d6fe1f30a9148514e7fae64a43cc906057ae70611433ab4",
+      "pandas/_libs/ops.cpython-313-x86_64-linux-gnu.so": "9088185008c7d15cdfb91f54bd3022b0dfb6dd3c2d7d3d56953617d0f4c4c355",
+      "pandas/_libs/ops_dispatch.cpython-313-x86_64-linux-gnu.so": "21602f29ff35f196af8dd5cc4d125e34b6d3c0570af518137a6763c6d4aabdec",
+      "pandas/_libs/pandas_datetime.cpython-313-x86_64-linux-gnu.so": "2c54cf89792007292cc35909befdd9b508a756f39569f805bc4229f5189757af",
+      "pandas/_libs/pandas_parser.cpython-313-x86_64-linux-gnu.so": "94eb7eb3d60f590207ac3bb5c0b82a76b970069e315e8988c7098c181cc4604a",
+      "pandas/_libs/parsers.cpython-313-x86_64-linux-gnu.so": "604837c1a4d2ceba0cb151d5fbbde0208ad208f731c12a48ee2e20cac22a22b5",
+      "pandas/_libs/properties.cpython-313-x86_64-linux-gnu.so": "09103421db20186fcda46c4eed59225c04c50295035e7e9ac157495481a6d2ac",
+      "pandas/_libs/reshape.cpython-313-x86_64-linux-gnu.so": "f4a0c4c6805d96727d201447a575be31f1bd716a6755b32def8aa4475e72382b",
+      "pandas/_libs/sas.cpython-313-x86_64-linux-gnu.so": "80d8322bb012709d91771b070947c4959ba9834c5245602ae1f7ddd3b9ec13aa",
+      "pandas/_libs/sparse.cpython-313-x86_64-linux-gnu.so": "87831a7d386ac7efb005f234b3defd666a0c62d5f9a0cd9a67c9d8c02cf8501a",
+      "pandas/_libs/testing.cpython-313-x86_64-linux-gnu.so": "57d4d6c576214c89010701a317c6a9341e42225fa3ba45ccb888d3e4df1eeb8e",
+      "pandas/_libs/tslib.cpython-313-x86_64-linux-gnu.so": "9fc1066a12b888525b3ef4dc79e808e35263eda6759458a0b48b619c98dab6a8",
+      "pandas/_libs/tslibs/base.cpython-313-x86_64-linux-gnu.so": "fe22d87cad81a06d1b0ae699ae6152c8134612cf0334114691d41deabcc30ee9",
+      "pandas/_libs/tslibs/ccalendar.cpython-313-x86_64-linux-gnu.so": "92b862da783d4efe3d11fd3b9735eeec3a4e57c8a1eb37e17f72de868ba3667c",
+      "pandas/_libs/tslibs/conversion.cpython-313-x86_64-linux-gnu.so": "6134755f6d59fea76a80a35c2610c4f5817fb137bee41ae312dc511d7c1baf98",
+      "pandas/_libs/tslibs/dtypes.cpython-313-x86_64-linux-gnu.so": "7d0ba3b2195e2dc0fe1d9de4b337defae6c1ac671df2f78709e5e4683b37c37e",
+      "pandas/_libs/tslibs/fields.cpython-313-x86_64-linux-gnu.so": "88feee207b5b074652d20d2d481eab52cad54aad52ff43d755d81477ff6476f4",
+      "pandas/_libs/tslibs/nattype.cpython-313-x86_64-linux-gnu.so": "b933c9972d4e88376bcfe0fff0b3d50980b9bb0bf17c9dcf72e30936ac30ab0d",
+      "pandas/_libs/tslibs/np_datetime.cpython-313-x86_64-linux-gnu.so": "07b737d4a3b8dd62883e41dd94b02cf1df9dc8bc5b79caadbe4881e5b339bf7f",
+      "pandas/_libs/tslibs/offsets.cpython-313-x86_64-linux-gnu.so": "d68331b2e54e4aeeac35107f758c3bef67d45a38391b4e1327ec4b6979ed179a",
+      "pandas/_libs/tslibs/parsing.cpython-313-x86_64-linux-gnu.so": "fcf1b6c31dc85f22c4bfb7f685694c4d734f2677718afad8352de3dc6fb0b59d",
+      "pandas/_libs/tslibs/period.cpython-313-x86_64-linux-gnu.so": "0b18d7d02a904f9aafee2e1489173647163969fc4394f037c71c39c557c63b04",
+      "pandas/_libs/tslibs/strptime.cpython-313-x86_64-linux-gnu.so": "b7b7a67fca7a79c11dee43c69eb83ea9d57a3a4c8c7ee5a1ba17cb15b4a7b61b",
+      "pandas/_libs/tslibs/timedeltas.cpython-313-x86_64-linux-gnu.so": "b95507c34bc9a659263de2ea3d84c77f4adbd37a4861467961b69154f1d78c4b",
+      "pandas/_libs/tslibs/timestamps.cpython-313-x86_64-linux-gnu.so": "5499b31ee4749d3a7af2ff5b100d3e8b3a3408189421a6753bed344206aca504",
+      "pandas/_libs/tslibs/timezones.cpython-313-x86_64-linux-gnu.so": "d9167dcabcdf7a28d0d726646596e271cffbc4475ab329db38bb2765cd8aab4a",
+      "pandas/_libs/tslibs/tzconversion.cpython-313-x86_64-linux-gnu.so": "1398a06aac7aec2cefbcc8f6c0058892bc95e0209c0883e739514e74cdd49eb3",
+      "pandas/_libs/tslibs/vectorized.cpython-313-x86_64-linux-gnu.so": "2827495fc39f6347f298d8fb1018b9ac6ed62a2eb2394a90458d18fd4f572557",
+      "pandas/_libs/window/aggregations.cpython-313-x86_64-linux-gnu.so": "5e78643e1943e2ddcc9a9cb61742233fc5364961fc6af07e59c2cddb4c03dc4e",
+      "pandas/_libs/window/indexers.cpython-313-x86_64-linux-gnu.so": "ee2d0fc986a5790d0a3c6de892f25c388ce0a3120f80a205c340388a25e2d505",
+      "pandas/_libs/writers.cpython-313-x86_64-linux-gnu.so": "7be477c4d902e5dac5d74b39ffa0c0a01f5b05db626ea71a90f304307ce0ceb7"
+     }
+    },
+    "polars": {
+     "version": "1.43.2",
+     "installed_record_sha256": "084fcbcf8bc710be50b37d7466742113a2777cecde627f1d428149e0b1ab669e",
+     "native_binary_sha256": {}
+    },
+    "polars-runtime-32": {
+     "version": "1.43.2",
+     "installed_record_sha256": "f308c7feacf7022740f1924ac1938d7310d274634d5c80703d9acd319e9faee7",
+     "native_binary_sha256": {
+      "_polars_runtime_32/_polars_runtime.abi3.so": "5f3ca8b0158eccdf72399af8a78e34bf65c4003691694569ffd369c4632174b9"
+     }
+    },
+    "pyarrow": {
+     "version": "25.0.1",
+     "installed_record_sha256": "4a77115ac49edc7ffd7a569f105c3d976ffb95a167b37a519252b13bec49db0a",
+     "native_binary_sha256": {
+      "pyarrow/_acero.cpython-313-x86_64-linux-gnu.so": "afa3b3c0b75ff6c8c9846a0fb1846fb28f4d1168e545a8eca49c85953eb52536",
+      "pyarrow/_azurefs.cpython-313-x86_64-linux-gnu.so": "7a81c257b3907a0458a6b3585eacd1e556d1f80d540084ccfc4260c1a0cff09c",
+      "pyarrow/_compute.cpython-313-x86_64-linux-gnu.so": "40c7aaea6a05562c93023aed8697aa1634b7f30f04b6e996294a5f8c9ab037e0",
+      "pyarrow/_csv.cpython-313-x86_64-linux-gnu.so": "5e3db1e14d9286b53b7ab54655730a642fba8da8c2ffff7f6af7a7509b404cf8",
+      "pyarrow/_dataset.cpython-313-x86_64-linux-gnu.so": "bb77db9ad6725f449994a2e937e48c7ce5667b8a88a7eaa9fae279456eeea068",
+      "pyarrow/_dataset_orc.cpython-313-x86_64-linux-gnu.so": "730bf294dc79ede8d2ee4d3c60d394e05c0c312dbb515330fd597673cc6c019f",
+      "pyarrow/_dataset_parquet.cpython-313-x86_64-linux-gnu.so": "3248977d1e5be6eb7682b51020d4a135a406b35b0e27a6517e8530a414e70378",
+      "pyarrow/_dataset_parquet_encryption.cpython-313-x86_64-linux-gnu.so": "8381bf59f63d15047e4e5b3dbb43b24cd1c427072f4d79420c49a93d20aa5806",
+      "pyarrow/_feather.cpython-313-x86_64-linux-gnu.so": "225a2148eb88acc8d6311a4c2686cbc7398d3fa47bf7a975a7a0897020669c06",
+      "pyarrow/_flight.cpython-313-x86_64-linux-gnu.so": "014f605f0fcc3ca5183afa3cc8c6f32d91c57f6b6dea9132843b9e0f22558ed0",
+      "pyarrow/_fs.cpython-313-x86_64-linux-gnu.so": "6c32c6f6a553bb519e046e32156c5d08a2de7b0f835156ee9e87c723e729adf8",
+      "pyarrow/_gcsfs.cpython-313-x86_64-linux-gnu.so": "665d5c2d14a1fb2d29ac5dc62d154daacb45efcbde69327dff565afbdf569e08",
+      "pyarrow/_hdfs.cpython-313-x86_64-linux-gnu.so": "01cd714ad596207c844849a539b0baada52698ee7607ef347f1dd2650db2cf2d",
+      "pyarrow/_json.cpython-313-x86_64-linux-gnu.so": "fbbca2250d2eaa80ac0704170cb9385aebb84be00826fd67a6007ac9f6d43935",
+      "pyarrow/_orc.cpython-313-x86_64-linux-gnu.so": "58c6e4a24668e343b42540342c5a4505f7df277d162776cf4419fff8cb71687f",
+      "pyarrow/_parquet.cpython-313-x86_64-linux-gnu.so": "a5ed9c904c7c3c21a31ba9e3c78791fd5435628baf60501d6c7a6940931d3458",
+      "pyarrow/_parquet_encryption.cpython-313-x86_64-linux-gnu.so": "e2cc632c9691647c200ba74569182d9d5d962f6abd0413024fca755ed000a9d2",
+      "pyarrow/_pyarrow_cpp_tests.cpython-313-x86_64-linux-gnu.so": "b1f80dd6ac1c2fed70048c70a3c52c5826d767afecb961a46339381c1bef5feb",
+      "pyarrow/_s3fs.cpython-313-x86_64-linux-gnu.so": "d085ba9671d3d23099483c0673e3cf1cc41596345e3dafb7e48fee9d771a3538",
+      "pyarrow/_substrait.cpython-313-x86_64-linux-gnu.so": "67618010c030b0a10ded338a5ace7d289a672b084f84002059ed476781750f9b",
+      "pyarrow/lib.cpython-313-x86_64-linux-gnu.so": "874e4c70d1750831a547d06bc5a940c2a487a283fed7da11aa1839f5b91c841f",
+      "pyarrow/libarrow_python.so": "82d495fe07afca6cd78bc3d5f9a0413d905e3c9770dbc1b809121a962ee4c38a",
+      "pyarrow/libarrow_python_flight.so": "bef94f3547ed748652e73e76bdda761785f533923b00dc02c67cb74dca66ec75",
+      "pyarrow/libarrow_python_parquet_encryption.so": "00b7cfd4b2f0853739e99b8b2fbba420a4d701dcc7646145ff09ed065faacd96"
+     }
+    },
+    "pyexcel": {
+     "version": "0.7.6",
+     "installed_record_sha256": "8e85c059a08d113093686ce82d938814e053730c0d96997543385674260e5ce6",
+     "native_binary_sha256": {}
+    },
+    "pyexcel-io": {
+     "version": "0.6.8",
+     "installed_record_sha256": "1ffc559d71cfca523ee942c6b68e915c16937259df5bf68243e7d3c54d9ca01a",
+     "native_binary_sha256": {}
+    },
+    "pyexcel-xlsx": {
+     "version": "0.6.1",
+     "installed_record_sha256": "7588ba7770a212d7425268e3c7a8592ea2476e53c54b0d90fb79e62536dfa8f1",
+     "native_binary_sha256": {}
+    },
+    "PyExcelerate": {
+     "version": "0.13.0",
+     "installed_record_sha256": "aca343709fe9fd085b2f001cfe8c979bb7450db14eb317762dccb50a2805c012",
+     "native_binary_sha256": {}
+    },
+    "pylightxl": {
+     "version": "1.61",
+     "installed_record_sha256": "98d13aab137b9be1b06347303f9682fcf5f0c636a42a7b4cbab7b00cde8fae13",
+     "native_binary_sha256": {}
+    },
+    "python-calamine": {
+     "version": "0.8.2",
+     "installed_record_sha256": "cce16f2f428cc66891f457dcebf6e68d67aa24341b502dbe1749f32ccc8b62cd",
+     "native_binary_sha256": {
+      "python_calamine/_python_calamine.cpython-313-x86_64-linux-gnu.so": "1fc9b42ef88ea3b97a4254cd338d8f251defb46ccbb77f5ac12862e356b1bf61"
+     }
+    },
+    "python-dateutil": {
+     "version": "3.0.0",
+     "installed_record_sha256": "a17d86766c46a890c3d8b1c4ccfa5bb1c6014919f3a3a9da4b8c597f47bf5b33",
+     "native_binary_sha256": {}
+    },
+    "six": {
+     "version": "1.17.0",
+     "installed_record_sha256": "d16e50f347969b1e1919fb0c88bac4b9c644f5305bcfcfb00f72b646dbd4065d",
+     "native_binary_sha256": {}
+    },
+    "tablib": {
+     "version": "3.10.0",
+     "installed_record_sha256": "e62979f914c95cb22db4a9e572907d8a337eb9444eacc3a9025585acf45567da",
+     "native_binary_sha256": {}
+    },
+    "texttable": {
+     "version": "1.7.2",
+     "installed_record_sha256": "7f3456aefeb4e6079d7a7020f14141f80b90c52c0afe1f3ce81487b074d262e6",
+     "native_binary_sha256": {}
+    },
+    "tzdata": {
+     "version": "2026.5",
+     "installed_record_sha256": "bc03ea1afd3394eb010013e6112f91d884785445c8453b7d56ddb7ba0cc4939d",
+     "native_binary_sha256": {}
+    },
+    "wolfxl": {
+     "version": "2.0.21",
+     "installed_record_sha256": "8e876ca30747925730a468e34e9c6ac34f3f557fe91878e5e3dec1408ecd8b06",
+     "native_binary_sha256": {
+      "wolfxl/_rust.cpython-313-x86_64-linux-gnu.so": "d61977c4f3da3b8418d18798d0e91077b7661cd9507466c806aebf2b104d525e"
+     }
+    },
+    "xlsx2csv": {
+     "version": "0.8.6",
+     "installed_record_sha256": "b3041c88c1a22170da65c52041c274df88dd50b81d110ec6be8204bbf20485d3",
+     "native_binary_sha256": {}
+    },
+    "xlsxwriter": {
+     "version": "3.2.9",
+     "installed_record_sha256": "ee789a3a184e98a68a04737a2bc3f5dc6204b28696336d8af54b1819fe08e503",
+     "native_binary_sha256": {}
+    }
+   },
+   "wolfxl_pypi_wheel": {
+    "filename": "wolfxl-2.0.21-cp313-cp313-manylinux_2_28_x86_64.whl",
+    "sha256": "ae3c8dc65b26b895fbc3621f021f0cb18814d81ffa170c21714973ce786aaeb9",
+    "matches_pypi_digest": true,
+    "installed_native_files_match_wheel": {
+     "wolfxl/_rust.cpython-313-x86_64-linux-gnu.so": "d61977c4f3da3b8418d18798d0e91077b7661cd9507466c806aebf2b104d525e"
+    }
+   },
+   "openpyxl_backends": {
+    "lxml": false,
+    "defusedxml": true
+   },
+   "duckdb_excel_extension": {
+    "name": "excel",
+    "version": "f4c72b5",
+    "installed_from": "core"
+   },
+   "build_mode": "Published PyPI distributions; compiler flags not independently verified; no local WolfXL build",
+   "build_reuse": "Installed pinned PyPI packages once in the same environment; no local build or skip-build path",
+   "cache_state": "OS page cache not flushed. Standard modify case has one discarded warmup; large modify case has none. Cold-start latency not measured.",
+   "cold_start_seconds": null,
+   "memory_cache_state": "Each peak-RSS sample runs once in a fresh process; OS page cache is not flushed",
+   "command": ".bench/bin/python benchmarks/benchmark_openpyxl_vs_wolfxl.py --rounds 5 --large-rounds 5 --case modify_two_cells_plain --case large_modify_two_cells_plain --no-memory --output-dir benchmarks/results --prefix 2026-10-27-community-2.0.21-modify-linux-epyc",
+   "overall_timeout_seconds": 600,
+   "round_timeout_seconds": null,
+   "warmup_rounds_by_case": {
+    "modify_two_cells_plain": 1,
+    "large_modify_two_cells_plain": 0
+   },
+   "scenario": "Load an openpyxl-generated existing workbook, change B2 and C3, then save. Claim-facing timing is modify_save; setup_copy and verify_load remain separately recorded.",
+   "memory_pass": "Not run for this file; use the ecosystem artifact for peak RSS.",
+   "artifact_paths": [
+    "benchmarks/results/2026-10-27-community-2.0.21-modify-linux-epyc.json",
+    "benchmarks/results/2026-10-27-community-2.0.21-modify-linux-epyc.md"
+   ],
+   "run_label_note": "Filename follows the requested run date; raw timestamps remain UTC."
+  }
+ },
+ "parameters": {
+  "cases": [
+   "large_modify_two_cells_plain",
+   "modify_two_cells_plain"
+  ],
+  "rows": 10000,
+  "cols": 5,
+  "small_rows": 2000,
+  "wide_rows": 1000,
+  "wide_cols": 50,
+  "style_rows": 2000,
+  "formula_rows": 2000,
+  "sheet_rows": 1000,
+  "sheet_count": 5,
+  "large_rows": 200000,
+  "large_cols": 8,
+  "large_rounds": 5
+ },
+ "results": [
+  {
+   "case": "modify_two_cells_plain",
+   "engine": "openpyxl",
+   "rows": 10000,
+   "cols": 5,
+   "units": 2,
+   "samples_seconds": [
+    0.7546213729999636,
+    0.7579817630000889,
+    0.8269359959999747,
+    0.7693262529999174,
+    0.7538014599999769
+   ],
+   "median_seconds": 0.7579817630000889,
+   "units_per_second": 2.6385859101464497,
+   "phase_samples_seconds": {
+    "setup_copy": [
+     0.00022441800001615775,
+     0.00021445300012601365,
+     0.00018949500008602627,
+     0.000221894000105749,
+     0.00020660100017266814
+    ],
+    "modify_save": [
+     0.43441308699993897,
+     0.5196095329999935,
+     0.5269257390000348,
+     0.4389530720000039,
+     0.5145243990000381
+    ],
+    "verify_load": [
+     0.3199690860001283,
+     0.23814232299992,
+     0.2998078619998523,
+     0.3301369349999277,
+     0.23905551799998648
+    ]
+   },
+   "phase_medians_seconds": {
+    "modify_save": 0.5145243990000381,
+    "setup_copy": 0.00021445300012601365,
+    "verify_load": 0.2998078619998523
+   }
+  },
+  {
+   "case": "modify_two_cells_plain",
+   "engine": "wolfxl_modify",
+   "rows": 10000,
+   "cols": 5,
+   "units": 2,
+   "samples_seconds": [
+    0.2591167299999597,
+    0.33141511899998477,
+    0.29789832799997384,
+    0.2568004629999905,
+    0.3290440490000037
+   ],
+   "median_seconds": 0.29789832799997384,
+   "units_per_second": 6.713699984244879,
+   "phase_samples_seconds": {
+    "setup_copy": [
+     0.0002139419998457015,
+     0.00018758200008051062,
+     0.00021274000005178095,
+     0.00020334600003479864,
+     0.00018465799985278863
+    ],
+    "modify_save": [
+     0.018766723999988244,
+     0.01909239399992657,
+     0.018655806999959168,
+     0.01877082999999402,
+     0.018797820000145293
+    ],
+    "verify_load": [
+     0.24012195399996017,
+     0.31212166099999195,
+     0.27901373600002444,
+     0.23781356799986497,
+     0.3100492620001205
+    ]
+   },
+   "phase_medians_seconds": {
+    "modify_save": 0.01877082999999402,
+    "setup_copy": 0.00020334600003479864,
+    "verify_load": 0.27901373600002444
+   }
+  },
+  {
+   "case": "large_modify_two_cells_plain",
+   "engine": "openpyxl",
+   "rows": 200000,
+   "cols": 8,
+   "units": 2,
+   "samples_seconds": [
+    20.951832780999894,
+    22.48092397100004,
+    22.527297467999915,
+    22.586560774999953,
+    22.483422315000098
+   ],
+   "median_seconds": 22.483422315000098,
+   "units_per_second": 0.08895442926701043,
+   "phase_samples_seconds": {
+    "setup_copy": [
+     0.001033776999975089,
+     0.001417083999967872,
+     0.001560408999921492,
+     0.001449472000103924,
+     0.001555644000063694
+    ],
+    "modify_save": [
+     12.728991403999999,
+     13.923241344999951,
+     13.903978642000084,
+     13.93108687200015,
+     13.860724171999891
+    ],
+    "verify_load": [
+     8.221797756999877,
+     8.556245131999958,
+     8.621735853000018,
+     8.654002107999986,
+     8.621120417000157
+    ]
+   },
+   "phase_medians_seconds": {
+    "modify_save": 13.903978642000084,
+    "setup_copy": 0.001449472000103924,
+    "verify_load": 8.621120417000157
+   }
+  },
+  {
+   "case": "large_modify_two_cells_plain",
+   "engine": "wolfxl_modify",
+   "rows": 200000,
+   "cols": 8,
+   "units": 2,
+   "samples_seconds": [
+    9.172781695999902,
+    8.929703133999965,
+    9.015580450000016,
+    9.540588424999896,
+    9.870632679999972
+   ],
+   "median_seconds": 9.172781695999902,
+   "units_per_second": 0.21803636740555668,
+   "phase_samples_seconds": {
+    "setup_copy": [
+     0.001207487999863588,
+     0.001488562000076854,
+     0.0014985970001362148,
+     0.0015510460000314197,
+     0.0015008990001206257
+    ],
+    "modify_save": [
+     0.3885159830001612,
+     0.38380334600014976,
+     0.3828734969999914,
+     0.392173160999846,
+     0.38974103800001103
+    ],
+    "verify_load": [
+     8.78304817000003,
+     8.544390123999847,
+     8.631188806999944,
+     9.14684368799999,
+     9.479372082000054
+    ]
+   },
+   "phase_medians_seconds": {
+    "modify_save": 0.3885159830001612,
+    "setup_copy": 0.0014985970001362148,
+    "verify_load": 8.78304817000003
+   }
+  }
+ ],
+ "comparisons": [
+  {
+   "case": "large_modify_two_cells_plain",
+   "engine": "wolfxl_modify",
+   "speedup_vs_openpyxl": 2.4511018642038267
+  },
+  {
+   "case": "modify_two_cells_plain",
+   "engine": "wolfxl_modify",
+   "speedup_vs_openpyxl": 2.544431075155801
+  }
+ ],
+ "phase_comparisons": [
+  {
+   "case": "large_modify_two_cells_plain",
+   "engine": "wolfxl_modify",
+   "phase": "modify_save",
+   "openpyxl_seconds": 13.903978642000084,
+   "wolfxl_seconds": 0.3885159830001612,
+   "speedup_vs_openpyxl": 35.78740450941581
+  },
+  {
+   "case": "large_modify_two_cells_plain",
+   "engine": "wolfxl_modify",
+   "phase": "setup_copy",
+   "openpyxl_seconds": 0.001449472000103924,
+   "wolfxl_seconds": 0.0014985970001362148,
+   "speedup_vs_openpyxl": 0.9672193391366555
+  },
+  {
+   "case": "large_modify_two_cells_plain",
+   "engine": "wolfxl_modify",
+   "phase": "verify_load",
+   "openpyxl_seconds": 8.621120417000157,
+   "wolfxl_seconds": 8.78304817000003,
+   "speedup_vs_openpyxl": 0.981563604130857
+  },
+  {
+   "case": "modify_two_cells_plain",
+   "engine": "wolfxl_modify",
+   "phase": "modify_save",
+   "openpyxl_seconds": 0.5145243990000381,
+   "wolfxl_seconds": 0.01877082999999402,
+   "speedup_vs_openpyxl": 27.410849653435783
+  },
+  {
+   "case": "modify_two_cells_plain",
+   "engine": "wolfxl_modify",
+   "phase": "setup_copy",
+   "openpyxl_seconds": 0.00021445300012601365,
+   "wolfxl_seconds": 0.00020334600003479864,
+   "speedup_vs_openpyxl": 1.054621187971803
+  },
+  {
+   "case": "modify_two_cells_plain",
+   "engine": "wolfxl_modify",
+   "phase": "verify_load",
+   "openpyxl_seconds": 0.2998078619998523,
+   "wolfxl_seconds": 0.27901373600002444,
+   "speedup_vs_openpyxl": 1.0745272483639516
+  }
+ ],
+ "operation_comparisons": [
+  {
+   "case": "large_modify_two_cells_plain",
+   "engine": "wolfxl_modify",
+   "phase": "modify_save",
+   "openpyxl_seconds": 13.903978642000084,
+   "wolfxl_seconds": 0.3885159830001612,
+   "speedup_vs_openpyxl": 35.78740450941581,
+   "speedup_basis": "operation_phase"
+  },
+  {
+   "case": "modify_two_cells_plain",
+   "engine": "wolfxl_modify",
+   "phase": "modify_save",
+   "openpyxl_seconds": 0.5145243990000381,
+   "wolfxl_seconds": 0.01877082999999402,
+   "speedup_vs_openpyxl": 27.410849653435783,
+   "speedup_basis": "operation_phase"
+  }
+ ],
+ "memory": [],
+ "memory_comparisons": []
+}

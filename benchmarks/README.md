@@ -98,6 +98,31 @@ of being silently dropped.
     --rounds 5 --output-dir /tmp/ecosystem-results --prefix my-run
 ```
 
+## Current measured results
+
+- [2026-10-27 ecosystem comparison](results/2026-10-27-ecosystem-full-linux-epyc.md)
+  ([raw JSON](results/2026-10-27-ecosystem-full-linux-epyc.json)): WolfXL
+  2.0.21 and the same direct competitor pins and engine set as the
+  [2026-08-18 run](results/2026-08-18-ecosystem-full-linux-epyc.json).
+- [Same-node WolfXL 2.0.1 control](results/2026-10-27-ecosystem-wolfxl-2.0.1-control-linux-epyc.md)
+  ([raw JSON](results/2026-10-27-ecosystem-wolfxl-2.0.1-control-linux-epyc.json)):
+  the same ecosystem cases, restricted to WolfXL, on the rerun machine.
+- [WolfXL 2.0.21 modify-and-save comparison](results/2026-10-27-community-2.0.21-modify-linux-epyc.md)
+  ([raw JSON](results/2026-10-27-community-2.0.21-modify-linux-epyc.json)):
+  the existing deep harness, with five measured rounds for both sizes.
+  Use its `modify_save` phase for operation claims; total time also includes
+  copying the fixture and reopening the result with openpyxl for verification.
+
+The October ecosystem rerun uses the default 240-second per-round budget,
+not the August run's 43,200-second budget. Every original engine is included;
+cases that exceed the new limit are recorded as DNF rather than substituted
+with older measurements. Ecosystem timings are warmed measurements after one
+discarded round, not cold-start latency. The separate peak-RSS pass measures
+one run per engine in a fresh process and includes the harness's input data.
+Hardware, package identities, commands, timeouts, and cache conditions are
+recorded alongside the raw samples. The repository README charts still show
+the historical August results.
+
 ## Regenerate the charts
 
 ```bash
@@ -147,13 +172,14 @@ under an hour.
   DuckDB) avoid materializing Python cell objects; wolfxl and python-calamine
   return Python cell values, and only wolfxl, openpyxl, pylightxl, Tablib, and
   pyexcel can also write.
-- DuckDB's excel extension wins the small mixed-type write outright; it is
-  timed from a registered DataFrame, so DataFrame-construction cost is
-  excluded from its number.
-- pylightxl's writer scales quadratically with cell count. With the 12-hour
-  budget it finishes every round (241 s plain, 1,438 s unique strings), and
-  the chart axis is clipped at the second-slowest engine so the remaining
-  bars stay readable; the printed value is always the true measurement.
+- In both runs, DuckDB's excel extension wins the small mixed-type write
+  outright. It is timed from a registered DataFrame, so DataFrame-construction
+  cost is excluded from its number.
+- pylightxl's writer scales quadratically with cell count. In the August run,
+  the 12-hour budget allowed every round to finish (241 s plain, 1,438 s
+  unique strings), and the chart axis was clipped at the second-slowest engine
+  so the remaining bars stayed readable. The printed value is always the
+  true measurement; the October rerun applies the shorter budget above.
 - PyExcelerate, Tablib, and pyexcel serialize floats with fewer significant
   digits than the other writers (a value like `8/7` does not round-trip
   bit-exactly), so their write numbers come with a precision tradeoff.
