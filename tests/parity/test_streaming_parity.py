@@ -242,3 +242,9 @@ def test_unbounded_scan_ignores_declared_dimension(
     assert wx_ws.calculate_dimension() == op_ws.calculate_dimension()
     if not read_only:
         assert list(wx_ws.iter_cols(values_only=True)) == list(op_ws.iter_cols(values_only=True))
+    for data_only in (False, True):
+        chunked_ws = wolfxl.load_workbook(
+            stale_dimension_xlsx, read_only=read_only, data_only=data_only
+        )[sheet]
+        chunked = [row for chunk in chunked_ws.iter_value_chunks() for row in chunk]
+        assert chunked == list(op_ws.values)
