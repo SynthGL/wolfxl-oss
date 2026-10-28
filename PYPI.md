@@ -26,6 +26,7 @@ python -m pip install wolfxl==2.0.22
 | Compute formula results in Python | WolfXL `calculate()` for common functions; Commercial for Excel-matched results |
 | Only read cell values, as fast as possible, into a DataFrame | python-calamine, fastexcel, or polars |
 | Only write new files, never read or edit them | XlsxWriter, or WolfXL if you also read or edit |
+| Call Python code from Excel as worksheet functions or macros | [PyXLL](https://www.pyxll.com) |
 
 ## Edit an existing workbook
 
