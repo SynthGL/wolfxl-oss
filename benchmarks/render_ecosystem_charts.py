@@ -82,8 +82,10 @@ EXTRA_NOTES = {
         "objects; xlsx2csv emits CSV text; read fixture written by openpyxl.",
     ],
     "read_formulas_multisheet": [
-        "Fixture written by XlsxWriter with a cached result for every formula; "
-        "five of eight columns are formulas. Every engine reads every sheet.",
+        "XlsxWriter fixture; five of eight columns are formulas. All sheets read; "
+        "cell count and final numeric formula column sum checked.",
+        "Arrow/DataFrame, Python values and CSV outputs differ. Cached values "
+        "requested; see raw report for validation and identity limits.",
     ],
     "memory_write_large": [
         "One fresh process per engine, single run. 'input grid only' is the cost "

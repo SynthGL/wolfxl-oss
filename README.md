@@ -38,8 +38,8 @@ python -m pip install wolfxl
 | Only write new files, never read or edit them | XlsxWriter, or WolfXL if you also read or edit |
 | Call Python code from Excel as worksheet functions or macros | [PyXLL](https://www.pyxll.com) |
 
-The read-only and write-only specialists are not part of the WolfXL
-benchmarks below. WolfXL is for code that reads, writes, and edits through
+The [ecosystem read comparison](#ecosystem-reads-2026-10-29) includes
+read-only specialists. WolfXL is for code that reads, writes, and edits through
 one openpyxl-compatible API.
 
 ## Edit an existing workbook
@@ -197,6 +197,36 @@ and sheet feature from the source is still present. Copy the directory into
 your agent's skills folder, for example `~/.claude/skills/wolfxl-xlsx`.
 
 ## Performance
+
+### Ecosystem reads: 2026-10-29
+
+The [plain and multi-sheet formula comparison](benchmarks/results/2026-10-29-ecosystem-formulas-linux-epyc.md)
+includes WolfXL 2.0.25, openpyxl 3.1.5, fastexcel 0.20.2, python-calamine,
+Polars, and other readers. Both fixtures contain 1.6 million cells. For the
+formula case, every engine reads four sheets with numeric and string cached
+formula results; the harness requests those cached values.
+
+Five measured rounds follow one discarded warmup per engine and case on an
+AMD EPYC 9655, Linux, Python 3.13.15. See the
+[raw samples and identities](benchmarks/results/2026-10-29-ecosystem-formulas-linux-epyc.json)
+for package versions, fixture hashes, and measurement boundaries.
+
+| Median read time | Plain values | Multi-sheet formula fixture |
+| --- | ---: | ---: |
+| WolfXL 2.0.25 | 0.444 s | 1.238 s |
+| openpyxl 3.1.5 | 4.928 s | 5.535 s |
+| fastexcel 0.20.2 | 0.423 s | 0.520 s |
+
+WolfXL takes 1.05x fastexcel's time on plain values and 2.38x on the formula
+fixture. Polars and python-calamine also beat WolfXL on the formula fixture.
+WolfXL is 11.1x faster than openpyxl on plain values and 4.5x on formulas.[^ecosystem-read]
+
+[^ecosystem-read]: These are warmed read-and-consume workloads with different
+    native output representations. Formula-case validation covers cell count
+    and the final numeric formula column's sum, not every value or type.
+    No memory pass was run. The raw report records identity limitations,
+    including the uncaptured DuckDB extension version. This is not a
+    formula-evaluation benchmark or a general speed guarantee.
 
 ### Sparse read-only follow-up: 2026-10-09
 

@@ -32,10 +32,10 @@ The large read case uses one fixture written by openpyxl so no reader is
 parsing its own writer's output. The formula read case uses a multi-sheet
 fixture written by XlsxWriter, which stores a cached result for every formula
 the way Excel does (openpyxl saves formulas without results). Every reader
-loads every sheet, and the case checks that each engine returns the cached
-results rather than formula text. A separate peak-RSS pass runs each large
-case once per engine in a fresh process; a grid-only baseline child shows how
-much of the peak is the input data itself.
+loads every sheet; the check covers cell count and the sum of the final numeric
+formula column, not every formula value or type. A separate peak-RSS pass runs
+each large case once per engine in a fresh process; a grid-only baseline child
+shows how much of the peak is the input data itself.
 
 Usage:
 
@@ -326,7 +326,7 @@ READ_ENGINES: dict[str, Callable[[Path], int]] = {
 # Each sheet has eight columns: three literal values (int, float, string) and
 # five formulas whose cached results are numbers and strings. The last column
 # is =A+B+D+E, so its cached results sum to a closed form the harness checks:
-# a reader that returned formula text or dropped cached values fails the case.
+# formula text or missing numeric caches in that final column fail the case.
 
 FORMULA_COLS = 8
 FORMULA_TOTAL_COL = 7
