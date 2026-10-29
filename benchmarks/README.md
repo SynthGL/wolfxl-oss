@@ -76,14 +76,22 @@ because mode choice matters on exactly that workload; adding them to every
 chart would only duplicate bars.
 
 Cases: large plain write, mixed-type write, unique-strings write
-(shared-strings stress), large value read, and a peak-RSS pass that runs each
-large case in a fresh process. Write-only libraries appear only in write cases
-and read-only libraries only in read cases. pandas, Polars, and DuckDB are
-timed from a prebuilt DataFrame (DuckDB reads a registered DataFrame view) and
-Tablib from a prebuilt Dataset, so their numbers include the frame-to-worksheet
-conversion but not frame construction. The read fixture is written by
-openpyxl so no reader parses its own writer's output. pylightxl has no
-datetime support and is excluded from the mixed-type case.
+(shared-strings stress), large value read, multi-sheet cached-formula read,
+and a peak-RSS pass for the large plain cases. Write-only libraries appear
+only in write cases and read-only libraries only in read cases. pandas,
+Polars, and DuckDB are timed from a prebuilt DataFrame (DuckDB reads a
+registered DataFrame view) and Tablib from a prebuilt Dataset, so their write
+numbers include frame-to-worksheet conversion but not frame construction.
+The large value-read fixture is written by openpyxl. pylightxl has no datetime
+support and is excluded from the mixed-type write case.
+
+The formula-read fixture is written by XlsxWriter: four sheets of 50,000 rows
+and eight columns each, with numeric and string cached results in five formula
+columns. All readers load every sheet. Each timed round includes a cell count
+and a sum of the final numeric formula column. Arrow/DataFrame engines use
+column reductions; row readers sum in Python. This is cached-value reading,
+not formula evaluation or full value/type parity validation. Use
+`--formula-sheets` and `--formula-rows` to change this workload.
 
 Every run (including the discarded warmup) must finish one round within
 `--round-budget` seconds (default 240). An engine that exceeds the budget is
@@ -91,7 +99,7 @@ recorded as DNF in the raw results and listed in the chart footnotes instead
 of being silently dropped.
 
 ```bash
-.bench/bin/pip install wolfxl==2.0.1 openpyxl==3.1.5 xlsxwriter pyexcelerate \
+.bench/bin/pip install wolfxl==2.0.25 openpyxl==3.1.5 xlsxwriter pyexcelerate \
     python-calamine fastexcel pyarrow pylightxl pandas polars duckdb \
     tablib pyexcel pyexcel-xlsx xlsx2csv
 .bench/bin/python benchmarks/benchmark_python_excel_ecosystem.py \
@@ -100,6 +108,11 @@ of being silently dropped.
 
 ## Current measured results
 
+- [2026-10-29 plain and multi-sheet formula reads](results/2026-10-29-ecosystem-formulas-linux-epyc.md)
+  ([raw JSON](results/2026-10-29-ecosystem-formulas-linux-epyc.json)): WolfXL
+  2.0.25 with the October 27 competitor pins, including fastexcel 0.20.2.
+  Both read cases ran on the same machine, with five measured rounds after
+  one warmup. This run has no write or memory measurements.
 - [2026-10-27 ecosystem comparison](results/2026-10-27-ecosystem-full-linux-epyc.md)
   ([raw JSON](results/2026-10-27-ecosystem-full-linux-epyc.json)): WolfXL
   2.0.21 and the same direct competitor pins and engine set as the
@@ -113,15 +126,14 @@ of being silently dropped.
   Use its `modify_save` phase for operation claims; total time also includes
   copying the fixture and reopening the result with openpyxl for verification.
 
-The October ecosystem rerun uses the default 240-second per-round budget,
+The October 27 ecosystem rerun uses the default 240-second per-round budget,
 not the August run's 43,200-second budget. Every original engine is included;
 cases that exceed the new limit are recorded as DNF rather than substituted
 with older measurements. Ecosystem timings are warmed measurements after one
-discarded round, not cold-start latency. The separate peak-RSS pass measures
-one run per engine in a fresh process and includes the harness's input data.
-Hardware, package identities, commands, timeouts, and cache conditions are
-recorded alongside the raw samples. The repository README charts still show
-the historical August results.
+discarded round, not cold-start latency. In runs with a peak-RSS pass, memory
+is measured once per engine in a fresh process and includes the harness's input
+data. Hardware, package identities, commands, timeouts, and cache conditions
+are recorded alongside the raw samples. Historical charts are unchanged.
 
 ## Regenerate the charts
 
