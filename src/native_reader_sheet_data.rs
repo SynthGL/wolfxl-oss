@@ -263,6 +263,13 @@ fn read_sheet_values_plain_full_xlsx(
     Ok(outer.into())
 }
 
+/// Read value-only rows in chunks, padding every row up to `max_row`.
+///
+/// Returns `None` when that padding could differ from the streaming reader,
+/// so the caller falls back to it: a sheet with no value cells (empty,
+/// formatting-only, or merge-only), or an `implicit_max_row` taken from the
+/// declared `<dimension>` that the last value row in range does not reach.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn read_sheet_value_chunks_plain_xlsx(
     book: &NativeXlsxBook,
     py: Python<'_>,
@@ -272,6 +279,7 @@ pub(crate) fn read_sheet_value_chunks_plain_xlsx(
     max_row: Option<u32>,
     min_col: Option<u32>,
     max_col: Option<u32>,
+    implicit_max_row: bool,
 ) -> PyResult<PyObject> {
     if chunk_size < 1 {
         return Err(PyErr::new::<PyValueError, _>(
@@ -283,10 +291,15 @@ pub(crate) fn read_sheet_value_chunks_plain_xlsx(
         PyErr::new::<PyIOError, _>(format!("native value-only sheet read failed: {e}"))
     })?;
     if cells.is_empty() {
-        return Ok(PyList::empty(py).into());
+        return Ok(py.None());
     }
     let row_min = min_row.unwrap_or(1);
     let col_min = min_col.unwrap_or(1);
+    if implicit_max_row
+        && last_value_row_in_range(&cells, row_min, max_row, col_min, max_col) != max_row
+    {
+        return Ok(py.None());
+    }
     let mut layout = analyze_value_cell_layout(&cells, row_min, max_row, col_min, max_col);
     if !layout.sorted {
         cells.sort_by_key(|cell| (cell.row, cell.col));
@@ -335,6 +348,25 @@ pub(crate) fn read_sheet_value_chunks_plain_xlsx(
         chunks.append(PyTuple::new(py, pending_rows)?)?;
     }
     Ok(chunks.into())
+}
+
+fn last_value_row_in_range(
+    cells: &[ValueCell],
+    row_min: u32,
+    max_row: Option<u32>,
+    col_min: u32,
+    max_col: Option<u32>,
+) -> Option<u32> {
+    cells
+        .iter()
+        .filter(|cell| {
+            cell.row >= row_min
+                && max_row.map_or(true, |max| cell.row <= max)
+                && cell.col >= col_min
+                && max_col.map_or(true, |max| cell.col <= max)
+        })
+        .map(|cell| cell.row)
+        .max()
 }
 
 struct ValueCellLayout {

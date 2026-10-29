@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "wolfxl"
-version = "2.0.23"
+version = "2.0.24"
 description = "Openpyxl-compatible Excel library with a Rust backend: speed up openpyxl code with one import change and edit .xlsx templates without losing formatting, conditional formatting, or data validation. WolfXL 2.0.21 measured 6.7-12.0x faster than openpyxl 3.1.5 on the committed read/write benchmark (small-file gains vary). MIT."
 readme = "PYPI.md"
 requires-python = ">=3.9,!=3.9.0,!=3.9.1"

@@ -953,10 +953,11 @@ def _direct_plain_value_chunks(
     scans. Larger or style-sensitive sheets keep the streaming path so
     ``read_only=True`` remains memory-friendly for huge workbooks.
 
-    The native reader pads every row up to ``max_row``. When that bound comes
-    from the declared ``<dimension>`` rather than the caller, use it only if
-    stored cells reach it; otherwise the streaming path applies openpyxl's
-    trailing-row rule (see ``_pad_trailing_rows``).
+    The native reader pads every row up to ``max_row`` and returns ``None``
+    when that could differ from the streaming path: a sheet with no value
+    cells, or a ``max_row`` from the declared ``<dimension>`` (not the caller)
+    that the last value row does not reach. The streaming path then applies
+    openpyxl's trailing-row rule (see ``_pad_trailing_rows``).
     """
     if not bool(getattr(wb, "_data_only", False)):
         return None
@@ -968,10 +969,6 @@ def _direct_plain_value_chunks(
     read_chunks = getattr(reader, "read_sheet_value_chunks_plain", None)
     if read_chunks is None:
         return None
-    if not explicit_max_row:
-        stored = reader.read_sheet_bounds(sheet)
-        if stored is None or int(stored[2]) != max_row:
-            return None
 
     chunks = read_chunks(
         sheet,
@@ -980,8 +977,9 @@ def _direct_plain_value_chunks(
         max_row,
         min_col,
         max_col,
+        implicit_max_row=not explicit_max_row,
     )
-    return iter(chunks)
+    return None if chunks is None else iter(chunks)
 
 
 def _chunk_value_rows(

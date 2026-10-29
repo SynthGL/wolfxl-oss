@@ -248,3 +248,53 @@ def test_unbounded_scan_ignores_declared_dimension(
         )[sheet]
         chunked = [row for chunk in chunked_ws.iter_value_chunks() for row in chunk]
         assert chunked == list(op_ws.values)
+
+
+@pytest.fixture
+def value_chunk_edge_xlsx(tmp_path: Path) -> Path:
+    wb = openpyxl.Workbook()
+    wb.active.title = "Empty"
+    wb.create_sheet("MergeOnly").merge_cells("A1:C4")
+    wb.create_sheet("MergeTail")["A1"] = 1
+    plain = tmp_path / "plain.xlsx"
+    wb.save(plain)
+
+    # MergeTail: one stored row, plus a merge that reaches the declared last row
+    # without any <row> element for it.
+    tail = "xl/worksheets/sheet3.xml"
+    path = tmp_path / "value-chunk-edges.xlsx"
+    with zipfile.ZipFile(plain) as src, zipfile.ZipFile(path, "w") as dst:
+        for item in src.infolist():
+            payload = src.read(item.filename)
+            if item.filename == tail:
+                payload, count = re.subn(
+                    rb'<dimension ref="[^"]*"', b'<dimension ref="A1:C5"', payload
+                )
+                assert count == 1
+                payload, count = re.subn(
+                    rb"</sheetData>",
+                    b'</sheetData><mergeCells count="1"><mergeCell ref="A3:C5"/></mergeCells>',
+                    payload,
+                )
+                assert count == 1
+            dst.writestr(item, payload)
+    return path
+
+
+@pytest.mark.parametrize("read_only", [True, False])
+@pytest.mark.parametrize("data_only", [True, False])
+@pytest.mark.parametrize("sheet", ["Empty", "MergeOnly", "MergeTail"])
+def test_value_chunks_match_rows_without_value_cells(
+    value_chunk_edge_xlsx: Path, read_only: bool, data_only: bool, sheet: str
+) -> None:
+    op_ws = openpyxl.load_workbook(value_chunk_edge_xlsx, read_only=read_only)[sheet]
+    wx_ws = wolfxl.load_workbook(value_chunk_edge_xlsx, read_only=read_only, data_only=data_only)[
+        sheet
+    ]
+
+    def chunked(**bounds: int) -> list[tuple[object, ...]]:
+        return [row for chunk in wx_ws.iter_value_chunks(**bounds) for row in chunk]
+
+    assert chunked() == list(op_ws.values)
+    assert chunked(max_row=6) == list(wx_ws.iter_rows(max_row=6, values_only=True))
+    assert len(chunked(max_row=6)) == 6
