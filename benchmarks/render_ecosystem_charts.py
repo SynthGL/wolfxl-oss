@@ -61,6 +61,7 @@ CASE_TITLES = {
     "write_mixed": "Write {rows:,} x {cols} mixed types (str/int/float/bool/datetime)",
     "write_unique_strings": "Write {rows:,} x {cols} unique strings (shared-strings stress)",
     "read_values_large": "Read {rows:,} x {cols}, all values",
+    "read_formulas_multisheet": "Read {sheets} sheets, {rows:,} x {cols} total, cached formula results",
     "memory_write_large": "Peak memory: write {rows:,} x {cols} plain values",
     "memory_read_large": "Peak memory: read {rows:,} x {cols}, all values",
 }
@@ -70,6 +71,7 @@ OUTPUTS = {
     "write_mixed": "ecosystem-write-mixed.svg",
     "write_unique_strings": "ecosystem-write-strings.svg",
     "read_values_large": "ecosystem-read-large.svg",
+    "read_formulas_multisheet": "ecosystem-read-formulas.svg",
     "memory_write_large": "ecosystem-memory-write.svg",
     "memory_read_large": "ecosystem-memory-read.svg",
 }
@@ -78,6 +80,10 @@ EXTRA_NOTES = {
     "read_values_large": [
         "fastexcel/Polars/DuckDB return Arrow-backed tables, not Python cell "
         "objects; xlsx2csv emits CSV text; read fixture written by openpyxl.",
+    ],
+    "read_formulas_multisheet": [
+        "Fixture written by XlsxWriter with a cached result for every formula; "
+        "five of eight columns are formulas. Every engine reads every sheet.",
     ],
     "memory_write_large": [
         "One fresh process per engine, single run. 'input grid only' is the cost "
@@ -174,7 +180,9 @@ def main() -> None:
         if not case_rows:
             continue
         title = CASE_TITLES[case].format(
-            rows=case_rows[0]["rows"], cols=case_rows[0]["cols"]
+            rows=case_rows[0]["rows"],
+            cols=case_rows[0]["cols"],
+            sheets=case_rows[0].get("sheets"),
         )
         finished = [r for r in case_rows if not r.get("timed_out")]
         dnf_notes = [

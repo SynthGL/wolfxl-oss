@@ -28,10 +28,14 @@ use case; DataFrame construction is excluded from their timings. tablib is
 timed from a prebuilt Dataset. duckdb, tablib, pyexcel, and xlsx2csv are
 imported lazily inside their engine functions so the peak-RSS children of
 other engines do not pay for their imports.
-Read cases share one fixture written by openpyxl so no reader is parsing its
-own writer's output. A separate peak-RSS pass runs each large case once per
-engine in a fresh process; a grid-only baseline child shows how much of the
-peak is the input data itself.
+The large read case uses one fixture written by openpyxl so no reader is
+parsing its own writer's output. The formula read case uses a multi-sheet
+fixture written by XlsxWriter, which stores a cached result for every formula
+the way Excel does (openpyxl saves formulas without results). Every reader
+loads every sheet, and the case checks that each engine returns the cached
+results rather than formula text. A separate peak-RSS pass runs each large
+case once per engine in a fresh process; a grid-only baseline child shows how
+much of the peak is the input data itself.
 
 Usage:
 
@@ -317,6 +321,206 @@ READ_ENGINES: dict[str, Callable[[Path], int]] = {
     "xlsx2csv": read_xlsx2csv,
 }
 
+# --- formula multi-sheet read engines ---------------------------------------
+#
+# Each sheet has eight columns: three literal values (int, float, string) and
+# five formulas whose cached results are numbers and strings. The last column
+# is =A+B+D+E, so its cached results sum to a closed form the harness checks:
+# a reader that returned formula text or dropped cached values fails the case.
+
+FORMULA_COLS = 8
+FORMULA_TOTAL_COL = 7
+
+
+def write_formula_fixture(path: Path, sheets: int, rows: int) -> tuple[str, ...]:
+    wb = xlsxwriter.Workbook(str(path))
+    names = []
+    for sheet_idx in range(sheets):
+        ws = wb.add_worksheet(f"Data{sheet_idx + 1}")
+        names.append(ws.name)
+        for row_idx in range(rows):
+            r = sheet_idx * rows + row_idx + 1
+            x = row_idx + 1
+            ws.write_number(row_idx, 0, r)
+            ws.write_number(row_idx, 1, r + 0.5)
+            ws.write_string(row_idx, 2, f"item-{r}")
+            ws.write_formula(row_idx, 3, f"=A{x}*2", None, 2 * r)
+            ws.write_formula(row_idx, 4, f"=A{x}+B{x}", None, 2 * r + 0.5)
+            ws.write_formula(row_idx, 5, f'=C{x}&"-x"', None, f"item-{r}-x")
+            ws.write_formula(
+                row_idx, 6, f'=IF(MOD(A{x},2)=0,"even","odd")', None,
+                "even" if r % 2 == 0 else "odd",
+            )
+            ws.write_formula(row_idx, 7, f"=A{x}+B{x}+D{x}+E{x}", None, 6 * r + 1)
+    wb.close()
+    return tuple(names)
+
+
+def formula_fixture_total(sheets: int, rows: int) -> int:
+    """Sum of the cached =A+B+D+E results, which equal 6r+1 for r = 1..n."""
+    n = sheets * rows
+    return 3 * n * (n + 1) + n
+
+
+def _read_rows_all_sheets(module: Any, path: Path) -> tuple[int, float]:
+    wb = module.load_workbook(str(path), read_only=True, data_only=True)
+    cells = 0
+    total = 0.0
+    for ws in wb.worksheets:
+        for row in ws.iter_rows(values_only=True):
+            cells += len(row)
+            total += row[FORMULA_TOTAL_COL]
+    wb.close()
+    return cells, total
+
+
+def read_formulas_wolfxl(path: Path, sheet_names: tuple[str, ...]) -> tuple[int, float]:
+    return _read_rows_all_sheets(wolfxl, path)
+
+
+def read_formulas_openpyxl(path: Path, sheet_names: tuple[str, ...]) -> tuple[int, float]:
+    return _read_rows_all_sheets(openpyxl, path)
+
+
+def read_formulas_python_calamine(
+    path: Path, sheet_names: tuple[str, ...]
+) -> tuple[int, float]:
+    wb = CalamineWorkbook.from_path(str(path))
+    cells = 0
+    total = 0.0
+    for name in wb.sheet_names:
+        for row in wb.get_sheet_by_name(name).to_python(skip_empty_area=False):
+            cells += len(row)
+            total += row[FORMULA_TOTAL_COL]
+    return cells, total
+
+
+def read_formulas_fastexcel(path: Path, sheet_names: tuple[str, ...]) -> tuple[int, float]:
+    import pyarrow.compute as pc
+
+    reader = fastexcel.read_excel(str(path))
+    cells = 0
+    total = 0.0
+    for name in reader.sheet_names:
+        table = reader.load_sheet(name, header_row=None).to_arrow()
+        cells += table.num_rows * table.num_columns
+        total += pc.sum(table.column(FORMULA_TOTAL_COL)).as_py()
+    return cells, total
+
+
+def read_formulas_pylightxl(path: Path, sheet_names: tuple[str, ...]) -> tuple[int, float]:
+    db = pylightxl.readxl(str(path))
+    cells = 0
+    total = 0.0
+    for name in db.ws_names:
+        for row in db.ws(name).rows:
+            cells += len(row)
+            total += row[FORMULA_TOTAL_COL]
+    return cells, total
+
+
+def _frames_total(frames: Any) -> tuple[int, float]:
+    cells = 0
+    total = 0.0
+    for frame in frames:
+        cells += int(frame.shape[0] * frame.shape[1])
+        total += float(frame[frame.columns[FORMULA_TOTAL_COL]].sum())
+    return cells, total
+
+
+def read_formulas_pandas_openpyxl(
+    path: Path, sheet_names: tuple[str, ...]
+) -> tuple[int, float]:
+    frames = pd.read_excel(str(path), header=None, sheet_name=None, engine="openpyxl")
+    return _frames_total(frames.values())
+
+
+def read_formulas_pandas_calamine(
+    path: Path, sheet_names: tuple[str, ...]
+) -> tuple[int, float]:
+    frames = pd.read_excel(str(path), header=None, sheet_name=None, engine="calamine")
+    return _frames_total(frames.values())
+
+
+def read_formulas_polars(path: Path, sheet_names: tuple[str, ...]) -> tuple[int, float]:
+    frames = pl.read_excel(str(path), sheet_id=0, has_header=False)
+    return _frames_total(frames.values())
+
+
+def read_formulas_duckdb(path: Path, sheet_names: tuple[str, ...]) -> tuple[int, float]:
+    # read_xlsx cannot enumerate sheets, so DuckDB alone is given the names.
+    import pyarrow.compute as pc
+
+    con = _duckdb_connection()
+    cells = 0
+    total = 0.0
+    for name in sheet_names:
+        table = con.execute(
+            f"SELECT * FROM read_xlsx('{path}', sheet = '{name}', header = false)"
+        ).fetch_arrow_table()
+        cells += table.num_rows * table.num_columns
+        total += pc.sum(table.column(FORMULA_TOTAL_COL)).as_py()
+    return cells, total
+
+
+def read_formulas_tablib(path: Path, sheet_names: tuple[str, ...]) -> tuple[int, float]:
+    import tablib
+
+    book = tablib.Databook().load(path.read_bytes(), format="xlsx", headers=False)
+    cells = 0
+    total = 0.0
+    for dataset in book.sheets():
+        cells += dataset.height * dataset.width
+        total += sum(dataset.get_col(FORMULA_TOTAL_COL))
+    return cells, total
+
+
+def read_formulas_pyexcel(path: Path, sheet_names: tuple[str, ...]) -> tuple[int, float]:
+    import pyexcel
+
+    book = pyexcel.get_book_dict(file_name=str(path))
+    cells = 0
+    total = 0.0
+    for rows in book.values():
+        for row in rows:
+            cells += len(row)
+            total += row[FORMULA_TOTAL_COL]
+    pyexcel.free_resources()
+    return cells, total
+
+
+def read_formulas_xlsx2csv(path: Path, sheet_names: tuple[str, ...]) -> tuple[int, float]:
+    from xlsx2csv import Xlsx2csv
+
+    cells = 0
+    total = 0.0
+    with tempfile.TemporaryDirectory() as out_dir:
+        # sheetid=0 converts every sheet into its own CSV file in out_dir.
+        Xlsx2csv(str(path), outputencoding="utf-8").convert(out_dir, sheetid=0)
+        for csv_path in Path(out_dir).glob("*.csv"):
+            with csv_path.open(encoding="utf-8") as fh:
+                for line in fh:
+                    fields = line.rstrip("\n").split(",")
+                    cells += len(fields)
+                    total += float(fields[FORMULA_TOTAL_COL])
+    return cells, total
+
+
+FORMULA_READ_ENGINES: dict[str, Callable[[Path, tuple[str, ...]], tuple[int, float]]] = {
+    "wolfxl": read_formulas_wolfxl,
+    "openpyxl": read_formulas_openpyxl,
+    "python_calamine": read_formulas_python_calamine,
+    "fastexcel": read_formulas_fastexcel,
+    "pylightxl": read_formulas_pylightxl,
+    "pandas_openpyxl": read_formulas_pandas_openpyxl,
+    "pandas_calamine": read_formulas_pandas_calamine,
+    "polars": read_formulas_polars,
+    "duckdb": read_formulas_duckdb,
+    "tablib": read_formulas_tablib,
+    "pyexcel": read_formulas_pyexcel,
+    "xlsx2csv": read_formulas_xlsx2csv,
+}
+
 ENGINE_SCOPE = {
     "wolfxl": "full read/write",
     "openpyxl": "full read/write",
@@ -399,6 +603,7 @@ READ_CASE_ENGINES = {
         "pyexcel",
         "xlsx2csv",
     ),
+    "read_formulas_multisheet": tuple(FORMULA_READ_ENGINES),
 }
 
 MEMORY_WRITE_ENGINES = WRITE_CASE_ENGINES["write_plain_large"]
@@ -652,6 +857,10 @@ def main() -> None:
     parser.add_argument("--mixed-rows", type=int, default=10_000)
     parser.add_argument("--string-rows", type=int, default=100_000)
     parser.add_argument("--string-cols", type=int, default=5)
+    parser.add_argument("--formula-sheets", type=int, default=4)
+    parser.add_argument(
+        "--formula-rows", type=int, default=50_000, help="rows per sheet in the formula case"
+    )
     parser.add_argument("--rounds", type=int, default=5)
     parser.add_argument(
         "--round-budget",
@@ -738,6 +947,24 @@ def main() -> None:
                 "fixture": fixture,
             }
         )
+    if include("read_formulas_multisheet"):
+        formula_fixture = workdir / "formula-fixture.xlsx"
+        cases.append(
+            {
+                "case": "read_formulas_multisheet",
+                "kind": "read_formulas",
+                "rows": args.formula_sheets * args.formula_rows,
+                "cols": FORMULA_COLS,
+                "sheets": args.formula_sheets,
+                "fixture": formula_fixture,
+                "sheet_names": write_formula_fixture(
+                    formula_fixture, args.formula_sheets, args.formula_rows
+                ),
+                "expected_total": formula_fixture_total(
+                    args.formula_sheets, args.formula_rows
+                ),
+            }
+        )
 
     install_round_budget_handler()
     results: list[dict[str, Any]] = []
@@ -755,6 +982,26 @@ def main() -> None:
                 workdir,
                 spec["case"],
             )
+        elif spec["kind"] == "read_formulas":
+            engines = {}
+            for name in selected_engines(READ_CASE_ENGINES[spec["case"]]):
+
+                def run_formula_read(
+                    r=FORMULA_READ_ENGINES[name],
+                    f=spec["fixture"],
+                    names=spec["sheet_names"],
+                    e=units,
+                    t=spec["expected_total"],
+                ) -> None:
+                    count, total = r(f, names)
+                    if count != e:
+                        raise AssertionError(f"read {count} cells, expected {e}")
+                    if total != t:
+                        raise AssertionError(
+                            f"cached formula results sum to {total}, expected {t}"
+                        )
+
+                engines[name] = run_formula_read
         else:
             expected = units
             engines = {}
@@ -777,6 +1024,8 @@ def main() -> None:
                 "cols": spec["cols"],
                 "units": units,
             }
+            if "sheets" in spec:
+                base["sheets"] = spec["sheets"]
             try:
                 samples = measure(fn, args.rounds, args.round_budget)
             except RoundBudgetExceeded:
@@ -841,6 +1090,7 @@ def main() -> None:
             "warmup_rounds": 1,
             "round_budget_seconds": args.round_budget,
             "read_fixture_writer": "openpyxl",
+            "formula_fixture_writer": "XlsxWriter, formulas with cached results",
             "dataframe_timing": "pandas/polars/duckdb timed from a prebuilt DataFrame; tablib from a prebuilt Dataset",
             "memory_pass": "one fresh process per engine, single run, peak RSS",
             "versions": library_versions(),
