@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.24 - 2026-10-28
+
+### Fixed
+
+- `ws.iter_value_chunks()` in `read_only=True, data_only=True` mode now
+  yields the same rows as `ws.iter_rows(values_only=True)` for sheets
+  without value cells. With an explicit `max_row`, an empty, formatting-only,
+  or merge-only sheet yields the padded blank rows instead of none. Without
+  bounds, a merge-only sheet yields its blank rows, as openpyxl does.
+- In the same mode, a merged range that reaches the declared `<dimension>`
+  with no stored rows for it no longer pads blank rows past the last stored
+  row. The decision to pad now uses value cells only, and no longer parses
+  the sheet a second time to get its bounds.
+
 ## 2.0.23 - 2026-10-28
 
 ### Fixed
