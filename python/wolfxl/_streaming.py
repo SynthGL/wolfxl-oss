@@ -881,7 +881,9 @@ def stream_value_chunks(
             if mx_c is not None
             else (default_bounds[3] if default_bounds is not None else None)
         )
-        empty_row = (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else ()
+        # Without a column bound, openpyxl yields ``[]`` for a missing row
+        # (and ``stream_iter_rows`` mirrors it); keep chunks equal to ``ws.values``.
+        empty_row = (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else []
         pending: list[tuple[Any, ...]] = []
         while True:
             if read_compact_chunk_with_flags is not None:
@@ -953,17 +955,22 @@ def _direct_plain_value_chunks(
     scans. Larger or style-sensitive sheets keep the streaming path so
     ``read_only=True`` remains memory-friendly for huge workbooks.
 
-    The native reader pads every row up to ``max_row`` and returns ``None``
-    when that could differ from the streaming path: a sheet with no value
-    cells, or a ``max_row`` from the declared ``<dimension>`` (not the caller)
-    that the last value row does not reach. The streaming path then applies
-    openpyxl's trailing-row rule (see ``_pad_trailing_rows``).
+    The native reader pads every row up to ``max_row`` and to a common width,
+    and returns ``None`` when the row padding could differ from the streaming
+    path: a sheet with no value cells, or a ``max_row`` from the declared
+    ``<dimension>`` (not the caller) that the last value row does not reach.
+    The streaming path then applies openpyxl's trailing-row rule (see
+    ``_pad_trailing_rows``). Without a column bound (no ``max_col`` and no
+    declared dimension), rows keep their own lengths, so the native reader is
+    not used.
     """
     if not bool(getattr(wb, "_data_only", False)):
         return None
     if getattr(wb, "_date_formats", ()):
         return None
     if max_row is None or max_row > AUTO_STREAM_ROW_THRESHOLD:
+        return None
+    if max_col is None:
         return None
     reader = getattr(wb, "_rust_reader", None)
     read_chunks = getattr(reader, "read_sheet_value_chunks_plain", None)

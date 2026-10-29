@@ -298,3 +298,46 @@ def test_value_chunks_match_rows_without_value_cells(
     assert chunked() == list(op_ws.values)
     assert chunked(max_row=6) == list(wx_ws.iter_rows(max_row=6, values_only=True))
     assert len(chunked(max_row=6)) == 6
+
+
+@pytest.fixture
+def no_dimension_xlsx(tmp_path: Path) -> Path:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Sparse"
+    ws["A1"] = 1
+    ws["C3"] = "x"
+    plain = tmp_path / "plain.xlsx"
+    wb.save(plain)
+
+    path = tmp_path / "no-dimension.xlsx"
+    with zipfile.ZipFile(plain) as src, zipfile.ZipFile(path, "w") as dst:
+        for item in src.infolist():
+            payload = src.read(item.filename)
+            if item.filename == "xl/worksheets/sheet1.xml":
+                payload, count = re.subn(rb'<dimension ref="[^"]*" ?/>', b"", payload)
+                assert count == 1
+            dst.writestr(item, payload)
+    return path
+
+
+@pytest.mark.parametrize("read_only", [True, False])
+@pytest.mark.parametrize("data_only", [True, False])
+@pytest.mark.parametrize(
+    "bounds",
+    [{}, {"max_row": 3}, {"max_row": 5}, {"min_row": 2, "max_row": 3}, {"max_col": 2}],
+)
+def test_value_chunks_match_rows_without_dimension(
+    no_dimension_xlsx: Path, read_only: bool, data_only: bool, bounds: dict[str, int]
+) -> None:
+    op_ws = openpyxl.load_workbook(no_dimension_xlsx, read_only=read_only)["Sparse"]
+    wx_ws = wolfxl.load_workbook(no_dimension_xlsx, read_only=read_only, data_only=data_only)[
+        "Sparse"
+    ]
+
+    chunked = [row for chunk in wx_ws.iter_value_chunks(**bounds) for row in chunk]
+    assert chunked == list(wx_ws.iter_rows(values_only=True, **bounds))
+    # Past the last stored row, wolfxl pads an explicit max_row in read-only
+    # mode where openpyxl stops, so compare with openpyxl inside the data only.
+    if bounds.get("max_row", 3) <= 3:
+        assert chunked == list(op_ws.iter_rows(values_only=True, **bounds))

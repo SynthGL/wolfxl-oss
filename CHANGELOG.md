@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.25 - 2026-10-28
+
+### Fixed
+
+- On a read-only sheet with no `<dimension>` element, or after
+  `ws.reset_dimensions()`, `ws.iter_value_chunks()` now yields the same rows
+  as `ws.iter_rows(values_only=True)` and openpyxl. With `data_only=True` and
+  an explicit `max_row`, rows keep their own lengths instead of being padded
+  to the widest column. A missing row is now `[]`, as in `ws.values`, instead
+  of `()`.
+
 ## 2.0.24 - 2026-10-28
 
 ### Fixed
