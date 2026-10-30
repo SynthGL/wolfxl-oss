@@ -291,19 +291,22 @@ _VALUELESS_CELLS = (
     '<c r="K1" t="b"><f>TRUE()</f></c>',
     '<c r="L1" t="d"><f>NOW()</f></c>',
     '<c r="M1" t="s"><f>A2</f></c>',
+    '<c r="N1" t="b"><v></v></c>',
+    '<c r="O1" t="d"></c>',
 )
 
 
 @pytest.mark.parametrize("data_only", [False, True])
 @pytest.mark.parametrize("values_only", [False, True])
-@pytest.mark.parametrize("read_only", [False, True])
-def test_streamed_valueless_cells_keep_their_type(
-    tmp_path, monkeypatch, read_only, values_only, data_only
+@pytest.mark.parametrize(("read_only", "stream"), [(False, False), (False, True), (True, False)])
+def test_valueless_cells_keep_their_type(
+    tmp_path, monkeypatch, read_only, stream, values_only, data_only
 ):
     # openpyxl keeps the `t=` type of a cell without a value, and a formula
     # cell reads as its formula even when its cached result is an error.
     path = _one_row_workbook(tmp_path / "valueless.xlsx", _VALUELESS_CELLS)
-    monkeypatch.setattr(_streaming, "AUTO_STREAM_ROW_THRESHOLD", 0)
+    if stream:
+        monkeypatch.setattr(_streaming, "AUTO_STREAM_ROW_THRESHOLD", 0)
     expected = openpyxl.load_workbook(path, read_only=read_only, data_only=data_only)
     actual = wolfxl.load_workbook(path, read_only=read_only, data_only=data_only)
 
@@ -315,6 +318,9 @@ def test_streamed_valueless_cells_keep_their_type(
         reference = first_row(expected)
         assert reference[0] == (None if values_only else (None, "s"))
         assert first_row(actual) == reference
+        if not read_only and not values_only:
+            indexed = [actual.active.cell(1, column) for column in range(1, len(reference) + 1)]
+            assert [(cell.value, cell.data_type) for cell in indexed] == reference
     finally:
         actual.close()
         expected.close()

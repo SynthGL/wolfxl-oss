@@ -296,13 +296,8 @@ pub(crate) fn append_native_record<B: NativeStyleResolver>(
         record.set_item("data_type", "formula")?;
         record.set_item("value", formula)?;
     } else if options.data_only && has_formula && !has_cached_value {
-        let kind = native_data_type(cell, true, number_format);
-        let data_type = if matches!(kind, "str" | "inlineStr") {
-            kind
-        } else {
-            "blank"
-        };
-        record.set_item("data_type", data_type)?;
+        // Like openpyxl, an uncached formula keeps its cell's `t=` type.
+        record.set_item("data_type", native_data_type(cell, true, number_format))?;
         record.set_item("value", py.None())?;
     } else {
         record.set_item(

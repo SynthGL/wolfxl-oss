@@ -1247,7 +1247,7 @@ dependencies = [
 
 [[package]]
 name = "wolfxl"
-version = "2.0.31"
+version = "2.0.32"
 dependencies = [
  "chrono",
  "crc32fast",
