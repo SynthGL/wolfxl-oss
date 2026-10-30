@@ -285,7 +285,7 @@ def test_clean_installed_python39_wheel(tmp_path: Path) -> None:
         env=environment_variables,
         check=True,
     )
-    wheels = list(dist.glob("wolfxl-2.0.25-cp39-cp39-*.whl"))
+    wheels = list(dist.glob("wolfxl-2.0.26-cp39-cp39-*.whl"))
     assert len(wheels) == 1, wheels
     environment = tmp_path / "clean-python39"
     subprocess.run(
@@ -303,8 +303,8 @@ def test_clean_installed_python39_wheel(tmp_path: Path) -> None:
 
 
 def main() -> None:
-    assert version("wolfxl") == "2.0.25"
-    assert wolfxl.__version__ == "2.0.25"
+    assert version("wolfxl") == "2.0.26"
+    assert wolfxl.__version__ == "2.0.26"
     for module_name in (
         "wolfxl.operations",
         "wolfxl.render",
