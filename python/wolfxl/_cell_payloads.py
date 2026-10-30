@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from functools import lru_cache
 from typing import Any
 
 from wolfxl._styles import Alignment, Border, Color, Font, PatternFill, Side
 from wolfxl.styles.fills import GradientFill
 from wolfxl.styles.protection import Protection
+from wolfxl.utils.datetime import time_to_days
 
 _ERROR_CODES = {"#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A"}
 _DEFAULT_FONT = Font()
@@ -198,6 +199,8 @@ def python_value_to_payload(value: Any) -> dict[str, Any]:
         return {"type": "date", "value": value.isoformat()}
     if isinstance(value, timedelta):
         return {"type": "timedelta", "value": value.total_seconds() / 86400}
+    if isinstance(value, time):
+        return {"type": "time", "value": time_to_days(value)}
     if isinstance(value, str) and value.startswith("="):
         return {"type": "formula", "formula": value, "value": value}
     if isinstance(value, str) and value in _ERROR_CODES:
