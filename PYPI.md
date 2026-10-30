@@ -1,13 +1,14 @@
 # WolfXL Community
 
-**An openpyxl-compatible Excel library for Python with a Rust backend. Edit existing `.xlsx` templates without losing formatting, conditional formatting, or data validation. MIT licensed. In the committed read/write benchmark, WolfXL 2.0.21 measured 6.7-12.0x faster than openpyxl 3.1.5 (small-file gains vary).**
+**An openpyxl alternative for Python with a Rust backend. Edit existing Excel `.xlsx` and `.xlsm` files in place without losing formatting, charts, conditional formatting, data validation, or VBA macros, and recalculate common formulas without Excel. MIT licensed. In the committed read/write benchmark, WolfXL 2.0.21 measured 6.7-12.0x faster than openpyxl 3.1.5 (small-file gains vary).**
 
 WolfXL Community reads, writes, and edits Excel `.xlsx` and `.xlsm` workbooks
 through the openpyxl API, with parsing, serialization, and cell storage
 implemented in Rust. Modify mode saves the cells you change and keeps the rest
 of the file, and `calculate()` covers common Excel functions in Python.
 Most openpyxl code runs after a one-line import change, so it is the first
-thing to try when an openpyxl script is too slow.
+thing to try when an openpyxl script is too slow. No Excel or LibreOffice
+install is needed: wheels cover Linux (glibc and musl), macOS, and Windows.
 
 WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported workbook creation, reading, writing, streaming exports, and existing-workbook edits. It is a free product, not a trial.
 
@@ -17,16 +18,23 @@ WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported 
 python -m pip install wolfxl==2.0.25
 ```
 
-## Which library for which Excel job
+## When to use WolfXL instead of openpyxl, XlsxWriter, or pandas
 
 | Job | Use |
 | --- | --- |
 | An openpyxl script is too slow | WolfXL: change `from openpyxl import ...` to `from wolfxl import ...` |
-| Fill or edit a styled template and keep its formatting, conditional formats, data validation, charts, and sparklines | WolfXL modify mode: `load_workbook(path, modify=True)` |
-| Compute formula results in Python | WolfXL `calculate()` for common functions; Commercial for Excel-matched results |
+| Fill or edit a styled template, and openpyxl drops its charts, sparklines, conditional formats, or data validation on save | WolfXL modify mode: `load_workbook(path, modify=True)` |
+| Compute formula results in Python, where openpyxl `data_only=True` returns `None` for files Excel never saved | WolfXL `calculate()` for common functions; Commercial for Excel-matched results |
+| Write a pandas DataFrame into an existing styled workbook (`to_excel` writes a new file) | WolfXL modify mode ([recipe](https://wolfxl.com/pandas-write-existing-excel-sheet?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09)) |
+| Only write new files, never read or edit them | XlsxWriter, or WolfXL if you also read or edit (XlsxWriter cannot open an existing file) |
 | Only read cell values, as fast as possible, into a DataFrame | python-calamine, fastexcel, or polars |
-| Only write new files, never read or edit them | XlsxWriter, or WolfXL if you also read or edit |
+| Render a sheet or chart to PDF or PNG on Linux without LibreOffice | WolfXL Commercial ([render](https://wolfxl.com/render-excel-python?utm_source=pypi&utm_medium=registry&utm_campaign=community_commercial_2026_09)); not in Community |
 | Call Python code from Excel as worksheet functions or macros | [PyXLL](https://www.pyxll.com) |
+
+On the 1.6-million-cell plain write in the
+[committed ecosystem benchmark](https://github.com/SynthGL/wolfxl-oss/blob/58498c5f533353338514a84d5889501b51ed0b7d/benchmarks/results/2026-10-27-ecosystem-full-linux-epyc.md),
+WolfXL 2.0.21 took 0.74 s, XlsxWriter 4.66 s, and pandas with the openpyxl
+engine 10.62 s. DuckDB wrote the mixed-type file faster than WolfXL.
 
 ## Edit an existing workbook
 
