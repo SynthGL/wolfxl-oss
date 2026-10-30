@@ -169,40 +169,6 @@ impl NativeXlsxBook {
 
     #[pyo3(signature = (
         sheet,
-        chunk_size = 1024,
-        min_row = None,
-        max_row = None,
-        min_col = None,
-        max_col = None,
-        implicit_max_row = false,
-    ))]
-    #[allow(clippy::too_many_arguments)]
-    pub fn read_sheet_value_chunks_plain(
-        &self,
-        py: Python<'_>,
-        sheet: &str,
-        chunk_size: usize,
-        min_row: Option<u32>,
-        max_row: Option<u32>,
-        min_col: Option<u32>,
-        max_col: Option<u32>,
-        implicit_max_row: bool,
-    ) -> PyResult<PyObject> {
-        crate::native_reader_sheet_data::read_sheet_value_chunks_plain_xlsx(
-            self,
-            py,
-            sheet,
-            chunk_size,
-            min_row,
-            max_row,
-            min_col,
-            max_col,
-            implicit_max_row,
-        )
-    }
-
-    #[pyo3(signature = (
-        sheet,
         cell_range = None,
         data_only = false,
         include_format = true,

@@ -1176,6 +1176,13 @@ impl StreamingSheetReader {
         let row_idx = row_index_from_start(&tag, previous)?;
         self.last_row = row_idx;
         if self.min_row.is_some_and(|min| row_idx < min) {
+            // The window ends at the first `</row>` bytes, which a comment,
+            // CDATA section, or attribute value may contain; such rows, and
+            // text quick-xml would reject, are skipped by the event reader.
+            if !window.self_closing && !is_plain_row_body(&text.as_bytes()[window.body.clone()]) {
+                self.last_row = previous;
+                return Ok(None);
+            }
             scanner.consume(&window);
             return Ok(Some(ValueStepResult::Skip));
         }
@@ -1253,6 +1260,31 @@ impl StreamingSheetReader {
 
         Ok(StepResult::Row(row_idx, cells))
     }
+}
+
+/// Whether a scanned row body is plain markup: complete tags (no comments,
+/// CDATA, or processing instructions) and text whose every `&` ends with `;`
+/// as quick-xml requires, so its first `</row>` is the row's real end tag.
+fn is_plain_row_body(body: &[u8]) -> bool {
+    let mut at = 0;
+    while let Some(offset) = memchr::memchr2(b'<', b'&', &body[at..]) {
+        let i = at + offset;
+        if body[i] == b'&' {
+            match memchr::memchr3(b';', b'&', b'<', &body[i + 1..]) {
+                Some(end) if body[i + 1 + end] == b';' => at = i + 2 + end,
+                _ => return false,
+            }
+            continue;
+        }
+        if matches!(body.get(i + 1), Some(b'!' | b'?') | None) {
+            return false;
+        }
+        let Some(gt) = scan_tag_end(body, i + 1) else {
+            return false;
+        };
+        at = gt + 1;
+    }
+    true
 }
 
 fn read_cells_until_row_end(
@@ -1501,8 +1533,8 @@ fn scan_value_row_body<'py>(
 
 /// [`read_cell_contents`] for a scanned cell whose content starts at `start`:
 /// the value, its cell type, and the offset past `</c>`. `Ok(None)` when the
-/// cell needs the event reader (inline strings, unknown children, entity
-/// references in formula text).
+/// cell needs the event reader (rich or phonetic inline strings, unknown
+/// children, unterminated references).
 fn scan_cell_value(
     text: &str,
     start: usize,
@@ -1515,6 +1547,7 @@ fn scan_cell_value(
     let keep_formula = output != CellOutput::CachedValue;
     let mut v_text: Option<String> = None;
     let mut f_text: Option<String> = None;
+    let mut inline_text: Option<String> = None;
     let mut fast_number: Option<PyObjectOwned> = None;
     let mut fast_shared: Option<usize> = None;
     let mut has_formula = false;
@@ -1529,9 +1562,10 @@ fn scan_cell_value(
         }
         let rest = &text[lt..];
         if rest.starts_with("</c>") {
-            // Without `<is>`, an inline-string cell has no value.
+            // openpyxl reads an inline string only from `<is>` and every
+            // other type only from `<v>`.
             let raw_value = if matches!(t_attr, CellTypeAttr::InlineString) {
-                None
+                inline_text
             } else {
                 v_text
             };
@@ -1564,6 +1598,19 @@ fn scan_cell_value(
             if !scan_cell_text(formula, sink)? {
                 return Ok(None);
             }
+            at = end;
+            continue;
+        }
+        if let Some((_, gt, self_closing)) = scan_start_tag(text, lt, "is") {
+            // openpyxl reads a present but empty `<is>` as "".
+            inline_text.get_or_insert_with(String::new);
+            if self_closing {
+                at = gt + 1;
+                continue;
+            }
+            let Some(end) = scan_inline_string(text, gt + 1, &mut inline_text)? else {
+                return Ok(None);
+            };
             at = end;
             continue;
         }
@@ -1609,6 +1656,44 @@ fn scan_cell_value(
         if !value.is_empty() {
             v_text.get_or_insert_with(String::new).push_str(&value);
         }
+    }
+}
+
+/// Plain `<t>` runs of an `<is>` body starting at `start`, appended to
+/// `inline_text`; the offset past `</is>`. `Ok(None)` for rich runs or any
+/// other markup, which the event reader handles.
+fn scan_inline_string(
+    text: &str,
+    start: usize,
+    inline_text: &mut Option<String>,
+) -> PyResult<Option<usize>> {
+    let bytes = text.as_bytes();
+    let mut at = start;
+    loop {
+        let Some(offset) = memchr::memchr(b'<', &bytes[at..]) else {
+            return Ok(None);
+        };
+        let lt = at + offset;
+        if !scan_cell_text(&text[at..lt], None)? {
+            return Ok(None);
+        }
+        if text[lt..].starts_with("</is>") {
+            return Ok(Some(lt + "</is>".len()));
+        }
+        let Some((_, gt, self_closing)) = scan_start_tag(text, lt, "t") else {
+            return Ok(None);
+        };
+        if self_closing {
+            at = gt + 1;
+            continue;
+        }
+        let Some((run, end)) = scan_text_until(text, gt + 1, "</t>") else {
+            return Ok(None);
+        };
+        if !scan_cell_text(run, Some(inline_text))? {
+            return Ok(None);
+        }
+        at = end;
     }
 }
 
@@ -2897,6 +2982,9 @@ B1</f><v>0</v></c></row>"#,
             r#"<row r="6"/><row r="7"><c r="A7" t="inlineStr"><is><t>inline</t></is></c></row><row r="8"><c r="A8"><v>10</v></c></row>"#,
             r#"<row r="9"><!-- note --><c r="A9"><v>11</v></c></row><row r="10"><c r="B10"><v>bad</v></c></row>"#,
             r#"<row r="13"><c r="A13" t="str"><f>IF(B1&gt;0,&quot;x&#x41;&quot;,&apos;S&apos;!A1)&#xD;&#10;</f><v>xA</v></c><c r="B13"><f>&lt;&amp;</f>  <v>1</v> </c></row>"#,
+            r#"<row r="17"><c r="A17" t="inlineStr"><is/></c><c r="B17" t="inlineStr"><is></is></c><c r="C17" t="inlineStr"><is><t/></is></c><c r="D17" t="inlineStr"><is> <t xml:space="preserve"> a&amp;b&#10;</t>
+<t>c</t></is></c><c r="E17"><is><t>9</t></is><v>3</v></c><c r="F17" t="inlineStr"><v>1</v><is><t>x</t></is></c><c r="G17" t="inlineStr"/><c r="H17" t="inlineStr"><is><t>&bad;</t></is></c></row>"#,
+            r#"<row r="18"><c r="A18" t="inlineStr"><is><t>a</t></is></c><c r="B18" t="inlineStr"><is><r><t>rich</t></r></is></c></row><row r="19"><c r="A19" t="inlineStr"><is><t>a</t><rPh sb="0" eb="1"><t>b</t></rPh></is></c></row>"#,
         ];
         let sheets = [
             format!("<worksheet><sheetData>{}</sheetData></worksheet>", rows.join("")),
@@ -2910,6 +2998,14 @@ B1</f><v>0</v></c></row>"#,
             format!("<worksheet><sheetData>{}<row r=\"14\"><c r=\"A14\"><f>A1&nbsp;</f><v>1</v></c></row></sheetData></worksheet>", rows[6]),
             format!("<worksheet><sheetData>{}<row r=\"15\"><c r=\"A15\"><f>A1&amp</f><v>1</v></c></row></sheetData></worksheet>", rows[6]),
             format!("<worksheet><sheetData>{}<row r=\"16\"><c r=\"A16\"><f>A1 & B1</f><v>1</v></c></row></sheetData></worksheet>", rows[6]),
+            format!("<worksheet><sheetData>{}{}</sheetData></worksheet>", rows[7].replace("<c r=\"H17\" t=\"inlineStr\"><is><t>&bad;</t></is></c>", ""), rows[8]),
+            // Skipped rows (min_row 3) whose first `</row>` bytes are not the end tag.
+            "<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><v>1</v></c><!-- </row> --></row><row r=\"2\"><c r=\"A2\" t=\"str\"><f>\"a\"&amp;\"b\"</f><v>ab</v></c></row><row r=\"3\"><c r=\"A3\"><v>3</v></c></row><row r=\"4\"><c r=\"D4\"><v>4</v></c></row></sheetData></worksheet>".to_string(),
+            "<worksheet><sheetData><row r=\"1\"><c r=\"A1\" x=\"</row>\"><v>1</v></c></row><row r=\"3\"><c r=\"D3\"><v>3</v></c></row></sheetData></worksheet>".to_string(),
+            "<worksheet><sheetData><row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t><![CDATA[</row>]]></t></is></c></row><row r=\"3\"><c r=\"D3\"><v>3</v></c></row></sheetData></worksheet>".to_string(),
+            "<worksheet><sheetData><row r=\"2\"><c r=\"A2\" t=\"str\"><f>A2 & B2</f></c></row><row r=\"3\"><c r=\"D3\"><v>3</v></c></row></sheetData></worksheet>".to_string(),
+            "<worksheet><sheetData><row r=\"2\"><c r=\"A2\" t=\"str\"><f>&a&b;</f></c></row><row r=\"3\"><c r=\"D3\"><v>3</v></c></row></sheetData></worksheet>".to_string(),
+            format!("<worksheet><sheetData>{}</sheetData></worksheet>", rows[7]),
         ];
         pyo3::Python::initialize();
         Python::attach(|py| {

@@ -202,61 +202,6 @@ def test_streaming_iter_value_chunks_match_sparse_rows(sparse_xlsx: Path) -> Non
     assert chunked_rows == list(ws.iter_rows(values_only=True))
 
 
-def test_data_only_iter_value_chunks_uses_direct_plain_value_reader(
-    basic_xlsx: Path,
-) -> None:
-    class DirectChunkCounter:
-        def __init__(self, inner: object) -> None:
-            self._inner = inner
-            self.calls: list[int] = []
-
-        def __getattr__(self, name: str) -> object:
-            return getattr(self._inner, name)
-
-        def read_sheet_value_chunks_plain(
-            self,
-            *args: object,
-            **kwargs: object,
-        ) -> object:
-            self.calls.append(int(args[1]))
-            return self._inner.read_sheet_value_chunks_plain(*args, **kwargs)
-
-    wb = wolfxl.load_workbook(basic_xlsx, read_only=True, data_only=True)
-    counter = DirectChunkCounter(wb._rust_reader)  # noqa: SLF001
-    wb._rust_reader = counter  # noqa: SLF001
-    ws = wb["Sheet1"]
-
-    rows = [row for chunk in ws.iter_value_chunks(chunk_size=128) for row in chunk]
-
-    assert rows == list(ws.iter_rows(values_only=True))
-    assert counter.calls == [128]
-
-
-def test_data_only_iter_rows_keeps_streaming_reader(
-    basic_xlsx: Path,
-) -> None:
-    class DirectChunkGuard:
-        def __init__(self, inner: object) -> None:
-            self._inner = inner
-
-        def __getattr__(self, name: str) -> object:
-            return getattr(self._inner, name)
-
-        def read_sheet_value_chunks_plain(
-            self,
-            *args: object,
-            **kwargs: object,
-        ) -> object:
-            raise AssertionError("iter_rows must keep the streaming row reader")
-
-    wb = wolfxl.load_workbook(basic_xlsx, read_only=True, data_only=True)
-    wb._rust_reader = DirectChunkGuard(wb._rust_reader)  # noqa: SLF001
-
-    rows = list(wb["Sheet1"].iter_rows(values_only=True))
-
-    assert rows[0] == (11, 12, 13, 14, 15)
-
-
 def test_iter_value_chunks_rejects_invalid_chunk_size(basic_xlsx: Path) -> None:
     wb = wolfxl.load_workbook(basic_xlsx, read_only=True)
 
