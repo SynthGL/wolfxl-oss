@@ -224,13 +224,14 @@ _INLINE_CELLS = (
 )
 
 
-@pytest.fixture
-def inline_string_workbook(tmp_path):
+def _one_row_workbook(path, cells):
+    """Save a workbook whose sheet holds exactly ``cells`` in row 1."""
     book = openpyxl.Workbook()
     book.active["A2"] = 1
     original = BytesIO()
     book.save(original)
     output = BytesIO()
+    last = openpyxl.utils.get_column_letter(len(cells))
     with ZipFile(original) as source, ZipFile(output, "w", ZIP_DEFLATED) as target:
         for entry in source.infolist():
             data = source.read(entry.filename)
@@ -238,13 +239,18 @@ def inline_string_workbook(tmp_path):
                 text = data.decode()
                 start = text.index("<sheetData>")
                 end = text.index("</sheetData>") + len("</sheetData>")
-                row = '<row r="1">' + "".join(_INLINE_CELLS) + "</row>"
+                row = '<row r="1">' + "".join(cells) + "</row>"
                 text = text[:start] + f"<sheetData>{row}</sheetData>" + text[end:]
-                data = text.replace('<dimension ref="A2:A2" />', '<dimension ref="A1:G1"/>').encode()
+                data = text.replace('<dimension ref="A2:A2" />', f'<dimension ref="A1:{last}1"/>')
+                data = data.encode()
             target.writestr(entry, data)
-    path = tmp_path / "inline.xlsx"
     path.write_bytes(output.getvalue())
     return path
+
+
+@pytest.fixture
+def inline_string_workbook(tmp_path):
+    return _one_row_workbook(tmp_path / "inline.xlsx", _INLINE_CELLS)
 
 
 @pytest.mark.parametrize("data_only", [False, True])
@@ -266,6 +272,49 @@ def test_inline_string_without_text_keeps_inline_type(
         if not read_only:
             indexed = [actual.active.cell(1, column) for column in range(1, len(reference) + 1)]
             assert [(cell.value, cell.data_type) for cell in indexed] == reference
+    finally:
+        actual.close()
+        expected.close()
+
+
+_VALUELESS_CELLS = (
+    '<c r="A1" t="s"/>',
+    '<c r="B1" t="str"/>',
+    '<c r="C1" t="b"/>',
+    '<c r="D1" t="e"/>',
+    '<c r="E1" t="e"></c>',
+    '<c r="F1" t="e"><v></v></c>',
+    '<c r="G1" t="d"/>',
+    '<c r="H1"/>',
+    '<c r="I1" t="e"><f>1/0</f></c>',
+    '<c r="J1" t="e"><f>1/0</f><v>#DIV/0!</v></c>',
+    '<c r="K1" t="b"><f>TRUE()</f></c>',
+    '<c r="L1" t="d"><f>NOW()</f></c>',
+    '<c r="M1" t="s"><f>A2</f></c>',
+)
+
+
+@pytest.mark.parametrize("data_only", [False, True])
+@pytest.mark.parametrize("values_only", [False, True])
+@pytest.mark.parametrize("read_only", [False, True])
+def test_streamed_valueless_cells_keep_their_type(
+    tmp_path, monkeypatch, read_only, values_only, data_only
+):
+    # openpyxl keeps the `t=` type of a cell without a value, and a formula
+    # cell reads as its formula even when its cached result is an error.
+    path = _one_row_workbook(tmp_path / "valueless.xlsx", _VALUELESS_CELLS)
+    monkeypatch.setattr(_streaming, "AUTO_STREAM_ROW_THRESHOLD", 0)
+    expected = openpyxl.load_workbook(path, read_only=read_only, data_only=data_only)
+    actual = wolfxl.load_workbook(path, read_only=read_only, data_only=data_only)
+
+    def first_row(book):
+        row = next(book.active.iter_rows(values_only=values_only))
+        return list(row) if values_only else [(cell.value, cell.data_type) for cell in row]
+
+    try:
+        reference = first_row(expected)
+        assert reference[0] == (None if values_only else (None, "s"))
+        assert first_row(actual) == reference
     finally:
         actual.close()
         expected.close()

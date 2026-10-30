@@ -1339,17 +1339,11 @@ fn read_cells_until_row_end(
             }
             Event::Empty(e) if e.local_name().as_ref() == "c" => {
                 let (col, style_id, t_attr) = cell_attrs_from_start(&e, &cells)?;
-                // openpyxl keeps `inlineStr` for a cell without an `<is>` child.
-                let cell_type = if matches!(t_attr, CellTypeAttr::InlineString) {
-                    "inlineStr"
-                } else {
-                    "blank"
-                };
                 cells.push(ParsedCell {
                     col,
                     value: py.None(),
                     style_id,
-                    cell_type,
+                    cell_type: valueless_cell_type(&t_attr),
                 });
             }
             Event::End(e) if e.local_name().as_ref() == "row" => return Ok(cells),
@@ -1655,12 +1649,8 @@ fn scan_cell_value(
             return Ok(None);
         };
         at = end;
-        // Formula-text rows ignore the cached result; error codes still
-        // come from `<v>`.
-        if has_formula
-            && output == CellOutput::FormulaText
-            && !matches!(t_attr, CellTypeAttr::Error)
-        {
+        // Formula-text rows ignore the cached result.
+        if has_formula && output == CellOutput::FormulaText {
             continue;
         }
         let raw = normalize_xml_eol(raw);
@@ -1842,12 +1832,8 @@ fn read_cell_contents(
                         .map_err(|e| {
                             PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}"))
                         })?;
-                    // Formula-text rows ignore the cached result; error
-                    // codes still come from `<v>`.
-                    if has_formula
-                        && output == CellOutput::FormulaText
-                        && !matches!(t_attr, CellTypeAttr::Error)
-                    {
+                    // Formula-text rows ignore the cached result.
+                    if has_formula && output == CellOutput::FormulaText {
                         continue;
                     }
                     let raw = normalize_xml_eol(&raw);
@@ -2259,6 +2245,20 @@ fn cell_type_from_bytes(value: &[u8]) -> CellTypeAttr {
     }
 }
 
+/// Cell type tag for a cell without a value: openpyxl keeps the `t=`
+/// attribute, and a number without a value is blank.
+fn valueless_cell_type(t_attr: &CellTypeAttr) -> &'static str {
+    match t_attr {
+        CellTypeAttr::Number => "blank",
+        CellTypeAttr::Shared => "s",
+        CellTypeAttr::FormulaString => "str",
+        CellTypeAttr::InlineString => "inlineStr",
+        CellTypeAttr::Bool => "b",
+        CellTypeAttr::Error => "e",
+        CellTypeAttr::Date => "d",
+    }
+}
+
 fn parse_u32_bytes(bytes: &[u8]) -> Option<u32> {
     if bytes.is_empty() {
         return None;
@@ -2485,13 +2485,17 @@ fn value_cell_object(
     raw_value: Option<String>,
     sst: &[String],
 ) -> PyResult<(PyObjectOwned, &'static str)> {
-    if matches!(t_attr, CellTypeAttr::Error) {
-        let code = raw_value.filter(|v| !v.is_empty());
-        return Ok((str_to_py(py, code.as_deref().unwrap_or("#ERROR!"))?, "e"));
-    }
     if has_formula && output == CellOutput::FormulaText {
         let formula = formula.unwrap_or_default();
         return Ok((str_to_py(py, &formula_with_eq(&formula))?, "formula"));
+    }
+    if matches!(t_attr, CellTypeAttr::Error) {
+        let code = raw_value.filter(|v| !v.is_empty());
+        let value = match code {
+            Some(code) => str_to_py(py, &code)?,
+            None => py.None(),
+        };
+        return Ok((value, "e"));
     }
     if let Some(value) = fast_number {
         return Ok((value, "n"));
@@ -2542,26 +2546,21 @@ fn build_cell_object(
     let raw_value =
         raw_value.filter(|v| !v.is_empty() || matches!(t_attr, CellTypeAttr::InlineString));
     if let Some(formula) = formula {
-        if !matches!(t_attr, CellTypeAttr::Error) {
-            let cached = cached_value_to_py(py, t_attr, raw_value, sst)?;
-            let payload = build_formula_dict(py, &formula, cached)?;
-            let cached_type = match t_attr {
-                CellTypeAttr::FormulaString => Some("str"),
-                CellTypeAttr::InlineString => Some("inlineStr"),
-                _ => None,
-            };
-            if let Some(cached_type) = cached_type {
-                payload
-                    .bind(py)
-                    .cast::<PyDict>()?
-                    .set_item("cached_type", cached_type)?;
-            }
-            return Ok((payload, "formula"));
+        let cached = cached_value_to_py(py, t_attr, raw_value, sst)?;
+        let payload = build_formula_dict(py, &formula, cached)?;
+        if !matches!(t_attr, CellTypeAttr::Number) {
+            payload
+                .bind(py)
+                .cast::<PyDict>()?
+                .set_item("cached_type", valueless_cell_type(t_attr))?;
         }
+        return Ok((payload, "formula"));
     }
     match t_attr {
         CellTypeAttr::Error => {
-            let v = raw_value.unwrap_or_else(|| "#ERROR!".to_string());
+            let Some(v) = raw_value else {
+                return Ok((py.None(), "e"));
+            };
             let d = new_dict(py)?;
             set_dict_item(&d, "type", str_to_py(py, "error")?)?;
             set_dict_item(&d, "value", str_to_py(py, &v)?)?;
