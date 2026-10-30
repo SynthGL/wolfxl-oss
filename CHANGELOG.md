@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.0.27 - 2026-10-29
+
+### Performance
+
+- Read-only `iter_rows(values_only=True)` and `iter_value_chunks()` read
+  ordinary worksheet rows, including formula cells and plain inline strings,
+  with a byte-level row scanner and hand any row it does not recognize to the
+  XML event reader, so output is unchanged. Sheets of one workbook now share a
+  single parsed shared-string table instead of parsing it per sheet, and the
+  ZIP reader no longer scans the whole file to locate the central directory.
+  Reading the formulas of a 4-sheet, 200,000-row workbook drops from 0.61 s
+  to 0.30 s.
+- `iter_value_chunks()` with `data_only=True` no longer loads sheets of up to
+  50,000 rows into memory before chunking them; every sheet streams, which is
+  faster on all measured shapes. The 4-sheet formula workbook reads in 0.30 s
+  instead of 0.49 s.
+
 ## 2.0.26 - 2026-10-29
 
 ### Performance

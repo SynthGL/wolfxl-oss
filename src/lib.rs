@@ -41,6 +41,7 @@ mod native_xls_backend;
 mod ooxml_util;
 mod streaming;
 mod streaming_blank_rows;
+mod streaming_scan;
 mod util;
 mod wolfxl;
 mod wolfxl_core_bridge;
@@ -178,6 +179,7 @@ fn _rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_class::<streaming::StreamingSheetReader>()?;
+    m.add_class::<streaming::StreamingSharedStrings>()?;
     m.add_function(wrap_pyfunction!(
         streaming_blank_rows::streaming_blank_rows,
         m

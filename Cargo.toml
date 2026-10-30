@@ -17,6 +17,8 @@ zip = { version = "9", default-features = false, features = ["deflate", "unreser
 flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
 crc32fast = "1.5"
 quick-xml = "0.42"
+# Already built for quick-xml; the streaming row scanner uses it directly.
+memchr = "2.7"
 chrono = "0.4"
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
@@ -26,7 +28,7 @@ tempfile = "3"
 
 [package]
 name = "wolfxl"
-version = "2.0.26"
+version = "2.0.27"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -48,6 +50,7 @@ zip.workspace = true
 flate2.workspace = true
 crc32fast.workspace = true
 quick-xml.workspace = true
+memchr.workspace = true
 chrono.workspace = true
 wolfxl-core = { path = "crates/wolfxl-core", version = "0.8" }
 wolfxl-writer = { path = "crates/wolfxl-writer", version = "0.1" }

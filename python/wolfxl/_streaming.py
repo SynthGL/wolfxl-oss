@@ -21,6 +21,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from datetime import date, datetime, time
 import io
+import os
 import posixpath
 import re
 from typing import TYPE_CHECKING, Any
@@ -75,12 +76,46 @@ def _open_source_zip(source: str | bytes) -> zipfile.ZipFile:
     return zipfile.ZipFile(source)
 
 
-def _open_stream_reader(source: str | bytes, sheet_title: str, *bounds: int | None) -> Any:
+def _stream_shared_strings(wb: Any, source: str | bytes) -> Any:
+    """Shared-strings table for ``source``, parsed once per workbook.
+
+    A path source is keyed by its stat identity so a file replaced on disk
+    between sheet reads is re-parsed instead of resolved against stale strings.
+    """
     from wolfxl import _rust
 
+    cached = getattr(wb, "_stream_shared_strings", None)
+    if isinstance(source, bytes):
+        # Immutable bytes owned by the workbook: identity is the cache key.
+        if cached is not None and cached[0] is source:
+            return cached[1]
+        key: Any = source
+        table = _rust.StreamingSharedStrings.load_from_bytes(source)
+    elif isinstance(source, bytearray):
+        return _rust.StreamingSharedStrings.load_from_bytes(bytes(source))
+    else:
+        st = os.stat(source)
+        key = (source, st.st_ino, st.st_size, st.st_mtime_ns)
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        table = _rust.StreamingSharedStrings.load(source)
+    wb._stream_shared_strings = (key, table)
+    return table
+
+
+def _open_stream_reader(
+    wb: Any, source: str | bytes, sheet_title: str, *bounds: int | None
+) -> Any:
+    from wolfxl import _rust
+
+    shared_strings = _stream_shared_strings(wb, source)
     if isinstance(source, (bytes, bytearray)):
-        return _rust.StreamingSheetReader.open_from_bytes(bytes(source), sheet_title, *bounds)
-    return _rust.StreamingSheetReader.open(source, sheet_title, *bounds)
+        return _rust.StreamingSheetReader.open_from_bytes(
+            bytes(source), sheet_title, *bounds, shared_strings=shared_strings
+        )
+    return _rust.StreamingSheetReader.open(
+        source, sheet_title, *bounds, shared_strings=shared_strings
+    )
 
 
 def _local_name(tag: str) -> str:
@@ -641,7 +676,7 @@ def stream_iter_rows(
     stream_mx_c = (
         mx_c if mx_c is not None else (default_bounds[3] if default_bounds is not None else None)
     )
-    reader = _open_stream_reader(path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
+    reader = _open_stream_reader(wb, path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
 
     def _fixed_cmax() -> int | None:
         if mx_c is not None:
@@ -785,21 +820,7 @@ def stream_value_chunks(
     stream_mx_c = (
         mx_c if mx_c is not None else (default_bounds[3] if default_bounds is not None else None)
     )
-    direct_chunks = _direct_plain_value_chunks(
-        wb,
-        ws.title,
-        chunk_size,
-        mn_r,
-        stream_mx_r,
-        mn_c,
-        stream_mx_c,
-        explicit_max_row=mx_r is not None,
-    )
-    if direct_chunks is not None:
-        yield from direct_chunks
-        return
-
-    reader = _open_stream_reader(path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
+    reader = _open_stream_reader(wb, path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
     try:
         _configure_value_reader(reader, wb)
         counter = mn_r if mn_r is not None else 1
@@ -853,57 +874,6 @@ def stream_value_chunks(
             yield tuple(pending)
     finally:
         reader.close()
-
-
-def _direct_plain_value_chunks(
-    wb: Any,
-    sheet: str,
-    chunk_size: int,
-    min_row: int | None,
-    max_row: int | None,
-    min_col: int | None,
-    max_col: int | None,
-    *,
-    explicit_max_row: bool,
-) -> Iterator[tuple[tuple[Any, ...], ...]] | None:
-    """Use the value-only Rust parser for bounded plain read chunks.
-
-    This is deliberately limited to data-only, style-date-free, small/medium
-    scans. Larger or style-sensitive sheets keep the streaming path so
-    ``read_only=True`` remains memory-friendly for huge workbooks.
-
-    The native reader pads every row up to ``max_row`` and to a common width,
-    and returns ``None`` when the row padding could differ from the streaming
-    path: a sheet with no value cells, or a ``max_row`` from the declared
-    ``<dimension>`` (not the caller) that the last value row does not reach.
-    The streaming path then applies openpyxl's trailing-row rule (see
-    ``_pad_trailing_rows``). Without a column bound (no ``max_col`` and no
-    declared dimension), rows keep their own lengths, so the native reader is
-    not used.
-    """
-    if not bool(getattr(wb, "_data_only", False)):
-        return None
-    if getattr(wb, "_date_formats", ()):
-        return None
-    if max_row is None or max_row > AUTO_STREAM_ROW_THRESHOLD:
-        return None
-    if max_col is None:
-        return None
-    reader = getattr(wb, "_rust_reader", None)
-    read_chunks = getattr(reader, "read_sheet_value_chunks_plain", None)
-    if read_chunks is None:
-        return None
-
-    chunks = read_chunks(
-        sheet,
-        chunk_size,
-        min_row,
-        max_row,
-        min_col,
-        max_col,
-        implicit_max_row=not explicit_max_row,
-    )
-    return None if chunks is None else iter(chunks)
 
 
 def should_auto_stream(ws: Worksheet) -> bool:
