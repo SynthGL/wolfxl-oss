@@ -256,6 +256,9 @@ class ReadOnlyWorksheet:
 
     def _cell_value(self, cell_el: Any, style_id: int = 0) -> tuple[Any, str]:
         cell_type = cell_el.get("t", "n")
+        if cell_type == "inlineStr" and cell_el.find("main:is", _NS) is None:
+            # openpyxl keeps ``inlineStr`` for a cell without an ``<is>`` child.
+            return None, "inlineStr"
         value_el = cell_el.find("main:v", _NS)
         if value_el is None:
             inline = cell_el.find("main:is/main:t", _NS)

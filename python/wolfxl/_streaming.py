@@ -367,9 +367,9 @@ class StreamingCell:
             and cell_type == "formula"
             and isinstance(value, dict)
             and value.get("cached") is None
-            and value.get("cached_type") == "str"
+            and value.get("cached_type") in ("str", "inlineStr")
         ):
-            cell_type = "str"
+            cell_type = value["cached_type"]
         object.__setattr__(self, "_value", _streaming_value(value, data_only=data_only))
         object.__setattr__(self, "_style_id", style_id)
         object.__setattr__(self, "_cell_type", cell_type)
@@ -442,7 +442,7 @@ class StreamingCell:
             "n": "n",
             "s": "s",
             "str": "str" if self._value is None else "s",
-            "inlineStr": "s",
+            "inlineStr": "inlineStr" if self._value is None else "s",
             "b": "b",
             "e": "e",
             "d": "d",

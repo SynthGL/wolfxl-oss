@@ -92,6 +92,8 @@ pub(crate) fn native_data_type(
         CellDataType::Bool => "boolean",
         CellDataType::Error => "error",
         CellDataType::FormulaString if matches!(cell.value, CellValue::Empty) => "str",
+        // openpyxl keeps `inlineStr` when the cell has no `<is>` child.
+        CellDataType::InlineString if matches!(cell.value, CellValue::Empty) => "inlineStr",
         CellDataType::DateIso
         | CellDataType::InlineString
         | CellDataType::SharedString

@@ -1399,6 +1399,7 @@ class Cell:
         mapping = {
             "string": "s",
             "str": "str",
+            "inlineStr": "inlineStr",
             "number": "n",
             "boolean": "b",
             "datetime": "d",

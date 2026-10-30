@@ -1338,12 +1338,18 @@ fn read_cells_until_row_end(
                 });
             }
             Event::Empty(e) if e.local_name().as_ref() == "c" => {
-                let (col, style_id, _t_attr) = cell_attrs_from_start(&e, &cells)?;
+                let (col, style_id, t_attr) = cell_attrs_from_start(&e, &cells)?;
+                // openpyxl keeps `inlineStr` for a cell without an `<is>` child.
+                let cell_type = if matches!(t_attr, CellTypeAttr::InlineString) {
+                    "inlineStr"
+                } else {
+                    "blank"
+                };
                 cells.push(ParsedCell {
                     col,
                     value: py.None(),
                     style_id,
-                    cell_type: "blank",
+                    cell_type,
                 });
             }
             Event::End(e) if e.local_name().as_ref() == "row" => return Ok(cells),
@@ -2539,11 +2545,16 @@ fn build_cell_object(
         if !matches!(t_attr, CellTypeAttr::Error) {
             let cached = cached_value_to_py(py, t_attr, raw_value, sst)?;
             let payload = build_formula_dict(py, &formula, cached)?;
-            if matches!(t_attr, CellTypeAttr::FormulaString) {
+            let cached_type = match t_attr {
+                CellTypeAttr::FormulaString => Some("str"),
+                CellTypeAttr::InlineString => Some("inlineStr"),
+                _ => None,
+            };
+            if let Some(cached_type) = cached_type {
                 payload
                     .bind(py)
                     .cast::<PyDict>()?
-                    .set_item("cached_type", "str")?;
+                    .set_item("cached_type", cached_type)?;
             }
             return Ok((payload, "formula"));
         }

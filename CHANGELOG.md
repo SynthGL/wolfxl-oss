@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.30 - 2026-10-30
+
+### Fixed
+
+- A `t="inlineStr"` cell without an `<is>` child now reports
+  `data_type == "inlineStr"`, as openpyxl does, instead of `"s"` when the
+  sheet is loaded eagerly or `"n"` when it is streamed or opened with
+  `read_only=True`. This covers self-closing cells, cells with only a `<v>`,
+  and, with `data_only=True`, formula cells. Cells with an `<is>` child still
+  report `"s"`.
+
 ## 2.0.29 - 2026-10-30
 
 ### Fixed
