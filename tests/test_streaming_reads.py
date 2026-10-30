@@ -577,6 +577,36 @@ def test_no_auto_trigger_below_threshold(basic_xlsx: Path) -> None:
     assert should_auto_stream(ws) is False
 
 
+@pytest.mark.parametrize("file_object", [False, True])
+def test_auto_trigger_counts_rows_exactly_without_dimension(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, file_object: bool
+) -> None:
+    # Without <dimension>, rows are counted from the XML. The sheet spans many
+    # inflate reads, so a tag split across two reads must count once: a sheet
+    # of exactly the threshold stays eager.
+    import io
+
+    from wolfxl import _streaming
+
+    rows = 3_000
+    raw = _build_basic(tmp_path / "raw.xlsx", n_rows=rows)
+    path = tmp_path / "no-dimension.xlsx"
+    with zipfile.ZipFile(raw) as src, zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            data = src.read(info.filename)
+            if info.filename == "xl/worksheets/sheet1.xml":
+                data, removed = re.subn(rb"<dimension\b[^>]*/>", b"", data)
+                assert removed == 1 and len(data) > 4 * 65_536
+            dst.writestr(info, data)
+    source = io.BytesIO(path.read_bytes()) if file_object else path
+    ws = wolfxl.load_workbook(source)["Sheet1"]
+
+    monkeypatch.setattr(_streaming, "AUTO_STREAM_ROW_THRESHOLD", rows)
+    assert should_auto_stream(ws) is False
+    monkeypatch.setattr(_streaming, "AUTO_STREAM_ROW_THRESHOLD", rows - 1)
+    assert should_auto_stream(ws) is True
+
+
 # ---------------------------------------------------------------------------
 # 13. read_only=True surfaces the explicit flag on the workbook.
 # ---------------------------------------------------------------------------

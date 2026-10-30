@@ -739,6 +739,29 @@ impl StreamingSheetReader {
         archive_cell_bounds(zip, sheet)
     }
 
+    /// Whether `sheet` in the xlsx at `path` holds more than `limit` `<row>`
+    /// start tags. Stops reading at the first tag past `limit`.
+    #[staticmethod]
+    pub fn row_tags_exceed(path: &str, sheet: &str, limit: usize) -> PyResult<bool> {
+        let file = File::open(path)
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open xlsx: {e}")))?;
+        let zip = ZipArchive::new(file)
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
+        archive_row_tags_exceed(zip, sheet, limit)
+    }
+
+    /// [`Self::row_tags_exceed`] for in-memory xlsx bytes (file-like sources).
+    #[staticmethod]
+    pub fn row_tags_exceed_from_bytes(
+        data: &Bound<'_, PyBytes>,
+        sheet: &str,
+        limit: usize,
+    ) -> PyResult<bool> {
+        let zip = ZipArchive::new(PyBytesCursor::new(data))
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
+        archive_row_tags_exceed(zip, sheet, limit)
+    }
+
     /// Install source-style kinds (0 plain, 1 datetime/time, 2 duration).
     /// Durations use the retained converter to preserve Python timedelta rounding.
     pub fn set_date_styles(
@@ -2047,6 +2070,78 @@ fn archive_cell_bounds<R: Read + Seek>(
     scan_cell_bounds(BufReader::with_capacity(SHEET_ENTRY_BUFFER, entry))
 }
 
+fn archive_row_tags_exceed<R: Read + Seek>(
+    mut zip: ZipArchive<R>,
+    sheet: &str,
+    limit: usize,
+) -> PyResult<bool> {
+    ooxml_util::validate_zip_archive(&mut zip)?;
+    let sheet_path = resolve_sheet_xml_path(&mut zip, sheet)?;
+    let entry = zip.by_name(&sheet_path).map_err(|e| {
+        PyErr::new::<PyIOError, _>(format!("Failed to open sheet part '{sheet_path}': {e}"))
+    })?;
+    row_tags_exceed(entry, limit).map_err(|e| {
+        PyErr::new::<PyIOError, _>(format!("Failed to read sheet part '{sheet_path}': {e}"))
+    })
+}
+
+/// Whether `xml` holds more than `limit` matches of
+/// `<(?:[A-Za-z0-9_]+:)?row(?:\s|>)`, counting each tag once even when it
+/// straddles two reads.
+fn row_tags_exceed<R: Read>(mut xml: R, limit: usize) -> io::Result<bool> {
+    let mut buf = vec![0u8; SHEET_ENTRY_BUFFER * 4];
+    // `buf[..kept]` holds the undecided tail of the previous read.
+    let mut kept = 0usize;
+    let mut count = 0usize;
+    loop {
+        if kept == buf.len() {
+            buf.resize(buf.len() * 2, 0);
+        }
+        let read = xml.read(&mut buf[kept..])?;
+        let eof = read == 0;
+        let end = kept + read;
+        let mut resume = end;
+        for at in memchr::memchr_iter(b'<', &buf[..end]) {
+            match row_tag_at(&buf[at..end]) {
+                Some(true) => {
+                    count += 1;
+                    if count > limit {
+                        return Ok(true);
+                    }
+                }
+                Some(false) => {}
+                // At end of input an unfinished tag cannot match.
+                None if eof => {}
+                None => {
+                    resume = at;
+                    break;
+                }
+            }
+        }
+        if eof {
+            return Ok(false);
+        }
+        buf.copy_within(resume..end, 0);
+        kept = end - resume;
+    }
+}
+
+/// Whether the `<` that starts `s` opens a `row` element, optionally
+/// namespace-prefixed; `None` when `s` ends before that is decided.
+fn row_tag_at(s: &[u8]) -> Option<bool> {
+    let name_end = s[1..]
+        .iter()
+        .position(|b| !(b.is_ascii_alphanumeric() || *b == b'_'))
+        .map(|offset| offset + 1)?;
+    let local = if s[name_end] == b':' && name_end > 1 {
+        name_end + 1
+    } else {
+        1
+    };
+    let tag = s.get(local..local + 4)?;
+    Some(&tag[..3] == b"row" && matches!(tag[3], b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c | b'>'))
+}
+
 /// Largest row and column of any `<c>` (at its reference, else one column
 /// past the previous cell of the row) or `<mergeCell>` range, mirroring where
 /// openpyxl's eager reader places cells. Cell values are never decoded.
@@ -2919,6 +3014,36 @@ mod tests {
         );
         let encoded = br#"<sheetData><row r="1"><c r="A5000&#49;"/></row></sheetData><mergeCells><mergeCell ref="A1:C&#x37;"/></mergeCells>"#;
         assert_eq!(scan_cell_bounds(&encoded[..]).unwrap(), (50001, 3));
+    }
+
+    /// Reads at most `step` bytes per call, so tags straddle reads.
+    struct Trickle<'a> {
+        data: &'a [u8],
+        step: usize,
+    }
+
+    impl Read for Trickle<'_> {
+        fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+            let n = self.step.min(out.len()).min(self.data.len());
+            out[..n].copy_from_slice(&self.data[..n]);
+            self.data = &self.data[n..];
+            Ok(n)
+        }
+    }
+
+    #[test]
+    fn row_tags_counted_once_across_reads() {
+        // Three rows match; `<rows>`, `<rowBreaks`, `<:row>` and a trailing
+        // unfinished `<row` do not.
+        let xml = b"<sheetData><row r=\"1\"/><x:row>\n</x:row><row\t/><rows><rowBreaks/><:row></sheetData><row";
+        for step in [1, 2, 3, 7, xml.len()] {
+            let probe = |limit| row_tags_exceed(Trickle { data: xml, step }, limit).unwrap();
+            assert!(probe(2), "step {step}");
+            assert!(!probe(3), "step {step}");
+        }
+        let many = b"<row>".repeat(50_001);
+        assert!(row_tags_exceed(&many[..], 50_000).unwrap());
+        assert!(!row_tags_exceed(&many[5..], 50_000).unwrap());
     }
 
     /// Value rows as `repr` strings (or the error), read through the row

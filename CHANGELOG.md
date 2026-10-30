@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.0.29 - 2026-10-30
+
+### Fixed
+
+- A worksheet without a `<dimension>` element and with up to 50,000 rows is
+  read eagerly again outside `read_only=True`, as documented. The row count
+  that decides auto-streaming counted some `<row>` tags twice, so sheets just
+  under the threshold were streamed and missed the faster eager parser.
+
+### Performance
+
+- That row count now runs natively and stops at the first row past the
+  threshold. Default-mode `load_workbook()` followed by
+  `iter_rows(values_only=True)` on 50,000-row sheets without a dimension
+  drops from 0.197 s to 0.167 s (mixed types) and from 0.297 s to 0.245 s
+  (dates) in a local interleaved comparison.
+
 ## 2.0.28 - 2026-10-29
 
 ### Performance
