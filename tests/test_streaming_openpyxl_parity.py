@@ -211,3 +211,61 @@ def test_eager_stream_extends_to_merged_range(tmp_path, file_object, values_only
     finally:
         actual.close()
         expected.close()
+
+
+_INLINE_CELLS = (
+    '<c r="A1" t="inlineStr"/>',
+    '<c r="B1" t="inlineStr"><is><t>x</t></is></c>',
+    '<c r="C1" t="inlineStr"><is/></c>',
+    '<c r="D1" t="inlineStr"><v>ignored</v></c>',
+    '<c r="E1" t="inlineStr"><f>1+1</f><v>2</v></c>',
+    '<c r="F1" t="inlineStr"></c>',
+    '<c r="G1" t="inlineStr"><is><r><t>a</t></r><r><t>b</t></r></is></c>',
+)
+
+
+@pytest.fixture
+def inline_string_workbook(tmp_path):
+    book = openpyxl.Workbook()
+    book.active["A2"] = 1
+    original = BytesIO()
+    book.save(original)
+    output = BytesIO()
+    with ZipFile(original) as source, ZipFile(output, "w", ZIP_DEFLATED) as target:
+        for entry in source.infolist():
+            data = source.read(entry.filename)
+            if entry.filename == "xl/worksheets/sheet1.xml":
+                text = data.decode()
+                start = text.index("<sheetData>")
+                end = text.index("</sheetData>") + len("</sheetData>")
+                row = '<row r="1">' + "".join(_INLINE_CELLS) + "</row>"
+                text = text[:start] + f"<sheetData>{row}</sheetData>" + text[end:]
+                data = text.replace('<dimension ref="A2:A2" />', '<dimension ref="A1:G1"/>').encode()
+            target.writestr(entry, data)
+    path = tmp_path / "inline.xlsx"
+    path.write_bytes(output.getvalue())
+    return path
+
+
+@pytest.mark.parametrize("data_only", [False, True])
+@pytest.mark.parametrize(("read_only", "stream"), [(False, False), (False, True), (True, False)])
+def test_inline_string_without_text_keeps_inline_type(
+    inline_string_workbook, monkeypatch, read_only, stream, data_only
+):
+    # openpyxl reports `inlineStr` until an `<is>` child turns the cell into a string.
+    if stream:
+        monkeypatch.setattr(_streaming, "AUTO_STREAM_ROW_THRESHOLD", 0)
+    expected = openpyxl.load_workbook(
+        inline_string_workbook, read_only=read_only, data_only=data_only
+    )
+    actual = wolfxl.load_workbook(inline_string_workbook, read_only=read_only, data_only=data_only)
+    try:
+        reference = [(cell.value, cell.data_type) for cell in next(expected.active.iter_rows())]
+        assert reference[0] == (None, "inlineStr")
+        assert [(cell.value, cell.data_type) for cell in next(actual.active.iter_rows())] == reference
+        if not read_only:
+            indexed = [actual.active.cell(1, column) for column in range(1, len(reference) + 1)]
+            assert [(cell.value, cell.data_type) for cell in indexed] == reference
+    finally:
+        actual.close()
+        expected.close()
