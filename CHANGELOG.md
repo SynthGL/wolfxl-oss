@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.0.31 - 2026-10-30
+
+### Fixed
+
+These fixes apply to streamed sheets, including `read_only=True`:
+
+- A self-closing typed cell such as `<c t="s"/>`, `<c t="str"/>`,
+  `<c t="b"/>`, `<c t="e"/>` or `<c t="d"/>` now keeps its `data_type`, as
+  openpyxl does, instead of reporting `"n"`.
+- An error cell with no code now reads as `None` instead of `"#ERROR!"`.
+- A formula cell whose cached result is an error now reads as its formula
+  when `data_only=False`, instead of as the error code.
+- With `data_only=True`, a formula cell with no cached result keeps its
+  `t=` type, such as `"b"`, `"d"`, `"e"` or `"s"`, instead of `"n"`.
+
 ## 2.0.30 - 2026-10-30
 
 ### Fixed

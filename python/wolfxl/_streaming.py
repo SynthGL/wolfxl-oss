@@ -362,14 +362,14 @@ class StreamingCell:
         object.__setattr__(self, "_row", row)
         object.__setattr__(self, "_col", col)
         data_only = bool(getattr(ws._workbook, "_data_only", False))  # noqa: SLF001
-        if (
-            data_only
-            and cell_type == "formula"
-            and isinstance(value, dict)
-            and value.get("cached") is None
-            and value.get("cached_type") in ("str", "inlineStr")
-        ):
-            cell_type = value["cached_type"]
+        if data_only and cell_type == "formula" and isinstance(value, dict):
+            # Like openpyxl, an empty cache keeps the cell's `t=` type, and an
+            # error cache stays an error.
+            cached_type = value.get("cached_type")
+            if cached_type is not None and (
+                cached_type == "e" or _cached_formula_value(value.get("cached")) is None
+            ):
+                cell_type = cached_type
         object.__setattr__(self, "_value", _streaming_value(value, data_only=data_only))
         object.__setattr__(self, "_style_id", style_id)
         object.__setattr__(self, "_cell_type", cell_type)
