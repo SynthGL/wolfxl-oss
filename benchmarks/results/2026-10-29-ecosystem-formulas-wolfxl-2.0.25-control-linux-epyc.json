@@ -1,0 +1,143 @@
+{
+ "metadata": {
+  "timestamp_utc": "2026-10-30T03:06:25.580089+00:00",
+  "python": "3.13.15",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "machine": "x86_64",
+  "cpu_brand": "AMD EPYC 9655 96-Core Processor",
+  "rounds": 5,
+  "warmup_rounds": 1,
+  "round_budget_seconds": 240,
+  "read_fixture_writer": "openpyxl",
+  "formula_fixture_writer": "XlsxWriter, formulas with cached results",
+  "dataframe_timing": "pandas/polars/duckdb timed from a prebuilt DataFrame; tablib from a prebuilt Dataset",
+  "memory_pass": "one fresh process per engine, single run, peak RSS",
+  "versions": {
+   "wolfxl": "2.0.25",
+   "openpyxl": "3.1.5",
+   "XlsxWriter": "3.2.9",
+   "PyExcelerate": "0.13.0",
+   "pylightxl": "1.61",
+   "pandas": "3.0.5",
+   "polars": "1.43.2",
+   "python-calamine": "0.8.2",
+   "fastexcel": "0.20.2",
+   "pyarrow": "25.0.1",
+   "duckdb": "1.5.5",
+   "tablib": "3.10.0",
+   "pyexcel": "0.7.6",
+   "pyexcel-xlsx": "0.6.1",
+   "xlsx2csv": "0.8.6"
+  },
+  "engine_scope": {
+   "wolfxl": "full read/write",
+   "openpyxl": "full read/write",
+   "openpyxl_wo": "openpyxl write_only mode",
+   "xlsxwriter": "write-only",
+   "xlsxwriter_cm": "XlsxWriter constant_memory mode",
+   "pyexcelerate": "write-only",
+   "pylightxl": "pure-Python read/write",
+   "pandas_openpyxl": "DataFrame I/O, openpyxl engine",
+   "pandas_xlsxwriter": "DataFrame I/O, xlsxwriter engine",
+   "pandas_calamine": "DataFrame read, calamine engine",
+   "polars": "DataFrame I/O, wraps XlsxWriter/fastexcel",
+   "python_calamine": "read-only, Python values",
+   "fastexcel": "read-only, Arrow tables",
+   "duckdb": "SQL engine; DataFrame in, Arrow out",
+   "tablib": "Dataset wrapper, openpyxl backend",
+   "pyexcel": "wrapper, openpyxl backend",
+   "xlsx2csv": "read-only, transcodes to CSV text"
+  },
+  "provenance": {
+   "harness_source_commit": "37c5416a67b6690cfc6c8e7872a69e28b57b310f",
+   "harness_sha256": "249842dcb9839ffc2146c1d9c09b89ccb82143b28e2c44e287558fa0baf274eb",
+   "measured_library_source": "Published PyPI distributions; working-tree library code was not used. Exact compiler flags were not independently verified.",
+   "build_reuse": "Prebuilt published wheels, no local library build.",
+   "wolfxl_wheel": {
+    "filename": "wolfxl-2.0.25-cp313-cp313-manylinux_2_28_x86_64.whl",
+    "sha256": "30813f5e01e992245141af85647e6e5b07cec9b871ef220baad09c899f4bbfa1",
+    "native_matches_wheel": true,
+    "native_sha256": "e4124a0bf1c5bad3bf70c3db1079806e922a436e6a4709cc5a64097287e70a10",
+    "matches_pypi_digest": true
+   },
+   "other_packages": "Same pinned versions as 2026-10-29-ecosystem-formulas-wolfxl-2.0.26-linux-epyc.json, installed in a separate environment on the same VM.",
+   "python_executable_sha256": "bb4d05c1f88e8568985e8704afe1822e82700a54bad9317c05c8eb96d3186701",
+   "fixtures": {
+    "formula-fixture.xlsx": {
+     "sha256": "65a56727909a76d1f4bd010df8c7c2e9b4eaab07061712fc162ff7c82f701424",
+     "bytes": 12395483
+    },
+    "read-fixture.xlsx": {
+     "sha256": "8783bd7796eda37a55f18c4260030d6bbac839b34d7816deb2288ee0b743880a",
+     "bytes": 7458543
+    }
+   },
+   "started_utc": "2026-10-30T03:05:44Z",
+   "finished_utc": "2026-10-30T03:06:25Z",
+   "raw_harness_output_sha256": "dbcfe3959201f35edfc7efdbfd4f661e1ee5764acd29662dba5313f136c8d157",
+   "command": ".control/bin/python benchmarks/benchmark_python_excel_ecosystem.py --case read_values_large,read_formulas_multisheet --engines wolfxl --rounds 5 --round-budget 240 --no-memory --output-dir benchmarks/results --prefix 2026-10-29-ecosystem-formulas-wolfxl-2.0.25-control-linux-epyc",
+   "overall_timeout_seconds": 900,
+   "warmup_rounds": 1,
+   "measured_rounds": 5,
+   "cache_state": "OS page cache not flushed; one discarded warmup per engine/case; sequential engine order, one process. Cold-start latency not measured.",
+   "memory_pass": "Skipped with --no-memory; top-level harness metadata describes the optional default pass, not an executed pass.",
+   "concurrency": "Same dedicated VM, run immediately after 2026-10-29-ecosystem-formulas-wolfxl-2.0.26-linux-epyc; no concurrent benchmark jobs.",
+   "logical_cpus": 16,
+   "thread_environment": {
+    "OMP_NUM_THREADS": null,
+    "POLARS_MAX_THREADS": null,
+    "RAYON_NUM_THREADS": null
+   },
+   "validation": "Every round checks cell count. Formula case also checks sum of column H cached numeric results against 3*n*(n+1)+n; other formula columns and exact Python types are not fully compared.",
+   "formula_shape": {
+    "sheets": 4,
+    "rows_per_sheet": 50000,
+    "columns": 8,
+    "formula_columns": 5,
+    "formula_cells": 1000000,
+    "total_cells": 1600000
+   },
+   "fixture_note": "The harness regenerated both fixtures with the same writers and sizes; bytes differ from the paired run only by document timestamps.",
+   "provenance_added_after_timing": true
+  }
+ },
+ "results": [
+  {
+   "case": "read_values_large",
+   "engine": "wolfxl",
+   "scope": "full read/write",
+   "rows": 200000,
+   "cols": 8,
+   "units": 1600000,
+   "samples_seconds": [
+    0.496536,
+    0.490529,
+    0.481796,
+    0.489364,
+    0.497153
+   ],
+   "median_seconds": 0.490529,
+   "units_per_second": 3261784.94
+  },
+  {
+   "case": "read_formulas_multisheet",
+   "engine": "wolfxl",
+   "scope": "full read/write",
+   "rows": 200000,
+   "cols": 8,
+   "units": 1600000,
+   "sheets": 4,
+   "samples_seconds": [
+    1.421426,
+    1.340974,
+    1.409967,
+    1.421557,
+    1.412597
+   ],
+   "median_seconds": 1.412597,
+   "units_per_second": 1132665.82
+  }
+ ],
+ "memory": [],
+ "comparisons": []
+}
