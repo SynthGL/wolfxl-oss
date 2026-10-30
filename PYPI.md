@@ -15,7 +15,7 @@ WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported 
 ## Install
 
 ```bash
-python -m pip install wolfxl==2.0.34
+python -m pip install wolfxl==2.0.35
 ```
 
 ## When to use WolfXL instead of openpyxl, XlsxWriter, or pandas

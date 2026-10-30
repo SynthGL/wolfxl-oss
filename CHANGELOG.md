@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.0.35 - 2026-10-30
+
+### Changed
+
+- Saving a new workbook that holds a timezone-aware `datetime` or
+  `datetime.time` now raises the same `TypeError` as openpyxl, from `save()`
+  for `append()`, `write_rows()` and cell assignments, and from `append()` on
+  a write-only sheet. Previously these values saved without their timezone.
+  Modified workbooks already raised this error. Unlike openpyxl, WolfXL leaves
+  no partial file behind.
+
+### Fixed
+
+- A new workbook no longer drops a date, datetime, rich text or other
+  non-plain value assigned to a cell when the sheet holds the same number of
+  plain values assigned with `ws["A1"] = ...` or `ws.cell(...)`. For example,
+  `ws["A1"] = 5` followed by `ws["A2"] = date(2024, 1, 2)` saved only `A1`.
+  This affected every release since 2.0.1.
+
 ## 2.0.34 - 2026-10-30
 
 ### Fixed

@@ -185,8 +185,18 @@ def _format_color_to_color(value: Any) -> Color:
     return Color.from_hex(value if isinstance(value, str) else str(value))
 
 
+_TIMEZONE_ERROR = (
+    "Excel does not support timezones in datetimes. "
+    "The tzinfo in the datetime/time object must be set to None."
+)
+
+
 def python_value_to_payload(value: Any) -> dict[str, Any]:
-    """Convert a plain Python value to a Rust cell-value payload dict."""
+    """Convert a plain Python value to a Rust cell-value payload dict.
+
+    Raises ``TypeError`` for timezone-aware ``datetime``/``time`` values,
+    matching openpyxl's save-time rejection.
+    """
     if value is None:
         return {"type": "blank"}
     if isinstance(value, bool):
@@ -194,12 +204,16 @@ def python_value_to_payload(value: Any) -> dict[str, Any]:
     if isinstance(value, (int, float)):
         return {"type": "number", "value": value}
     if isinstance(value, datetime):
+        if value.tzinfo is not None:
+            raise TypeError(_TIMEZONE_ERROR)
         return {"type": "datetime", "value": value.replace(microsecond=0).isoformat()}
     if isinstance(value, date):
         return {"type": "date", "value": value.isoformat()}
     if isinstance(value, timedelta):
         return {"type": "timedelta", "value": value.total_seconds() / 86400}
     if isinstance(value, time):
+        if value.tzinfo is not None:
+            raise TypeError(_TIMEZONE_ERROR)
         return {"type": "time", "value": time_to_days(value)}
     if isinstance(value, str) and value.startswith("="):
         return {"type": "formula", "formula": value, "value": value}

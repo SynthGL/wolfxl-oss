@@ -1,9 +1,10 @@
 """Durations and times of day write as openpyxl writes them: a serial day count
-under ``[hh]:mm:ss`` or ``h:mm:ss``."""
+under ``[hh]:mm:ss`` or ``h:mm:ss``. Timezone-aware values are rejected, as in
+openpyxl."""
 
 from __future__ import annotations
 
-from datetime import time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 
 import openpyxl
@@ -14,6 +15,13 @@ import wolfxl
 VALUES = [
     pytest.param(timedelta(hours=27, minutes=30), "[hh]:mm:ss", id="timedelta"),
     pytest.param(time(10, 30, 15, 250000), "h:mm:ss", id="time"),
+]
+
+_TZ = timezone(timedelta(hours=5))
+AWARE_VALUES = [
+    pytest.param(datetime(2024, 1, 15, 10, 30, tzinfo=_TZ), id="datetime"),
+    pytest.param(datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc), id="utc-datetime"),
+    pytest.param(time(10, 30, tzinfo=_TZ), id="time"),
 ]
 
 
@@ -76,6 +84,29 @@ def test_modified_workbooks_write_time_values(tmp_path: Path, value, number_form
     book.close()
 
     assert _written(tmp_path / "modified.xlsx") == (value, "d", number_format)
+
+
+def _assign_beside_plain(book, value):
+    book.active["B1"] = 2
+    book.active["A1"] = value
+
+
+@pytest.mark.parametrize("value", AWARE_VALUES)
+@pytest.mark.parametrize("write", [_append, _assign, _assign_beside_plain, _write_rows])
+def test_timezone_aware_values_fail_on_save(tmp_path: Path, write, value) -> None:
+    book = wolfxl.Workbook()
+    write(book, value)
+
+    with pytest.raises(TypeError, match="Excel does not support timezones"):
+        book.save(tmp_path / "aware.xlsx")
+
+
+@pytest.mark.parametrize("value", AWARE_VALUES)
+def test_write_only_timezone_aware_values_fail_on_append(value) -> None:
+    sheet = wolfxl.Workbook(write_only=True).create_sheet()
+
+    with pytest.raises(TypeError, match="Excel does not support timezones"):
+        sheet.append([value])
 
 
 def test_copied_duration_rows_stay_durations(tmp_path: Path) -> None:
