@@ -1,5 +1,6 @@
 """Community cell metadata parity on the native streaming path."""
 
+import datetime
 from io import BytesIO
 from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -224,10 +225,15 @@ _INLINE_CELLS = (
 )
 
 
-def _one_row_workbook(path, cells):
-    """Save a workbook whose sheet holds exactly ``cells`` in row 1."""
+def _one_row_workbook(path, cells, number_format=None):
+    """Save a workbook whose sheet holds exactly ``cells`` in row 1.
+
+    ``number_format``, when given, is the format of cell style 1.
+    """
     book = openpyxl.Workbook()
     book.active["A2"] = 1
+    if number_format is not None:
+        book.active["A2"].number_format = number_format
     original = BytesIO()
     book.save(original)
     output = BytesIO()
@@ -324,3 +330,75 @@ def test_valueless_cells_keep_their_type(
     finally:
         actual.close()
         expected.close()
+
+
+_ISO_DATE_CELLS = (
+    '<c r="A1" t="d"><v>2024-01-15</v></c>',
+    '<c r="B1" t="d"><v>2024-01-15T10:30:00</v></c>',
+    '<c r="C1" t="d"><v>2024-01-15T10:30:00.123456Z</v></c>',
+    '<c r="D1" t="d"><v>2024-01-15T10:30:00+05:00</v></c>',
+    '<c r="E1" t="d"><v>10:30</v></c>',
+    '<c r="F1" t="d"><v>T10:30:15.5</v></c>',
+    '<c r="G1" t="d"><v>PT1H30M2.25S</v></c>',
+    '<c r="H1" t="d" s="1"><v>2024-01-15T10:30:00</v></c>',
+    '<c r="I1" t="d" s="1"><v>PT36H</v></c>',
+    '<c r="J1" t="d"><f>NOW()</f><v>2024-01-15T10:30:00</v></c>',
+    '<c r="K1" s="1"><v>1.25</v></c>',
+    '<c r="L1" s="1"><f>A2</f><v>0.5</v></c>',
+)
+
+
+@pytest.mark.parametrize("data_only", [False, True])
+@pytest.mark.parametrize("values_only", [False, True])
+@pytest.mark.parametrize(("read_only", "stream"), [(False, False), (False, True), (True, False)])
+def test_date_cells_read_as_openpyxl_does(
+    tmp_path, monkeypatch, read_only, stream, values_only, data_only
+):
+    # openpyxl reads `t="d"` text with `from_ISO8601` whatever the cell's
+    # number format, and a serial under a duration format as a timedelta.
+    path = _one_row_workbook(tmp_path / "dates.xlsx", _ISO_DATE_CELLS, "[h]:mm:ss")
+    if stream:
+        monkeypatch.setattr(_streaming, "AUTO_STREAM_ROW_THRESHOLD", 0)
+    expected = openpyxl.load_workbook(path, read_only=read_only, data_only=data_only)
+    actual = wolfxl.load_workbook(path, read_only=read_only, data_only=data_only)
+
+    def typed(value):
+        return type(value).__name__, value
+
+    def first_row(book):
+        row = next(book.active.iter_rows(values_only=values_only))
+        if values_only:
+            return [typed(value) for value in row]
+        return [(typed(cell.value), cell.data_type) for cell in row]
+
+    try:
+        reference = first_row(expected)
+        assert reference[0] == (
+            typed(datetime.date(2024, 1, 15)) if values_only else (typed(datetime.date(2024, 1, 15)), "d")
+        )
+        assert first_row(actual) == reference
+        if not read_only and not values_only:
+            indexed = [actual.active.cell(1, column) for column in range(1, len(reference) + 1)]
+            assert [(typed(cell.value), cell.data_type) for cell in indexed] == reference
+    finally:
+        actual.close()
+        expected.close()
+
+
+@pytest.mark.parametrize("number_format", ["yyyy-mm-dd", "[h]:mm:ss"])
+@pytest.mark.parametrize(("read_only", "stream"), [(False, False), (False, True), (True, False)])
+def test_serials_outside_the_date_range_stay_numbers(
+    tmp_path, monkeypatch, read_only, stream, number_format
+):
+    path = _one_row_workbook(
+        tmp_path / "huge.xlsx", ('<c r="A1" s="1"><v>1000000000000</v></c>',), number_format
+    )
+    if stream:
+        monkeypatch.setattr(_streaming, "AUTO_STREAM_ROW_THRESHOLD", 0)
+    book = wolfxl.load_workbook(path, read_only=read_only)
+    try:
+        assert next(book.active.iter_rows(values_only=True)) == (1000000000000,)
+        cell = next(book.active.iter_rows())[0]
+        assert (cell.value, cell.data_type) == (1000000000000, "n")
+    finally:
+        book.close()

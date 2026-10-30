@@ -61,7 +61,7 @@ def test_bounded_records_return_values_and_source_style_ids_without_cells(tmp_pa
             records.extend(batch)
         by_position = {(record["row"], record["column"]): record for record in records}
         assert by_position[1, 1]["value"] == datetime(2026, 10, 8, 7, 30, 15)
-        assert isinstance(by_position[2, 1]["value"], datetime)  # Native elapsed representation.
+        assert by_position[2, 1]["value"] == timedelta(hours=27)
         assert by_position[2, 1]["number_format"] == "[hh]:mm:ss"
         assert by_position[3, 1]["value"] == 3.25
         assert by_position[3, 1]["style_id"] > 0

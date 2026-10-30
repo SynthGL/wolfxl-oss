@@ -4,6 +4,7 @@ use pyo3::types::{PyBytes, PyDict, PyList};
 type PyObject = Py<PyAny>;
 
 mod atomic_save;
+mod iso8601;
 mod native_reader_backend;
 mod native_reader_cell_helpers;
 mod native_reader_cf;

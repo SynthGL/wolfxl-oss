@@ -37,10 +37,8 @@ from wolfxl._utils import column_letter as _column_letter
 from wolfxl._utils import rowcol_to_a1
 from wolfxl._worksheet_rich_text import runs_payload_to_cellrichtext
 from wolfxl.utils.cell import column_index_from_string, range_boundaries
-from wolfxl.utils.datetime import from_excel, to_excel
 from wolfxl.utils.exceptions import IllegalCharacterError
 from wolfxl.utils.numbers import is_date_format
-from wolfxl.styles.numbers import is_timedelta_format
 
 if TYPE_CHECKING:
     from wolfxl._worksheet import Worksheet
@@ -795,17 +793,6 @@ class Cell:
                 rt = self.rich_text
                 if rt is not None:
                     return rt
-        wb_format = getattr(self._rust_workbook(), "_format", "xlsx")
-        if (
-            wb_format == "xlsx"
-            and isinstance(self._value, _dt.datetime)
-            and is_timedelta_format(self.number_format)
-        ):
-            epoch = self.base_date
-            serial = to_excel(self._value, epoch) if epoch is not None else to_excel(self._value)
-            if epoch is not None:
-                return from_excel(serial, epoch, timedelta=True)
-            return from_excel(serial, timedelta=True)
         return self._value
 
     @value.setter

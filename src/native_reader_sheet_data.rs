@@ -11,7 +11,7 @@ use pyo3::types::{PyDict, PyList, PyTuple};
 
 use crate::native_reader_backend::{NativeXlsbBook, NativeXlsxBook};
 use crate::native_reader_cell_helpers::{
-    cell_to_dict, cell_to_plain, cell_to_plain_unstyled_data_only, formula_to_py,
+    cell_to_dict, cell_to_plain, cell_to_plain_unstyled_data_only, formula_to_py, SerialDates,
 };
 use crate::native_reader_dimensions::{parse_range_1based, update_bounds};
 use crate::native_reader_traits::NativeStyleResolver;
@@ -45,7 +45,13 @@ pub(crate) fn read_cell_value_xlsx(
         return cell_blank(py);
     };
     let number_format = book.number_format_for_cell(&cell);
-    cell_to_dict(py, &cell, data_only, number_format, book.book.date1904())
+    cell_to_dict(
+        py,
+        &cell,
+        data_only,
+        number_format,
+        book.book.serial_dates(),
+    )
 }
 
 pub(crate) fn read_cell_value_xlsb(
@@ -72,7 +78,13 @@ pub(crate) fn read_cell_value_xlsb(
         return cell_blank(py);
     };
     let number_format = book.number_format_for_cell(&cell);
-    cell_to_dict(py, &cell, data_only, number_format, book.book.date1904())
+    cell_to_dict(
+        py,
+        &cell,
+        data_only,
+        number_format,
+        book.book.serial_dates(),
+    )
 }
 
 // ---------- Sheet values (dict / plain) ----------
@@ -98,7 +110,7 @@ pub(crate) fn read_sheet_values_xlsx(
     })?;
     let native_book = &book.book;
     let outer = PyList::empty(py);
-    let date1904 = native_book.date1904();
+    let dates = native_book.serial_dates();
     for row in min_row..=max_row {
         let inner = PyList::empty(py);
         for col in min_col..=max_col {
@@ -106,7 +118,7 @@ pub(crate) fn read_sheet_values_xlsx(
                 let number_format = cell
                     .style_id
                     .and_then(|style_id| native_book.number_format_for_style_id(style_id));
-                inner.append(cell_to_dict(py, cell, data_only, number_format, date1904)?)?;
+                inner.append(cell_to_dict(py, cell, data_only, number_format, dates)?)?;
             } else {
                 inner.append(cell_blank(py)?)?;
             }
@@ -136,7 +148,7 @@ pub(crate) fn read_sheet_values_xlsb(
         PyErr::new::<PyValueError, _>(format!("Missing sheet cache for sheet: {sheet}"))
     })?;
     let native_book = &book.book;
-    let date1904 = native_book.date1904();
+    let dates = native_book.serial_dates();
     let outer = PyList::empty(py);
     for row in min_row..=max_row {
         let inner = PyList::empty(py);
@@ -147,7 +159,7 @@ pub(crate) fn read_sheet_values_xlsb(
                     let number_format = cell
                         .style_id
                         .and_then(|style_id| native_book.number_format_for_style_id(style_id));
-                    inner.append(cell_to_dict(py, cell, data_only, number_format, date1904)?)?;
+                    inner.append(cell_to_dict(py, cell, data_only, number_format, dates)?)?;
                 }
                 None => inner.append(cell_blank(py)?)?,
             }
@@ -181,7 +193,7 @@ pub(crate) fn read_sheet_values_plain_xlsx(
         PyErr::new::<PyValueError, _>(format!("Missing sheet cache for sheet: {sheet}"))
     })?;
     let native_book = &book.book;
-    let date1904 = native_book.date1904();
+    let dates = native_book.serial_dates();
     let outer = PyList::empty(py);
     for row in min_row..=max_row {
         let mut inner: Vec<PyObject> = Vec::with_capacity((max_col - min_col + 1) as usize);
@@ -190,7 +202,7 @@ pub(crate) fn read_sheet_values_plain_xlsx(
                 let number_format = cell
                     .style_id
                     .and_then(|style_id| native_book.number_format_for_style_id(style_id));
-                inner.push(cell_to_plain(py, cell, data_only, number_format, date1904)?);
+                inner.push(cell_to_plain(py, cell, data_only, number_format, dates)?);
             } else {
                 inner.push(py.None());
             }
@@ -220,7 +232,7 @@ fn read_sheet_values_plain_full_xlsx(
     let row_count = (max_row - min_row + 1) as usize;
     let col_count = (max_col - min_col + 1) as usize;
     let native_book = &book.book;
-    let date1904 = native_book.date1904();
+    let dates = native_book.serial_dates();
     if analysis.dense_a1 {
         if analysis.unstyled {
             if data_only {
@@ -228,15 +240,7 @@ fn read_sheet_values_plain_full_xlsx(
             }
             return read_dense_a1_unstyled_plain_values(py, data, max_row, max_col, data_only);
         }
-        return read_dense_a1_plain_values(
-            py,
-            data,
-            native_book,
-            max_row,
-            max_col,
-            data_only,
-            date1904,
-        );
+        return read_dense_a1_plain_values(py, data, native_book, max_row, max_col, data_only);
     }
 
     let mut grid: Vec<Vec<PyObject>> = (0..row_count)
@@ -251,7 +255,7 @@ fn read_sheet_values_plain_full_xlsx(
             .style_id
             .and_then(|style_id| native_book.number_format_for_style_id(style_id));
         grid[(cell.row - min_row) as usize][(cell.col - min_col) as usize] =
-            cell_to_plain(py, cell, data_only, number_format, date1904)?;
+            cell_to_plain(py, cell, data_only, number_format, dates)?;
     }
 
     let outer = PyList::empty(py);
@@ -377,7 +381,13 @@ fn read_dense_a1_unstyled_plain_values(
         let end = start + col_count;
         let mut inner: Vec<PyObject> = Vec::with_capacity(col_count);
         for cell in &data.cells[start..end] {
-            inner.push(cell_to_plain(py, cell, data_only, None, false)?);
+            inner.push(cell_to_plain(
+                py,
+                cell,
+                data_only,
+                None,
+                SerialDates::default(),
+            )?);
         }
         outer.append(PyTuple::new(py, inner)?)?;
     }
@@ -391,8 +401,8 @@ fn read_dense_a1_plain_values<B: NativeStyleResolver>(
     max_row: u32,
     max_col: u32,
     data_only: bool,
-    date1904: bool,
 ) -> PyResult<PyObject> {
+    let dates = native_book.serial_dates();
     let row_count = max_row as usize;
     let col_count = max_col as usize;
     let outer = PyList::empty(py);
@@ -405,7 +415,7 @@ fn read_dense_a1_plain_values<B: NativeStyleResolver>(
             let number_format = cell
                 .style_id
                 .and_then(|style_id| native_book.number_format_for_style_id(style_id));
-            inner.push(cell_to_plain(py, cell, data_only, number_format, date1904)?);
+            inner.push(cell_to_plain(py, cell, data_only, number_format, dates)?);
         }
         outer.append(PyTuple::new(py, inner)?)?;
     }
@@ -432,7 +442,7 @@ pub(crate) fn read_sheet_values_plain_xlsb(
         PyErr::new::<PyValueError, _>(format!("Missing sheet cache for sheet: {sheet}"))
     })?;
     let native_book = &book.book;
-    let date1904 = native_book.date1904();
+    let dates = native_book.serial_dates();
     let outer = PyList::empty(py);
     for row in min_row..=max_row {
         let mut inner: Vec<PyObject> = Vec::with_capacity((max_col - min_col + 1) as usize);
@@ -443,7 +453,7 @@ pub(crate) fn read_sheet_values_plain_xlsb(
                     let number_format = cell
                         .style_id
                         .and_then(|style_id| native_book.number_format_for_style_id(style_id));
-                    inner.push(cell_to_plain(py, cell, data_only, number_format, date1904)?);
+                    inner.push(cell_to_plain(py, cell, data_only, number_format, dates)?);
                 }
                 None => inner.push(py.None()),
             }
@@ -515,14 +525,14 @@ pub(crate) fn read_cached_formula_values_xlsx(
     sheet: &str,
 ) -> PyResult<PyObject> {
     let cells = book.ensure_sheet(sheet)?.cells.clone();
-    let date1904 = book.book.date1904();
+    let dates = book.book.serial_dates();
     let out = PyDict::new(py);
     for cell in &cells {
         if cell.formula.is_some() {
             let number_format = book.number_format_for_cell(cell);
             out.set_item(
                 &cell.coordinate,
-                cell_to_plain(py, cell, true, number_format, date1904)?,
+                cell_to_plain(py, cell, true, number_format, dates)?,
             )?;
         }
     }
@@ -535,14 +545,14 @@ pub(crate) fn read_cached_formula_values_xlsb(
     sheet: &str,
 ) -> PyResult<PyObject> {
     let cells = book.ensure_sheet(sheet)?.cells.clone();
-    let date1904 = book.book.date1904();
+    let dates = book.book.serial_dates();
     let out = PyDict::new(py);
     for cell in &cells {
         if cell.formula.is_some() {
             let number_format = book.number_format_for_cell(cell);
             out.set_item(
                 &cell.coordinate,
-                cell_to_plain(py, cell, true, number_format, date1904)?,
+                cell_to_plain(py, cell, true, number_format, dates)?,
             )?;
         }
     }

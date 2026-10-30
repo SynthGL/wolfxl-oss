@@ -3,7 +3,7 @@
 //! Community NativeXlsBook/WorksheetData interfaces and legacy Python contract.
 //! No Commercial reader, binding, BIFF or CFB implementation is used here.
 
-use crate::native_reader_cell_helpers::{cell_to_dict, cell_to_plain};
+use crate::native_reader_cell_helpers::{cell_to_dict, cell_to_plain, SerialDates};
 use crate::native_reader_dimensions::{parse_range_1based, update_bounds};
 use crate::util::{a1_to_row_col, cell_blank};
 use pyo3::exceptions::{PyIOError, PyNotImplementedError, PyValueError};
@@ -75,8 +75,15 @@ impl NativeXlsBook {
                 let format = cell
                     .style_id
                     .and_then(|id| self.reader.number_format_for_style_id(id));
-                cell_to_dict(py, cell, data_only, format, self.reader.date1904())
+                cell_to_dict(py, cell, data_only, format, self.serial_dates())
             }
+        }
+    }
+
+    fn serial_dates(&self) -> SerialDates {
+        SerialDates {
+            date1904: self.reader.date1904(),
+            durations: false,
         }
     }
 }
@@ -199,7 +206,7 @@ impl NativeXlsBook {
                     .and_then(|id| self.reader.number_format_for_style_id(id));
                 out.set_item(
                     &cell.coordinate,
-                    cell_to_plain(py, cell, true, format, self.reader.date1904())?,
+                    cell_to_plain(py, cell, true, format, self.serial_dates())?,
                 )?;
             }
         }
