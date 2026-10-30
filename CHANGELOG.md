@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.0.28 - 2026-10-29
+
+### Performance
+
+- Loading a workbook without `read_only=True` parses each worksheet faster:
+  sheets with no `<autoFilter>` skip a second XML pass, cell attributes are
+  read in one pass, worksheet events borrow the in-memory XML instead of
+  copying it, and the cell list is sized once from a byte count of `<c>` tags.
+  Default-mode `load_workbook()` followed by `iter_rows(values_only=True)`
+  over every sheet drops from 1.11 s to 0.69 s on the 4-sheet,
+  200,000-row formula workbook and from 0.20 s to 0.13 s on a 50,000-row,
+  8-column plain sheet.
+
 ## 2.0.27 - 2026-10-29
 
 ### Performance
