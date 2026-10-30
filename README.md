@@ -171,7 +171,7 @@ Step-by-step guide: [openpyxl migration](https://wolfxl.com/openpyxl-migration).
 Install the current Community release:
 
 ```bash
-python -m pip install wolfxl==2.0.27
+python -m pip install wolfxl==2.0.28
 ```
 
 WolfXL Community supports Python 3.9 and newer CPython versions for which a

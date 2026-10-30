@@ -74,7 +74,7 @@ fn xml_event_text<'a>(
 }
 
 fn normalize_xml_line_ends(text: &str) -> std::borrow::Cow<'_, str> {
-    if text.contains('\r') {
+    if memchr::memchr(b'\r', text.as_bytes()).is_some() {
         std::borrow::Cow::Owned(text.replace("\r\n", "\n").replace('\r', "\n"))
     } else {
         std::borrow::Cow::Borrowed(text)
@@ -3140,6 +3140,19 @@ fn builtin_num_fmt(format_id: u32) -> Option<&'static str> {
     }
 }
 
+/// Count unprefixed `<c>` start tags: the cell count of a typical worksheet,
+/// used to size the cell vector once instead of regrowing it.
+fn count_cell_starts(xml: &[u8]) -> usize {
+    memchr::memmem::find_iter(xml, b"<c")
+        .filter(|&at| {
+            matches!(
+                xml.get(at + 2),
+                Some(b' ' | b'>' | b'/' | b'\t' | b'\r' | b'\n')
+            )
+        })
+        .count()
+}
+
 fn parse_worksheet(
     xml: &str,
     shared_strings: &SharedStrings,
@@ -3148,7 +3161,6 @@ fn parse_worksheet(
     tables: Vec<Table>,
 ) -> Result<WorksheetData> {
     let mut reader = XmlReader::from_str(xml);
-    let mut buf = Vec::new();
     let mut dimension = None;
     let mut merged_ranges = Vec::new();
     let mut hyperlink_nodes = Vec::new();
@@ -3185,10 +3197,12 @@ fn parse_worksheet(
     let mut header_footer_text = String::new();
     let mut inline_text = String::new();
     let mut active_breaks: Option<BreakListKind> = None;
-    let mut cells = Vec::new();
+    let mut cells = Vec::with_capacity(count_cell_starts(xml.as_bytes()));
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        // The sheet text is in memory: borrow events from it instead of
+        // copying each one into a scratch buffer.
+        match reader.read_event() {
             Ok(Event::Start(e)) => match e.local_name().as_ref().as_bytes() {
                 b"sheetPr" => {
                     sheet_properties = Some(SheetPropertiesInfo::from_start(&e));
@@ -3664,7 +3678,6 @@ fn parse_worksheet(
                 }
             }
         }
-        buf.clear();
     }
 
     let mut hidden_rows: Vec<u32> = hidden_rows
@@ -4355,6 +4368,11 @@ fn parse_range_bounds_1based(range: &str) -> Option<(u32, u32, u32, u32)> {
 }
 
 fn parse_auto_filter(xml: &str) -> Result<Option<AutoFilterInfo>> {
+    // Both callers parse the same text with the same reader, so skipping a
+    // part that never names the element cannot hide an XML error.
+    if memchr::memmem::find(xml.as_bytes(), b"autoFilter").is_none() {
+        return Ok(None);
+    }
     let mut reader = XmlReader::from_str(xml);
     let mut buf = Vec::new();
     let mut auto_filter: Option<AutoFilterInfo> = None;
@@ -6838,22 +6856,36 @@ impl ValueCellBuilder {
 
 impl CellBuilder {
     fn from_start(e: &BytesStart<'_>, refs: &mut SheetRefCursor) -> Self {
-        let coordinate = attr_value(e, b"r");
+        // One attribute pass; the first occurrence of each key wins, as in
+        // `attr_value`.
+        let mut coordinate: Option<String> = None;
+        let mut data_type: Option<CellDataType> = None;
+        let mut style_id: Option<Option<u32>> = None;
+        for a in e.attributes().with_checks(false).flatten() {
+            match a.key.as_ref().as_bytes() {
+                b"r" if coordinate.is_none() => coordinate = Some(attr_text(&a).into_owned()),
+                b"t" if data_type.is_none() => {
+                    data_type = Some(match attr_text(&a).as_ref() {
+                        "s" => CellDataType::SharedString,
+                        "inlineStr" => CellDataType::InlineString,
+                        "str" => CellDataType::FormulaString,
+                        "b" => CellDataType::Bool,
+                        "e" => CellDataType::Error,
+                        "d" => CellDataType::DateIso,
+                        _ => CellDataType::Number,
+                    });
+                }
+                b"s" if style_id.is_none() => style_id = Some(attr_text(&a).parse::<u32>().ok()),
+                _ => {}
+            }
+        }
         let explicit = coordinate.as_deref().and_then(a1_to_row_col);
         let (row, col) = refs.cell(explicit);
         let coordinate = coordinate
             .filter(|_| explicit.is_some())
             .unwrap_or_else(|| row_col_to_a1(row, col));
-        let data_type = match attr_value(e, b"t").as_deref() {
-            Some("s") => CellDataType::SharedString,
-            Some("inlineStr") => CellDataType::InlineString,
-            Some("str") => CellDataType::FormulaString,
-            Some("b") => CellDataType::Bool,
-            Some("e") => CellDataType::Error,
-            Some("d") => CellDataType::DateIso,
-            _ => CellDataType::Number,
-        };
-        let style_id = attr_value(e, b"s").and_then(|v| v.parse::<u32>().ok());
+        let data_type = data_type.unwrap_or(CellDataType::Number);
+        let style_id = style_id.flatten();
         Self {
             row,
             col,
@@ -7251,13 +7283,16 @@ fn resolve_zip_part_name<R: Read + std::io::Seek>(
 fn attr_value(e: &BytesStart<'_>, key: &[u8]) -> Option<String> {
     for a in e.attributes().with_checks(false).flatten() {
         if a.key.as_ref().as_bytes() == key {
-            if let Ok(v) = quick_xml::escape::unescape(&a.value) {
-                return Some(v.into_owned());
-            }
-            return Some(a.value.into_owned());
+            return Some(attr_text(&a).into_owned());
         }
     }
     None
+}
+
+/// An attribute value with entities resolved, or the raw value when it holds
+/// an unknown entity.
+fn attr_text<'a>(a: &'a Attribute<'_>) -> std::borrow::Cow<'a, str> {
+    quick_xml::escape::unescape(&a.value).unwrap_or(std::borrow::Cow::Borrowed(&a.value))
 }
 
 fn relationship_id_attr(e: &BytesStart<'_>) -> Option<String> {
