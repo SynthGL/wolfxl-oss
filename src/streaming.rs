@@ -28,7 +28,7 @@ use flate2::read::DeflateDecoder;
 use pyo3::exceptions::{PyIOError, PyMemoryError, PyStopIteration, PyValueError};
 use pyo3::ffi;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDateTime, PyDict, PyFloat, PyInt, PyList, PyTime, PyTuple};
+use pyo3::types::{PyBytes, PyDateTime, PyDict, PyFloat, PyInt, PyList, PyString, PyTime, PyTuple};
 use pyo3::IntoPyObjectExt;
 
 use quick_xml::events::{BytesStart, Event};
@@ -254,6 +254,19 @@ pub struct StreamingSheetReader {
     last_row: u32,
     /// Date conversion configured once per values-only streaming pass.
     date_styles: DateStyles,
+    /// What values-only rows return for formula cells.
+    value_output: CellOutput,
+}
+
+/// How `read_cell_contents` reports formula and error cells.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CellOutput {
+    /// `{"type": "formula"|"error", ...}` payloads for `StreamingCell`.
+    Payload,
+    /// Values-only rows with `data_only=False`: the `=`-prefixed formula text.
+    FormulaText,
+    /// Values-only rows with `data_only=True`: the cached result.
+    CachedValue,
 }
 
 #[derive(Default)]
@@ -295,23 +308,10 @@ impl DateStyles {
         numeric: bool,
     ) -> PyResult<PyObjectOwned> {
         let kind = self.kind(style_id);
-        if kind == 0 || !numeric {
+        if kind == 0 || !numeric || cell_type != "n" {
             return Ok(value);
         }
-        if cell_type == "formula" {
-            let formula = value.bind(py).cast::<PyDict>()?;
-            let key = str_to_py(py, "cached")?;
-            if let Some(cached) = formula.get_item(&key)? {
-                let converted = self.convert(py, kind, cached.unbind())?;
-                formula.set_item(key, converted)?;
-            }
-            return Ok(value);
-        }
-        if cell_type == "n" {
-            self.convert(py, kind, value)
-        } else {
-            Ok(value)
-        }
+        self.convert(py, kind, value)
     }
 }
 
@@ -672,6 +672,16 @@ impl StreamingSheetReader {
         };
     }
 
+    /// Choose what values-only rows return for formula cells: the cached
+    /// result (`data_only=True`) or the formula text.
+    pub fn set_data_only(&mut self, data_only: bool) {
+        self.value_output = if data_only {
+            CellOutput::CachedValue
+        } else {
+            CellOutput::FormulaText
+        };
+    }
+
     /// Read the next row matching the configured bounds.
     ///
     /// Returns `None` when the stream is exhausted. Otherwise returns
@@ -727,9 +737,7 @@ impl StreamingSheetReader {
         }
         loop {
             match self.parse_one_value_row(py)? {
-                ValueStepResult::Row(_row_idx, values, _needs_normalise) => {
-                    return Ok(Some(values))
-                }
+                ValueStepResult::Row(_row_idx, values) => return Ok(Some(values)),
                 ValueStepResult::Skip => continue,
                 ValueStepResult::Done => {
                     self.exhausted = true;
@@ -750,7 +758,7 @@ impl StreamingSheetReader {
         }
         loop {
             match self.parse_one_value_row(py)? {
-                ValueStepResult::Row(row_idx, values, _needs_normalise) => {
+                ValueStepResult::Row(row_idx, values) => {
                     let row_obj = u32_to_py(py, row_idx)?;
                     return Ok(Some(new_tuple(
                         py,
@@ -777,34 +785,15 @@ impl StreamingSheetReader {
         py: Python<'py>,
         max_rows: usize,
     ) -> PyResult<Option<Bound<'py, PyList>>> {
-        match self.read_next_values_chunk_with_flags(py, max_rows)? {
-            Some(result) => Ok(Some(result.get_item(0)?.cast_into()?)),
-            None => Ok(None),
-        }
-    }
-
-    /// Read a value-row chunk and report whether rows need Python normalization.
-    ///
-    /// The boolean is true only when the chunk contains formula/error payloads.
-    /// Plain value scans can yield tuples directly without Python rescanning
-    /// every row for dictionaries.
-    #[pyo3(signature = (max_rows=1024))]
-    pub fn read_next_values_chunk_with_flags<'py>(
-        &mut self,
-        py: Python<'py>,
-        max_rows: usize,
-    ) -> PyResult<Option<Bound<'py, PyTuple>>> {
         if self.exhausted {
             return Ok(None);
         }
         let limit = max_rows.max(1);
         let chunk = new_list(py)?;
-        let mut needs_normalise = false;
         let mut cells = 0usize;
         while chunk.len() < limit && cells < CHUNK_CELL_BUDGET {
             match self.parse_one_value_row(py)? {
-                ValueStepResult::Row(row_idx, values, row_needs_normalise) => {
-                    needs_normalise |= row_needs_normalise;
+                ValueStepResult::Row(row_idx, values) => {
                     cells += values.len();
                     let row_obj = u32_to_py(py, row_idx)?;
                     let item = new_tuple(py, [row_obj, values.into_any().unbind()].into_iter())?;
@@ -817,24 +806,15 @@ impl StreamingSheetReader {
                 }
             }
         }
-        if chunk.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(new_tuple(
-                py,
-                [chunk.into_any().unbind(), needs_normalise.into_py_any(py)?].into_iter(),
-            )?))
-        }
+        Ok((!chunk.is_empty()).then_some(chunk))
     }
 
-    /// Read a value-row chunk with a compact dense-table representation.
+    /// Read a value-row chunk as `(items, first_row, last_row, dense)`.
     ///
-    /// Dense plain chunks return only value tuples plus their first/last row
-    /// indexes. Sparse chunks, or chunks needing Python formula/error
-    /// normalization, fall back to the row-indexed record shape used by
-    /// `read_next_values_chunk_with_flags`.
+    /// Dense chunks (contiguous row indexes) return only value tuples.
+    /// Sparse chunks return `(row_index, value_tuple)` records.
     #[pyo3(signature = (max_rows=1024))]
-    pub fn read_next_values_compact_chunk_with_flags<'py>(
+    pub fn read_next_values_compact_chunk<'py>(
         &mut self,
         py: Python<'py>,
         max_rows: usize,
@@ -844,7 +824,6 @@ impl StreamingSheetReader {
         }
         let limit = max_rows.max(1);
         let mut rows: Vec<(u32, Bound<'py, PyTuple>)> = Vec::with_capacity(limit);
-        let mut needs_normalise = false;
         let mut first_row = 0;
         let mut last_row = 0;
         let mut contiguous = true;
@@ -852,14 +831,13 @@ impl StreamingSheetReader {
         let mut cells = 0usize;
         while rows.len() < limit && cells < CHUNK_CELL_BUDGET {
             match self.parse_one_value_row(py)? {
-                ValueStepResult::Row(row_idx, values, row_needs_normalise) => {
+                ValueStepResult::Row(row_idx, values) => {
                     if rows.is_empty() {
                         first_row = row_idx;
                     } else if row_idx != last_row + 1 {
                         contiguous = false;
                     }
                     last_row = row_idx;
-                    needs_normalise |= row_needs_normalise;
                     cells += values.len();
                     rows.push((row_idx, values));
                 }
@@ -875,9 +853,9 @@ impl StreamingSheetReader {
             return Ok(None);
         }
 
-        let dense_plain = contiguous && !needs_normalise;
+        let dense = contiguous;
         let items = new_list(py)?;
-        if dense_plain {
+        if dense {
             for (_row_idx, values) in rows {
                 items.append(values)?;
             }
@@ -895,10 +873,9 @@ impl StreamingSheetReader {
             py,
             [
                 items.into_any().unbind(),
-                needs_normalise.into_py_any(py)?,
                 u32_to_py(py, first_row)?,
                 u32_to_py(py, last_row)?,
-                dense_plain.into_py_any(py)?,
+                dense.into_py_any(py)?,
             ]
             .into_iter(),
         )?))
@@ -943,7 +920,7 @@ enum StepResult {
 }
 
 enum ValueStepResult<'py> {
-    Row(u32, Bound<'py, PyTuple>, bool),
+    Row(u32, Bound<'py, PyTuple>),
     Skip,
     Done,
 }
@@ -1006,6 +983,7 @@ impl StreamingSheetReader {
             max_col,
             last_row: 0,
             date_styles: DateStyles::default(),
+            value_output: CellOutput::FormulaText,
         })
     }
 
@@ -1074,17 +1052,18 @@ impl StreamingSheetReader {
                             return Ok(ValueStepResult::Done);
                         }
                     }
-                    let (values, needs_normalise) = read_values_until_row_end(
+                    let values = read_values_until_row_end(
                         reader,
                         &mut self.event_buf,
                         py,
                         &self.sst,
                         &self.date_styles,
+                        self.value_output,
                         row_idx,
                         self.min_col,
                         self.max_col,
                     )?;
-                    return Ok(ValueStepResult::Row(row_idx, values, needs_normalise));
+                    return Ok(ValueStepResult::Row(row_idx, values));
                 }
                 Event::Empty(e) if e.local_name().as_ref() == "row" => {
                     let row_idx = row_index_from_start(&e, self.last_row)?;
@@ -1117,7 +1096,6 @@ impl StreamingSheetReader {
         Ok(ValueStepResult::Row(
             row_idx,
             empty_value_row(py, self.min_col, self.max_col)?,
-            false,
         ))
     }
 
@@ -1164,7 +1142,8 @@ fn read_cells_until_row_end(
             Event::Start(e) if e.local_name().as_ref() == "c" => {
                 let (col, style_id, t_attr) = cell_attrs_from_start(&e, &cells)?;
                 drop(e);
-                let (value, cell_type) = read_cell_contents(reader, buf, py, &t_attr, sst)?;
+                let (value, cell_type) =
+                    read_cell_contents(reader, buf, py, &t_attr, sst, CellOutput::Payload)?;
                 cells.push(ParsedCell {
                     col,
                     value,
@@ -1220,15 +1199,15 @@ fn read_values_until_row_end<'py>(
     py: Python<'py>,
     sst: &[String],
     date_styles: &DateStyles,
+    output: CellOutput,
     row_idx: u32,
     min_col: Option<u32>,
     max_col: Option<u32>,
-) -> PyResult<(Bound<'py, PyTuple>, bool)> {
+) -> PyResult<Bound<'py, PyTuple>> {
     let cmin = min_col.unwrap_or(1);
     let mut out: Vec<PyObjectOwned> = Vec::new();
     let mut last_col = cmin.saturating_sub(1);
     let mut next_col = 1;
-    let mut needs_normalise = false;
 
     loop {
         buf.clear();
@@ -1240,7 +1219,7 @@ fn read_values_until_row_end<'py>(
                 let (col, style_id, t_attr) = cell_value_attrs_from_start(&e, next_col)?;
                 next_col = col.saturating_add(1);
                 drop(e);
-                let (value, cell_type) = read_cell_contents(reader, buf, py, &t_attr, sst)?;
+                let (value, cell_type) = read_cell_contents(reader, buf, py, &t_attr, sst, output)?;
                 let value = date_styles.apply(
                     py,
                     style_id,
@@ -1248,11 +1227,7 @@ fn read_values_until_row_end<'py>(
                     cell_type,
                     matches!(t_attr, CellTypeAttr::Number),
                 )?;
-                let pushed =
-                    push_bounded_value(py, &mut out, &mut last_col, col, value, min_col, max_col);
-                if pushed && matches!(cell_type, "formula" | "e") {
-                    needs_normalise = true;
-                }
+                push_bounded_value(py, &mut out, &mut last_col, col, value, min_col, max_col);
             }
             Event::Empty(e) if e.local_name().as_ref() == "c" => {
                 let (col, _style_id, _t_attr) = cell_value_attrs_from_start(&e, next_col)?;
@@ -1268,10 +1243,7 @@ fn read_values_until_row_end<'py>(
                 );
             }
             Event::End(e) if e.local_name().as_ref() == "row" => {
-                return Ok((
-                    finish_value_row(py, out, last_col, min_col, max_col)?,
-                    needs_normalise,
-                ));
+                return finish_value_row(py, out, last_col, min_col, max_col);
             }
             Event::Eof => {
                 return Err(PyErr::new::<PyIOError, _>(format!(
@@ -1291,17 +1263,16 @@ fn push_bounded_value(
     value: PyObjectOwned,
     min_col: Option<u32>,
     max_col: Option<u32>,
-) -> bool {
+) {
     let cmin = min_col.unwrap_or(1);
     if col < cmin || max_col.is_some_and(|cmax| col > cmax) || col <= *last_col {
-        return false;
+        return;
     }
     for _ in last_col.saturating_add(1)..col {
         out.push(py.None());
     }
     out.push(value);
     *last_col = col;
-    true
 }
 
 fn finish_value_row<'py>(
@@ -1340,12 +1311,16 @@ fn read_cell_contents(
     py: Python<'_>,
     t_attr: &CellTypeAttr,
     sst: &[String],
+    output: CellOutput,
 ) -> PyResult<(PyObjectOwned, &'static str)> {
     let mut v_text: Option<String> = None;
     let mut f_text: Option<String> = None;
     let mut inline_text: Option<String> = None;
     let mut fast_number: Option<PyObjectOwned> = None;
     let mut fast_shared: Option<usize> = None;
+    let mut has_formula = false;
+    // Cached-value rows never return formula text, so skip collecting it.
+    let keep_formula = output != CellOutput::CachedValue;
     let mut in_f = false;
     let mut in_t = false;
     let mut in_rph = false;
@@ -1373,6 +1348,14 @@ fn read_cell_contents(
                         .map_err(|e| {
                             PyErr::new::<PyIOError, _>(format!("Streaming reader XML: {e}"))
                         })?;
+                    // Formula-text rows ignore the cached result; error
+                    // codes still come from `<v>`.
+                    if has_formula
+                        && output == CellOutput::FormulaText
+                        && !matches!(t_attr, CellTypeAttr::Error)
+                    {
+                        continue;
+                    }
                     let raw = normalize_xml_eol(&raw);
                     let text = quick_xml::escape::unescape(&raw).map_err(|e| {
                         PyErr::new::<PyIOError, _>(format!("cell text decode: {e}"))
@@ -1400,7 +1383,10 @@ fn read_cell_contents(
                         v_text.get_or_insert_with(String::new).push_str(&text);
                     }
                 }
-                b"f" => in_f = true,
+                b"f" => {
+                    has_formula = true;
+                    in_f = keep_formula;
+                }
                 b"t" => in_t = true,
                 b"rPh" => in_rph = true,
                 // openpyxl reads a present but empty `<is>` as "".
@@ -1414,7 +1400,10 @@ fn read_cell_contents(
                     v_text.get_or_insert_with(String::new);
                 }
                 b"f" => {
-                    f_text.get_or_insert_with(String::new);
+                    has_formula = true;
+                    if keep_formula {
+                        f_text.get_or_insert_with(String::new);
+                    }
                 }
                 b"t" if !in_rph => {
                     inline_text.get_or_insert_with(String::new);
@@ -1446,6 +1435,26 @@ fn read_cell_contents(
             }
             Event::End(e) => match e.local_name().as_ref().as_bytes() {
                 b"c" => {
+                    // openpyxl reads an inline string only from `<is>` and
+                    // every other type only from `<v>`.
+                    let raw_value = if matches!(t_attr, CellTypeAttr::InlineString) {
+                        inline_text
+                    } else {
+                        v_text
+                    };
+                    if output != CellOutput::Payload {
+                        return value_cell_object(
+                            py,
+                            t_attr,
+                            output,
+                            has_formula,
+                            f_text,
+                            fast_number,
+                            fast_shared,
+                            raw_value,
+                            sst,
+                        );
+                    }
                     if f_text.is_none() {
                         if let Some(value) = fast_number {
                             return Ok((value, "n"));
@@ -1460,13 +1469,11 @@ fn read_cell_contents(
                         let cached = str_to_py(py, resolved)?;
                         return Ok((build_formula_dict(py, &formula, cached)?, "formula"));
                     }
-                    // openpyxl reads an inline string only from `<is>` and
-                    // every other type only from `<v>`.
-                    let raw_value = if matches!(t_attr, CellTypeAttr::InlineString) {
-                        inline_text
-                    } else {
-                        v_text
-                    };
+                    // `<v>` before `<f>` already parsed the numeric cache.
+                    if let Some(cached) = fast_number {
+                        let formula = f_text.unwrap_or_default();
+                        return Ok((build_formula_dict(py, &formula, cached)?, "formula"));
+                    }
                     return build_cell_object(py, t_attr, f_text, raw_value, sst);
                 }
                 b"f" => in_f = false,
@@ -1897,6 +1904,67 @@ fn parse_cell_inner(
     build_cell_object(py, &t_attr, f_text, raw_value, sst)
 }
 
+/// Resolve a values-only row cell: an error reads as its code, a formula as
+/// its `=`-prefixed text or, for `data_only`, its cached result (an empty
+/// cache reads as `None`).
+#[allow(clippy::too_many_arguments)]
+fn value_cell_object(
+    py: Python<'_>,
+    t_attr: &CellTypeAttr,
+    output: CellOutput,
+    has_formula: bool,
+    formula: Option<String>,
+    fast_number: Option<PyObjectOwned>,
+    fast_shared: Option<usize>,
+    raw_value: Option<String>,
+    sst: &[String],
+) -> PyResult<(PyObjectOwned, &'static str)> {
+    if matches!(t_attr, CellTypeAttr::Error) {
+        let code = raw_value.filter(|v| !v.is_empty());
+        return Ok((str_to_py(py, code.as_deref().unwrap_or("#ERROR!"))?, "e"));
+    }
+    if has_formula && output == CellOutput::FormulaText {
+        let formula = formula.unwrap_or_default();
+        return Ok((str_to_py(py, &formula_with_eq(&formula))?, "formula"));
+    }
+    if let Some(value) = fast_number {
+        return Ok((value, "n"));
+    }
+    if !has_formula {
+        if let Some(idx) = fast_shared {
+            return Ok((str_to_py(py, sst.get(idx).map_or("", String::as_str))?, "s"));
+        }
+        return build_cell_object(py, t_attr, None, raw_value, sst);
+    }
+    let cached = match fast_shared {
+        Some(idx) => str_to_py(py, sst.get(idx).map_or("", String::as_str))?,
+        None => {
+            let raw_value =
+                raw_value.filter(|v| !v.is_empty() || matches!(t_attr, CellTypeAttr::InlineString));
+            cached_value_to_py(py, t_attr, raw_value, sst)?
+        }
+    };
+    let bound = cached.bind(py);
+    if bound.is_exact_instance_of::<PyString>() && bound.len()? == 0 {
+        return Ok((py.None(), "formula"));
+    }
+    // A numeric cache keeps date-style conversion.
+    let kind = if matches!(t_attr, CellTypeAttr::Number) {
+        "n"
+    } else {
+        "formula"
+    };
+    Ok((cached, kind))
+}
+
+fn formula_with_eq(formula: &str) -> std::borrow::Cow<'_, str> {
+    if formula.starts_with('=') {
+        std::borrow::Cow::Borrowed(formula)
+    } else {
+        std::borrow::Cow::Owned(format!("={formula}"))
+    }
+}
+
 fn build_cell_object(
     py: Python<'_>,
     t_attr: &CellTypeAttr,
@@ -1996,11 +2064,7 @@ fn build_formula_dict(
     cached: PyObjectOwned,
 ) -> PyResult<PyObjectOwned> {
     let d = new_dict(py)?;
-    let f_with_eq = if formula.starts_with('=') {
-        formula.to_string()
-    } else {
-        format!("={formula}")
-    };
+    let f_with_eq = formula_with_eq(formula);
     set_dict_item(&d, "type", str_to_py(py, "formula")?)?;
     set_dict_item(&d, "formula", str_to_py(py, &f_with_eq)?)?;
     set_dict_item(&d, "cached", cached)?;
@@ -2280,8 +2344,15 @@ mod tests {
                         Event::Start(_)
                     ));
                     let sst: Vec<_> = (0..11).map(|i| format!("entry {i}")).collect();
-                    let (value, _) =
-                        read_cell_contents(&mut reader, &mut buf, py, &kind, &sst).unwrap();
+                    let (value, _) = read_cell_contents(
+                        &mut reader,
+                        &mut buf,
+                        py,
+                        &kind,
+                        &sst,
+                        CellOutput::Payload,
+                    )
+                    .unwrap();
                     if matches!(kind, CellTypeAttr::Number) {
                         assert_eq!(value.extract::<i64>(py).unwrap().to_string(), expected);
                     } else {
@@ -2308,10 +2379,15 @@ mod tests {
                     reader.read_event_into(&mut buf).unwrap(),
                     Event::Start(_)
                 ));
-                assert!(
-                    read_cell_contents(&mut reader, &mut buf, py, &CellTypeAttr::Number, &[])
-                        .is_err()
-                );
+                assert!(read_cell_contents(
+                    &mut reader,
+                    &mut buf,
+                    py,
+                    &CellTypeAttr::Number,
+                    &[],
+                    CellOutput::Payload,
+                )
+                .is_err());
             }
         });
     }
@@ -2320,16 +2396,26 @@ mod tests {
     fn streaming_formula_and_cache_aggregate_references() {
         pyo3::Python::initialize();
         Python::attach(|py| {
-            let xml = b"<c><f> A1 &amp; &quot; B &quot;&#10;</f><v>1&#50;3</v></c>";
-            let mut reader =
-                SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(xml.to_vec())));
-            let mut buf = Vec::new();
-            assert!(matches!(
-                reader.read_event_into(&mut buf).unwrap(),
-                Event::Start(_)
-            ));
-            let (value, kind) =
-                read_cell_contents(&mut reader, &mut buf, py, &CellTypeAttr::Number, &[]).unwrap();
+            let read = |output| {
+                let xml = b"<c><f> A1 &amp; &quot; B &quot;&#10;</f><v>1&#50;3</v></c>";
+                let mut reader =
+                    SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(xml.to_vec())));
+                let mut buf = Vec::new();
+                assert!(matches!(
+                    reader.read_event_into(&mut buf).unwrap(),
+                    Event::Start(_)
+                ));
+                read_cell_contents(
+                    &mut reader,
+                    &mut buf,
+                    py,
+                    &CellTypeAttr::Number,
+                    &[],
+                    output,
+                )
+                .unwrap()
+            };
+            let (value, kind) = read(CellOutput::Payload);
             assert_eq!(kind, "formula");
             let fields = value.bind(py).cast::<PyDict>().unwrap();
             let formula: String = fields
@@ -2346,6 +2432,12 @@ mod tests {
                 .unwrap();
             assert_eq!(formula, "= A1 & \" B \"\n");
             assert_eq!(cached, 123);
+
+            let (text, _) = read(CellOutput::FormulaText);
+            assert_eq!(text.extract::<String>(py).unwrap(), "= A1 & \" B \"\n");
+            let (cached, kind) = read(CellOutput::CachedValue);
+            assert_eq!(cached.extract::<i64>(py).unwrap(), 123);
+            assert_eq!(kind, "n");
         });
     }
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Performance
+
+- Read-only `iter_rows(values_only=True)` and `iter_value_chunks()` now
+  resolve formula cells in the native reader. With `data_only=True`, cached
+  formula results no longer cost more than the same constant values; formula
+  text reads (`data_only=False`) are also faster.
+
+### Fixed
+
+- A formula cell whose cached `<v>` comes before its `<f>` now reads its
+  numeric cached result in `data_only=True` mode instead of `None`, as
+  openpyxl does.
+
 ## 2.0.25 - 2026-10-28
 
 ### Fixed

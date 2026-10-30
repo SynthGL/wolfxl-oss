@@ -182,58 +182,6 @@ def test_streaming_values_only_yields_1000_rows(basic_xlsx: Path) -> None:
     assert rows[-1] == (10001, 10002, 10003, 10004, 10005)
 
 
-def test_streaming_values_only_prefers_compact_chunks(
-    monkeypatch: pytest.MonkeyPatch,
-    basic_xlsx: Path,
-) -> None:
-    import wolfxl._rust as rust
-
-    calls = []
-
-    class CompactReader:
-        def __init__(self) -> None:
-            self._done = False
-
-        def read_next_values_row(self) -> None:
-            raise AssertionError("compact chunk path should avoid row-at-a-time reads")
-
-        def read_next_values_chunk_with_flags(self) -> None:
-            raise AssertionError("compact chunk path should avoid row-indexed chunks")
-
-        def read_next_values_compact_chunk_with_flags(
-            self,
-            chunk_size: int,
-        ) -> tuple[list[tuple[int, ...]], bool, int, int, bool] | None:
-            calls.append(chunk_size)
-            if self._done:
-                return None
-            self._done = True
-            return ([(11, 12, 13), (21, 22, 23)], False, 1, 2, True)
-
-        def close(self) -> None:
-            pass
-
-    class CompactReaderFactory:
-        @staticmethod
-        def open(*args: object, **kwargs: object) -> CompactReader:
-            return CompactReader()
-
-    monkeypatch.setattr(rust, "StreamingSheetReader", CompactReaderFactory)
-    wb = wolfxl.load_workbook(basic_xlsx, read_only=True)
-    rows = list(
-        wb["Sheet1"].iter_rows(
-            min_row=1,
-            max_row=2,
-            min_col=1,
-            max_col=3,
-            values_only=True,
-        )
-    )
-
-    assert rows == [(11, 12, 13), (21, 22, 23)]
-    assert calls == [1024, 1024]
-
-
 def test_streaming_iter_value_chunks_match_values_only_rows(basic_xlsx: Path) -> None:
     wb = wolfxl.load_workbook(basic_xlsx, read_only=True)
     ws = wb["Sheet1"]

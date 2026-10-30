@@ -283,8 +283,9 @@ def _timedelta_from_serial(value: Any) -> Any:
         return value
 
 
-def _install_streaming_date_styles(reader: Any, wb: Any) -> None:
-    """Configure compact value rows once, without per-cell Python style lookups."""
+def _configure_value_reader(reader: Any, wb: Any) -> None:
+    """Configure values-only rows once: formula output and date-style conversion."""
+    reader.set_data_only(bool(getattr(wb, "_data_only", False)))
     date_styles, timedelta_styles = streaming_date_style_ids(wb)
     if not date_styles:
         return
@@ -295,17 +296,6 @@ def _install_streaming_date_styles(reader: Any, wb: Any) -> None:
         if 0 <= style_id < len(kinds):
             kinds[style_id] = 2 if style_id in timedelta_styles else 1
     reader.set_date_styles(bytes(kinds), _timedelta_from_serial, wb.epoch == CALENDAR_MAC_1904)
-
-
-def _normalise_streaming_value_tuple(row: tuple[Any, ...], *, data_only: bool) -> tuple[Any, ...]:
-    """Convert formula/error payload dictionaries only when a row contains them."""
-    for value in row:
-        if isinstance(value, dict):
-            return tuple(
-                _streaming_value(item, data_only=data_only) if isinstance(item, dict) else item
-                for item in row
-            )
-    return row
 
 
 class StreamingCell:
@@ -668,76 +658,33 @@ def stream_iter_rows(
 
     try:
         if values_only:
-            _install_streaming_date_styles(reader, wb)
-            data_only = bool(getattr(wb, "_data_only", False))
+            _configure_value_reader(reader, wb)
             counter = mn_r if mn_r is not None else 1
             cmin = mn_c if mn_c is not None else 1
             fixed_cmax = _fixed_cmax()
             empty_row = (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else []
-            read_chunk_with_flags = getattr(reader, "read_next_values_chunk_with_flags", None)
-            read_compact_chunk_with_flags = getattr(
-                reader, "read_next_values_compact_chunk_with_flags", None
-            )
-            read_chunk = getattr(reader, "read_next_values_chunk", None)
-            if read_compact_chunk_with_flags is not None or read_chunk_with_flags is not None:
-                while True:
-                    if read_compact_chunk_with_flags is not None:
-                        chunk_result = read_compact_chunk_with_flags(1024)
-                    else:
-                        chunk_result = read_chunk_with_flags()
-                    if chunk_result is None:
-                        break
-                    if len(chunk_result) == 5:
-                        (
-                            chunk,
-                            needs_normalise,
-                            first_row,
-                            _last_row,
-                            dense_plain,
-                        ) = chunk_result
-                        if dense_plain:
-                            while counter < first_row:
-                                yield empty_row
-                                counter += 1
-                            for offset, values in enumerate(chunk):
-                                row_idx = first_row + offset
-                                while counter < row_idx:
-                                    yield empty_row
-                                    counter += 1
-                                yield values
-                                counter = row_idx + 1
-                            continue
-                    else:
-                        chunk, needs_normalise = chunk_result
-                    for row_idx, values in chunk:
+            while True:
+                chunk_result = reader.read_next_values_compact_chunk(1024)
+                if chunk_result is None:
+                    break
+                chunk, first_row, _last_row, dense = chunk_result
+                if dense:
+                    while counter < first_row:
+                        yield empty_row
+                        counter += 1
+                    for offset, values in enumerate(chunk):
+                        row_idx = first_row + offset
                         while counter < row_idx:
                             yield empty_row
                             counter += 1
-                        if needs_normalise:
-                            values = _normalise_streaming_value_tuple(values, data_only=data_only)
                         yield values
                         counter = row_idx + 1
-            elif read_chunk is not None:
-                while True:
-                    chunk = read_chunk()
-                    if chunk is None:
-                        break
-                    for row_idx, values in chunk:
-                        while counter < row_idx:
-                            yield empty_row
-                            counter += 1
-                        yield _normalise_streaming_value_tuple(values, data_only=data_only)
-                        counter = row_idx + 1
-            else:
-                while True:
-                    row = reader.read_next_values_row()
-                    if row is None:
-                        break
-                    row_idx, values = row
+                    continue
+                for row_idx, values in chunk:
                     while counter < row_idx:
                         yield empty_row
                         counter += 1
-                    yield _normalise_streaming_value_tuple(values, data_only=data_only)
+                    yield values
                     counter = row_idx + 1
             if stream_mx_r is not None and _pad_trailing_rows(wb, reader, mx_r):
                 while counter <= stream_mx_r:
@@ -854,26 +801,7 @@ def stream_value_chunks(
 
     reader = _open_stream_reader(path, ws.title, mn_r, stream_mx_r, mn_c, stream_mx_c)
     try:
-        _install_streaming_date_styles(reader, wb)
-        read_chunk_with_flags = getattr(reader, "read_next_values_chunk_with_flags", None)
-        if read_chunk_with_flags is None:
-            yield from _chunk_value_rows(
-                stream_iter_rows(
-                    ws,
-                    min_row=min_row,
-                    max_row=max_row,
-                    min_col=min_col,
-                    max_col=max_col,
-                    values_only=True,
-                ),
-                chunk_size,
-            )
-            return
-        read_compact_chunk_with_flags = getattr(
-            reader, "read_next_values_compact_chunk_with_flags", None
-        )
-
-        data_only = bool(getattr(wb, "_data_only", False))
+        _configure_value_reader(reader, wb)
         counter = mn_r if mn_r is not None else 1
         cmin = mn_c if mn_c is not None else 1
         fixed_cmax = (
@@ -886,21 +814,12 @@ def stream_value_chunks(
         empty_row = (None,) * max(0, fixed_cmax + 1 - cmin) if fixed_cmax is not None else []
         pending: list[tuple[Any, ...]] = []
         while True:
-            if read_compact_chunk_with_flags is not None:
-                chunk_result = read_compact_chunk_with_flags(chunk_size)
-            else:
-                chunk_result = read_chunk_with_flags(chunk_size)
+            chunk_result = reader.read_next_values_compact_chunk(chunk_size)
             if chunk_result is None:
                 break
-            if len(chunk_result) == 5:
-                chunk, needs_normalise, first_row, last_row, dense_plain = chunk_result
-            else:
-                chunk, needs_normalise = chunk_result
-                first_row = chunk[0][0] if chunk else counter
-                last_row = chunk[-1][0] if chunk else counter - 1
-                dense_plain = False
+            chunk, first_row, last_row, dense = chunk_result
             if (
-                dense_plain
+                dense
                 and not pending
                 and chunk
                 and first_row == counter
@@ -909,7 +828,7 @@ def stream_value_chunks(
                 yield tuple(chunk)
                 counter = last_row + 1
                 continue
-            if dense_plain:
+            if dense:
                 chunk = tuple((first_row + offset, values) for offset, values in enumerate(chunk))
             for row_idx, values in chunk:
                 while counter < row_idx:
@@ -918,8 +837,6 @@ def stream_value_chunks(
                         yield tuple(pending)
                         pending = []
                     counter += 1
-                if needs_normalise:
-                    values = _normalise_streaming_value_tuple(values, data_only=data_only)
                 pending.append(values)
                 if len(pending) >= chunk_size:
                     yield tuple(pending)
@@ -987,20 +904,6 @@ def _direct_plain_value_chunks(
         implicit_max_row=not explicit_max_row,
     )
     return None if chunks is None else iter(chunks)
-
-
-def _chunk_value_rows(
-    rows: Iterator[tuple[Any, ...]],
-    chunk_size: int,
-) -> Iterator[tuple[tuple[Any, ...], ...]]:
-    pending: list[tuple[Any, ...]] = []
-    for row in rows:
-        pending.append(row)
-        if len(pending) >= chunk_size:
-            yield tuple(pending)
-            pending = []
-    if pending:
-        yield tuple(pending)
 
 
 def should_auto_stream(ws: Worksheet) -> bool:
