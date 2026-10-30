@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.0.32 - 2026-10-30
+
+### Fixed
+
+These fixes apply to workbooks loaded without streaming, as 2.0.31 did for
+streamed sheets:
+
+- A `t="b"`, `t="e"` or `t="d"` cell with a missing or empty `<v>` now reads
+  as `None`, as openpyxl does, instead of `False` or `""`. An empty `t="d"`
+  cell reports `data_type == "d"` instead of `"s"`.
+- With `data_only=True`, a formula cell with no cached result keeps its `t=`
+  type, such as `"b"`, `"d"`, `"e"` or `"s"`, and reads as `None`.
+
 ## 2.0.31 - 2026-10-30
 
 ### Fixed
