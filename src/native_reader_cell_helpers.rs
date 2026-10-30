@@ -4,22 +4,33 @@
 //! data_only/formula split.
 
 use chrono::{Datelike, Duration, NaiveDate, Timelike};
+use pyo3::exceptions::{PyOverflowError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDateTime, PyDict, PyTime};
 use pyo3::IntoPyObjectExt;
 
 use wolfxl_reader::{Cell, CellDataType, CellValue};
 
+use crate::iso8601::{is_iso8601, iso8601_to_py};
 use crate::util::{cell_blank, cell_with_value};
 
 type PyObject = Py<PyAny>;
+
+/// How a date-formatted serial reads: the workbook's epoch, and whether a
+/// duration format such as `[h]:mm:ss` reads as `datetime.timedelta`, as
+/// openpyxl reads xlsx. The xls and xlsb readers keep `datetime.datetime`.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct SerialDates {
+    pub(crate) date1904: bool,
+    pub(crate) durations: bool,
+}
 
 pub(crate) fn cell_to_dict(
     py: Python<'_>,
     cell: &Cell,
     data_only: bool,
     number_format: Option<&str>,
-    date1904: bool,
+    dates: SerialDates,
 ) -> PyResult<PyObject> {
     if !data_only {
         if let Some(formula) = &cell.formula {
@@ -28,11 +39,20 @@ pub(crate) fn cell_to_dict(
     }
     match &cell.value {
         CellValue::Empty => cell_blank(py),
+        CellValue::String(s) if cell.data_type == CellDataType::DateIso => {
+            match iso8601_to_py(py, s)? {
+                Some(value) => cell_with_value(py, "datetime", value),
+                None => cell_with_value(py, "string", s),
+            }
+        }
         CellValue::String(s) => cell_with_value(py, "string", s),
         CellValue::Number(n) if is_date_format(number_format) => {
             let d = PyDict::new(py);
             d.set_item("type", "datetime")?;
-            d.set_item("value", date_serial_to_py(py, *n, date1904, number_format)?)?;
+            d.set_item(
+                "value",
+                date_serial_to_py(py, cell, *n, dates, number_format)?,
+            )?;
             Ok(d.into())
         }
         CellValue::Number(n) => {
@@ -51,7 +71,7 @@ pub(crate) fn cell_to_plain(
     cell: &Cell,
     data_only: bool,
     number_format: Option<&str>,
-    date1904: bool,
+    dates: SerialDates,
 ) -> PyResult<PyObject> {
     if !data_only {
         if let Some(formula) = &cell.formula {
@@ -60,9 +80,9 @@ pub(crate) fn cell_to_plain(
     }
     match &cell.value {
         CellValue::Empty => Ok(py.None()),
-        CellValue::String(s) => Ok(s.clone().into_py_any(py)?),
+        CellValue::String(s) => string_to_py(py, cell, s),
         CellValue::Number(n) if is_date_format(number_format) => {
-            date_serial_to_py(py, *n, date1904, number_format)
+            date_serial_to_py(py, cell, *n, dates, number_format)
         }
         CellValue::Number(n) => number_to_py(py, *n, is_float_number(cell)),
         CellValue::Bool(b) => Ok((*b).into_py_any(py)?),
@@ -73,7 +93,7 @@ pub(crate) fn cell_to_plain(
 pub(crate) fn cell_to_plain_unstyled_data_only(py: Python<'_>, cell: &Cell) -> PyResult<PyObject> {
     match &cell.value {
         CellValue::Empty => Ok(py.None()),
-        CellValue::String(s) => Ok(s.clone().into_py_any(py)?),
+        CellValue::String(s) => string_to_py(py, cell, s),
         CellValue::Number(n) => number_to_py(py, *n, is_float_number(cell)),
         CellValue::Bool(b) => Ok((*b).into_py_any(py)?),
         CellValue::Error(e) => Ok(e.clone().into_py_any(py)?),
@@ -95,6 +115,9 @@ pub(crate) fn native_data_type(
         // openpyxl keeps `inlineStr` when the cell has no `<is>` child.
         CellDataType::InlineString if matches!(cell.value, CellValue::Empty) => "inlineStr",
         CellDataType::DateIso if matches!(cell.value, CellValue::Empty) => "datetime",
+        CellDataType::DateIso if matches!(&cell.value, CellValue::String(s) if is_iso8601(s)) => {
+            "datetime"
+        }
         CellDataType::DateIso
         | CellDataType::InlineString
         | CellDataType::SharedString
@@ -109,6 +132,16 @@ pub(crate) fn native_data_type(
             }
         }
     }
+}
+
+/// A string cell value, or the date or time a `t="d"` cell's text reads as.
+fn string_to_py(py: Python<'_>, cell: &Cell, text: &str) -> PyResult<PyObject> {
+    if cell.data_type == CellDataType::DateIso {
+        if let Some(value) = iso8601_to_py(py, text)? {
+            return Ok(value);
+        }
+    }
+    Ok(text.into_py_any(py)?)
 }
 
 pub(crate) fn ensure_formula_prefix(formula: &str) -> String {
@@ -217,15 +250,22 @@ fn is_timedelta_format(format: &str) -> bool {
 /// Python value of a date-formatted serial, matching openpyxl's `from_excel`:
 /// a serial in `[0, 1)` is a `datetime.time` (serial 0 is midnight), any
 /// other serial a `datetime.datetime`. The day fraction rounds to the
-/// millisecond and is kept as microseconds. A duration format always yields a
-/// `datetime.datetime`, which `Cell.value` converts to `datetime.timedelta`.
+/// millisecond and is kept as microseconds. A duration format reads as a
+/// `datetime.timedelta` when `dates.durations` is set and otherwise always as
+/// a `datetime.datetime`. A serial outside Python's year range stays a number,
+/// as it does on streamed sheets.
 fn date_serial_to_py(
     py: Python<'_>,
+    cell: &Cell,
     serial: f64,
-    date1904: bool,
+    dates: SerialDates,
     number_format: Option<&str>,
 ) -> PyResult<PyObject> {
-    if (0.0..1.0).contains(&serial) && !number_format.is_some_and(is_timedelta_format) {
+    let duration = number_format.is_some_and(is_timedelta_format);
+    if duration && dates.durations {
+        return serial_to_timedelta(py, cell, serial);
+    }
+    if (0.0..1.0).contains(&serial) && !duration {
         let millis = (serial * 86_400_000.0).round() as u32;
         if millis < 86_400_000 {
             let secs = millis / 1000;
@@ -240,7 +280,11 @@ fn date_serial_to_py(
             return Ok(time.into_any().unbind());
         }
     }
-    let dt = excel_serial_to_datetime(serial, date1904);
+    let Some(dt) = excel_serial_to_datetime(serial, dates.date1904)
+        .filter(|dt| (1..=9999).contains(&dt.year()))
+    else {
+        return number_to_py(py, serial, is_float_number(cell));
+    };
     let py_dt = PyDateTime::new(
         py,
         dt.year(),
@@ -255,17 +299,45 @@ fn date_serial_to_py(
     Ok(py_dt.into_any().unbind())
 }
 
-pub(crate) fn excel_serial_to_datetime(serial: f64, date1904: bool) -> chrono::NaiveDateTime {
+/// `from_excel(serial, timedelta=True)`, through the same function the
+/// streaming reader uses; a serial too large for `timedelta` stays a number.
+fn serial_to_timedelta(py: Python<'_>, cell: &Cell, serial: f64) -> PyResult<PyObject> {
+    let from_excel = py.import("wolfxl.utils.datetime")?.getattr("from_excel")?;
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("timedelta", true)?;
+    match from_excel.call((serial,), Some(&kwargs)) {
+        Ok(value) => Ok(value.unbind()),
+        Err(err)
+            if err.is_instance_of::<PyOverflowError>(py)
+                || err.is_instance_of::<PyValueError>(py) =>
+        {
+            number_to_py(py, serial, is_float_number(cell))
+        }
+        Err(err) => Err(err),
+    }
+}
+
+pub(crate) fn excel_serial_to_datetime(
+    serial: f64,
+    date1904: bool,
+) -> Option<chrono::NaiveDateTime> {
     let epoch = if date1904 {
         NaiveDate::from_ymd_opt(1904, 1, 1).unwrap()
     } else {
         NaiveDate::from_ymd_opt(1899, 12, 30).unwrap()
     };
+    if !serial.is_finite() {
+        return None;
+    }
     let mut days = serial.trunc() as i64;
     if !date1904 && serial > 0.0 && serial < 60.0 {
         days += 1;
     }
     let fraction = serial - serial.trunc();
     let millis = (fraction * 86_400_000.0).round() as i64;
-    epoch.and_hms_opt(0, 0, 0).unwrap() + Duration::days(days) + Duration::milliseconds(millis)
+    epoch
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+        .checked_add_signed(Duration::try_days(days)?)?
+        .checked_add_signed(Duration::milliseconds(millis))
 }

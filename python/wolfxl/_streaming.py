@@ -19,7 +19,7 @@ across every cell in the iteration.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 import io
 import os
 import posixpath
@@ -433,10 +433,10 @@ class StreamingCell:
                 return "b"
             if isinstance(value, str):
                 return "s"
-            if isinstance(value, (date, datetime, time)):
+            if isinstance(value, (date, datetime, time, timedelta)):
                 return "d"
             return "n"
-        if self._cell_type == "n" and isinstance(self.value, (date, datetime, time)):
+        if self._cell_type == "n" and isinstance(self.value, (date, datetime, time, timedelta)):
             return "d"
         return {
             "n": "n",

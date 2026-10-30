@@ -36,6 +36,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader as XmlReader;
 use zip::{CompressionMethod, ZipArchive};
 
+use crate::iso8601::{is_iso8601, iso8601_to_py};
 use crate::ooxml_util;
 use crate::streaming_scan::{HandoffReader, RowScanner};
 
@@ -2585,6 +2586,8 @@ fn build_cell_object(
                 CellTypeAttr::FormulaString => "str",
                 CellTypeAttr::InlineString => "inlineStr",
                 CellTypeAttr::Bool => "b",
+                // Text that reads as no date or time stays a string.
+                _ if raw_value.as_deref().is_some_and(|v| !is_iso8601(v)) => "s",
                 _ => "d",
             };
             Ok((cached_value_to_py(py, t_attr, raw_value, sst)?, tag))
@@ -2621,10 +2624,13 @@ fn cached_value_to_py(
             Some(number) => Ok(number),
             None => str_to_py(py, &v),
         },
-        CellTypeAttr::FormulaString
-        | CellTypeAttr::InlineString
-        | CellTypeAttr::Error
-        | CellTypeAttr::Date => str_to_py(py, &v),
+        CellTypeAttr::Date => match iso8601_to_py(py, &v)? {
+            Some(value) => Ok(value),
+            None => str_to_py(py, &v),
+        },
+        CellTypeAttr::FormulaString | CellTypeAttr::InlineString | CellTypeAttr::Error => {
+            str_to_py(py, &v)
+        }
     }
 }
 

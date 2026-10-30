@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.0.33 - 2026-10-30
+
+### Fixed
+
+- A `t="d"` cell now reads as the date, time, datetime or timedelta its ISO
+  8601 text names, as openpyxl reads it, instead of as the raw text. For
+  example, `2024-01-15` reads as `datetime.date(2024, 1, 15)` and `PT1H30M` as
+  `datetime.timedelta(hours=1, minutes=30)`. The cell reports
+  `data_type == "d"` in every load mode, and its number format no longer
+  changes the value. Text that names no valid date or time stays a string;
+  openpyxl refuses to load such a workbook.
+- With a full load, `iter_rows(values_only=True)` and `iter_cell_records()`
+  now read a serial under a duration format such as `[h]:mm:ss` as a
+  `datetime.timedelta`, as `Cell.value` and the streaming reader already did.
+- A full load no longer raises `PanicException` for a date- or
+  duration-formatted serial outside Python's date range. The value stays a
+  number with `data_type == "n"`, as it does on streamed loads.
+- On streamed sheets, a cell that reads as a `datetime.timedelta` now reports
+  `data_type == "d"` instead of `"n"`.
+- A `datetime.timedelta` written with `append()`, `write_rows()`, a cell
+  assignment or a write-only sheet now saves as its serial day count with the
+  `[hh]:mm:ss` format, as openpyxl saves it. Previously it saved as text such
+  as `1 day, 3:30:00`, so copying rows read with `values_only=True` kept their
+  durations only as text.
+
 ## 2.0.32 - 2026-10-30
 
 ### Fixed

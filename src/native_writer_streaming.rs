@@ -131,7 +131,7 @@ pub(crate) fn append_streaming_row(
         .map_err(|e| PyIOError::new_err(format!("streaming append failed: {e}")))
 }
 
-/// Pick a default `number_format` string for a `date`/`datetime`
+/// Pick a default `number_format` string for a `date`/`datetime`/`timedelta`
 /// payload that didn't get an explicit `style_id`. Mirrors the eager
 /// path in `native_writer_cells::write_cell_payload` so streaming and
 /// eager date cells render identically when re-opened.
@@ -139,16 +139,20 @@ fn infer_default_number_format(
     dict: &Bound<'_, PyDict>,
     value: &WriteCellValue,
 ) -> PyResult<Option<&'static str>> {
-    if !matches!(value, WriteCellValue::DateSerial(_)) {
+    if !matches!(
+        value,
+        WriteCellValue::DateSerial(_) | WriteCellValue::Number(_)
+    ) {
         return Ok(None);
     }
     let type_str: Option<String> = dict
         .get_item("type")?
         .map(|v| v.extract::<String>())
         .transpose()?;
-    Ok(match type_str.as_deref() {
-        Some("date") => Some("yyyy-mm-dd"),
-        Some("datetime") => Some("yyyy-mm-dd hh:mm:ss"),
+    Ok(match (type_str.as_deref(), value) {
+        (Some("date"), WriteCellValue::DateSerial(_)) => Some("yyyy-mm-dd"),
+        (Some("datetime"), WriteCellValue::DateSerial(_)) => Some("yyyy-mm-dd hh:mm:ss"),
+        (Some("timedelta"), WriteCellValue::Number(_)) => Some("[hh]:mm:ss"),
         _ => None,
     })
 }

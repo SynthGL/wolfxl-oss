@@ -287,7 +287,7 @@ pub(crate) fn append_native_record<B: NativeStyleResolver>(
         if options.include_cached_formula_value && has_cached_value {
             record.set_item(
                 "cached_value",
-                cell_to_plain(py, cell, true, number_format, book.date1904())?,
+                cell_to_plain(py, cell, true, number_format, book.serial_dates())?,
             )?;
         }
     }
@@ -300,14 +300,23 @@ pub(crate) fn append_native_record<B: NativeStyleResolver>(
         record.set_item("data_type", native_data_type(cell, true, number_format))?;
         record.set_item("value", py.None())?;
     } else {
-        record.set_item(
-            "data_type",
-            native_data_type(cell, options.data_only, number_format),
+        let value = cell_to_plain(
+            py,
+            cell,
+            options.data_only,
+            number_format,
+            book.serial_dates(),
         )?;
-        record.set_item(
-            "value",
-            cell_to_plain(py, cell, options.data_only, number_format, book.date1904())?,
-        )?;
+        let mut data_type = native_data_type(cell, options.data_only, number_format);
+        // A date-formatted serial outside the date range stays a number.
+        if data_type == "datetime"
+            && (value.bind(py).is_instance_of::<pyo3::types::PyInt>()
+                || value.bind(py).is_instance_of::<pyo3::types::PyFloat>())
+        {
+            data_type = "number";
+        }
+        record.set_item("data_type", data_type)?;
+        record.set_item("value", value)?;
     }
 
     if options.include_format && !is_merged_subordinate {

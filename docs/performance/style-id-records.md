@@ -49,7 +49,7 @@ unbounded sparse scan can be cheaper than stepping through many empty windows.
 |---|---|
 | Ordinary numbers, strings, booleans, errors | Native Python scalar values; no Cell allocation. |
 | Excel serial date formats | Native date conversion uses the workbook's 1900 or 1904 epoch and returns `datetime`. These values are not raw Excel serials. |
-| Elapsed formats such as `[h]:mm:ss` | The record API currently returns a native `datetime`, while `Cell.value` converts it to `timedelta`. Use `number_format` and explicit normalization if elapsed-duration parity is required. |
+| Elapsed formats such as `[h]:mm:ss` | Native conversion returns `timedelta`, as `Cell.value` does. |
 | Subsecond date/time precision | The current native record conversion returns whole seconds and does not expose the original date-formatted numeric serial. Validate another extraction path if retaining subsecond precision matters. |
 | Formulas | `data_only=False` returns the `=` formula string. `data_only=True` returns its saved cached value, or `None` when no cached value exists. Formula records are included by default even without a cache. |
 | Merged subordinate positions | Format metadata, including style IDs, is suppressed. Blank positions are omitted by default; `include_empty=True` includes blank records within the selected rectangle. This does not compose merged borders into records. |

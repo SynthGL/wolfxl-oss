@@ -10,6 +10,8 @@ use wolfxl_reader::{
     NativeXlsxBook as NativeReaderBook, ProtectionInfo,
 };
 
+use crate::native_reader_cell_helpers::SerialDates;
+
 pub(crate) trait NativeStyleResolver {
     fn number_format_for_style_id(&self, style_id: u32) -> Option<&str>;
     fn border_for_style_id(&self, style_id: u32) -> Option<&BorderInfo>;
@@ -18,7 +20,7 @@ pub(crate) trait NativeStyleResolver {
     fn alignment_for_style_id(&self, style_id: u32) -> Option<&AlignmentInfo>;
     fn protection_for_style_id(&self, style_id: u32) -> Option<&ProtectionInfo>;
     fn named_style_for_style_id(&self, style_id: u32) -> Option<&str>;
-    fn date1904(&self) -> bool;
+    fn serial_dates(&self) -> SerialDates;
 }
 
 impl NativeStyleResolver for NativeReaderBook {
@@ -50,8 +52,11 @@ impl NativeStyleResolver for NativeReaderBook {
         self.named_style_for_style_id(style_id)
     }
 
-    fn date1904(&self) -> bool {
-        self.date1904()
+    fn serial_dates(&self) -> SerialDates {
+        SerialDates {
+            date1904: self.date1904(),
+            durations: true,
+        }
     }
 }
 
@@ -86,7 +91,10 @@ impl NativeStyleResolver for NativeXlsbReaderBook {
         None
     }
 
-    fn date1904(&self) -> bool {
-        self.date1904()
+    fn serial_dates(&self) -> SerialDates {
+        SerialDates {
+            date1904: self.date1904(),
+            durations: false,
+        }
     }
 }

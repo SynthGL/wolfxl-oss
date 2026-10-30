@@ -32,8 +32,8 @@ pub(crate) fn write_cell_payload(
     let (row, col) = parse_a1_to_row_col(a1)?;
     let value = payload_to_write_cell_value(payload, wb.date1904)?;
 
-    // If the value is a date/datetime and no number_format has been
-    // attached yet, apply the oracle's defaults on the cell's style.
+    // If the value is a date, datetime or duration and no number_format has
+    // been attached yet, apply the oracle's defaults on the cell's style.
     let default_nf = match (
         payload
             .cast::<PyDict>()
@@ -45,6 +45,7 @@ pub(crate) fn write_cell_payload(
     ) {
         (Some("date"), WriteCellValue::DateSerial(_)) => Some("yyyy-mm-dd"),
         (Some("datetime"), WriteCellValue::DateSerial(_)) => Some("yyyy-mm-dd hh:mm:ss"),
+        (Some("timedelta"), WriteCellValue::Number(_)) => Some("[hh]:mm:ss"),
         _ => None,
     };
 
@@ -252,7 +253,8 @@ pub(crate) fn payload_to_write_cell_value(
     match type_str.as_str() {
         "blank" => Ok(WriteCellValue::Blank),
         "string" => Ok(WriteCellValue::String(value_str.unwrap_or_default())),
-        "number" => {
+        // A duration is its serial day count, as openpyxl writes it.
+        "number" | "timedelta" => {
             let n: f64 = value_str
                 .as_deref()
                 .unwrap_or("0")

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from functools import lru_cache
 from typing import Any
 
@@ -196,6 +196,8 @@ def python_value_to_payload(value: Any) -> dict[str, Any]:
         return {"type": "datetime", "value": value.replace(microsecond=0).isoformat()}
     if isinstance(value, date):
         return {"type": "date", "value": value.isoformat()}
+    if isinstance(value, timedelta):
+        return {"type": "timedelta", "value": value.total_seconds() / 86400}
     if isinstance(value, str) and value.startswith("="):
         return {"type": "formula", "formula": value, "value": value}
     if isinstance(value, str) and value in _ERROR_CODES:
