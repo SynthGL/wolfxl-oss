@@ -19,6 +19,7 @@ def close_workbook(workbook: Any) -> None:
     _clear_worksheet_style_caches(workbook)
     workbook._rust_reader = None
     workbook._streaming_style_cache = None
+    workbook._stream_shared_strings = None
     workbook._rust_writer = None
     workbook._rust_patcher = None
     tmp_path = getattr(workbook, "_tempfile_path", None)

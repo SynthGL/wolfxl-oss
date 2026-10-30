@@ -23,6 +23,7 @@
 
 use std::fs::File;
 use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom};
+use std::sync::Arc;
 
 use flate2::read::DeflateDecoder;
 use pyo3::exceptions::{PyIOError, PyMemoryError, PyStopIteration, PyValueError};
@@ -36,6 +37,7 @@ use quick_xml::Reader as XmlReader;
 use zip::{CompressionMethod, ZipArchive};
 
 use crate::ooxml_util;
+use crate::streaming_scan::{HandoffReader, RowScanner};
 
 type PyObjectOwned = Py<PyAny>;
 // Keep read_only value scans below openpyxl's peak RSS on ordinary table-sized
@@ -228,6 +230,47 @@ fn resolve_sheet_xml_path<R: Read + Seek>(
     )))
 }
 
+/// Parsed `xl/sharedStrings.xml`, loaded once per workbook and shared by
+/// every [`StreamingSheetReader`] opened from the same source.
+#[pyclass(frozen, module = "wolfxl._rust")]
+pub struct StreamingSharedStrings {
+    sst: Arc<Vec<String>>,
+}
+
+#[pymethods]
+impl StreamingSharedStrings {
+    /// Parse the shared-strings table of the xlsx at `path`.
+    #[staticmethod]
+    pub fn load(path: &str) -> PyResult<Self> {
+        let file = File::open(path)
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open xlsx: {e}")))?;
+        let zip = ZipArchive::new(file)
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
+        Self::from_archive(zip)
+    }
+
+    /// [`Self::load`] for in-memory xlsx bytes (file-like sources).
+    #[staticmethod]
+    pub fn load_from_bytes(data: &Bound<'_, PyBytes>) -> PyResult<Self> {
+        let zip = ZipArchive::new(PyBytesCursor::new(data))
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
+        Self::from_archive(zip)
+    }
+
+    fn __len__(&self) -> usize {
+        self.sst.len()
+    }
+}
+
+impl StreamingSharedStrings {
+    fn from_archive<R: Read + Seek>(mut zip: ZipArchive<R>) -> PyResult<Self> {
+        ooxml_util::validate_zip_archive(&mut zip)?;
+        Ok(Self {
+            sst: Arc::new(load_sst(&mut zip)?),
+        })
+    }
+}
+
 /// Streaming sheet reader. See module docs.
 #[pyclass(unsendable, module = "wolfxl._rust")]
 pub struct StreamingSheetReader {
@@ -235,8 +278,9 @@ pub struct StreamingSheetReader {
     reader: Option<SheetXmlReader>,
     /// Scratch buffer reused for quick-xml events.
     event_buf: Vec<u8>,
-    /// Shared-strings table loaded upfront from `xl/sharedStrings.xml`.
-    sst: Vec<String>,
+    /// Shared-strings table: supplied by the caller or loaded from
+    /// `xl/sharedStrings.xml` when the reader opens.
+    sst: Arc<Vec<String>>,
     /// Whether the reader has been exhausted.
     exhausted: bool,
     /// Optional `min_row` bound (1-based, inclusive). Rows below are skipped.
@@ -405,17 +449,37 @@ enum CellTypeAttr {
     Date,
 }
 
+/// Worksheet XML source. Values-only rows come from the byte-level row
+/// scanner; the first event read (other modes, or a row the fast path leaves
+/// to quick-xml) hands the rest of the stream to quick-xml for good.
 enum SheetXmlReader {
-    Memory(XmlReader<Cursor<Vec<u8>>>),
-    Entry(XmlReader<BufReader<SheetEntryReader>>),
+    Scan(RowScanner),
+    Events(XmlReader<BufReader<HandoffReader>>),
 }
 
 impl SheetXmlReader {
-    fn read_event_into<'a>(&mut self, buf: &'a mut Vec<u8>) -> quick_xml::Result<Event<'a>> {
-        match self {
-            Self::Memory(reader) => reader.read_event_into(buf),
-            Self::Entry(reader) => reader.read_event_into(buf),
+    fn new(initial: Vec<u8>, source: Option<Box<dyn Read>>) -> Self {
+        Self::Scan(RowScanner::new(initial, source))
+    }
+
+    fn events(&mut self) -> &mut XmlReader<BufReader<HandoffReader>> {
+        if let Self::Scan(scanner) = self {
+            let scanner = std::mem::replace(scanner, RowScanner::new(Vec::new(), None));
+            let mut reader = XmlReader::from_reader(BufReader::with_capacity(
+                SHEET_ENTRY_BUFFER,
+                scanner.handoff(),
+            ));
+            reader.config_mut().trim_text(false);
+            *self = Self::Events(reader);
         }
+        match self {
+            Self::Events(reader) => reader,
+            Self::Scan(_) => unreachable!("the scanner was just replaced"),
+        }
+    }
+
+    fn read_event_into<'a>(&mut self, buf: &'a mut Vec<u8>) -> quick_xml::Result<Event<'a>> {
+        self.events().read_event_into(buf)
     }
 
     fn read_text_into<'a>(
@@ -423,10 +487,7 @@ impl SheetXmlReader {
         end: quick_xml::name::QName<'_>,
         buf: &'a mut Vec<u8>,
     ) -> quick_xml::Result<quick_xml::events::BytesText<'a>> {
-        match self {
-            Self::Memory(reader) => reader.read_text_into(end, buf),
-            Self::Entry(reader) => reader.read_text_into(end, buf),
-        }
+        self.events().read_text_into(end, buf)
     }
 }
 
@@ -603,9 +664,11 @@ impl Read for SheetEntryReader {
 
 #[pymethods]
 impl StreamingSheetReader {
-    /// Open `path` and prepare to stream `sheet`.
+    /// Open `path` and prepare to stream `sheet`. Pass `shared_strings`
+    /// loaded from the same source to skip re-parsing the table.
     #[staticmethod]
-    #[pyo3(signature = (path, sheet, min_row=None, max_row=None, min_col=None, max_col=None))]
+    #[pyo3(signature = (path, sheet, min_row=None, max_row=None, min_col=None, max_col=None, shared_strings=None))]
+    #[allow(clippy::too_many_arguments)]
     pub fn open(
         path: &str,
         sheet: &str,
@@ -613,17 +676,27 @@ impl StreamingSheetReader {
         max_row: Option<u32>,
         min_col: Option<u32>,
         max_col: Option<u32>,
+        shared_strings: Option<&StreamingSharedStrings>,
     ) -> PyResult<Self> {
         let file = File::open(path)
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open xlsx: {e}")))?;
         let zip = ZipArchive::new(file)
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
-        Self::from_archive(zip, sheet, min_row, max_row, min_col, max_col)
+        Self::from_archive(
+            zip,
+            sheet,
+            min_row,
+            max_row,
+            min_col,
+            max_col,
+            shared_strings,
+        )
     }
 
     /// Prepare to stream `sheet` from in-memory xlsx bytes (file-like sources).
     #[staticmethod]
-    #[pyo3(signature = (data, sheet, min_row=None, max_row=None, min_col=None, max_col=None))]
+    #[pyo3(signature = (data, sheet, min_row=None, max_row=None, min_col=None, max_col=None, shared_strings=None))]
+    #[allow(clippy::too_many_arguments)]
     pub fn open_from_bytes(
         data: &Bound<'_, PyBytes>,
         sheet: &str,
@@ -631,10 +704,19 @@ impl StreamingSheetReader {
         max_row: Option<u32>,
         min_col: Option<u32>,
         max_col: Option<u32>,
+        shared_strings: Option<&StreamingSharedStrings>,
     ) -> PyResult<Self> {
         let zip = ZipArchive::new(PyBytesCursor::new(data))
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
-        Self::from_archive(zip, sheet, min_row, max_row, min_col, max_col)
+        Self::from_archive(
+            zip,
+            sheet,
+            min_row,
+            max_row,
+            min_col,
+            max_col,
+            shared_strings,
+        )
     }
 
     /// `(max_row, max_col)` covered by `sheet`'s cells and merged ranges in the
@@ -926,8 +1008,8 @@ enum ValueStepResult<'py> {
 }
 
 impl StreamingSheetReader {
-    /// Load shared strings and stage `sheet`'s XML: in memory when small, else
-    /// inflated from its ZIP entry while rows are read.
+    /// Resolve shared strings and stage `sheet`'s XML: in memory when small,
+    /// else inflated from its ZIP entry while rows are read.
     fn from_archive<R: IntoEntrySource>(
         mut zip: ZipArchive<R>,
         sheet: &str,
@@ -935,10 +1017,14 @@ impl StreamingSheetReader {
         max_row: Option<u32>,
         min_col: Option<u32>,
         max_col: Option<u32>,
+        shared_strings: Option<&StreamingSharedStrings>,
     ) -> PyResult<Self> {
         ooxml_util::validate_zip_archive(&mut zip)?;
 
-        let sst = load_sst(&mut zip)?;
+        let sst = match shared_strings {
+            Some(shared) => Arc::clone(&shared.sst),
+            None => Arc::new(load_sst(&mut zip)?),
+        };
         let sheet_path = resolve_sheet_xml_path(&mut zip, sheet)?;
         let mut sheet_entry = zip.by_name(&sheet_path).map_err(|e| {
             PyErr::new::<PyIOError, _>(format!("Failed to open sheet part '{sheet_path}': {e}"))
@@ -948,9 +1034,7 @@ impl StreamingSheetReader {
             sheet_entry
                 .read_to_end(&mut xml)
                 .map_err(|e| PyErr::new::<PyIOError, _>(format!("read sheet XML: {e}")))?;
-            let mut reader = XmlReader::from_reader(Cursor::new(xml));
-            reader.config_mut().trim_text(false);
-            SheetXmlReader::Memory(reader)
+            SheetXmlReader::new(xml, None)
         } else {
             let data_start = sheet_entry.data_start().ok_or_else(|| {
                 PyErr::new::<PyIOError, _>(format!("sheet part '{sheet_path}' has no data offset"))
@@ -965,10 +1049,7 @@ impl StreamingSheetReader {
                 .into_entry_source(data_start, compressed_size)
                 .and_then(|source| SheetEntryReader::new(source, method, size, crc32))
                 .map_err(|e| PyErr::new::<PyIOError, _>(format!("open sheet XML: {e}")))?;
-            let mut reader =
-                XmlReader::from_reader(BufReader::with_capacity(SHEET_ENTRY_BUFFER, entry));
-            reader.config_mut().trim_text(false);
-            SheetXmlReader::Entry(reader)
+            SheetXmlReader::new(Vec::new(), Some(Box::new(entry)))
         };
 
         Ok(Self {
@@ -1024,6 +1105,9 @@ impl StreamingSheetReader {
     }
 
     fn parse_one_value_row<'py>(&mut self, py: Python<'py>) -> PyResult<ValueStepResult<'py>> {
+        if let Some(step) = self.scan_value_row(py)? {
+            return Ok(step);
+        }
         let reader = match self.reader.as_mut() {
             Some(reader) => reader,
             None => return Ok(ValueStepResult::Done),
@@ -1074,6 +1158,53 @@ impl StreamingSheetReader {
                 _ => {}
             }
         }
+    }
+
+    /// Values-only fast path: `Some(step)` when the row scanner handled the
+    /// next row, `None` when the event reader must take over from here. A row
+    /// the scanner cannot parse is left unconsumed, so quick-xml re-reads it.
+    fn scan_value_row<'py>(&mut self, py: Python<'py>) -> PyResult<Option<ValueStepResult<'py>>> {
+        let Some(SheetXmlReader::Scan(scanner)) = self.reader.as_mut() else {
+            return Ok(None);
+        };
+        let Some(window) = scanner.next_row() else {
+            return Ok(None);
+        };
+        let text = scanner.text();
+        let previous = self.last_row;
+        let tag = BytesStart::from_content(&text[window.tag.clone()], "row".len());
+        let row_idx = row_index_from_start(&tag, previous)?;
+        self.last_row = row_idx;
+        if self.min_row.is_some_and(|min| row_idx < min) {
+            scanner.consume(&window);
+            return Ok(Some(ValueStepResult::Skip));
+        }
+        if self.max_row.is_some_and(|max| row_idx > max) {
+            self.exhausted = true;
+            self.stopped_past_max_row = true;
+            return Ok(Some(ValueStepResult::Done));
+        }
+        let values = if window.self_closing {
+            empty_value_row(py, self.min_col, self.max_col)?
+        } else {
+            match scan_value_row_body(
+                &text[window.body.clone()],
+                py,
+                &self.sst,
+                &self.date_styles,
+                self.value_output,
+                self.min_col,
+                self.max_col,
+            )? {
+                Some(values) => values,
+                None => {
+                    self.last_row = previous;
+                    return Ok(None);
+                }
+            }
+        };
+        scanner.consume(&window);
+        Ok(Some(ValueStepResult::Row(row_idx, values)))
     }
 
     fn empty_value_row_result<'py>(
@@ -1303,6 +1434,255 @@ fn empty_value_row<'py>(
 ) -> PyResult<Bound<'py, PyTuple>> {
     let cmin = min_col.unwrap_or(1);
     finish_value_row(py, Vec::new(), cmin.saturating_sub(1), min_col, max_col)
+}
+
+/// Values-only fast path over a scanned `<row>` body, producing what
+/// [`read_values_until_row_end`] would. `Ok(None)` when the body holds markup
+/// left to quick-xml: anything but unprefixed `<c>` cells with `<f>`/`<v>`
+/// children, or entity references outside `<v>`.
+fn scan_value_row_body<'py>(
+    body: &str,
+    py: Python<'py>,
+    sst: &[String],
+    date_styles: &DateStyles,
+    output: CellOutput,
+    min_col: Option<u32>,
+    max_col: Option<u32>,
+) -> PyResult<Option<Bound<'py, PyTuple>>> {
+    let bytes = body.as_bytes();
+    let mut out: Vec<PyObjectOwned> = Vec::new();
+    let mut last_col = min_col.unwrap_or(1).saturating_sub(1);
+    let mut next_col = 1;
+    let mut at = 0;
+    while let Some(offset) = memchr::memchr(b'<', &bytes[at..]) {
+        let lt = at + offset;
+        if bytes[at..lt].contains(&b'&') {
+            return Ok(None);
+        }
+        let Some((tag, gt, self_closing)) = scan_start_tag(body, lt, "c") else {
+            return Ok(None);
+        };
+        let (col, style_id, t_attr) =
+            cell_value_attrs_from_start(&BytesStart::from_content(tag, "c".len()), next_col)?;
+        next_col = col.saturating_add(1);
+        if self_closing {
+            push_bounded_value(
+                py,
+                &mut out,
+                &mut last_col,
+                col,
+                py.None(),
+                min_col,
+                max_col,
+            );
+            at = gt + 1;
+            continue;
+        }
+        let Some((value, cell_type, end)) =
+            scan_cell_value(body, gt + 1, py, &t_attr, sst, output)?
+        else {
+            return Ok(None);
+        };
+        let value = date_styles.apply(
+            py,
+            style_id,
+            value,
+            cell_type,
+            matches!(t_attr, CellTypeAttr::Number),
+        )?;
+        push_bounded_value(py, &mut out, &mut last_col, col, value, min_col, max_col);
+        at = end;
+    }
+    if bytes[at..].contains(&b'&') {
+        return Ok(None);
+    }
+    finish_value_row(py, out, last_col, min_col, max_col).map(Some)
+}
+
+/// [`read_cell_contents`] for a scanned cell whose content starts at `start`:
+/// the value, its cell type, and the offset past `</c>`. `Ok(None)` when the
+/// cell needs the event reader (inline strings, unknown children, entity
+/// references in formula text).
+fn scan_cell_value(
+    text: &str,
+    start: usize,
+    py: Python<'_>,
+    t_attr: &CellTypeAttr,
+    sst: &[String],
+    output: CellOutput,
+) -> PyResult<Option<(PyObjectOwned, &'static str, usize)>> {
+    let bytes = text.as_bytes();
+    let keep_formula = output != CellOutput::CachedValue;
+    let mut v_text: Option<String> = None;
+    let mut f_text: Option<String> = None;
+    let mut fast_number: Option<PyObjectOwned> = None;
+    let mut fast_shared: Option<usize> = None;
+    let mut has_formula = false;
+    let mut at = start;
+    loop {
+        let Some(offset) = memchr::memchr(b'<', &bytes[at..]) else {
+            return Ok(None);
+        };
+        let lt = at + offset;
+        if !scan_cell_text(&text[at..lt], None)? {
+            return Ok(None);
+        }
+        let rest = &text[lt..];
+        if rest.starts_with("</c>") {
+            // Without `<is>`, an inline-string cell has no value.
+            let raw_value = if matches!(t_attr, CellTypeAttr::InlineString) {
+                None
+            } else {
+                v_text
+            };
+            let (value, cell_type) = value_cell_object(
+                py,
+                t_attr,
+                output,
+                has_formula,
+                f_text,
+                fast_number,
+                fast_shared,
+                raw_value,
+                sst,
+            )?;
+            return Ok(Some((value, cell_type, lt + "</c>".len())));
+        }
+        if let Some((_, gt, self_closing)) = scan_start_tag(text, lt, "f") {
+            has_formula = true;
+            if self_closing {
+                if keep_formula {
+                    f_text.get_or_insert_with(String::new);
+                }
+                at = gt + 1;
+                continue;
+            }
+            let Some((formula, end)) = scan_text_until(text, gt + 1, "</f>") else {
+                return Ok(None);
+            };
+            let sink = keep_formula.then_some(&mut f_text);
+            if !scan_cell_text(formula, sink)? {
+                return Ok(None);
+            }
+            at = end;
+            continue;
+        }
+        if rest.starts_with("<v/>") {
+            v_text.get_or_insert_with(String::new);
+            at = lt + "<v/>".len();
+            continue;
+        }
+        if !rest.starts_with("<v>") {
+            return Ok(None);
+        }
+        let Some((raw, end)) = scan_text_until(text, lt + "<v>".len(), "</v>") else {
+            return Ok(None);
+        };
+        at = end;
+        // Formula-text rows ignore the cached result; error codes still
+        // come from `<v>`.
+        if has_formula
+            && output == CellOutput::FormulaText
+            && !matches!(t_attr, CellTypeAttr::Error)
+        {
+            continue;
+        }
+        let raw = normalize_xml_eol(raw);
+        let value = quick_xml::escape::unescape(&raw)
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("cell text decode: {e}")))?;
+        if matches!(t_attr, CellTypeAttr::Number)
+            && f_text.is_none()
+            && v_text.is_none()
+            && fast_number.is_none()
+        {
+            if let Some(number) = number_text_to_py(py, value.as_bytes())? {
+                fast_number = Some(number);
+                continue;
+            }
+        }
+        if matches!(t_attr, CellTypeAttr::Shared) && v_text.is_none() && fast_shared.is_none() {
+            if let Some(idx) = parse_usize_bytes(value.as_bytes()) {
+                fast_shared = Some(idx);
+                continue;
+            }
+        }
+        if !value.is_empty() {
+            v_text.get_or_insert_with(String::new).push_str(&value);
+        }
+    }
+}
+
+/// The `<name ...>` or `<name .../>` tag at `lt`, with no namespace prefix:
+/// its content between `<` and `>` (without a trailing `/`), the offset of
+/// `>`, and whether it is self-closing.
+fn scan_start_tag<'a>(text: &'a str, lt: usize, name: &str) -> Option<(&'a str, usize, bool)> {
+    let bytes = text.as_bytes();
+    if !text[lt + 1..].starts_with(name) {
+        return None;
+    }
+    let gt = scan_tag_end(bytes, lt + 1 + name.len())?;
+    let self_closing = bytes[gt - 1] == b'/';
+    let content = &text[lt + 1..gt - usize::from(self_closing)];
+    // quick-xml's tag name runs to the first whitespace.
+    let name_end = content
+        .bytes()
+        .position(|b| b.is_ascii_whitespace())
+        .unwrap_or(content.len());
+    (content[..name_end] == *name).then_some((content, gt, self_closing))
+}
+
+/// Offset of the first `>` at or after `from` outside a quoted value.
+fn scan_tag_end(bytes: &[u8], from: usize) -> Option<usize> {
+    let mut at = from;
+    loop {
+        let i = at + memchr::memchr3(b'>', b'"', b'\'', &bytes[at..])?;
+        match bytes[i] {
+            b'>' => return Some(i),
+            quote => at = i + 1 + memchr::memchr(quote, &bytes[i + 1..])? + 1,
+        }
+    }
+}
+
+/// Text from `start` to the next markup, which must be `close`: the text and
+/// the offset past `close`.
+fn scan_text_until<'a>(text: &'a str, start: usize, close: &str) -> Option<(&'a str, usize)> {
+    let lt = start + memchr::memchr(b'<', &text.as_bytes()[start..])?;
+    text[lt..]
+        .starts_with(close)
+        .then(|| (&text[start..lt], lt + close.len()))
+}
+
+/// Apply one cell text node the way [`read_cell_contents`] handles its
+/// `Text` and `GeneralRef` events: every reference is resolved (an unknown
+/// one is an error) and, with a `sink`, line-normalized text and resolved
+/// references are appended. `Ok(false)` for a `&` quick-xml would reject as
+/// unterminated, so the event reader reports it.
+fn scan_cell_text(raw: &str, mut sink: Option<&mut Option<String>>) -> PyResult<bool> {
+    let mut push = |piece: &str| {
+        if let Some(sink) = sink.as_mut() {
+            if !piece.is_empty() {
+                sink.get_or_insert_with(String::new).push_str(piece);
+            }
+        }
+    };
+    let mut rest = raw;
+    while let Some(amp) = rest.find('&') {
+        push(&normalize_xml_eol(&rest[..amp]));
+        let after = &rest[amp + 1..];
+        let Some(end) = after.find([';', '&']) else {
+            return Ok(false);
+        };
+        if after.as_bytes()[end] != b';' {
+            return Ok(false);
+        }
+        let resolved =
+            ooxml_util::resolve_general_ref(&quick_xml::events::BytesRef::new(&after[..end]))
+                .map_err(|e| PyErr::new::<PyIOError, _>(format!("cell text decode: {e}")))?;
+        push(&resolved);
+        rest = &after[end + 1..];
+    }
+    push(&normalize_xml_eol(rest));
+    Ok(true)
 }
 
 fn read_cell_contents(
@@ -2253,6 +2633,20 @@ mod tests {
         .unwrap()
     }
 
+    /// An event reader over `xml` (inflated from a ZIP entry when
+    /// `use_entry`) that refills three bytes at a time.
+    fn tiny_buffer_events(xml: &[u8], use_entry: bool) -> SheetXmlReader {
+        let scanner = if use_entry {
+            RowScanner::new(Vec::new(), Some(Box::new(deflated_entry(xml))))
+        } else {
+            RowScanner::new(xml.to_vec(), None)
+        };
+        SheetXmlReader::Events(XmlReader::from_reader(BufReader::with_capacity(
+            3,
+            scanner.handoff(),
+        )))
+    }
+
     #[test]
     fn sheet_entry_reader_streams_stored_and_deflated_parts() {
         let xml: Vec<u8> = (0..20_000)
@@ -2328,16 +2722,7 @@ mod tests {
                     ),
                 ] {
                     // A tiny read buffer splits references across refills.
-                    let mut reader = if use_entry {
-                        SheetXmlReader::Entry(XmlReader::from_reader(BufReader::with_capacity(
-                            3,
-                            deflated_entry(xml.as_bytes()),
-                        )))
-                    } else {
-                        SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(
-                            xml.as_bytes().to_vec(),
-                        )))
-                    };
+                    let mut reader = tiny_buffer_events(xml.as_bytes(), use_entry);
                     let mut buf = Vec::new();
                     assert!(matches!(
                         reader.read_event_into(&mut buf).unwrap(),
@@ -2372,8 +2757,7 @@ mod tests {
                 "<is><t>before &unknown; after</t></is>",
             ] {
                 let xml = format!("<c>{body}</c>");
-                let mut reader =
-                    SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(xml.into_bytes())));
+                let mut reader = SheetXmlReader::new(xml.into_bytes(), None);
                 let mut buf = Vec::new();
                 assert!(matches!(
                     reader.read_event_into(&mut buf).unwrap(),
@@ -2398,8 +2782,7 @@ mod tests {
         Python::attach(|py| {
             let read = |output| {
                 let xml = b"<c><f> A1 &amp; &quot; B &quot;&#10;</f><v>1&#50;3</v></c>";
-                let mut reader =
-                    SheetXmlReader::Memory(XmlReader::from_reader(Cursor::new(xml.to_vec())));
+                let mut reader = SheetXmlReader::new(xml.to_vec(), None);
                 let mut buf = Vec::new();
                 assert!(matches!(
                     reader.read_event_into(&mut buf).unwrap(),
@@ -2451,5 +2834,98 @@ mod tests {
         );
         let encoded = br#"<sheetData><row r="1"><c r="A5000&#49;"/></row></sheetData><mergeCells><mergeCell ref="A1:C&#x37;"/></mergeCells>"#;
         assert_eq!(scan_cell_bounds(&encoded[..]).unwrap(), (50001, 3));
+    }
+
+    /// Value rows as `repr` strings (or the error), read through the row
+    /// scanner when `fast`, else through quick-xml events only.
+    fn value_rows(
+        py: Python<'_>,
+        xml: &str,
+        output: CellOutput,
+        bounds: [Option<u32>; 4],
+        fast: bool,
+    ) -> Vec<String> {
+        let reader = if fast {
+            SheetXmlReader::new(xml.as_bytes().to_vec(), None)
+        } else {
+            let mut events = SheetXmlReader::new(xml.as_bytes().to_vec(), None);
+            events.events();
+            events
+        };
+        let [min_row, max_row, min_col, max_col] = bounds;
+        let mut sheet = StreamingSheetReader {
+            reader: Some(reader),
+            event_buf: Vec::new(),
+            sst: Arc::new((0..3).map(|i| format!("s{i}")).collect()),
+            exhausted: false,
+            min_row,
+            max_row,
+            stopped_past_max_row: false,
+            min_col,
+            max_col,
+            last_row: 0,
+            date_styles: DateStyles::default(),
+            value_output: output,
+        };
+        let mut rows = Vec::new();
+        loop {
+            match sheet.parse_one_value_row(py) {
+                Ok(ValueStepResult::Row(row, values)) => {
+                    rows.push(format!("{row}: {}", values.repr().unwrap()));
+                }
+                Ok(ValueStepResult::Skip) => rows.push("skip".into()),
+                Ok(ValueStepResult::Done) => break,
+                Err(err) => {
+                    rows.push(format!("error: {err}"));
+                    break;
+                }
+            }
+        }
+        rows.push(format!("past max: {}", sheet.stopped_past_max_row));
+        rows
+    }
+
+    #[test]
+    fn scanned_value_rows_match_event_rows() {
+        let rows = [
+            r#"<row r="1" spans="1:4"><c r="A1"><v>1.5</v></c><c r="B1" t="s"><v>2</v></c><c r="C1" t="b"><v>1</v></c><c r="D1" s="3"/></row>"#,
+            r#"<row r="2"><c r="A2"><f t="shared" ref="A2:A3" si="0">B2*2</f><v>4</v></c><c r="C2"><f t="shared" si="0"/><v>6</v></c><c r="D2" t="str"><f>"a"&amp;"b"</f><v>ab</v></c></row>"#,
+            r#"<row r="3"><c r="A3" t="e"><f>1/0</f><v>#DIV/0!</v></c><c r="B3"><f>X1</f><v/></c><c r="C3"><f></f><v>7</v></c><c r="D3"><v>1&#50;3</v></c></row>"#,
+            r#"<row><c><v>8</v></c><c><v>9</v></c>
+  <c r="F4" t="s"><v>99</v></c><c r="G4"><f>A1&#13;
+B1</f><v>0</v></c></row>"#,
+            r#"<row r="6"/><row r="7"><c r="A7" t="inlineStr"><is><t>inline</t></is></c></row><row r="8"><c r="A8"><v>10</v></c></row>"#,
+            r#"<row r="9"><!-- note --><c r="A9"><v>11</v></c></row><row r="10"><c r="B10"><v>bad</v></c></row>"#,
+            r#"<row r="13"><c r="A13" t="str"><f>IF(B1&gt;0,&quot;x&#x41;&quot;,&apos;S&apos;!A1)&#xD;&#10;</f><v>xA</v></c><c r="B13"><f>&lt;&amp;</f>  <v>1</v> </c></row>"#,
+        ];
+        let sheets = [
+            format!("<worksheet><sheetData>{}</sheetData></worksheet>", rows.join("")),
+            format!(
+                "<?xml version=\"1.0\"?>\n<x:worksheet xmlns:x=\"urn:x\"><x:sheetData>{}</x:sheetData></x:worksheet>",
+                rows[0].replace("<row", "<x:row").replace("</row>", "</x:row>")
+            ),
+            format!("<worksheet><sheetData>{}<row r=\"11\"><c r=\"1A\"/></row></sheetData></worksheet>", rows[0]),
+            format!("<worksheet><sheetData>{}<row r=\"12\"><c r=\"A12\"><v>1</v></c>", rows[1]),
+            format!("<worksheet><sheetData>{}<row r=\"x\"/></sheetData></worksheet>", rows[2]),
+            format!("<worksheet><sheetData>{}<row r=\"14\"><c r=\"A14\"><f>A1&nbsp;</f><v>1</v></c></row></sheetData></worksheet>", rows[6]),
+            format!("<worksheet><sheetData>{}<row r=\"15\"><c r=\"A15\"><f>A1&amp</f><v>1</v></c></row></sheetData></worksheet>", rows[6]),
+            format!("<worksheet><sheetData>{}<row r=\"16\"><c r=\"A16\"><f>A1 & B1</f><v>1</v></c></row></sheetData></worksheet>", rows[6]),
+        ];
+        pyo3::Python::initialize();
+        Python::attach(|py| {
+            for xml in &sheets {
+                for output in [CellOutput::FormulaText, CellOutput::CachedValue] {
+                    for bounds in [
+                        [None, None, None, None],
+                        [Some(2), Some(7), Some(2), Some(5)],
+                        [Some(3), None, Some(4), None],
+                    ] {
+                        let fast = value_rows(py, xml, output, bounds, true);
+                        let events = value_rows(py, xml, output, bounds, false);
+                        assert_eq!(fast, events, "{xml}");
+                    }
+                }
+            }
+        });
     }
 }
