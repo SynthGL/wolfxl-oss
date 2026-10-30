@@ -104,9 +104,9 @@ def _spy_compact(monkeypatch):
         def read_next_row(self):
             pytest.fail("date values must not use per-cell read_next_row")
 
-        def read_next_values_compact_chunk_with_flags(self, *args):
+        def read_next_values_compact_chunk(self, *args):
             calls.append(True)
-            return self.inner.read_next_values_compact_chunk_with_flags(*args)
+            return self.inner.read_next_values_compact_chunk(*args)
 
     monkeypatch.setattr(_streaming, "_open_stream_reader", lambda *args: Reader(original(*args)))
     return calls
