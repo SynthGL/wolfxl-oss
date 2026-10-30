@@ -409,6 +409,15 @@ evaluation access, pricing, compatibility information, and support. Commercial
 source and releases are maintained separately and are not part of this
 repository.
 
+## Related libraries
+
+The same MIT-licensed family covers the other Office formats:
+
+- [WolfPPT](https://github.com/wolfiesch/wolfppt-oss): edit PowerPoint `.pptx`
+  decks, a python-pptx alternative (`pip install wolfppt`).
+- [WolfDocx](https://github.com/wolfiesch/wolfdocx-oss): edit Word `.docx`
+  documents, a python-docx alternative (`pip install wolfdocx`).
+
 ## Development
 
 Prerequisites: a supported CPython, Rust, and `maturin`.
