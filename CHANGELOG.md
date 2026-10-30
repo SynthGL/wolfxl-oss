@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.34 - 2026-10-30
+
+### Fixed
+
+- A `datetime.time` written with `append()`, `write_rows()`, a cell
+  assignment, a write-only sheet or a modified workbook now saves as its
+  fraction of a day with the `h:mm:ss` format, as openpyxl saves it, and reads
+  back as a `datetime.time`. Previously it saved as text such as `10:30:00`.
+
 ## 2.0.33 - 2026-10-30
 
 ### Fixed

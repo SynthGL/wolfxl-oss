@@ -131,7 +131,7 @@ pub(crate) fn append_streaming_row(
         .map_err(|e| PyIOError::new_err(format!("streaming append failed: {e}")))
 }
 
-/// Pick a default `number_format` string for a `date`/`datetime`/`timedelta`
+/// Pick a default `number_format` string for a date, datetime, duration or time
 /// payload that didn't get an explicit `style_id`. Mirrors the eager
 /// path in `native_writer_cells::write_cell_payload` so streaming and
 /// eager date cells render identically when re-opened.
@@ -153,6 +153,7 @@ fn infer_default_number_format(
         (Some("date"), WriteCellValue::DateSerial(_)) => Some("yyyy-mm-dd"),
         (Some("datetime"), WriteCellValue::DateSerial(_)) => Some("yyyy-mm-dd hh:mm:ss"),
         (Some("timedelta"), WriteCellValue::Number(_)) => Some("[hh]:mm:ss"),
+        (Some("time"), WriteCellValue::Number(_)) => Some("h:mm:ss"),
         _ => None,
     })
 }
