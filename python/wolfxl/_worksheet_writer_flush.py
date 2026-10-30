@@ -41,7 +41,7 @@ def flush_to_writer(
     dirty_values = ws._dirty_values  # noqa: SLF001
     dirty = ws._dirty  # noqa: SLF001
     format_keys = ws._format_dirty_cells  # noqa: SLF001
-    if dirty_values and (not dirty or len(dirty_values) == len(dirty)):
+    if dirty_values and dirty <= dirty_values.keys():
         _write_dirty_values(ws, writer, dirty_values)
         format_cells = _format_cell_entries(ws, format_keys) if format_keys else []
     else:
@@ -141,13 +141,16 @@ def _partition_dirty_cells(
     dirty_values = ws._dirty_values  # noqa: SLF001
     format_keys = ws._format_dirty_cells  # noqa: SLF001
 
-    if dirty_values and not format_keys and (not dirty or len(dirty_values) == len(dirty)):
+    # ``cell()``/``ws[...] = v`` record plain values only in ``_dirty_values``,
+    # so the value map covers every edit only when ``_dirty`` is a subset of it.
+    values_cover_dirty = bool(dirty_values) and dirty <= dirty_values.keys()
+    if values_cover_dirty and not format_keys:
         return (
             [(row, col, value) for (row, col), value in dirty_values.items()],
             [],
             [],
         )
-    if dirty_values and format_keys and dirty and len(dirty_values) == len(dirty):
+    if values_cover_dirty:
         return (
             [(row, col, value) for (row, col), value in dirty_values.items()],
             [],

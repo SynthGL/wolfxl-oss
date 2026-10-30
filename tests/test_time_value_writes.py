@@ -86,8 +86,13 @@ def test_modified_workbooks_write_time_values(tmp_path: Path, value, number_form
     assert _written(tmp_path / "modified.xlsx") == (value, "d", number_format)
 
 
+def _assign_beside_plain(book, value):
+    book.active["B1"] = 2
+    book.active["A1"] = value
+
+
 @pytest.mark.parametrize("value", AWARE_VALUES)
-@pytest.mark.parametrize("write", [_append, _assign, _write_rows])
+@pytest.mark.parametrize("write", [_append, _assign, _assign_beside_plain, _write_rows])
 def test_timezone_aware_values_fail_on_save(tmp_path: Path, write, value) -> None:
     book = wolfxl.Workbook()
     write(book, value)
