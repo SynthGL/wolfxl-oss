@@ -153,7 +153,7 @@ def _normalize_patcher_value_payload(
     payload: dict[str, Any],
 ) -> dict[str, Any]:
     """Convert naive date/time payloads to Excel serials for ``XlsxPatcher``."""
-    if payload.get("type") in {"date", "datetime", "time"}:
+    if payload.get("type") in {"date", "datetime", "time", "timedelta"}:
         if getattr(value, "tzinfo", None) is not None:
             raise TypeError(
                 "Excel does not support timezones in datetimes. "

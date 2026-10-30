@@ -19,6 +19,11 @@
   number with `data_type == "n"`, as it does on streamed loads.
 - On streamed sheets, a cell that reads as a `datetime.timedelta` now reports
   `data_type == "d"` instead of `"n"`.
+- A `datetime.timedelta` written with `append()`, `write_rows()`, a cell
+  assignment or a write-only sheet now saves as its serial day count with the
+  `[hh]:mm:ss` format, as openpyxl saves it. Previously it saved as text such
+  as `1 day, 3:30:00`, so copying rows read with `values_only=True` kept their
+  durations only as text.
 
 ## 2.0.32 - 2026-10-30
 
