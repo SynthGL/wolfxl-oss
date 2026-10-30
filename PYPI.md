@@ -110,11 +110,11 @@ faster, and DuckDB wrote the mixed-type file faster.
 Small-file gains vary: the separate [officelibs small-feature benchmark](https://officelibs.com/excel/)
 reports about 1.7x for reads and 2.4x for writes, outside this range.
 
-The [October 29 cached-formula read comparison](https://github.com/SynthGL/wolfxl-oss/blob/main/benchmarks/results/2026-10-29-ecosystem-formulas-linux-epyc.md)
-measures WolfXL 2.0.25 on four sheets containing 1.6 million cells in total:
-1.238 s for WolfXL, 5.535 s for openpyxl 3.1.5, and 0.520 s for fastexcel
-0.20.2. WolfXL is 4.5x faster than openpyxl here and takes 2.38x fastexcel's
-time. Polars and python-calamine also beat WolfXL on this fixture.[^formula-read]
+The [October 29 cached-formula read comparison](https://github.com/SynthGL/wolfxl-oss/blob/main/benchmarks/results/2026-10-29-ecosystem-formulas-wolfxl-2.0.26-linux-epyc.md)
+measures WolfXL 2.0.26 on four sheets containing 1.6 million cells in total:
+0.747 s for WolfXL, 5.970 s for openpyxl 3.1.5, and 0.560 s for fastexcel
+0.20.2. WolfXL is 8.0x faster than openpyxl here and takes 1.33x fastexcel's
+time. Polars also beats WolfXL on this fixture.[^formula-read]
 
 [^formula-read]: AMD EPYC 9655, Linux, Python 3.13.15; five measured rounds
     after one warmup. Cached values are requested, with cell count and a sum

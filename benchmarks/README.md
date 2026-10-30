@@ -99,7 +99,7 @@ recorded as DNF in the raw results and listed in the chart footnotes instead
 of being silently dropped.
 
 ```bash
-.bench/bin/pip install wolfxl==2.0.25 openpyxl==3.1.5 xlsxwriter pyexcelerate \
+.bench/bin/pip install wolfxl==2.0.26 openpyxl==3.1.5 xlsxwriter pyexcelerate \
     python-calamine fastexcel pyarrow pylightxl pandas polars duckdb \
     tablib pyexcel pyexcel-xlsx xlsx2csv
 .bench/bin/python benchmarks/benchmark_python_excel_ecosystem.py \
@@ -108,11 +108,17 @@ of being silently dropped.
 
 ## Current measured results
 
-- [2026-10-29 plain and multi-sheet formula reads](results/2026-10-29-ecosystem-formulas-linux-epyc.md)
+- [2026-10-29 plain and multi-sheet formula reads, WolfXL 2.0.26](results/2026-10-29-ecosystem-formulas-wolfxl-2.0.26-linux-epyc.md)
+  ([raw JSON](results/2026-10-29-ecosystem-formulas-wolfxl-2.0.26-linux-epyc.json)):
+  the same cases, pins, and fixture shapes as the 2.0.25 run below, with five
+  measured rounds after one warmup. No write or memory measurements.
+- [Same-node WolfXL 2.0.25 control](results/2026-10-29-ecosystem-formulas-wolfxl-2.0.25-control-linux-epyc.md)
+  ([raw JSON](results/2026-10-29-ecosystem-formulas-wolfxl-2.0.25-control-linux-epyc.json)):
+  the same two read cases, restricted to WolfXL, on the 2.0.26 machine.
+- [2026-10-29 plain and multi-sheet formula reads, WolfXL 2.0.25](results/2026-10-29-ecosystem-formulas-linux-epyc.md)
   ([raw JSON](results/2026-10-29-ecosystem-formulas-linux-epyc.json)): WolfXL
-  2.0.25 with the October 27 competitor pins, including fastexcel 0.20.2.
-  Both read cases ran on the same machine, with five measured rounds after
-  one warmup. This run has no write or memory measurements.
+  2.0.25 with the October 27 competitor pins, including fastexcel 0.20.2,
+  on a different VM of the same type.
 - [2026-10-27 ecosystem comparison](results/2026-10-27-ecosystem-full-linux-epyc.md)
   ([raw JSON](results/2026-10-27-ecosystem-full-linux-epyc.json)): WolfXL
   2.0.21 and the same direct competitor pins and engine set as the

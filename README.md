@@ -208,26 +208,27 @@ your agent's skills folder, for example `~/.claude/skills/wolfxl-xlsx`.
 
 ### Ecosystem reads: 2026-10-29
 
-The [plain and multi-sheet formula comparison](benchmarks/results/2026-10-29-ecosystem-formulas-linux-epyc.md)
-includes WolfXL 2.0.25, openpyxl 3.1.5, fastexcel 0.20.2, python-calamine,
+The [plain and multi-sheet formula comparison](benchmarks/results/2026-10-29-ecosystem-formulas-wolfxl-2.0.26-linux-epyc.md)
+includes WolfXL 2.0.26, openpyxl 3.1.5, fastexcel 0.20.2, python-calamine,
 Polars, and other readers. Both fixtures contain 1.6 million cells. For the
 formula case, every engine reads four sheets with numeric and string cached
 formula results; the harness requests those cached values.
 
 Five measured rounds follow one discarded warmup per engine and case on an
 AMD EPYC 9655, Linux, Python 3.13.15. See the
-[raw samples and identities](benchmarks/results/2026-10-29-ecosystem-formulas-linux-epyc.json)
+[raw samples and identities](benchmarks/results/2026-10-29-ecosystem-formulas-wolfxl-2.0.26-linux-epyc.json)
 for package versions, fixture hashes, and measurement boundaries.
 
 | Median read time | Plain values | Multi-sheet formula fixture |
 | --- | ---: | ---: |
-| WolfXL 2.0.25 | 0.444 s | 1.238 s |
-| openpyxl 3.1.5 | 4.928 s | 5.535 s |
-| fastexcel 0.20.2 | 0.423 s | 0.520 s |
+| WolfXL 2.0.26 | 0.475 s | 0.747 s |
+| openpyxl 3.1.5 | 5.386 s | 5.970 s |
+| fastexcel 0.20.2 | 0.466 s | 0.560 s |
 
-WolfXL takes 1.05x fastexcel's time on plain values and 2.38x on the formula
-fixture. Polars and python-calamine also beat WolfXL on the formula fixture.
-WolfXL is 11.1x faster than openpyxl on plain values and 4.5x on formulas.[^ecosystem-read]
+WolfXL takes 1.02x fastexcel's time on plain values and 1.33x on the formula
+fixture, where Polars also beats it. WolfXL is 11.3x faster than openpyxl on
+plain values and 8.0x on formulas. On the same machine, 2.0.26 reads the
+formula fixture 1.89x faster than 2.0.25.[^ecosystem-read]
 
 [^ecosystem-read]: These are warmed read-and-consume workloads with different
     native output representations. Formula-case validation covers cell count
