@@ -58,7 +58,6 @@ if TYPE_CHECKING:
 AUTO_STREAM_ROW_THRESHOLD = 50_000
 
 _DIMENSION_REF_RE = re.compile(rb"<(?:[A-Za-z0-9_]+:)?dimension\b[^>]*\bref=[\"']([^\"']+)[\"']")
-_ROW_TAG_RE = re.compile(rb"<(?:[A-Za-z0-9_]+:)?row(?:\s|>)")
 _UNSET = object()
 
 
@@ -190,25 +189,6 @@ def _dimension_ref_from_sheet_head(zf: zipfile.ZipFile, sheet_path: str) -> str 
     return None
 
 
-def _row_count_exceeds_threshold(zf: zipfile.ZipFile, sheet_path: str) -> bool:
-    try:
-        with zf.open(sheet_path) as fh:
-            tail = b""
-            count = 0
-            while True:
-                chunk = fh.read(65_536)
-                if not chunk:
-                    break
-                buf = tail + chunk
-                count += len(_ROW_TAG_RE.findall(buf))
-                if count > AUTO_STREAM_ROW_THRESHOLD:
-                    return True
-                tail = buf[-32:]
-    except (KeyError, OSError, zipfile.BadZipFile):
-        return False
-    return False
-
-
 def _max_row_from_dimension_ref(ref: str) -> int | None:
     cell = ref.split(":", 1)[-1].replace("$", "")
     try:
@@ -270,15 +250,25 @@ def _source_dimension_max_row(source: str | bytes, sheet_title: str) -> int | No
             if sheet_path is None:
                 return None
             ref = _dimension_ref_from_sheet_head(zf, sheet_path)
-            bounds = _bounds_from_dimension_ref(ref) if ref is not None else None
-            max_row = bounds[2] if bounds is not None else None
-            if max_row is not None:
-                return max_row
-            if _row_count_exceeds_threshold(zf, sheet_path):
-                return AUTO_STREAM_ROW_THRESHOLD + 1
-            return None
+        bounds = _bounds_from_dimension_ref(ref) if ref is not None else None
+        if bounds is not None:
+            return bounds[2]
+        if _row_tags_exceed(source, sheet_title, AUTO_STREAM_ROW_THRESHOLD):
+            return AUTO_STREAM_ROW_THRESHOLD + 1
+        return None
     except (OSError, ValueError, zipfile.BadZipFile):
         return None
+
+
+def _row_tags_exceed(source: str | bytes, sheet_title: str, limit: int) -> bool:
+    """Whether the sheet XML holds more than ``limit`` ``<row>`` tags, counted natively."""
+    from wolfxl import _rust
+
+    if isinstance(source, (bytes, bytearray)):
+        return _rust.StreamingSheetReader.row_tags_exceed_from_bytes(
+            bytes(source), sheet_title, limit
+        )
+    return _rust.StreamingSheetReader.row_tags_exceed(source, sheet_title, limit)
 
 
 def _streaming_value(payload: Any, *, data_only: bool = False) -> Any:
