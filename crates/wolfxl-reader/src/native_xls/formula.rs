@@ -655,6 +655,7 @@ fn cell_label(ctx: &Context<'_>, row: u32, col: u32, quoted: bool) -> Result<Str
         .ok_or_else(|| bad("natural-language label references missing cell"))?;
     match &cell.value {
         super::CellValue::String(s) => Ok(label_text(s, quoted)),
+        super::CellValue::SharedString(s) => Ok(label_text(s, quoted)),
         super::CellValue::Number(n) => Ok(if quoted {
             format!("'{n}'")
         } else {

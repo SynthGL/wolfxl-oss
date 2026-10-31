@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- `Limits` and `LimitExceeded` let XLSX callers bound uncompressed package and
+  part bytes, stored cells, shared-string bytes, and materialized text bytes
+  with `load_workbook(..., limits=...)`.
+
+### Fixed
+
+- Bound memory for shared strings referenced by many cells. Eager and
+  streaming readers reuse shared text and Python string objects per workbook.
+
 ### Security
 
 - Update anyhow to 1.0.104 (RUSTSEC-2026-0190).

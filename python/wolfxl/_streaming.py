@@ -84,12 +84,13 @@ def _stream_shared_strings(wb: Any, source: str | bytes) -> Any:
     from wolfxl import _rust
 
     cached = getattr(wb, "_stream_shared_strings", None)
+    native = getattr(getattr(wb, "_rust_reader", None), "shared_strings", None)
     if isinstance(source, bytes):
         # Immutable bytes owned by the workbook: identity is the cache key.
         if cached is not None and cached[0] is source:
             return cached[1]
         key: Any = source
-        table = _rust.StreamingSharedStrings.load_from_bytes(source)
+        table = native() if cached is None and native is not None else _rust.StreamingSharedStrings.load_from_bytes(source)
     elif isinstance(source, bytearray):
         return _rust.StreamingSharedStrings.load_from_bytes(bytes(source))
     else:
@@ -97,7 +98,11 @@ def _stream_shared_strings(wb: Any, source: str | bytes) -> Any:
         key = (source, st.st_ino, st.st_size, st.st_mtime_ns)
         if cached is not None and cached[0] == key:
             return cached[1]
-        table = _rust.StreamingSharedStrings.load(source)
+        if cached is not None:
+            limits = getattr(wb, "_limits", None)
+            if limits is not None:
+                limits._validate(source)
+        table = native() if cached is None and native is not None else _rust.StreamingSharedStrings.load(source)
     wb._stream_shared_strings = (key, table)
     return table
 

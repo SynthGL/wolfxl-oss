@@ -81,10 +81,10 @@ fn normalize_xml_line_ends(text: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
-const DEFAULT_MAX_ZIP_ENTRIES: usize = 200_000;
-const DEFAULT_MAX_ZIP_ENTRY_BYTES: u64 = 512 * 1024 * 1024;
-const DEFAULT_MAX_ZIP_TOTAL_BYTES: u64 = 4 * 1024 * 1024 * 1024;
-const DEFAULT_MAX_COMPRESSION_RATIO: u64 = 1_000;
+use wolfxl_rels::package_guard::{
+    DEFAULT_MAX_COMPRESSION_RATIO, DEFAULT_MAX_ZIP_ENTRIES, DEFAULT_MAX_ZIP_ENTRY_BYTES,
+    DEFAULT_MAX_ZIP_TOTAL_BYTES,
+};
 const MAX_VALUE_CELL_PREALLOC: usize = 1_000_000;
 
 /// Native reader result type.
@@ -233,7 +233,8 @@ pub struct Cell {
     /// Array/data-table formula metadata when this cell is the master.
     pub array_formula: Option<ArrayFormulaInfo>,
     /// Structured rich-text runs for shared-string or inline-string cells.
-    pub rich_text: Option<Vec<RichTextRun>>,
+    /// Cells that reference the same shared-string entry share one run list.
+    pub rich_text: Option<Arc<[RichTextRun]>>,
 }
 
 /// A decoded value-only worksheet cell.
@@ -270,13 +271,46 @@ pub struct FormulaSheetSummary {
 }
 
 /// Native cell value model shared by future readers.
-#[derive(Debug, Clone, PartialEq)]
+///
+/// `String` and `SharedString` hold the same kind of value and compare equal
+/// when their text matches; the variant only records how the text is stored.
+#[derive(Debug, Clone)]
 pub enum CellValue {
     Empty,
     String(String),
+    /// Text resolved from a workbook shared-string table. Every cell that
+    /// references the same table entry holds a clone of the same `Arc`, so a
+    /// repeated entry keeps one copy of its text.
+    SharedString(Arc<str>),
     Number(f64),
     Bool(bool),
     Error(String),
+}
+
+impl CellValue {
+    /// Text of a `String` or `SharedString` value.
+    pub fn as_text(&self) -> Option<&str> {
+        match self {
+            Self::String(text) => Some(text),
+            Self::SharedString(text) => Some(text),
+            Self::Empty | Self::Number(_) | Self::Bool(_) | Self::Error(_) => None,
+        }
+    }
+}
+
+impl PartialEq for CellValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Empty, Self::Empty) => true,
+            (Self::Number(a), Self::Number(b)) => a == b,
+            (Self::Bool(a), Self::Bool(b)) => a == b,
+            (Self::Error(a), Self::Error(b)) => a == b,
+            _ => match (self.as_text(), other.as_text()) {
+                (Some(a), Some(b)) => a == b,
+                _ => false,
+            },
+        }
+    }
 }
 
 /// OOXML cell type classification.
@@ -1558,7 +1592,8 @@ impl NativeXlsxBook {
     }
 
     /// Shared-string table as plain strings, decoded on first value access.
-    pub fn shared_strings(&self) -> Result<&[String]> {
+    /// Cells that reference an entry hold clones of the same `Arc`.
+    pub fn shared_strings(&self) -> Result<&[Arc<str>]> {
         self.load_shared_strings()
             .map(|strings| strings.values.as_slice())
     }
@@ -2214,10 +2249,12 @@ impl FileSharing {
     }
 }
 
+/// One `Arc` per `<si>` entry. Cells clone the `Arc` instead of the text so a
+/// repeated entry is stored once however many cells reference it.
 #[derive(Debug, Clone, Default, PartialEq)]
 struct SharedStrings {
-    values: Vec<String>,
-    rich_text: Vec<Option<Vec<RichTextRun>>>,
+    values: Vec<Arc<str>>,
+    rich_text: Vec<Option<Arc<[RichTextRun]>>>,
 }
 
 fn resolve_named_ranges(raw_names: Vec<RawNamedRange>) -> Vec<NamedRange> {
@@ -2436,7 +2473,7 @@ fn parse_shared_strings_reader<R: BufRead, const RETAIN: bool>(input: R) -> Resu
             },
             Ok(Event::Empty(e)) => match e.local_name().as_ref().as_bytes() {
                 b"si" if RETAIN => {
-                    out.values.push(String::new());
+                    out.values.push(Arc::from(""));
                     out.rich_text.push(None);
                 }
                 other if current_props.is_some() => {
@@ -2447,8 +2484,8 @@ fn parse_shared_strings_reader<R: BufRead, const RETAIN: bool>(input: R) -> Resu
             Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                 b"si" => {
                     if RETAIN {
-                        out.values.push(std::mem::take(&mut current));
-                        out.rich_text.push(saw_r.then(|| std::mem::take(&mut runs)));
+                        out.values.push(Arc::from(current.as_str()));
+                        out.rich_text.push(saw_r.then(|| runs.drain(..).collect()));
                     }
                     in_si = false;
                 }
@@ -6798,7 +6835,7 @@ impl ValueCellBuilder {
         let value = match self.data_type {
             CellDataType::SharedString => shared_string_idx
                 .and_then(|i| shared_strings.values.get(i).cloned())
-                .map(CellValue::String)
+                .map(CellValue::SharedString)
                 .unwrap_or(CellValue::Empty),
             CellDataType::InlineString => {
                 if self.inline_text.is_empty() && !self.inline_present {
@@ -7000,7 +7037,7 @@ impl CellBuilder {
         let rich_text = match self.data_type {
             CellDataType::SharedString => shared_string_idx
                 .and_then(|idx| shared_strings.rich_text.get(idx).cloned().flatten()),
-            CellDataType::InlineString if self.inline_saw_r => Some(self.inline_runs),
+            CellDataType::InlineString if self.inline_saw_r => Some(Arc::from(self.inline_runs)),
             _ => None,
         };
         let float_text = self.data_type == CellDataType::Number
@@ -7008,7 +7045,7 @@ impl CellBuilder {
         let value = match self.data_type {
             CellDataType::SharedString => shared_string_idx
                 .and_then(|i| shared_strings.values.get(i).cloned())
-                .map(CellValue::String)
+                .map(CellValue::SharedString)
                 .unwrap_or(CellValue::Empty),
             CellDataType::InlineString => {
                 if self.inline_text.is_empty() && !self.inline_present {
@@ -7656,7 +7693,7 @@ mod tests {
         let cells = book.worksheet_value_cells("Data").unwrap();
         assert_eq!(cells[0].value, CellValue::String("shared value".into()));
         assert!(book.shared_strings.get().is_some());
-        assert_eq!(book.shared_strings().unwrap(), ["shared value"]);
+        assert_eq!(sst_texts(book.shared_strings().unwrap()), ["shared value"]);
         // Full sparse-sheet parsing must initialize its own lazy table too.
         assert!(cloned.shared_strings.get().is_none());
         let sheet = cloned.worksheet("Data").unwrap();
@@ -7664,6 +7701,76 @@ mod tests {
             sheet.cells[0].value,
             CellValue::String("shared value".into())
         );
+    }
+
+    fn sst_texts(values: &[Arc<str>]) -> Vec<&str> {
+        values.iter().map(|value| &**value).collect()
+    }
+
+    #[test]
+    fn repeated_shared_string_cells_share_one_text_and_run_list() {
+        let strings = parse_shared_strings(
+            r#"<sst><si><t>plain repeated</t></si><si><r><rPr><b/></rPr><t>rich</t></r><r><t> tail</t></r></si></sst>"#,
+        )
+        .unwrap();
+        let repeats = 12_000u32;
+        let mut xml = String::from("<worksheet><sheetData>");
+        for row in 1..=repeats {
+            xml.push_str(&format!(
+                r#"<row r="{row}"><c r="A{row}" t="s"><v>0</v></c><c r="B{row}" t="s"><v>1</v></c></row>"#
+            ));
+        }
+        xml.push_str("</sheetData></worksheet>");
+
+        let sheet = parse_worksheet(&xml, &strings, None, Vec::new(), Vec::new()).unwrap();
+        assert_eq!(sheet.cells.len(), 2 * repeats as usize);
+        let plain = &strings.values[0];
+        let rich_text = &strings.values[1];
+        let runs = strings.rich_text[1].as_ref().unwrap();
+        for cell in &sheet.cells {
+            let (expected, expected_runs) = if cell.col == 1 {
+                (plain, None)
+            } else {
+                (rich_text, Some(runs))
+            };
+            let CellValue::SharedString(text) = &cell.value else {
+                panic!("shared-string cell decoded as {:?}", cell.value);
+            };
+            assert!(Arc::ptr_eq(text, expected));
+            match (&cell.rich_text, expected_runs) {
+                (Some(actual), Some(expected)) => assert!(Arc::ptr_eq(actual, expected)),
+                (None, None) => {}
+                other => panic!("unexpected rich runs {other:?}"),
+            }
+        }
+        // The table plus one clone per cell, with no per-cell text copies.
+        assert_eq!(Arc::strong_count(plain), 1 + repeats as usize);
+        assert_eq!(Arc::strong_count(rich_text), 1 + repeats as usize);
+        assert_eq!(Arc::strong_count(runs), 1 + repeats as usize);
+        drop(sheet);
+
+        let cells = parse_worksheet_value_cells(&xml, &strings).unwrap();
+        assert_eq!(cells.len(), 2 * repeats as usize);
+        for cell in &cells {
+            let expected = if cell.col == 1 { plain } else { rich_text };
+            assert!(matches!(
+                &cell.value,
+                CellValue::SharedString(text) if Arc::ptr_eq(text, expected)
+            ));
+        }
+        assert_eq!(Arc::strong_count(plain), 1 + repeats as usize);
+        assert_eq!(Arc::strong_count(runs), 1);
+    }
+
+    #[test]
+    fn shared_and_owned_string_values_compare_by_text() {
+        let shared = CellValue::SharedString(Arc::from("text"));
+        assert_eq!(shared, CellValue::String("text".to_string()));
+        assert_eq!(CellValue::String("text".to_string()), shared);
+        assert_ne!(shared, CellValue::String("other".to_string()));
+        assert_ne!(shared, CellValue::Error("text".to_string()));
+        assert_eq!(shared.as_text(), Some("text"));
+        assert_eq!(CellValue::Error("text".to_string()).as_text(), None);
     }
 
     #[test]
@@ -7888,7 +7995,7 @@ mod tests {
     fn parses_shared_strings_plain_and_rich_text() {
         let xml = r#"<sst><si><t>Plain</t></si><si><r><rPr><b/><color rgb="FFFF0000"/></rPr><t>Rich&#13;&#10;</t></r><r><t>Text</t></r></si></sst>"#;
         let strings = parse_shared_strings(xml).expect("parse sst");
-        assert_eq!(strings.values, vec!["Plain", "Rich\r\nText"]);
+        assert_eq!(sst_texts(&strings.values), ["Plain", "Rich\r\nText"]);
         assert_eq!(strings.rich_text[0], None);
         let rich = strings.rich_text[1].as_ref().expect("rich runs");
         assert_eq!(
@@ -7981,7 +8088,7 @@ mod tests {
         </autoFilter>
         </worksheet>"#;
         let shared_strings = SharedStrings {
-            values: vec!["Shared".to_string()],
+            values: vec![Arc::from("Shared")],
             rich_text: vec![None],
         };
         let sheet = parse_worksheet(xml, &shared_strings, None, Vec::new(), Vec::new())
@@ -8158,7 +8265,7 @@ mod tests {
             <cfRule type="cellIs" priority="1"><formula>50</formula></cfRule>
         </conditionalFormatting></worksheet>"#;
         let shared_strings = SharedStrings {
-            values: vec!["Shared".to_string()],
+            values: vec![Arc::from("Shared")],
             rich_text: vec![None],
         };
         let cells =
@@ -8245,7 +8352,7 @@ mod tests {
         assert_eq!(values[0].value, expected);
         assert_eq!(values[1].value, expected);
         let strings = parse_shared_strings("<sst><si><t>a\r\nb\rc&#13;d</t></si></sst>").unwrap();
-        assert_eq!(strings.values, ["a\nb\nc\rd"]);
+        assert_eq!(sst_texts(&strings.values), ["a\nb\nc\rd"]);
     }
 
     #[test]
@@ -8730,7 +8837,10 @@ mod tests {
             </sst>"#,
         )
         .unwrap();
-        assert_eq!(strings.values, [" left & right \u{1D11E} &lt; ", "A\r\n&B"]);
+        assert_eq!(
+            sst_texts(&strings.values),
+            [" left & right \u{1D11E} &lt; ", "A\r\n&B"]
+        );
         let runs = strings.rich_text[1].as_ref().unwrap();
         assert_eq!(runs[0].text, "A\r\n&");
         assert_eq!(runs[0].font.as_ref().unwrap().bold, Some(true));

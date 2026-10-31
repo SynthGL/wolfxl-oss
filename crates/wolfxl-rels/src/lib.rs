@@ -40,6 +40,8 @@ use std::fmt;
 use quick_xml::events::Event;
 use quick_xml::Reader as XmlReader;
 
+pub mod package_guard;
+
 mod part_id_allocator;
 pub use part_id_allocator::PartIdAllocator;
 

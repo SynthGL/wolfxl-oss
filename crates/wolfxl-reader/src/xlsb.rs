@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{Cursor, Read};
 use std::path::Path;
+use std::sync::Arc;
 
 use wolfxl_rels::{RelId, RelsGraph};
 use zip::ZipArchive;
@@ -66,7 +67,7 @@ pub struct NativeXlsbBook {
     print_titles: HashMap<String, PrintTitlesInfo>,
     extern_sheets: Vec<XtiRef>,
     formula_names: Vec<String>,
-    shared_strings: Vec<String>,
+    shared_strings: Vec<Arc<str>>,
     styles: StyleTables,
     date1904: bool,
 }
@@ -418,7 +419,7 @@ fn read_workbook(
     ))
 }
 
-fn read_shared_strings(zip: &mut ZipArchive<Cursor<Vec<u8>>>) -> Result<Vec<String>> {
+fn read_shared_strings(zip: &mut ZipArchive<Cursor<Vec<u8>>>) -> Result<Vec<Arc<str>>> {
     let Some(data) = read_zip_part_optional(zip, "xl/sharedStrings.bin")? else {
         return Ok(Vec::new());
     };
@@ -427,7 +428,7 @@ fn read_shared_strings(zip: &mut ZipArchive<Cursor<Vec<u8>>>) -> Result<Vec<Stri
         let record = record?;
         if record.typ == 0x0013 && record.payload.len() > 1 {
             let mut consumed = 0;
-            strings.push(wide_string(&record.payload[1..], &mut consumed)?);
+            strings.push(Arc::from(wide_string(&record.payload[1..], &mut consumed)?));
         }
     }
     Ok(strings)
@@ -649,7 +650,7 @@ fn sheet_name_from_ref(refers_to: &str) -> Option<String> {
 #[cfg(test)]
 fn parse_worksheet(
     data: &[u8],
-    shared_strings: &[String],
+    shared_strings: &[Arc<str>],
     rels: Option<&RelsGraph>,
     comments: Vec<Comment>,
     formula_context: Option<&formula::FormulaContext<'_>>,
@@ -666,7 +667,7 @@ fn parse_worksheet(
 
 fn parse_worksheet_with_tables(
     data: &[u8],
-    shared_strings: &[String],
+    shared_strings: &[Arc<str>],
     rels: Option<&RelsGraph>,
     comments: Vec<Comment>,
     tables: Vec<Table>,
@@ -862,12 +863,16 @@ fn parse_worksheet_with_tables(
             0x0007 => {
                 if let Some((col, style_id)) = parse_cell_header(record.payload) {
                     let idx = record.payload.get(8..12).map(le_u32).unwrap_or_default() as usize;
-                    let value = shared_strings.get(idx).cloned().unwrap_or_default();
+                    // A shared string index outside the table reads as empty text.
+                    let value = shared_strings
+                        .get(idx)
+                        .cloned()
+                        .map_or_else(|| CellValue::String(String::new()), CellValue::SharedString);
                     cells.push(make_cell(
                         row,
                         col,
                         style_id,
-                        CellValue::String(value),
+                        value,
                         CellDataType::SharedString,
                         None,
                     ));

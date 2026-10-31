@@ -9,7 +9,9 @@ use pyo3::types::{PyDict, PyList};
 use wolfxl_reader::{Cell, CellValue};
 
 use crate::native_reader_backend::{NativeXlsbBook, NativeXlsxBook};
-use crate::native_reader_cell_helpers::{cell_to_plain, ensure_formula_prefix, native_data_type};
+use crate::native_reader_cell_helpers::{
+    cell_to_plain, ensure_formula_prefix, native_data_type, SharedStringCache,
+};
 use crate::native_reader_dimensions::{is_merged_subordinate, row_col_to_a1_1based};
 use crate::native_reader_styles::gradient_to_pydict;
 use crate::native_reader_traits::NativeStyleResolver;
@@ -56,6 +58,7 @@ pub(crate) fn read_sheet_records_xlsx(
         PyErr::new::<PyValueError, _>(format!("Missing sheet cache for sheet: {sheet}"))
     })?;
     let native_book = &book.book;
+    let strings = &book.shared_string_values;
     let options = NativeRecordOptions {
         data_only,
         include_format,
@@ -76,6 +79,7 @@ pub(crate) fn read_sheet_records_xlsx(
                         py,
                         &out,
                         native_book,
+                        strings,
                         merged_bounds,
                         cell_index.get(&(row, col)).map(|idx| &data.cells[*idx]),
                         row,
@@ -102,6 +106,7 @@ pub(crate) fn read_sheet_records_xlsx(
             py,
             &out,
             native_book,
+            strings,
             merged_bounds,
             Some(cell),
             cell.row,
@@ -137,6 +142,7 @@ pub(crate) fn read_sheet_records_xlsb(
         PyErr::new::<PyValueError, _>(format!("Missing sheet cache for sheet: {sheet}"))
     })?;
     let native_book = &book.book;
+    let strings = &book.shared_string_values;
     let options = NativeRecordOptions {
         data_only,
         include_format,
@@ -156,6 +162,7 @@ pub(crate) fn read_sheet_records_xlsb(
                         py,
                         &out,
                         native_book,
+                        strings,
                         &[],
                         cell_index.get(&(row, col)).map(|idx| &data.cells[*idx]),
                         row,
@@ -181,6 +188,7 @@ pub(crate) fn read_sheet_records_xlsb(
             py,
             &out,
             native_book,
+            strings,
             &[],
             Some(cell),
             cell.row,
@@ -238,6 +246,7 @@ pub(crate) fn append_native_record<B: NativeStyleResolver>(
     py: Python<'_>,
     out: &Bound<'_, PyList>,
     book: &B,
+    strings: &SharedStringCache,
     merged_bounds: &[(u32, u32, u32, u32)],
     cell: Option<&Cell>,
     row: u32,
@@ -287,7 +296,14 @@ pub(crate) fn append_native_record<B: NativeStyleResolver>(
         if options.include_cached_formula_value && has_cached_value {
             record.set_item(
                 "cached_value",
-                cell_to_plain(py, cell, true, number_format, book.serial_dates())?,
+                cell_to_plain(
+                    py,
+                    cell,
+                    true,
+                    number_format,
+                    book.serial_dates(),
+                    strings,
+                )?,
             )?;
         }
     }
@@ -306,6 +322,7 @@ pub(crate) fn append_native_record<B: NativeStyleResolver>(
             options.data_only,
             number_format,
             book.serial_dates(),
+            strings,
         )?;
         let mut data_type = native_data_type(cell, options.data_only, number_format);
         // A date-formatted serial outside the date range stays a number.

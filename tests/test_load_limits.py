@@ -1,0 +1,135 @@
+"""Generated workbook resource regressions; no binary fixtures required."""
+from dataclasses import replace
+from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
+
+import pytest
+import wolfxl
+
+
+NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+
+
+def workbook_bytes(*, text="shared text", cells=4, inline=False, second_sheet=False):
+    out = BytesIO()
+    with ZipFile(out, "w", ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>')
+        sheets = 2 if second_sheet else 1
+        zf.writestr("_rels/.rels", f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{REL}/officeDocument" Target="xl/workbook.xml"/></Relationships>')
+        zf.writestr("xl/workbook.xml", f'<workbook xmlns="{NS}" xmlns:r="{REL}"><sheets>' + ''.join(f'<sheet name="Sheet{i}" sheetId="{i}" r:id="rId{i}"/>' for i in range(1, sheets + 1)) + '</sheets></workbook>')
+        zf.writestr("xl/_rels/workbook.xml.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + ''.join(f'<Relationship Id="rId{i}" Type="{REL}/worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1, sheets + 1)) + '</Relationships>')
+        if not inline:
+            zf.writestr("xl/sharedStrings.xml", f'<sst xmlns="{NS}"><si><t>{text}</t></si></sst>')
+        for i in range(1, sheets + 1):
+            rows = ''.join(f'<row r="{r}"><c r="A{r}" t="inlineStr"><is><t>{text}</t></is></c></row>' if inline else f'<row r="{r}"><c r="A{r}" t="s"><v>0</v></c></row>' for r in range(1, cells + 1))
+            zf.writestr(f"xl/worksheets/sheet{i}.xml", f'<worksheet xmlns="{NS}"><dimension ref="A1:A{cells}"/><sheetData>{rows}</sheetData></worksheet>')
+    return out.getvalue()
+
+
+def generate_zip_bomb(path, *, uncompressed_bytes=1024**3, members=None):
+    """Create either a high-ratio part or a many-small-members admission case."""
+    with ZipFile(path, "w", ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", '<Types>spreadsheetml</Types>')
+        if members is not None:
+            for index in range(members):
+                zf.writestr(f"parts/{index}.xml", "<part/>")
+        else:
+            with zf.open("xl/worksheets/sheet1.xml", "w") as part:
+                prefix = f'<worksheet xmlns="{NS}"><sheetData>'.encode()
+                suffix = b'</sheetData></worksheet>'
+                part.write(prefix)
+                remaining = uncompressed_bytes - len(prefix) - len(suffix)
+                chunk = b" " * (1024 * 1024)
+                while remaining:
+                    size = min(remaining, len(chunk))
+                    part.write(chunk[:size])
+                    remaining -= size
+                part.write(suffix)
+
+
+@pytest.mark.parametrize("read_only", [False, True])
+@pytest.mark.parametrize("source_kind", ["bytes", "path", "file"])
+@pytest.mark.parametrize("limit", ["max_package_bytes", "max_part_bytes", "max_cells", "max_shared_string_bytes", "max_materialized_string_bytes"])
+def test_each_limit_refuses_before_materialization(tmp_path, limit, source_kind, read_only):
+    data = workbook_bytes()
+    source = data
+    if source_kind == "path":
+        source = tmp_path / "bounded.xlsx"
+        source.write_bytes(data)
+    elif source_kind == "file":
+        source = BytesIO(data)
+    budgets = wolfxl.Limits(**{limit: 1})
+    with pytest.raises(wolfxl.LimitExceeded) as exc:
+        wolfxl.load_workbook(source, read_only=read_only, limits=budgets)
+    message = str(exc.value)
+    assert limit in message
+    assert "observed " in message
+    assert "configured 1" in message
+    assert "limits=" in message
+
+
+@pytest.mark.parametrize("read_only", [False, True])
+def test_exact_decoded_string_budgets_and_repeated_references(read_only):
+    # Six decoded UTF-8 bytes: a + ampersand + a four-byte code point.
+    data = workbook_bytes(text="a&amp;&#x1f600;", cells=100)
+    limits = replace(wolfxl.Limits(), max_shared_string_bytes=6, max_materialized_string_bytes=6, max_cells=100)
+    wb = wolfxl.load_workbook(data, read_only=read_only, limits=limits)
+    values = [row[0] for row in wb.active.iter_rows(values_only=True)]
+    assert values == ["a&😀"] * 100
+    assert all(value is values[0] for value in values)
+    wb.close()
+    with pytest.raises(wolfxl.LimitExceeded, match="max_shared_string_bytes"):
+        wolfxl.load_workbook(data, read_only=read_only, limits=replace(limits, max_shared_string_bytes=5))
+
+
+@pytest.mark.parametrize("read_only", [False, True])
+def test_shared_strings_have_one_python_identity_across_access_paths(read_only):
+    text = "shared payload " * 4096
+    wb = wolfxl.load_workbook(workbook_bytes(text=text, cells=128, second_sheet=True), read_only=read_only)
+    first = wb.active["A1"].value
+    assert first == text
+    assert wb.active.cell(2, 1).value is first
+    for sheet in wb.worksheets:
+        assert all(row[0] is first for row in sheet.iter_rows(values_only=True))
+        assert all(row[0].value is first for row in sheet.iter_rows())
+    wb.close()
+
+
+def test_cell_and_inline_text_budgets_are_workbook_wide():
+    data = workbook_bytes(text="four", cells=2, inline=True, second_sheet=True)
+    for limits, name in [(wolfxl.Limits(max_cells=3), "max_cells"), (wolfxl.Limits(max_materialized_string_bytes=15), "max_materialized_string_bytes")]:
+        with pytest.raises(wolfxl.LimitExceeded, match=name):
+            wolfxl.load_workbook(data, limits=limits)
+    wb = wolfxl.load_workbook(data, limits=wolfxl.Limits(max_cells=4, max_materialized_string_bytes=16))
+    assert wb.active["A1"].value == "four"
+    wb.close()
+
+
+def test_limits_apply_to_modify_mode(tmp_path):
+    path = tmp_path / "modify.xlsx"
+    path.write_bytes(workbook_bytes())
+    with pytest.raises(wolfxl.LimitExceeded, match="max_cells"):
+        wolfxl.load_workbook(path, modify=True, limits=wolfxl.Limits(max_cells=1))
+
+
+@pytest.mark.parametrize("value", [-1, True, 1.5, "1", 2**64])
+def test_invalid_limit_values(value):
+    with pytest.raises(ValueError, match="max_cells"):
+        wolfxl.Limits(max_cells=value)
+
+
+def test_limits_are_immutable_and_require_a_limits_instance():
+    from dataclasses import FrozenInstanceError
+    with pytest.raises(FrozenInstanceError):
+        wolfxl.Limits().max_cells = 1
+    with pytest.raises(TypeError, match="limits="):
+        wolfxl.load_workbook(workbook_bytes(), limits={"max_cells": 1})
+
+
+@pytest.mark.parametrize("read_only", [False, True])
+def test_generated_high_ratio_part_is_refused(tmp_path, read_only):
+    path = tmp_path / "ratio.xlsx"
+    generate_zip_bomb(path, uncompressed_bytes=4 * 1024**2)
+    with pytest.raises((OSError, ValueError), match="compression ratio"):
+        wolfxl.load_workbook(path, read_only=read_only)

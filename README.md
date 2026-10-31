@@ -195,6 +195,39 @@ print(loaded["Summary"]["B1"].value)
 loaded.close()
 ```
 
+### Limit workbook input
+
+`load_workbook` bounds input before materializing XLSX cells in full,
+`read_only=True`, and `modify=True` modes. Shared-string references reuse one
+string object per workbook rather than copying the text into every cell.
+
+```python
+from wolfxl import LimitExceeded, Limits, load_workbook
+
+try:
+    workbook = load_workbook(
+        "incoming.xlsx",
+        limits=Limits(max_cells=500_000, max_shared_string_bytes=32 * 1024**2),
+    )
+except LimitExceeded as error:
+    print(error)  # limit name, observed value, configured value, and limits= knob
+```
+
+| Field | Default | Counts |
+| --- | --- | --- |
+| `max_package_bytes` | 4 GiB | Sum of uncompressed ZIP member sizes |
+| `max_part_bytes` | 512 MiB | Uncompressed bytes in one member |
+| `max_cells` | 8,000,000 | Stored cell elements across all worksheets |
+| `max_shared_string_bytes` | 256 MiB | Decoded UTF-8 text in the shared-string table |
+| `max_materialized_string_bytes` | 512 MiB | Decoded shared/inline text, string cached values, error/date text, and formulas |
+
+`Limits` is immutable. Omit `limits=` or pass `None` for these defaults. Shared
+strings count once, not once per reference. A value of zero permits no content
+for that counter. Existing ZIP entry-count, compression-ratio, and environment
+admission guards still apply; `limits=` does not weaken those guards. These are
+input budgets, not a process-memory or execution-time sandbox. They apply to
+XLSX-family packages, including decrypted inputs, not legacy XLS or XLSB.
+
 ### For AI coding agents
 
 [`skills/wolfxl-xlsx`](skills/wolfxl-xlsx/SKILL.md) is an agent skill for

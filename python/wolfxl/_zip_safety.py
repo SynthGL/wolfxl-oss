@@ -5,10 +5,17 @@ from __future__ import annotations
 import os
 import zipfile
 
-DEFAULT_MAX_ZIP_ENTRIES = 200_000
-DEFAULT_MAX_ZIP_ENTRY_BYTES = 512 * 1024 * 1024
-DEFAULT_MAX_ZIP_TOTAL_BYTES = 4 * 1024 * 1024 * 1024
-DEFAULT_MAX_COMPRESSION_RATIO = 1_000
+from wolfxl._rust import load_limit_defaults
+
+(
+    DEFAULT_MAX_ZIP_TOTAL_BYTES,
+    DEFAULT_MAX_ZIP_ENTRY_BYTES,
+    _DEFAULT_MAX_CELLS,
+    _DEFAULT_MAX_SHARED_STRING_BYTES,
+    _DEFAULT_MAX_MATERIALIZED_STRING_BYTES,
+    DEFAULT_MAX_ZIP_ENTRIES,
+    DEFAULT_MAX_COMPRESSION_RATIO,
+) = load_limit_defaults()
 
 
 def _env_int(name: str, default: int) -> int:

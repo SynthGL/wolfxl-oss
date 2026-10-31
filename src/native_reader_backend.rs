@@ -12,6 +12,7 @@ use pyo3::pybacked::PyBackedBytes;
 
 type PyObject = Py<PyAny>;
 
+use crate::native_reader_cell_helpers::SharedStringCache;
 use crate::native_reader_dimensions::{parse_range_1based, update_bounds};
 use crate::util::a1_to_row_col;
 use wolfxl_reader::{
@@ -28,6 +29,8 @@ pub struct NativeXlsxBook {
     pub(crate) sheet_merge_metadata: HashMap<String, crate::native_reader_merges::MergeMetadata>,
     pub(crate) opened_from_bytes: bool,
     pub(crate) source_path: Option<String>,
+    /// Python `str` objects for shared-string values, one per table entry.
+    pub(crate) shared_string_values: SharedStringCache,
 }
 
 #[pyclass(unsendable, module = "wolfxl._rust")]
@@ -36,6 +39,8 @@ pub struct NativeXlsbBook {
     pub(crate) sheet_names: Vec<String>,
     pub(crate) sheet_cache: HashMap<String, WorksheetData>,
     pub(crate) sheet_cell_indexes: HashMap<String, HashMap<(u32, u32), usize>>,
+    /// Python `str` objects for shared-string values, one per table entry.
+    pub(crate) shared_string_values: SharedStringCache,
 }
 
 #[pymethods]
@@ -56,6 +61,18 @@ impl NativeXlsxBook {
 
     pub fn sheet_names(&self) -> Vec<String> {
         self.sheet_names.clone()
+    }
+
+    /// The workbook's shared-string table as a streaming-reader handle. It
+    /// shares this book's per-entry Python `str` objects, so eager reads and
+    /// streaming readers opened with it return the same `str` for an entry.
+    pub fn shared_strings(&self) -> PyResult<crate::streaming::StreamingSharedStrings> {
+        let entries = self.book.shared_strings().map_err(|e| {
+            PyErr::new::<PyIOError, _>(format!("native shared strings read failed: {e}"))
+        })?;
+        Ok(crate::streaming::StreamingSharedStrings::from_table(
+            self.shared_string_values.link(entries),
+        ))
     }
 
     /// `<sheet>` entries left out of `sheet_names` because their `r:id` is
@@ -758,6 +775,12 @@ impl NativeXlsxBook {
             let data = self.book.worksheet(sheet).map_err(|e| {
                 PyErr::new::<PyIOError, _>(format!("native sheet read failed: {e}"))
             })?;
+            // A parsed worksheet implies a loaded table; link it before any
+            // cell of this sheet becomes a Python value.
+            let entries = self.book.shared_strings().map_err(|e| {
+                PyErr::new::<PyIOError, _>(format!("native shared strings read failed: {e}"))
+            })?;
+            self.shared_string_values.link(entries);
             self.sheet_cache.insert(sheet.to_string(), data);
         }
         Ok(self.sheet_cache.get(sheet).unwrap())

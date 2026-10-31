@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import PurePosixPath
 from typing import Any
+from wolfxl._limits import Limits
 
 from wolfxl._workbook_state import (
     build_xlsb_xls_wb,
@@ -25,6 +26,7 @@ def open_workbook_source(
     permissive: bool,
     modify: bool,
     read_only: bool,
+    limits: Limits | None = None,
 ) -> Any:
     """Open a classified workbook source through the matching constructor.
 
@@ -43,6 +45,9 @@ def open_workbook_source(
         A workbook instance opened in the requested mode.
     """
     if fmt == "xlsx":
+        limits = limits if limits is not None else Limits()
+        if password is None:
+            limits._validate(data if data is not None else path)
         if password is not None:
             return from_encrypted(
                 cls,
@@ -55,6 +60,7 @@ def open_workbook_source(
                 permissive=permissive,
                 modify=modify,
                 read_only=read_only,
+                limits=limits,
             )
         if data is not None:
             return from_bytes(
@@ -395,6 +401,7 @@ def from_encrypted(
     permissive: bool = False,
     modify: bool = False,
     read_only: bool = False,
+    limits: Limits | None = None,
 ) -> Any:
     """Open an OOXML-encrypted .xlsx via msoffcrypto-tool."""
     if (path is None) == (data is None):
@@ -407,6 +414,9 @@ def from_encrypted(
         is_plain_xlsx = bytes(data).startswith(b"PK")  # type: ignore[arg-type]
 
     if is_plain_xlsx:
+        (limits if limits is not None else Limits())._validate(
+            bytes(data) if data is not None else path
+        )
         return _open_plain_xlsx_source(
             cls,
             path=path,
@@ -465,6 +475,7 @@ def from_encrypted(
         except Exception as exc:
             raise ValueError(f"failed to decrypt workbook (wrong password?): {exc}") from exc
         decrypted_bytes = buf.getvalue()
+        (limits if limits is not None else Limits())._validate(decrypted_bytes)
     finally:
         src_fp.close()
 
