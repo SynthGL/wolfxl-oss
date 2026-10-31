@@ -466,7 +466,7 @@ def from_encrypted(
         modify=modify,
         read_only=read_only,
         limits=limits,
-        preserve_source_path=preserve_source_path,
+        preserve_source_path=False,
     )
 
 
@@ -544,6 +544,10 @@ def from_bytes(
             finally:
                 raise
         wb._tempfile_path = tmp_path
+        import weakref
+        from wolfxl._workbook_lifecycle import _remove_temporary_source
+
+        wb._tempfile_finalizer = weakref.finalize(wb, _remove_temporary_source, tmp_path)
         wb._source_bytes = data_bytes
         return wb
 

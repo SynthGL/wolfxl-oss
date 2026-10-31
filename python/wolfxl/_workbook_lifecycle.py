@@ -24,13 +24,21 @@ def close_workbook(workbook: Any) -> None:
     workbook._rust_patcher = None
     tmp_path = getattr(workbook, "_tempfile_path", None)
     if tmp_path is not None:
-        import os
-
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        finalizer = getattr(workbook, "_tempfile_finalizer", None)
+        if finalizer is not None:
+            finalizer()
+        else:
+            _remove_temporary_source(tmp_path)
         workbook._tempfile_path = None
+
+
+def _remove_temporary_source(path: str) -> None:
+    import os
+
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
 
 
 def _clear_worksheet_style_caches(workbook: Any) -> None:

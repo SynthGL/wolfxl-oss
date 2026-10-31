@@ -383,7 +383,7 @@ def test_path_snapshot_preserves_named_and_differential_styles(tmp_path, read_on
     ranges = list(wb.active.conditional_formatting)
     rule = wb.active.conditional_formatting[ranges[0]][0]
     assert rule.operator == "greaterThan"
-    assert rule.dxf.fill.fgColor.rgb == "FFFF0000"
+    assert rule.dxf.fill.fgColor == "FFFF0000"
     wb.close()
 
 
@@ -401,6 +401,7 @@ def test_keep_vba_uses_admitted_snapshot_after_path_replacement(tmp_path, monkey
     wb = wolfxl.load_workbook(path, keep_vba=True)
     assert b"admitted" in wb.vba_archive.read("xl/sharedStrings.xml")
     assert b"replacement" not in wb.vba_archive.read("xl/sharedStrings.xml")
+    wb.vba_archive.close()
     wb.close()
 
 
@@ -420,3 +421,50 @@ def test_nonstandard_normalization_cannot_activate_unscanned_orphan_rels(mode, f
     data = replace_parts(workbook_bytes(text="four", inline=True), transform)
     with pytest.raises(wolfxl.LimitExceeded, match=field):
         wolfxl.load_workbook(data, limits=wolfxl.Limits(**{field: budget}), **mode)
+
+
+def test_path_snapshot_tempfile_is_removed_when_workbook_is_collected(tmp_path):
+    import gc
+    from pathlib import Path
+    import weakref
+
+    path = tmp_path / "source.xlsx"
+    path.write_bytes(workbook_bytes())
+    wb = wolfxl.load_workbook(path)
+    snapshot_path = Path(wb._tempfile_path)
+    assert snapshot_path.exists()
+    reference = weakref.ref(wb)
+    del wb
+    gc.collect()
+    assert reference() is None
+    assert not snapshot_path.exists()
+
+
+def test_decrypted_path_read_does_not_write_a_plaintext_snapshot(tmp_path, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    from wolfxl._workbook_sources import from_encrypted
+
+    decrypted = workbook_bytes()
+
+    class EncryptedOffice:
+        def __init__(self, source):
+            assert source.read() == b"encrypted source"
+
+        def is_encrypted(self):
+            return True
+
+        def load_key(self, *, password):
+            assert password == "password"
+
+        def decrypt(self, target):
+            target.write(decrypted)
+
+    monkeypatch.setitem(sys.modules, "msoffcrypto", SimpleNamespace(OfficeFile=EncryptedOffice))
+    path = tmp_path / "encrypted.xlsx"
+    path.write_bytes(b"encrypted source")
+    wb = from_encrypted(wolfxl.Workbook, str(path), password="password")
+    assert wb._source_bytes == decrypted
+    assert wb._source_path is None
+    assert getattr(wb, "_tempfile_path", None) is None
+    wb.close()
