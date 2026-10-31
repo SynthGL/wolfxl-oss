@@ -119,8 +119,7 @@ jobs:
   pip-audit-full-lock:
     name: Python full-lock report
     # Includes old-Python test-only pins with no compatible patched release.
-    # Keep findings visible without silently excluding them from the audit.
-    continue-on-error: true
+    # Findings are informational, but setup, collection and tool failures block.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -170,19 +169,52 @@ jobs:
       - name: Audit all locked Python versions and platforms
         shell: bash
         run: |
-          status=0
-          for requirements in "$RUNNER_TEMP"/requirements-audit-*.txt; do
-            uvx --python 3.12 --from pip-audit==2.10.0 pip-audit \
-              --strict --no-deps --disable-pip --requirement "$requirements" \
-              2>&1 | tee "${requirements%.txt}.log" || status=1
-          done
-          {
-            echo "## Full Python lock audit (non-blocking)"
-            echo "Includes all development/test pins and old-Python marker branches."
-            for report in "$RUNNER_TEMP"/requirements-audit-*.log; do
-              echo '```text'
-              cat "$report"
-              echo '```'
-            done
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit "$status"
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          directory = Path(os.environ["RUNNER_TEMP"])
+          requirements_files = sorted(directory.glob("requirements-audit-*.txt"))
+          if not requirements_files:
+              raise ValueError("No full-lock audit requirements were generated")
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          with summary.open("a") as output:
+              output.write("## Full Python lock audit (informational findings)\n\n")
+              output.write("Includes all development/test and old-Python marker branches.\n\n")
+          for requirements in requirements_files:
+              report_path = requirements.with_suffix(".json")
+              result = subprocess.run([
+                  "uvx", "--python", "3.12", "--from", "pip-audit==2.10.0",
+                  "pip-audit", "--strict", "--no-deps", "--disable-pip",
+                  "--format", "json", "--output", str(report_path),
+                  "--requirement", str(requirements),
+              ])
+              report = json.loads(report_path.read_text())
+              dependencies = report["dependencies"]
+              expected = set(requirements.read_text().splitlines())
+              actual = {f"{p['name']}=={p['version']}" for p in dependencies}
+              if actual != expected or len(dependencies) != len(expected):
+                  raise ValueError(f"Incomplete audit: {requirements.name}")
+              findings = [(p, v) for p in dependencies for v in p["vulns"]]
+              # Exit 1 is non-blocking only with a complete vulnerability report.
+              # Missing/invalid JSON, skipped dependencies, and other exits fail.
+              if result.returncode != (1 if findings else 0):
+                  raise RuntimeError(f"Unexpected pip-audit exit: {result.returncode}")
+              with summary.open("a") as output:
+                  output.write(f"### {requirements.name}\n\n")
+                  if findings:
+                      output.write("| Package | Version | Advisory | Fixed versions |\n")
+                      output.write("| --- | --- | --- | --- |\n")
+                      for package, vulnerability in findings:
+                          fixes = ", ".join(vulnerability["fix_versions"]) or "None"
+                          output.write(
+                              f"| {package['name']} | {package['version']} | "
+                              f"{vulnerability['id']} | {fixes} |\n"
+                          )
+                      print(f"::warning::{requirements.name}: {len(findings)} vulnerability records")
+                  else:
+                      output.write("No known vulnerabilities found.\n")
+                  output.write("\n")
+          PY
