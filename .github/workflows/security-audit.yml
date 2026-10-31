@@ -1,0 +1,73 @@
+name: Dependency security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-audit:
+    name: RustSec audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
+        with:
+          tool: cargo-audit@0.22.2
+      # Vulnerabilities fail by default. Informational advisories remain visible
+      # as warnings here; cargo-deny enforces the stricter repository policy.
+      - name: Audit Cargo.lock against RustSec
+        run: cargo audit --file Cargo.lock
+
+  cargo-deny:
+    name: Dependency policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
+        with:
+          tool: cargo-deny@0.20.2
+      - name: Check advisories, licenses, duplicate versions and sources
+        run: cargo deny --workspace --all-features --locked check
+
+  pip-audit:
+    name: Python dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: "0.12.3"
+      - name: Export the complete Python lock without the local extension
+        run: >-
+          uv export --locked --all-extras --all-groups --no-emit-project
+          --format requirements-txt --output-file "$RUNNER_TEMP/requirements-audit.txt"
+      # The export is already pinned and hashed. Do not resolve, install, or
+      # execute the audited packages (including optional and test dependencies).
+      - name: Audit locked Python dependencies
+        run: >-
+          uvx --python 3.12 --from pip-audit==2.10.0 pip-audit
+          --strict --no-deps --disable-pip
+          --requirement "$RUNNER_TEMP/requirements-audit.txt"

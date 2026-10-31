@@ -1,0 +1,28 @@
+# Check every workspace crate, feature, and target, including wheel platforms.
+[graph]
+all-features = true
+
+[advisories]
+# Repository policy is stricter than cargo-audit's informational warnings:
+# known unsound and unmaintained dependencies require an explicit, justified
+# advisory-specific exception rather than silently passing the policy gate.
+unsound = "all"
+unmaintained = "all"
+yanked = "warn"
+ignore = []
+
+[licenses]
+# Permissive dependency licenses compatible with distributing WolfXL as MIT.
+allow = ["MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-3-Clause", "Unicode-3.0", "Zlib"]
+confidence-threshold = 0.8
+
+[bans]
+# Transitive dependencies may require different major versions. Surface them
+# for review without blocking unrelated security updates.
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
