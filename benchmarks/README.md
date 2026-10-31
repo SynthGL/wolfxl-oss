@@ -272,3 +272,26 @@ build-reuse description. Each case has a 600-second timeout and an 8 GiB address
 space ceiling. There is one measured iteration and no warmup. OS page-cache
 state is unspecified, including warming from generation or earlier cases;
 these resource observations are not a cold-cache or speedup claim.
+
+### 2026-10-31 observations
+
+The [large-path evidence manifest](results/2026-10-31-reader-limits/large-path-manifest.json)
+records exact input, harness, source and native-binary hashes, build reuse and
+raw JSON artifacts. Compressed sizes are 49,959,975 and 249,818,535 bytes.
+The same inputs were reused for all four implementations on Linux x86_64,
+Python 3.12.14, Ryzen 9 9950X3D, one fresh interpreter per case and no warmup:
+
+| Input / API | Released 2.0.35 RSS bytes / wall s | Main `04804b02` | Before fix `6be833b3` | Candidate `a506450b` |
+| --- | ---: | ---: | ---: | ---: |
+| 50 MB / read-only | 31,322,112 / 0.729600 | 33,705,984 / 0.748063 | 81,539,072 / 0.819356 | 39,915,520 / 1.262267 |
+| 250 MB / read-only | 31,907,840 / 2.688875 | 32,124,928 / 3.174253 | 281,153,536 / 4.831362 | 40,267,776 / 3.583958 |
+| 50 MB / non-read-only | 31,559,680 / 1.747720 | 30,662,656 / 0.788696 | 82,137,088 / 0.953748 | 40,087,552 / 1.387580 |
+
+All row, cell and value hashes match. The candidate passes the conservative
+RSS gate against both released and main: added RSS is below
+`max(10% of compressed file size, 32 MiB)` for each case. The allowance is
+33,554,432 bytes here; observed candidate increases over those two baselines
+range from 6,209,536 to 9,424,896 bytes. This is one non-isolated observation,
+not a cold-cache, speedup or statistically established timing comparison.
+The non-read-only case uses the default auto-streaming behavior, not forced
+Cell-object hydration. Windows uses bounded bytes and was not measured.

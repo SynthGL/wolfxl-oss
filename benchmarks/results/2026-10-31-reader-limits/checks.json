@@ -19,7 +19,7 @@
     "expected_failure": "wolfxl.Limits is absent on the base; five independent budgets, three source kinds and two load modes are covered."
   },
   "candidate_focused": {
-    "source": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2",
+    "source": "a506450b614ab887db891a05cfc1a664739b4e64",
     "program": "python",
     "arguments": [
       "-m",
@@ -35,17 +35,19 @@
       "tests/test_modify_noop_preservation.py",
       "tests/test_vba_package_shape.py",
       "tests/test_workbook_compat_t0.py",
+      "tests/test_atomic_save_safety.py",
+      "tests/test_eager_style_cache_windows.py",
       "-q",
-      "--basetemp=<repository-local-scratch>/pytest-final-snapshot"
+      "--basetemp=<external-scratch>/pytest-mmap-close-focused"
     ],
     "result": {
-      "passed": 278,
+      "passed": 315,
       "warnings": 19,
-      "wall_s": 101.79
+      "wall_s": 39.45
     }
   },
   "candidate_public_python": {
-    "source": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2",
+    "source": "a506450b614ab887db891a05cfc1a664739b4e64",
     "program": "python",
     "arguments": [
       "-m",
@@ -63,19 +65,20 @@
       "--ignore=tests/test_import_release_artifact_proof_reports.py",
       "--ignore=tests/test_openpyxl_compat_oracle.py",
       "--ignore=tests/test_openpyxl_corpus_runner_summary.py",
-      "--deselect=tests/test_calc_functions.py::TestWhitelist::test_public_formula_counts_match_whitelist"
+      "--deselect=tests/test_calc_functions.py::TestWhitelist::test_public_formula_counts_match_whitelist",
+      "--basetemp=<external-scratch>/pytest-mmap-close-public"
     ],
     "result": {
-      "passed": 3656,
+      "passed": 3679,
       "skipped": 51,
       "warnings": 36,
       "subtests_passed": 4,
-      "wall_s": 224.93
+      "wall_s": 248.49
     },
-    "selection": "The existing public CI selection, not an unfiltered full-suite pass."
+    "selection": "The existing public CI selection, run serially rather than with xdist. Not an unfiltered full-suite pass."
   },
   "candidate_rust": {
-    "source": "573a20d5ef3044babd69ff63c38bd7d2b58b916f",
+    "source": "a506450b614ab887db891a05cfc1a664739b4e64",
     "program": "cargo",
     "arguments": [
       "test",
@@ -91,20 +94,19 @@
       "--locked"
     ],
     "result": {
-      "passed": 617,
+      "passed": 623,
       "failed": 0
     },
     "environment": {
       "CARGO_BUILD_JOBS": "4",
       "PYO3_PYTHON": "virtualenv interpreter",
       "LD_LIBRARY_PATH": "Python interpreter sysconfig LIBDIR"
-    },
-    "unchanged_native_inputs_at": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2"
+    }
   },
   "test_environment": {
     "python": "3.12.14",
     "os": "Linux x86_64",
-    "TMPDIR": "Repository-local scratch directory on the same filesystem as test outputs"
+    "TMPDIR": "External scratch directory on the same filesystem as test outputs"
   },
   "residuals": [
     "An earlier unfiltered Python suite attempt encountered 55 collection errors because this public checkout omits private script modules. No unfiltered full-suite pass is claimed.",
@@ -118,5 +120,6 @@
     "command": "actionlint .github/workflows/sparse-styled-profile.yml",
     "result": "passed",
     "environment": "macOS arm64"
-  }
+  },
+  "large_path_evidence": "large-path-manifest.json"
 }

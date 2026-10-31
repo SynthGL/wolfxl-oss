@@ -254,6 +254,9 @@ path. Modify mode uses a private temporary copy, removed on close or collection.
 Saving back to the original path advances the private source and then publishes
 it atomically through a new file renamed over the path, adding a second write of
 the compressed package.
+Atomic publication requires write permission on the target directory. Existing
+permission bits and symlinks are preserved; ownership, ACLs and extended
+attributes are not copied, and replacing one hard-link name breaks its sharing.
 
 On Linux and macOS, `close()` releases the map unless a live reader or row
 iterator still uses it; it is then released when the last reader is collected.
