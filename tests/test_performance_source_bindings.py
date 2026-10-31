@@ -23,7 +23,6 @@ dependencies = ["zip"]
 AFTER_LOCK = BEFORE_LOCK.replace('["zip"]', '["memchr", "zip"]')
 
 
-@unittest.skipIf(sys.version_info < (3, 11), "Source-binding tooling requires Python 3.11+")
 class PublicationBindingTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="binding-verifier-")

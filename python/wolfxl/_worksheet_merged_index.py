@@ -2,18 +2,13 @@
 
 from __future__ import annotations
 
-import sys
 from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Any, Iterable
 
 from wolfxl.utils.cell import range_boundaries
 
-# Python 3.9 has frozen dataclasses but no slots keyword.
-_DATACLASS_SLOTS = {"slots": True} if sys.version_info >= (3, 10) else {}
-
-
-@dataclass(frozen=True, **_DATACLASS_SLOTS)
+@dataclass(frozen=True, slots=True)
 class _MergedRangeBounds:
     min_row: int
     min_col: int
@@ -21,7 +16,7 @@ class _MergedRangeBounds:
     max_col: int
 
 
-@dataclass(frozen=True, **_DATACLASS_SLOTS)
+@dataclass(frozen=True, slots=True)
 class _RowIntervalNode:
     center: int
     by_start: tuple[_MergedRangeBounds, ...]

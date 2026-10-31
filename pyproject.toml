@@ -7,7 +7,7 @@ name = "wolfxl"
 version = "2.0.36"
 description = "Openpyxl-compatible Excel library with a Rust backend: speed up openpyxl code with one import change and edit .xlsx templates without losing formatting, conditional formatting, or data validation. WolfXL 2.0.21 measured 6.7-12.0x faster than openpyxl 3.1.5 on the committed read/write benchmark (small-file gains vary). MIT."
 readme = "PYPI.md"
-requires-python = ">=3.9,!=3.9.0,!=3.9.1"
+requires-python = ">=3.11"
 dependencies = ["defusedxml>=0.7.1,<1.0"]
 license = { text = "MIT" }
 authors = [{ name = "Wolfgang Schoenberger" }]
@@ -36,6 +36,11 @@ classifiers = [
     "Intended Audience :: Financial and Insurance Industry",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Rust",
     "Topic :: Office/Business :: Financial :: Spreadsheet",
@@ -57,13 +62,10 @@ encrypted = ["msoffcrypto-tool>=5.4,<6.0"]
 #     (openpyxl/reader/drawings.py: `if not PILImage: return charts, []`), so a
 #     venv without Pillow shows false image-test failures, not a writer defect.
 test = [
-    "pytest>=7.4; python_version < '3.10'",
-    "pytest>=9.0.3; python_version >= '3.10'",
+    "pytest>=9.0.3",
     "pytest-xdist>=3.3",
     "openpyxl>=3.1",
-    "Pillow>=11.3.0; python_version < '3.10'",
-    "Pillow>=12.3.0; python_version >= '3.10' and python_version < '3.11'",
-    "Pillow>=13.0.0; python_version >= '3.11'",
+    "Pillow>=13.0.0",
 ]
 
 [dependency-groups]
@@ -84,10 +86,11 @@ python-source = "python"
 features = ["extension-module"]
 
 [tool.pyright]
-pythonVersion = "3.12"
+pythonVersion = "3.11"
 extraPaths = ["python"]
 
 [tool.ruff]
+target-version = "py311"
 line-length = 100
 extend-exclude = ["tests/vendored_openpyxl"]
 
@@ -99,7 +102,7 @@ ignore = [
     # Keep lint focused on behavioral issues until the openpyxl surface is
     # migrated to a project-wide formatter/import policy.
     "I",
-    # The package supports Python 3.9; defer pyupgrade-style rewrites.
+    # Avoid unrelated pyupgrade-style rewrites of the openpyxl-compatible API.
     "UP",
     # Existing OOXML fixture strings and importorskip patterns are long/by design.
     "E402",
@@ -137,4 +140,5 @@ markers = [
 ]
 
 [tool.mypy]
+python_version = "3.11"
 strict = true

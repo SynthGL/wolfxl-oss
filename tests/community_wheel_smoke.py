@@ -252,25 +252,24 @@ def test_drawing_text_bullet_compatibility() -> None:
         else:
             raise AssertionError(f"{cls.__name__}({kwargs!r}) was accepted")
 
-    if sys.version_info >= (3, 10):
-        keyword_only = inspect.Parameter.KEYWORD_ONLY
-        positional = inspect.Parameter.POSITIONAL_OR_KEYWORD
-        style_parameters = [(name, keyword_only, None) for name in style_names]
-        for cls, prefix in (
-            (_BulletStyle, ()),
-            (CharacterBullet, (("character", "\u2022"),)),
-            (AutoNumberedBullet, (("scheme", "arabicPeriod"), ("start_at", 1))),
-            (PictureBullet, (("image", b""), ("image_format", "png"))),
-        ):
-            actual = [
-                (parameter.name, parameter.kind, parameter.default)
-                for parameter in inspect.signature(cls).parameters.values()
-            ]
-            expected = [(name, positional, default) for name, default in prefix]
-            assert actual == expected + style_parameters, (cls.__name__, actual)
+    keyword_only = inspect.Parameter.KEYWORD_ONLY
+    positional = inspect.Parameter.POSITIONAL_OR_KEYWORD
+    style_parameters = [(name, keyword_only, None) for name in style_names]
+    for cls, prefix in (
+        (_BulletStyle, ()),
+        (CharacterBullet, (("character", "\u2022"),)),
+        (AutoNumberedBullet, (("scheme", "arabicPeriod"), ("start_at", 1))),
+        (PictureBullet, (("image", b""), ("image_format", "png"))),
+    ):
+        actual = [
+            (parameter.name, parameter.kind, parameter.default)
+            for parameter in inspect.signature(cls).parameters.values()
+        ]
+        expected = [(name, positional, default) for name, default in prefix]
+        assert actual == expected + style_parameters, (cls.__name__, actual)
 
 
-def test_clean_installed_python39_wheel(tmp_path: Path) -> None:
+def test_clean_installed_python311_wheel(tmp_path: Path) -> None:
     """Explicit remote qualification node; excluded from default test discovery."""
     project = Path(__file__).resolve().parents[1]
     dist = tmp_path / "dist"
@@ -280,16 +279,16 @@ def test_clean_installed_python39_wheel(tmp_path: Path) -> None:
         "UV_PYTHON_INSTALL_DIR": str(tmp_path / "interpreters"),
     }
     subprocess.run(
-        ["uv", "build", "--wheel", "--python", "3.9", "--out-dir", str(dist)],
+        ["uv", "build", "--wheel", "--python", "3.11", "--out-dir", str(dist)],
         cwd=project,
         env=environment_variables,
         check=True,
     )
-    wheels = list(dist.glob("wolfxl-2.0.36-cp39-cp39-*.whl"))
+    wheels = list(dist.glob("wolfxl-2.0.36-cp311-cp311-*.whl"))
     assert len(wheels) == 1, wheels
-    environment = tmp_path / "clean-python39"
+    environment = tmp_path / "clean-python311"
     subprocess.run(
-        ["uv", "venv", "--python", "3.9", str(environment)],
+        ["uv", "venv", "--python", "3.11", str(environment)],
         env=environment_variables,
         check=True,
     )

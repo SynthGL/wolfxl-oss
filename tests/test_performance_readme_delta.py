@@ -16,7 +16,6 @@ fixture_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture_module)
 
 
-@unittest.skipIf(sys.version_info < (3, 11), "README-delta tooling requires Python 3.11+")
 class ReadmeDeltaTests(unittest.TestCase):
     def setUp(self):
         self.fixture = fixture_module.PublicationBindingTests("test_default_identical_inputs_pass")

@@ -25,8 +25,7 @@ from typing import Any
 
 
 class Tier(str, Enum):
-    """``str`` mixin keeps ``Tier.HARD == "hard"`` true on Python 3.9-3.10
-    (``enum.StrEnum`` is 3.11+)."""
+    """String-valued scoring tiers with the existing Enum string representation."""
 
     HARD = "hard"
     SOFT = "soft"
