@@ -78,8 +78,8 @@ def _open_source_zip(source: str | bytes) -> zipfile.ZipFile:
 def _stream_shared_strings(wb: Any, source: str | bytes) -> Any:
     """Shared-strings table for ``source``, parsed once per workbook.
 
-    A path source is keyed by its stat identity so a file replaced on disk
-    between sheet reads is re-parsed instead of resolved against stale strings.
+    Native tables belong only to the workbook's admitted immutable byte source.
+    Other sources must build their own table, even on the first streaming read.
     """
     from wolfxl import _rust
 
@@ -90,7 +90,11 @@ def _stream_shared_strings(wb: Any, source: str | bytes) -> Any:
         if cached is not None and cached[0] is source:
             return cached[1]
         key: Any = source
-        table = native() if cached is None and native is not None else _rust.StreamingSharedStrings.load_from_bytes(source)
+        table = (
+            native()
+            if cached is None and native is not None and source is getattr(wb, "_source_bytes", None)
+            else _rust.StreamingSharedStrings.load_from_bytes(source)
+        )
     elif isinstance(source, bytearray):
         return _rust.StreamingSharedStrings.load_from_bytes(bytes(source))
     else:
@@ -102,7 +106,7 @@ def _stream_shared_strings(wb: Any, source: str | bytes) -> Any:
             limits = getattr(wb, "_limits", None)
             if limits is not None:
                 limits._validate(source)
-        table = native() if cached is None and native is not None else _rust.StreamingSharedStrings.load(source)
+        table = _rust.StreamingSharedStrings.load(source)
     wb._stream_shared_strings = (key, table)
     return table
 

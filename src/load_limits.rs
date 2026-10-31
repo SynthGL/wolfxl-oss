@@ -226,8 +226,49 @@ fn worksheet_parts<R: Read + Seek>(
     zip: &mut ZipArchive<R>,
     permissive: bool,
 ) -> PyResult<HashMap<String, u64>> {
-    let mut workbook_xml = String::new();
-    let mut workbook_rels = String::new();
+    let mut workbook_part = "xl/workbook.xml".to_owned();
+    let canonical = read_metadata_part(zip, &workbook_part)?;
+    if canonical.is_none() {
+        let root_rels = read_metadata_part(zip, "_rels/.rels")?.unwrap_or_default();
+        if let Ok(rels) = wolfxl_rels::RelsGraph::parse(root_rels.as_bytes()) {
+            if let Some(rel) = rels
+                .iter()
+                .find(|rel| rel.rel_type.ends_with("/officeDocument"))
+            {
+                workbook_part = rel.target.trim_start_matches('/').to_owned();
+            }
+        }
+    }
+    let workbook_xml = match canonical {
+        Some(xml) => xml,
+        None => read_metadata_part(zip, &workbook_part)?.unwrap_or_default(),
+    };
+    let (directory, basename) = workbook_part
+        .rsplit_once('/')
+        .unwrap_or(("", &workbook_part));
+    let rels_part = if directory.is_empty() {
+        format!("_rels/{basename}.rels")
+    } else {
+        format!("{directory}/_rels/{basename}.rels")
+    };
+    let workbook_rels = read_metadata_part(zip, &rels_part)?.unwrap_or_default();
+    let mut out = HashMap::new();
+    if let Ok(targets) =
+        wolfxl_reader::worksheet_load_targets(&workbook_xml, &workbook_rels, permissive)
+    {
+        // The loader normalizes the workbook and its rels to xl/ before loading.
+        for target in targets {
+            let copies = out.entry(target.to_ascii_lowercase()).or_insert(0u64);
+            *copies = copies.saturating_add(1);
+        }
+    }
+    Ok(out)
+}
+
+fn read_metadata_part<R: Read + Seek>(
+    zip: &mut ZipArchive<R>,
+    part: &str,
+) -> PyResult<Option<String>> {
     for index in 0..zip.len() {
         let mut entry = zip
             .by_index(index)
@@ -235,28 +276,13 @@ fn worksheet_parts<R: Read + Seek>(
         let name = entry
             .name()
             .map_err(|e| PyIOError::new_err(e.to_string()))?;
-        let destination = if name.eq_ignore_ascii_case("xl/workbook.xml") {
-            &mut workbook_xml
-        } else if name.eq_ignore_ascii_case("xl/_rels/workbook.xml.rels") {
-            &mut workbook_rels
-        } else {
-            continue;
-        };
-        // Let the reader produce its existing malformed-metadata diagnostic.
-        if entry.read_to_string(destination).is_err() {
-            return Ok(HashMap::new());
+        if name.eq_ignore_ascii_case(part) {
+            let mut xml = String::new();
+            // Let the reader produce its existing malformed-metadata diagnostic.
+            return Ok(entry.read_to_string(&mut xml).ok().map(|_| xml));
         }
     }
-    let mut out = HashMap::new();
-    if let Ok(targets) =
-        wolfxl_reader::worksheet_load_targets(&workbook_xml, &workbook_rels, permissive)
-    {
-        for target in targets {
-            let copies = out.entry(target.to_ascii_lowercase()).or_insert(0u64);
-            *copies = copies.saturating_add(1);
-        }
-    }
-    Ok(out)
+    Ok(None)
 }
 
 fn record_shared_formula(

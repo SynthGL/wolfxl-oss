@@ -26,7 +26,7 @@ class Limits:
     """
 
     max_package_bytes: int = _PACKAGE
-    """Maximum sum of uncompressed package member sizes (default 4 GiB)."""
+    """Maximum uncompressed package sum and path snapshot size (default 4 GiB)."""
     max_part_bytes: int = _PART
     """Maximum uncompressed size of any package member (default 512 MiB)."""
     max_cells: int = _CELLS

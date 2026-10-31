@@ -22,6 +22,11 @@
 
 - Bound memory for shared strings referenced by many cells. Eager and
   streaming readers reuse shared text and Python string objects per workbook.
+- Admit and load one immutable snapshot for path-backed XLSX inputs, keeping
+  streaming strings bound to that source after the original path is replaced.
+  Compressed path snapshots are also bounded by `max_package_bytes`.
+- Apply worksheet cell and text budgets when package relationships select a
+  nonstandard workbook part, before normalizing that part for loading.
 
 ### Security
 

@@ -286,3 +286,71 @@ def test_shared_strings_part_used_as_sheet_counts_each_alias(mode):
     data = replace_parts(workbook_bytes(text="four", inline=True, second_sheet=True), transform)
     with pytest.raises(wolfxl.LimitExceeded, match="max_materialized_string_bytes"):
         wolfxl.load_workbook(data, limits=wolfxl.Limits(max_materialized_string_bytes=31), **mode)
+
+
+@pytest.mark.parametrize("mode", [{}, {"read_only": True}, {"modify": True}, {"password": "unused"}])
+def test_path_replacement_after_admission_loads_the_admitted_snapshot(tmp_path, monkeypatch, mode):
+    path = tmp_path / "source.xlsx"
+    admitted = workbook_bytes(text="admitted", cells=4)
+    path.write_bytes(admitted)
+    validate = wolfxl.Limits._validate
+    scanned = []
+
+    def swap_after_scan(self, source, *, permissive=False):
+        assert isinstance(source, bytes)
+        scanned.append(source)
+        validate(self, source, permissive=permissive)
+        path.write_bytes(workbook_bytes(text="replacement", cells=8))
+
+    monkeypatch.setattr(wolfxl.Limits, "_validate", swap_after_scan)
+    wb = wolfxl.load_workbook(path, limits=wolfxl.Limits(max_cells=4), **mode)
+    assert scanned and all(source == admitted for source in scanned)
+    assert list(wb.active.iter_rows(values_only=True)) == [("admitted",)] * 4
+    wb.close()
+
+
+@pytest.mark.parametrize("read_only", [False, True])
+def test_replacement_before_first_stream_read_keeps_admitted_string_table(tmp_path, read_only):
+    path = tmp_path / "source.xlsx"
+    admitted = workbook_bytes(text="admitted shared value")
+    path.write_bytes(admitted)
+    wb = wolfxl.load_workbook(path, read_only=read_only)
+    path.write_bytes(workbook_bytes(text="replacement shared value"))
+    assert list(wb.active.iter_rows(values_only=True)) == [("admitted shared value",)] * 4
+    assert wb.active["A1"].value == "admitted shared value"
+    wb.close()
+
+
+@pytest.mark.parametrize("mode", [{}, {"read_only": True}, {"modify": True}])
+@pytest.mark.parametrize("source_kind", ["bytes", "path"])
+@pytest.mark.parametrize("field,inline,budget", [
+    ("max_cells", False, 3),
+    ("max_shared_string_bytes", False, 3),
+    ("max_materialized_string_bytes", True, 15),
+])
+def test_nonstandard_workbook_part_is_admitted_before_normalization(
+    tmp_path, mode, source_kind, field, inline, budget
+):
+    def transform(name, value):
+        if name == "xl/workbook.xml":
+            name = "xl/alternate.xml"
+        elif name == "xl/_rels/workbook.xml.rels":
+            name = "xl/_rels/alternate.xml.rels"
+        elif name in ("_rels/.rels", "[Content_Types].xml"):
+            value = value.replace(b"xl/workbook.xml", b"xl/alternate.xml")
+        return name, value
+
+    data = replace_parts(workbook_bytes(text="four", inline=inline), transform)
+    limits = wolfxl.Limits(**{field: budget})
+    # Exercise native admission directly, without the Python normalization path.
+    with pytest.raises(wolfxl.LimitExceeded, match=field):
+        limits._validate(data)
+    source = data
+    if source_kind == "path":
+        source = tmp_path / "alternate.xlsx"
+        source.write_bytes(data)
+    with pytest.raises(wolfxl.LimitExceeded, match=field):
+        wolfxl.load_workbook(source, limits=limits, **mode)
+    wb = wolfxl.load_workbook(source, **mode)
+    assert wb.active["A1"].value == "four"
+    wb.close()
