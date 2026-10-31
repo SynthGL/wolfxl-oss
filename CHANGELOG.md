@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## 2.0.36 - 2026-10-31
 
 ### Added
 
@@ -41,6 +41,11 @@
 
 ### Security
 
+- Untrusted XLSX files can no longer exhaust memory through a shared string
+  referenced by many cells. In 2.0.35, a 110 KB workbook that references one
+  1 MiB shared string from 12,000 cells used more than 2 GiB on a full load.
+  Upgrade to 2.0.36. A GitHub security advisory with the affected version
+  range will follow.
 - Update anyhow to 1.0.104 (RUSTSEC-2026-0190).
 - Require pytest 9.0.3 or newer in the test extra on Python 3.10 and newer,
   while retaining the compatible pytest range on Python 3.9.
