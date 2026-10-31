@@ -1,0 +1,122 @@
+{
+  "base_limit_regressions": {
+    "source": "b21ff6b72b77b357e78f7fe1e0e0723e1dd8d89d",
+    "environment": "Linux x86_64, source-built native extension",
+    "program": "python",
+    "arguments": [
+      "-m",
+      "pytest",
+      "evidence/test_load_limits.py",
+      "-q",
+      "-k",
+      "test_each_limit_refuses_before_materialization"
+    ],
+    "result": {
+      "failed": 30,
+      "deselected": 14,
+      "wall_s": 0.2
+    },
+    "expected_failure": "wolfxl.Limits is absent on the base; five independent budgets, three source kinds and two load modes are covered."
+  },
+  "candidate_focused": {
+    "source": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2",
+    "program": "python",
+    "arguments": [
+      "-m",
+      "pytest",
+      "tests/test_load_limits.py",
+      "tests/test_streaming_oom_error.py",
+      "tests/test_readonly_load_memory.py",
+      "tests/test_streaming_reads.py",
+      "tests/test_external_links.py",
+      "tests/test_modify_conditional_formatting.py",
+      "tests/test_images_inplace_resave.py",
+      "tests/test_streaming_no_spool.py",
+      "tests/test_modify_noop_preservation.py",
+      "tests/test_vba_package_shape.py",
+      "tests/test_workbook_compat_t0.py",
+      "-q",
+      "--basetemp=<repository-local-scratch>/pytest-final-snapshot"
+    ],
+    "result": {
+      "passed": 278,
+      "warnings": 19,
+      "wall_s": 101.79
+    }
+  },
+  "candidate_public_python": {
+    "source": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2",
+    "program": "python",
+    "arguments": [
+      "-m",
+      "pytest",
+      "tests",
+      "-q",
+      "--ignore=tests/vendored_openpyxl",
+      "--ignore-glob=tests/test_ooxml_*.py",
+      "--ignore-glob=tests/test_*audit*.py",
+      "--ignore-glob=tests/test_*benchmark*.py",
+      "--ignore-glob=tests/test_release_*.py",
+      "--ignore-glob=tests/test_*sota*.py",
+      "--ignore=tests/test_compatibility_matrix_render.py",
+      "--ignore=tests/test_external_oracle_preservation.py",
+      "--ignore=tests/test_import_release_artifact_proof_reports.py",
+      "--ignore=tests/test_openpyxl_compat_oracle.py",
+      "--ignore=tests/test_openpyxl_corpus_runner_summary.py",
+      "--deselect=tests/test_calc_functions.py::TestWhitelist::test_public_formula_counts_match_whitelist"
+    ],
+    "result": {
+      "passed": 3656,
+      "skipped": 51,
+      "warnings": 36,
+      "subtests_passed": 4,
+      "wall_s": 224.93
+    },
+    "selection": "The existing public CI selection, not an unfiltered full-suite pass."
+  },
+  "candidate_rust": {
+    "source": "573a20d5ef3044babd69ff63c38bd7d2b58b916f",
+    "program": "cargo",
+    "arguments": [
+      "test",
+      "-p",
+      "wolfxl",
+      "-p",
+      "wolfxl-reader",
+      "-p",
+      "wolfxl-core",
+      "-p",
+      "wolfxl-rels",
+      "--all-targets",
+      "--locked"
+    ],
+    "result": {
+      "passed": 617,
+      "failed": 0
+    },
+    "environment": {
+      "CARGO_BUILD_JOBS": "4",
+      "PYO3_PYTHON": "virtualenv interpreter",
+      "LD_LIBRARY_PATH": "Python interpreter sysconfig LIBDIR"
+    },
+    "unchanged_native_inputs_at": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2"
+  },
+  "test_environment": {
+    "python": "3.12.14",
+    "os": "Linux x86_64",
+    "TMPDIR": "Repository-local scratch directory on the same filesystem as test outputs"
+  },
+  "residuals": [
+    "An earlier unfiltered Python suite attempt encountered 55 collection errors because this public checkout omits private script modules. No unfiltered full-suite pass is claimed.",
+    "The default Rust command including doctests found two pre-existing JSON snippets treated as Rust in untouched src/wolfxl/external_links.rs. The all-targets command, matching CI target scope, passes.",
+    "A pre-existing unused variable warning remains in src/native_writer_cells.rs.",
+    "Hosted CI on the eventual publication head has not been asserted as passing.",
+    "The passing public Python selection emitted 36 warnings, including a ZipFile destructor warning in a keep_vba package-shape test."
+  ],
+  "artifact_publication": "Subsequent evidence-only commits do not alter the verified library or tests.",
+  "actionlint": {
+    "command": "actionlint .github/workflows/sparse-styled-profile.yml",
+    "result": "passed",
+    "environment": "macOS arm64"
+  }
+}

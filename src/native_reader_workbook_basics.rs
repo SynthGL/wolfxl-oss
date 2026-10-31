@@ -13,6 +13,7 @@ use wolfxl_reader::{
 };
 
 use crate::native_reader_backend::{NativeXlsbBook, NativeXlsxBook};
+use crate::native_reader_cell_helpers::SharedStringCache;
 
 type PyObject = Py<PyAny>;
 
@@ -29,6 +30,7 @@ pub(crate) fn open_xlsx_path(path: &str, permissive: bool) -> PyResult<NativeXls
         sheet_merge_metadata: HashMap::new(),
         opened_from_bytes: false,
         source_path: Some(path.to_string()),
+        shared_string_values: SharedStringCache::default(),
     })
 }
 
@@ -47,6 +49,7 @@ pub(crate) fn open_xlsx_bytes(data: PyBackedBytes, permissive: bool) -> PyResult
         sheet_merge_metadata: HashMap::new(),
         opened_from_bytes: true,
         source_path: None,
+        shared_string_values: SharedStringCache::default(),
     })
 }
 
@@ -59,6 +62,7 @@ pub(crate) fn open_xlsb_path(path: &str) -> PyResult<NativeXlsbBook> {
         sheet_names,
         sheet_cache: HashMap::new(),
         sheet_cell_indexes: HashMap::new(),
+        shared_string_values: SharedStringCache::default(),
     })
 }
 
@@ -71,6 +75,7 @@ pub(crate) fn open_xlsb_bytes(data: &[u8]) -> PyResult<NativeXlsbBook> {
         sheet_names,
         sheet_cache: HashMap::new(),
         sheet_cell_indexes: HashMap::new(),
+        shared_string_values: SharedStringCache::default(),
     })
 }
 

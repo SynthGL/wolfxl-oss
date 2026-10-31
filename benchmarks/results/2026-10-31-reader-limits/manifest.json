@@ -1,0 +1,129 @@
+{
+  "date": "2026-10-31",
+  "scenario": "Load each package and normalize every value from default iter_rows(values_only=True). Full and read_only for admission cases; full only for the corpus.",
+  "hardware": {
+    "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+    "physical_cores": 16,
+    "logical_cpus": 32,
+    "memory_bytes": 32102088704,
+    "isolated": false
+  },
+  "candidate_source": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2",
+  "candidate_tree": "b18f7edce8874a5c3b8aa1a1de3464afbbb83d00",
+  "native_build_source": "573a20d5ef3044babd69ff63c38bd7d2b58b916f",
+  "native_reuse": "Native sources and build inputs are unchanged since 573a20d5e. The locked release developer installation ran again at the candidate source and reused native Cargo artifacts. Candidate Python sources, focused tests, corpus and fixture measurements are at candidate_source.",
+  "native_build": {
+    "program": "maturin",
+    "arguments": [
+      "develop",
+      "--release",
+      "--locked"
+    ],
+    "features": [
+      "extension-module"
+    ],
+    "release_lto": "fat",
+    "release_codegen_units": 1,
+    "cargo_build_jobs": 4,
+    "rustc": "1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "1.99.0 (5f94df478 2026-08-27)",
+    "maturin": "1.16.0",
+    "release_environment_overrides": null,
+    "rustflags": null,
+    "rustc_wrapper": null,
+    "source_transport": "Git bundle of committed source"
+  },
+  "built_base": {
+    "source": "b21ff6b72b77b357e78f7fe1e0e0723e1dd8d89d",
+    "tree": "7300e8d638657a333b8ef94ee6a2a3c6797cec7b",
+    "program": "maturin",
+    "arguments": [
+      "develop",
+      "--release"
+    ],
+    "artifact": "built-base-fixtures.json",
+    "harness": "Initial bootstrap runner, with the same process ceiling, timeout, RSS measurement and value normalization. The released baseline below was rerun with the committed harness."
+  },
+  "released_baseline": {
+    "distribution": "wolfxl==2.0.35 from PyPI",
+    "harness_source": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2",
+    "artifacts": [
+      "released-fixtures.json",
+      "released-corpus.json"
+    ],
+    "harness_blob": "608e5f877e342e689dc0d2af7e0d78641ea81907",
+    "harness_provenance": "Recorded before the rebase using a byte-identical harness. harness_source identifies its equivalent in-branch source; harness_blob is the exact measured script content."
+  },
+  "candidate_artifacts": [
+    "candidate-fixtures.json",
+    "candidate-corpus.json"
+  ],
+  "reference": {
+    "distribution": "openpyxl==3.1.5",
+    "artifact": "openpyxl-fixtures.json",
+    "harness_source": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2",
+    "harness": "The same committed reader_limits.py used for the released and candidate runs; fixture hashes, Python/platform and process configuration are recorded.",
+    "harness_blob": "608e5f877e342e689dc0d2af7e0d78641ea81907",
+    "harness_provenance": "Recorded before the rebase using a byte-identical harness. harness_source identifies its equivalent in-branch source; harness_blob is the exact measured script content."
+  },
+  "fixture_provenance": {
+    "repository": "https://github.com/apache/poi",
+    "revision": "6327f056ba3cfdae326a0261a236460592b80f5c",
+    "directory": "test-data/spreadsheet",
+    "xlsx_files": 352,
+    "manifest": "corpus-hashes.json",
+    "missing_requested_file": "zip-bomb.xlsx is absent from the pinned revision; generated substitutes are measured instead.",
+    "generated": [
+      {
+        "file": "generated-zip-bomb.xlsx",
+        "sha256": "7c83fea69460941836093b9502b8ed1e21ab824901397a3afecbd018068ca4a7"
+      },
+      {
+        "file": "generated-many-members.xlsx",
+        "sha256": "9c1f2d714053d87171fc93e420b540fcc6c7c31a5aea224a1470f0e79e280921"
+      }
+    ],
+    "generation_command": "python benchmarks/reader_limits.py --corpus-dir corpus --generate-cases",
+    "generated_cases_reused": "Generate once and reuse the exact files for both libraries. ZIP timestamps make independently generated ZIP hashes differ."
+  },
+  "resource_target": {
+    "peak_rss_bytes_exclusive": 268435456,
+    "wall_s_exclusive": 5,
+    "candidate_pairs": 10,
+    "all_observed_pairs_within_target": true,
+    "iterations": 1,
+    "warmups": 0,
+    "cache_state": "Fresh interpreter; OS cache unspecified. Host not isolated. No speedup or general timing claim."
+  },
+  "corpus_comparison": {
+    "files": 352,
+    "unchanged": 351,
+    "candidate_ok": 328,
+    "candidate_error": 24,
+    "changes": [
+      {
+        "file": "poc-shared-strings.xlsx",
+        "before_status": "crash",
+        "after_status": "ok",
+        "before_error": null,
+        "after_error": null,
+        "after_nonempty": 11997,
+        "after_sheet_hashes": [
+          "20982493da57c5484f2ceeaf4dea6b4c7affde04c4728822069db885c3446d4e"
+        ]
+      }
+    ],
+    "reason": "The shared-string package changes from allocator abort under the 2 GiB address-space ceiling to successful load. All 327 previously successful workbook value hashes and all 24 error records are unchanged."
+  },
+  "read_only_compatibility": {
+    "file": "poc-shared-strings.xlsx",
+    "declared_dimension": "A1:C1",
+    "nonempty_default_read_only": 3,
+    "nonempty_default_full": 11997,
+    "full_row_count": 3999,
+    "explanation": "Default read_only iteration honors the declared dimension. Row-zero cells are outside normal default iteration. Both candidate mode hashes match openpyxl 3.1.5; this mode difference is retained for compatibility."
+  },
+  "raw_results_policy": "All measurement and error fields are retained. Normalized row arrays are replaced by row_count and per-sheet value hashes in committed summaries. raw_sha256 identifies the complete original JSON. The harness emits complete rows by default.",
+  "integration_base": "04804b02b",
+  "snapshot_policy": "Path inputs are opened once into immutable bytes bounded by max_package_bytes. Admission, loading, metadata, streaming and VBA copying use those bytes. Non-modify reads do not spool; modify and edited-read promotion use a private temporary source with close/collection cleanup. Same-origin saves advance the private source then publish a synced atomic replacement."
+}

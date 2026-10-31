@@ -16,6 +16,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use std::sync::Arc;
 
 const MAX_BYTES: usize = 512 * 1024 * 1024;
 const MAX_CELLS: usize = 8_000_000;
@@ -57,7 +58,7 @@ pub struct NativeXlsBook {
     sheets: Vec<Sheet>,
     names: Vec<NamedRange>,
     formula_names: Vec<String>,
-    strings: Vec<String>,
+    strings: Vec<Arc<str>>,
     formats: HashMap<u16, String>,
     xfs: Vec<u16>,
     font_pages: Vec<Option<u16>>,
@@ -273,7 +274,7 @@ impl NativeXlsBook {
                         return Err(bad("invalid SST counts"));
                     }
                     for _ in 0..n {
-                        book.strings.push(s.unicode(None)?);
+                        book.strings.push(Arc::from(s.unicode(None)?));
                     }
                 }
                 0x041e | 0x001e => {
@@ -617,7 +618,7 @@ impl NativeXlsBook {
                         }
                         0xfd => {
                             let n = u32_at(r.data, h)? as usize;
-                            cell.value = CellValue::String(
+                            cell.value = CellValue::SharedString(
                                 self.strings
                                     .get(n)
                                     .ok_or_else(|| bad("LABELSST index outside SST"))?
@@ -670,7 +671,7 @@ impl NativeXlsBook {
                         _ => {}
                     }
                     cell.data_type = match cell.value {
-                        CellValue::String(_) => {
+                        CellValue::String(_) | CellValue::SharedString(_) => {
                             if cell.data_type == CellDataType::SharedString {
                                 CellDataType::SharedString
                             } else {

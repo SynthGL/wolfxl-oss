@@ -39,7 +39,7 @@ pub(crate) fn read_cell_rich_text_xlsx(
             .find(|c| c.row == row && c.col == col)
             .and_then(|cell| cell.rich_text.clone())
     };
-    serialize_rich_text(py, runs)
+    serialize_rich_text(py, runs, &book.shared_string_values)
 }
 
 pub(crate) fn read_cell_rich_text_xlsb(
@@ -58,22 +58,23 @@ pub(crate) fn read_cell_rich_text_xlsb(
             .find(|c| c.row == row && c.col == col)
             .and_then(|cell| cell.rich_text.clone())
     };
-    serialize_rich_text(py, runs)
+    serialize_rich_text(py, runs, &book.shared_string_values)
 }
 
 fn serialize_rich_text(
     py: Python<'_>,
-    runs: Option<Vec<wolfxl_reader::RichTextRun>>,
+    runs: Option<std::sync::Arc<[wolfxl_reader::RichTextRun]>>,
+    strings: &crate::native_reader_cell_helpers::SharedStringCache,
 ) -> PyResult<PyObject> {
     let Some(runs) = runs else {
         return Ok(py.None());
     };
     let out = PyList::empty(py);
-    for run in runs {
+    for (index, run) in runs.iter().enumerate() {
         let item = PyList::empty(py);
-        item.append(run.text)?;
-        match run.font {
-            Some(font) => item.append(rich_font_to_py(py, &font)?)?,
+        item.append(strings.rich_run_text(py, &runs, index))?;
+        match &run.font {
+            Some(font) => item.append(rich_font_to_py(py, font)?)?,
             None => item.append(py.None())?,
         }
         out.append(item)?;

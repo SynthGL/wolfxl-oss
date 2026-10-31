@@ -4,7 +4,9 @@
 //! a sheet has > 50k rows). Walks `xl/worksheets/sheetN.xml` one row at a
 //! time using an incremental XML reader over a bounded in-memory sheet part, or
 //! for larger worksheets over the sheet part inflated from its ZIP entry while
-//! parsing, resolving shared-string-table (SST) references upfront. Style metadata is
+//! parsing, resolving shared-string-table (SST) references against a table
+//! loaded once per workbook. Each SST entry becomes one Python `str` on first
+//! reference, reused by every later reference. Style metadata is
 //! exposed as a `style_id` only — Python-side `StreamingCell` resolves the
 //! actual font/fill/etc. via the eager Rust reader code path
 //! (which already loads `xl/styles.xml` and exposes O(1) style lookups).
@@ -29,6 +31,7 @@ use flate2::read::DeflateDecoder;
 use pyo3::exceptions::{PyIOError, PyMemoryError, PyStopIteration, PyValueError};
 use pyo3::ffi;
 use pyo3::prelude::*;
+use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBytes, PyDateTime, PyDict, PyFloat, PyInt, PyList, PyString, PyTime, PyTuple};
 use pyo3::IntoPyObjectExt;
 
@@ -231,11 +234,58 @@ fn resolve_sheet_xml_path<R: Read + Seek>(
     )))
 }
 
+/// Shared-string entries of one workbook. An entry becomes a Python `str` on
+/// its first reference and every later reference, from any reader sharing the
+/// table, returns that same object, so a string repeated across many cells is
+/// materialized once rather than once per cell. The native xlsx backend builds
+/// its table from the native reader's entries, so its eager reads and the
+/// streaming readers it hands the table to share one `str` per entry.
+pub(crate) struct SharedStringTable {
+    strings: Vec<Arc<str>>,
+    py_strings: Box<[PyOnceLock<PyObjectOwned>]>,
+}
+
+impl SharedStringTable {
+    fn new(strings: Vec<String>) -> Self {
+        Self::from_shared(strings.into_iter().map(Arc::from).collect())
+    }
+
+    /// Table over entries already held as `Arc<str>`, without copying text.
+    pub(crate) fn from_shared(strings: Vec<Arc<str>>) -> Self {
+        let py_strings = strings.iter().map(|_| PyOnceLock::new()).collect();
+        Self {
+            strings,
+            py_strings,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.strings.len()
+    }
+
+    /// Python `str` of entry `idx`; an index past the table reads as `""`.
+    pub(crate) fn get_py(&self, py: Python<'_>, idx: usize) -> PyResult<PyObjectOwned> {
+        let (Some(text), Some(slot)) = (self.strings.get(idx), self.py_strings.get(idx)) else {
+            return str_to_py(py, "");
+        };
+        if let Some(cached) = slot.get(py) {
+            return Ok(cached.clone_ref(py));
+        }
+        let created = str_to_py(py, text)?;
+        match slot.set(py, created.clone_ref(py)) {
+            Ok(()) => Ok(created),
+            // Another thread stored this entry first; share its object.
+            Err(_) => Ok(slot.get(py).map_or(created, |stored| stored.clone_ref(py))),
+        }
+    }
+}
+
 /// Parsed `xl/sharedStrings.xml`, loaded once per workbook and shared by
-/// every [`StreamingSheetReader`] opened from the same source.
+/// every [`StreamingSheetReader`] opened from the same source, together with
+/// the Python `str` of each entry already referenced.
 #[pyclass(frozen, module = "wolfxl._rust")]
 pub struct StreamingSharedStrings {
-    sst: Arc<Vec<String>>,
+    sst: Arc<SharedStringTable>,
 }
 
 #[pymethods]
@@ -267,8 +317,13 @@ impl StreamingSharedStrings {
     fn from_archive<R: Read + Seek>(mut zip: ZipArchive<R>) -> PyResult<Self> {
         ooxml_util::validate_zip_archive(&mut zip)?;
         Ok(Self {
-            sst: Arc::new(load_sst(&mut zip)?),
+            sst: Arc::new(SharedStringTable::new(load_sst(&mut zip)?)),
         })
+    }
+
+    /// Handle over a table another backend already holds.
+    pub(crate) fn from_table(sst: Arc<SharedStringTable>) -> Self {
+        Self { sst }
     }
 }
 
@@ -281,7 +336,7 @@ pub struct StreamingSheetReader {
     event_buf: Vec<u8>,
     /// Shared-strings table: supplied by the caller or loaded from
     /// `xl/sharedStrings.xml` when the reader opens.
-    sst: Arc<Vec<String>>,
+    sst: Arc<SharedStringTable>,
     /// Whether the reader has been exhausted.
     exhausted: bool,
     /// Optional `min_row` bound (1-based, inclusive). Rows below are skipped.
@@ -1047,7 +1102,7 @@ impl StreamingSheetReader {
 
         let sst = match shared_strings {
             Some(shared) => Arc::clone(&shared.sst),
-            None => Arc::new(load_sst(&mut zip)?),
+            None => Arc::new(SharedStringTable::new(load_sst(&mut zip)?)),
         };
         let sheet_path = resolve_sheet_xml_path(&mut zip, sheet)?;
         let mut sheet_entry = zip.by_name(&sheet_path).map_err(|e| {
@@ -1315,7 +1370,7 @@ fn read_cells_until_row_end(
     reader: &mut SheetXmlReader,
     buf: &mut Vec<u8>,
     py: Python<'_>,
-    sst: &[String],
+    sst: &SharedStringTable,
     row_idx: u32,
 ) -> PyResult<Vec<ParsedCell>> {
     let mut cells: Vec<ParsedCell> = Vec::new();
@@ -1384,7 +1439,7 @@ fn read_values_until_row_end<'py>(
     reader: &mut SheetXmlReader,
     buf: &mut Vec<u8>,
     py: Python<'py>,
-    sst: &[String],
+    sst: &SharedStringTable,
     date_styles: &DateStyles,
     output: CellOutput,
     row_idx: u32,
@@ -1499,7 +1554,7 @@ fn empty_value_row<'py>(
 fn scan_value_row_body<'py>(
     body: &str,
     py: Python<'py>,
-    sst: &[String],
+    sst: &SharedStringTable,
     date_styles: &DateStyles,
     output: CellOutput,
     min_col: Option<u32>,
@@ -1564,7 +1619,7 @@ fn scan_cell_value(
     start: usize,
     py: Python<'_>,
     t_attr: &CellTypeAttr,
-    sst: &[String],
+    sst: &SharedStringTable,
     output: CellOutput,
 ) -> PyResult<Option<(PyObjectOwned, &'static str, usize)>> {
     let bytes = text.as_bytes();
@@ -1795,7 +1850,7 @@ fn read_cell_contents(
     buf: &mut Vec<u8>,
     py: Python<'_>,
     t_attr: &CellTypeAttr,
-    sst: &[String],
+    sst: &SharedStringTable,
     output: CellOutput,
 ) -> PyResult<(PyObjectOwned, &'static str)> {
     let mut v_text: Option<String> = None;
@@ -1941,13 +1996,11 @@ fn read_cell_contents(
                             return Ok((value, "n"));
                         }
                         if let Some(idx) = fast_shared {
-                            let resolved = sst.get(idx).map_or("", String::as_str);
-                            return Ok((str_to_py(py, resolved)?, "s"));
+                            return Ok((sst.get_py(py, idx)?, "s"));
                         }
                     } else if let Some(idx) = fast_shared {
                         let formula = f_text.unwrap_or_default();
-                        let resolved = sst.get(idx).map_or("", String::as_str);
-                        let cached = str_to_py(py, resolved)?;
+                        let cached = sst.get_py(py, idx)?;
                         return Ok((build_formula_dict(py, &formula, cached)?, "formula"));
                     }
                     // `<v>` before `<f>` already parsed the numeric cache.
@@ -2456,7 +2509,7 @@ fn parse_cell_inner(
     py: Python<'_>,
     inner: &[u8],
     t_attr: &str,
-    sst: &[String],
+    sst: &SharedStringTable,
 ) -> PyResult<(PyObjectOwned, &'static str)> {
     let v_text = extract_inner_text(inner, b"v");
     let f_text = extract_inner_text(inner, b"f");
@@ -2484,7 +2537,7 @@ fn value_cell_object(
     fast_number: Option<PyObjectOwned>,
     fast_shared: Option<usize>,
     raw_value: Option<String>,
-    sst: &[String],
+    sst: &SharedStringTable,
 ) -> PyResult<(PyObjectOwned, &'static str)> {
     if has_formula && output == CellOutput::FormulaText {
         let formula = formula.unwrap_or_default();
@@ -2503,12 +2556,12 @@ fn value_cell_object(
     }
     if !has_formula {
         if let Some(idx) = fast_shared {
-            return Ok((str_to_py(py, sst.get(idx).map_or("", String::as_str))?, "s"));
+            return Ok((sst.get_py(py, idx)?, "s"));
         }
         return build_cell_object(py, t_attr, None, raw_value, sst);
     }
     let cached = match fast_shared {
-        Some(idx) => str_to_py(py, sst.get(idx).map_or("", String::as_str))?,
+        Some(idx) => sst.get_py(py, idx)?,
         None => {
             let raw_value =
                 raw_value.filter(|v| !v.is_empty() || matches!(t_attr, CellTypeAttr::InlineString));
@@ -2541,7 +2594,7 @@ fn build_cell_object(
     t_attr: &CellTypeAttr,
     formula: Option<String>,
     raw_value: Option<String>,
-    sst: &[String],
+    sst: &SharedStringTable,
 ) -> PyResult<(PyObjectOwned, &'static str)> {
     // Value text as openpyxl reads it: an empty `<v>` is no value.
     let raw_value =
@@ -2603,7 +2656,7 @@ fn cached_value_to_py(
     py: Python<'_>,
     t_attr: &CellTypeAttr,
     raw_value: Option<String>,
-    sst: &[String],
+    sst: &SharedStringTable,
 ) -> PyResult<PyObjectOwned> {
     let Some(v) = raw_value else {
         return Ok(py.None());
@@ -2614,7 +2667,7 @@ fn cached_value_to_py(
                 .trim()
                 .parse()
                 .map_err(|_| PyErr::new::<PyValueError, _>(format!("Bad SST index: {v:?}")))?;
-            str_to_py(py, sst.get(idx).map_or("", String::as_str))
+            sst.get_py(py, idx)
         }
         CellTypeAttr::Bool => match v.trim().parse::<i64>() {
             Ok(n) => Ok((n != 0).into_py_any(py)?),
@@ -2778,7 +2831,9 @@ mod tests {
     fn parse_cell_inner_number() {
         pyo3::Python::initialize();
         Python::attach(|py| {
-            let (obj, kind) = parse_cell_inner(py, b"<v>42</v>", "n", &[]).unwrap();
+            let (obj, kind) =
+                parse_cell_inner(py, b"<v>42</v>", "n", &SharedStringTable::new(Vec::new()))
+                    .unwrap();
             let value: i64 = obj.extract(py).unwrap();
             assert_eq!(kind, "n");
             assert_eq!(value, 42);
@@ -2924,7 +2979,8 @@ mod tests {
                         reader.read_event_into(&mut buf).unwrap(),
                         Event::Start(_)
                     ));
-                    let sst: Vec<_> = (0..11).map(|i| format!("entry {i}")).collect();
+                    let sst =
+                        SharedStringTable::new((0..11).map(|i| format!("entry {i}")).collect());
                     let (value, _) = read_cell_contents(
                         &mut reader,
                         &mut buf,
@@ -2964,7 +3020,7 @@ mod tests {
                     &mut buf,
                     py,
                     &CellTypeAttr::Number,
-                    &[],
+                    &SharedStringTable::new(Vec::new()),
                     CellOutput::Payload,
                 )
                 .is_err());
@@ -2989,7 +3045,7 @@ mod tests {
                     &mut buf,
                     py,
                     &CellTypeAttr::Number,
-                    &[],
+                    &SharedStringTable::new(Vec::new()),
                     output,
                 )
                 .unwrap()
@@ -3062,15 +3118,15 @@ mod tests {
         assert!(!row_tags_exceed(&many[5..], 50_000).unwrap());
     }
 
-    /// Value rows as `repr` strings (or the error), read through the row
-    /// scanner when `fast`, else through quick-xml events only.
-    fn value_rows(
-        py: Python<'_>,
+    /// Reader over `xml` resolving shared strings against `sst`, through the
+    /// row scanner when `fast`, else through quick-xml events only.
+    fn test_reader(
         xml: &str,
+        sst: Arc<SharedStringTable>,
         output: CellOutput,
         bounds: [Option<u32>; 4],
         fast: bool,
-    ) -> Vec<String> {
+    ) -> StreamingSheetReader {
         let reader = if fast {
             SheetXmlReader::new(xml.as_bytes().to_vec(), None)
         } else {
@@ -3079,10 +3135,10 @@ mod tests {
             events
         };
         let [min_row, max_row, min_col, max_col] = bounds;
-        let mut sheet = StreamingSheetReader {
+        StreamingSheetReader {
             reader: Some(reader),
             event_buf: Vec::new(),
-            sst: Arc::new((0..3).map(|i| format!("s{i}")).collect()),
+            sst,
             exhausted: false,
             min_row,
             max_row,
@@ -3092,7 +3148,22 @@ mod tests {
             last_row: 0,
             date_styles: DateStyles::default(),
             value_output: output,
-        };
+        }
+    }
+
+    /// Value rows as `repr` strings (or the error), read through the row
+    /// scanner when `fast`, else through quick-xml events only.
+    fn value_rows(
+        py: Python<'_>,
+        xml: &str,
+        output: CellOutput,
+        bounds: [Option<u32>; 4],
+        fast: bool,
+    ) -> Vec<String> {
+        let sst = Arc::new(SharedStringTable::new(
+            (0..3).map(|i| format!("s{i}")).collect(),
+        ));
+        let mut sheet = test_reader(xml, sst, output, bounds, fast);
         let mut rows = Vec::new();
         loop {
             match sheet.parse_one_value_row(py) {
@@ -3109,6 +3180,72 @@ mod tests {
         }
         rows.push(format!("past max: {}", sheet.stopped_past_max_row));
         rows
+    }
+
+    #[test]
+    fn shared_string_references_share_one_python_str() {
+        let xml = concat!(
+            "<worksheet><sheetData><row r=\"1\">",
+            "<c r=\"A1\" t=\"s\"><v>1</v></c><c r=\"B1\" t=\"s\"><v> 1 </v></c>",
+            "<c r=\"C1\" t=\"s\"><f>X1</f><v>1</v></c></row>",
+            "<row r=\"2\"><c r=\"A2\" t=\"s\"><v>1</v></c><c r=\"B2\" t=\"s\"><v>7</v></c></row>",
+            "</sheetData></worksheet>",
+        );
+        pyo3::Python::initialize();
+        Python::attach(|py| {
+            let table = Arc::new(SharedStringTable::new(vec!["s0".into(), "x".repeat(4096)]));
+            let expected = table.get_py(py, 1).unwrap();
+            assert!(expected.bind(py).is(table.get_py(py, 1).unwrap()));
+            assert_eq!(
+                table.get_py(py, 7).unwrap().extract::<String>(py).unwrap(),
+                ""
+            );
+
+            // Every reader sharing the table, on both values-only paths and
+            // the cell path, returns the one cached object for entry 1.
+            let mut matches = 0;
+            for output in [CellOutput::FormulaText, CellOutput::CachedValue] {
+                for fast in [true, false] {
+                    let mut sheet = test_reader(xml, Arc::clone(&table), output, [None; 4], fast);
+                    while let ValueStepResult::Row(_, values) =
+                        sheet.parse_one_value_row(py).unwrap()
+                    {
+                        for value in values.iter() {
+                            if value.eq(&expected).unwrap() {
+                                assert!(value.is(&expected));
+                                matches += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            // A1, B1, A2 per formula-text pass; C1's cached result as well
+            // per cached-value pass.
+            assert_eq!(matches, 2 * 3 + 2 * 4);
+
+            let mut sheet = test_reader(
+                xml,
+                Arc::clone(&table),
+                CellOutput::Payload,
+                [None; 4],
+                false,
+            );
+            let mut payload_matches = 0;
+            while let StepResult::Row(_, cells) = sheet.parse_one_row(py).unwrap() {
+                for cell in cells {
+                    let value = cell.value.bind(py);
+                    let value = match value.cast::<PyDict>() {
+                        Ok(payload) => payload.get_item("cached").unwrap().unwrap(),
+                        Err(_) => value.clone(),
+                    };
+                    if value.eq(&expected).unwrap() {
+                        assert!(value.is(&expected));
+                        payload_matches += 1;
+                    }
+                }
+            }
+            assert_eq!(payload_matches, 4);
+        });
     }
 
     #[test]

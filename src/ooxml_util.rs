@@ -8,10 +8,10 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader as XmlReader;
 use zip::ZipArchive;
 
-const DEFAULT_MAX_ZIP_ENTRIES: usize = 200_000;
-const DEFAULT_MAX_ZIP_ENTRY_BYTES: u64 = 512 * 1024 * 1024;
-const DEFAULT_MAX_ZIP_TOTAL_BYTES: u64 = 4 * 1024 * 1024 * 1024;
-const DEFAULT_MAX_COMPRESSION_RATIO: u64 = 1_000;
+use wolfxl_rels::package_guard::{
+    DEFAULT_MAX_COMPRESSION_RATIO, DEFAULT_MAX_ZIP_ENTRIES, DEFAULT_MAX_ZIP_ENTRY_BYTES,
+    DEFAULT_MAX_ZIP_TOTAL_BYTES,
+};
 
 fn env_usize(name: &str, default: usize) -> usize {
     std::env::var(name)

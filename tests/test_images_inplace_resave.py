@@ -85,6 +85,33 @@ def test_second_image_add_after_in_place_image_add(tmp_path: Path, with_source_i
     _assert_clean_package(path)
 
 
+def test_second_save_after_edited_read_load_keeps_first_image(tmp_path: Path) -> None:
+    path = _workbook(tmp_path, with_image=True)
+    wb = load_workbook(path)
+    ws = wb.active
+    ws.add_image(Image(JPG_PATH), "D4")
+    wb.save(path)
+    ws["A2"] = "second save"
+    wb.save(path)
+
+    assert _anchors(path) == [(1, 1), (3, 3)]
+    assert load_workbook(path).active["A2"].value == "second save"
+    _assert_clean_package(path)
+
+
+def test_save_to_other_path_leaves_loaded_file_unchanged(tmp_path: Path) -> None:
+    path = _workbook(tmp_path, with_image=True)
+    original = path.read_bytes()
+    copy = tmp_path / "copy.xlsx"
+    wb = load_workbook(path, modify=True)
+    wb.active.add_image(Image(JPG_PATH), "D4")
+    wb.save(copy)
+
+    assert path.read_bytes() == original
+    assert _anchors(copy) == [(1, 1), (3, 3)]
+    _assert_clean_package(copy)
+
+
 @pytest.mark.parametrize("with_source_image", [False, True])
 def test_remove_image_added_by_first_in_place_save(tmp_path: Path, with_source_image: bool) -> None:
     path = _workbook(tmp_path, with_image=with_source_image)

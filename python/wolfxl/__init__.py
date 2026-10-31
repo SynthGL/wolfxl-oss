@@ -30,6 +30,7 @@ from wolfxl._cell import Cell
 from wolfxl.chartsheet import Chartsheet
 from wolfxl._external_links import ExternalFileLink, ExternalLink
 from wolfxl._rust import __version__, classify_format
+from wolfxl._limits import LimitExceeded, Limits
 from wolfxl.xml import DEFUSEDXML, LXML
 
 # File-format detector (xlsx / xlsb / xls / ods / unknown), distinct from the
@@ -96,6 +97,8 @@ __all__ = [
     "ExternalLink",
     "Font",
     "LXML",
+    "LimitExceeded",
+    "Limits",
     "NUMPY",
     "PatternFill",
     "Side",
@@ -163,6 +166,7 @@ def load_workbook(
     permissive: bool = False,
     rich_text: bool = False,
     password: str | bytes | None = None,
+    limits: Limits | None = None,
 ) -> Workbook:
     """Open a workbook for reading, streaming, or modify-mode saves.
 
@@ -185,12 +189,16 @@ def load_workbook(
             shared-string runs.
         password: Decrypt OOXML-encrypted ``.xlsx`` inputs with the optional
             ``wolfxl[encrypted]`` dependency.
+        limits: Workbook-wide XLSX admission budgets. ``None`` uses
+            :class:`Limits` defaults. Applies to full, read-only and modify loads,
+            including decrypted XLSX inputs. Not supported for XLS or XLSB.
 
     Returns:
         A :class:`Workbook` in read, streaming, or modify mode.
 
     Raises:
         InvalidFileException: If the input format cannot be identified.
+        LimitExceeded: If an OOXML input exceeds a configured resource budget.
         NotImplementedError: If the requested mode is unsupported for the
             detected format, such as modify mode for ``.xlsb``.
         ValueError: If an encrypted workbook needs a password or the supplied
@@ -200,6 +208,13 @@ def load_workbook(
     from wolfxl._workbook_sources import open_workbook_source
 
     fmt, data, path = classify_input(filename)
+    source_fmt = fmt
+    if limits is not None and fmt in ("xls", "xlsb"):
+        raise NotImplementedError("limits= is supported for XLSX-family workbooks only")
+    if limits is None:
+        limits = Limits()
+    elif not isinstance(limits, Limits):
+        raise TypeError("limits= must be a wolfxl.Limits instance or None")
 
     # OOXML-encrypted .xlsx files arrive as OLE CFB envelopes that the
     # sniffer reports as ``"encrypted"``.  Once decrypted via
@@ -268,16 +283,27 @@ def load_workbook(
         permissive=permissive,
         modify=modify,
         read_only=read_only,
+        limits=limits,
         ),
     )
 
+    if path is not None and source_fmt == "xlsx":
+        # XLSX loads keep a private snapshot instead of the caller's file.
+        # Remember the caller path so saving back to it advances the private
+        # patcher source in place before publishing.
+        wb._source_origin_path = os.path.abspath(path)  # noqa: SLF001
+
     if keep_vba:
         try:
-            wb.vba_archive = _copy_archive(filename)  # type: ignore[attr-defined]
+            snapshot = getattr(wb, "_source_bytes", None)
+            source = BytesIO(snapshot) if snapshot is not None else getattr(wb, "_source_path", None)
+            if source is not None:
+                wb.vba_archive = _copy_archive(source)  # type: ignore[attr-defined]
         except Exception:
             pass
 
     wb._rich_text = rich_text  # noqa: SLF001
+    wb._limits = limits  # noqa: SLF001
     return wb
 
 

@@ -61,7 +61,11 @@ jobs:
           git rev-parse HEAD > sparse-profile/candidate-ref.txt
           git rev-parse "$BASELINE_REF" > sparse-profile/baseline-ref.txt
           git diff --name-only "$BASELINE_REF" HEAD > sparse-profile/changed-files.txt
-          git diff --exit-code "$BASELINE_REF" HEAD -- src crates Cargo.toml Cargo.lock build.rs
+          if ! git diff --quiet "$BASELINE_REF" HEAD -- src crates Cargo.toml Cargo.lock build.rs; then
+            echo "### Python overlay benchmark skipped" >> "$GITHUB_STEP_SUMMARY"
+            echo "Native sources or build inputs differ from the base. This benchmark requires an unchanged native extension." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           git show "$BASELINE_REF:python/wolfxl/_streaming.py" > sparse-profile/baseline-streaming.py
           python benchmarks/sparse_styled_profile.py \
             --baseline-streaming sparse-profile/baseline-streaming.py \

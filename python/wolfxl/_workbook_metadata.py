@@ -179,7 +179,9 @@ def get_calc_properties(wb: Any) -> Any:
         return wb._calc_properties_cache  # noqa: SLF001
     payload = _reader_workbook_payload(wb, "read_calc_properties")
     wb._calc_properties_cache = _calc_properties_from_payload(payload)  # noqa: SLF001
-    if payload is None and wb._source_path is not None:  # noqa: SLF001
+    if payload is None and (
+        wb._source_path is not None or getattr(wb, "_source_bytes", None) is not None
+    ):  # noqa: SLF001
         # An absent source calcPr has no explicit recalculate-on-open flag.
         wb._calc_properties_cache.fullCalcOnLoad = None  # noqa: SLF001
     wb._calc_properties_original = tuple(wb._calc_properties_cache)  # noqa: SLF001

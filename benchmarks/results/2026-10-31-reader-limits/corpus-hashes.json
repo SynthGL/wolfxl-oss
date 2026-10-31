@@ -1,0 +1,1410 @@
+[
+  {
+    "file": "123233_charts.xlsx",
+    "sha256": "47e9e8dea87494d17dbacce9aa3a9ec31cb2b26b288de05ca95c0a4622ca7f80"
+  },
+  {
+    "file": "1_NoIden.xlsx",
+    "sha256": "87c8aa12cc031a54be9e2a3b1d6aec37b095eaafbb874218ad829528f13d286e"
+  },
+  {
+    "file": "45430.xlsx",
+    "sha256": "6c55370b676db1fa4c92e3215726f7f83f1d28807d95f7b44b5532186645aaae"
+  },
+  {
+    "file": "45540_classic_Footer.xlsx",
+    "sha256": "090b7f22e7dd5309acd6122b225ac4124974d9c4c1caf574870aa5fafa5f4a8d"
+  },
+  {
+    "file": "45540_classic_Header.xlsx",
+    "sha256": "f1096655276b5cb2301c830f190017499b4e5a6aefb113cff434868b85178e7a"
+  },
+  {
+    "file": "45540_form_Footer.xlsx",
+    "sha256": "6b462fff66e6228e590cec586077886b5aa81e6908612dfab79218d027ab7989"
+  },
+  {
+    "file": "45540_form_Header.xlsx",
+    "sha256": "5e9a5cc4f70614fa4db4b8d87718f0e1bf6110e26046af251db8dc62a22ae7eb"
+  },
+  {
+    "file": "45544.xlsx",
+    "sha256": "a6ed1a727f7b741128565512d4b55d9cb74b52efec391109d783ece5dcbe81d8"
+  },
+  {
+    "file": "46535.xlsx",
+    "sha256": "3aefff05aa9eab15b18ecfac53d0dd733eae82f7655139422db562a19e412324"
+  },
+  {
+    "file": "46536.xlsx",
+    "sha256": "7e6169dd532c21a45b9b5381945627ff7ffb5990569ae549ae52e7216eab0be4"
+  },
+  {
+    "file": "47090.xlsx",
+    "sha256": "80122a145bc4104c4d5f8e263b0ea91892564ee8cc30042c4a24eda81b5e44bb"
+  },
+  {
+    "file": "47504.xlsx",
+    "sha256": "37e7a84e23ba6df5d7a160d760101f309e1580f79e37d461b211177c83e6fd4f"
+  },
+  {
+    "file": "47668.xlsx",
+    "sha256": "41c504cc8fe4eebab5cbd9dfd4521661d043a5ebdfe212ded3134fbef808e3c4"
+  },
+  {
+    "file": "47737.xlsx",
+    "sha256": "4bcb8da52e258c615aca1f2b2252b2ff9e05f51b40560cfeda084486c3f614b3"
+  },
+  {
+    "file": "47804.xlsx",
+    "sha256": "35eaa8a561cdc57f6eda13ef97006391103b4d424cab7ab82fc369a4a9367a36"
+  },
+  {
+    "file": "47813.xlsx",
+    "sha256": "24ee6b9018780f1159126e1c7ed7e987fbe719b91c0da9a7a23286aea1d391cd"
+  },
+  {
+    "file": "47862.xlsx",
+    "sha256": "9001657debd5baae2288e9f8873cd1aa3f9a664ae2c44b264213c650919558a0"
+  },
+  {
+    "file": "47889.xlsx",
+    "sha256": "a6d7f8a056622201862c354bd508820f7e57a84c5e2531e4e4da20180615f312"
+  },
+  {
+    "file": "48495.xlsx",
+    "sha256": "4a315e728f49620a62855a51ff762005e36136aee63d64ada93343ecc24d5d26"
+  },
+  {
+    "file": "48539.xlsx",
+    "sha256": "334a6ebff35265c31d7ada2729012da11169748416fab74e5804ef20906b231f"
+  },
+  {
+    "file": "48703.xlsx",
+    "sha256": "10af0c1b25c30c09112f61f9e52980c8946f5379d85e7e3bf9daa5b02712c999"
+  },
+  {
+    "file": "48779.xlsx",
+    "sha256": "5db5b7be99314495087d55478a1ad6b12abd348d7d534e7a7ec1fe3e72bcda9d"
+  },
+  {
+    "file": "48923.xlsx",
+    "sha256": "2da36b428bff2b23b47358a5782dd7ced36fab7bf209f699ec636c753b461d80"
+  },
+  {
+    "file": "48962.xlsx",
+    "sha256": "58a34dbdf0233db433aec6b8ddfacc47f4a5e59ecc2013e8ec56a7b8dd2d2044"
+  },
+  {
+    "file": "49156.xlsx",
+    "sha256": "7376a8118afc503a82759ad2277f5781a44dce057b2b0984a5b3b5b805db347d"
+  },
+  {
+    "file": "49273.xlsx",
+    "sha256": "f99d52971bc5bed1b18fb23743c330611a5d011504d7f0991a4f2b9426ab8041"
+  },
+  {
+    "file": "49325.xlsx",
+    "sha256": "884b570ff452bf04e6e5d42f417cd69f5f81ef29431a646c1115af352e8d144f"
+  },
+  {
+    "file": "49609.xlsx",
+    "sha256": "4237e7a06cfba518904fac9d2085bc38c4912290c9c698acd38234b86691c546"
+  },
+  {
+    "file": "49783.xlsx",
+    "sha256": "c6960c8e100dd4068686c8894cb00214ea8f1515fc70e5777e6e2ee9b1f77f84"
+  },
+  {
+    "file": "49872.xlsx",
+    "sha256": "e44c7518a4ad65bc1b30d22492c88aec0af2ef5cabd61978ed612e8420b03f91"
+  },
+  {
+    "file": "49928.xlsx",
+    "sha256": "3daabfb45eedcd7ea6c0658663ccc08f5705243d14cf6de6d4418175d6ee6e41"
+  },
+  {
+    "file": "49966.xlsx",
+    "sha256": "b34643668b81588e86bbd10f863d2b872e834dbf79848b945852913e806ee182"
+  },
+  {
+    "file": "50096.xlsx",
+    "sha256": "af2f2b9465f6556621ef4c116edc972430e72463c196f856c899009ae448ec87"
+  },
+  {
+    "file": "50299.xlsx",
+    "sha256": "eb32ad8da197c3e321e0f3808bd379d5a7c64928209db5c7c12def565f52bca0"
+  },
+  {
+    "file": "50755_workday_formula_example.xlsx",
+    "sha256": "c519f7c90b74d2c92500c47370a6b85a0a19430a0ee6470254fcbeaaa71fc505"
+  },
+  {
+    "file": "50784-font_theme_colours.xlsx",
+    "sha256": "5e5042f855d93ef36fa96db64f1a21f800f9ce4a662514fd0c0fa202e06d9545"
+  },
+  {
+    "file": "50786-indexed_colours.xlsx",
+    "sha256": "ce6233e534aabcb238a5a6906bf39fed060feff3abc15655d62450cc4213e3e4"
+  },
+  {
+    "file": "50795.xlsx",
+    "sha256": "3c997b1d8529219326dd8191512751de7b50fd4b1215b59f659fe2fd933764de"
+  },
+  {
+    "file": "50846-border_colours.xlsx",
+    "sha256": "dc7edf8efebcf6ba23705a459d7c416d445bd57b8c42fc4c473d961762c62d8a"
+  },
+  {
+    "file": "50867_with_table.xlsx",
+    "sha256": "142c5e3e48bde3adb5378f7c143b7374f24177d949b6117e4cbfd7ab1e7bae1a"
+  },
+  {
+    "file": "51222.xlsx",
+    "sha256": "46d53bfaed203e900bfcc734b3988c6136549e629a0ddcce9940d249877577e7"
+  },
+  {
+    "file": "51470.xlsx",
+    "sha256": "df58c4d9a0ca30dc3e4c451125e12b8890c309abd7d2abe536ee0ca6138d8746"
+  },
+  {
+    "file": "51519.xlsx",
+    "sha256": "3a68ed7bcd764b4f38ab6a66d5385a644b84de8572b00aefb4316b43a274882b"
+  },
+  {
+    "file": "51585.xlsx",
+    "sha256": "0f6b5534e10bdc4e2919cc0ef57018d4381b2a4f732e36735a952e714f949e24"
+  },
+  {
+    "file": "51626.xlsx",
+    "sha256": "f991583281ecb4ded8a8cdaae989c021d16504de7ac2188883e7e0520df0dc2a"
+  },
+  {
+    "file": "51626_contact.xlsx",
+    "sha256": "b550106fcaa97457c90b5c2ef756993a1d9d54a61a4813abab09ede879ea55f8"
+  },
+  {
+    "file": "51710.xlsx",
+    "sha256": "e83661bb4fdc02893f547ba910ab85241957f068da506ec07a9efcb638677700"
+  },
+  {
+    "file": "51850.xlsx",
+    "sha256": "ca96ff28d84fcc90e674107f080b6c1f68bcbe42b3a8bf25034ef38dc29bc10b"
+  },
+  {
+    "file": "51963.xlsx",
+    "sha256": "7e37d10b34edd80c10af53a040bde395864662994c58f291c2b6a61bf57e7291"
+  },
+  {
+    "file": "51998.xlsx",
+    "sha256": "00415a5a936afc87016835893f6a7fa3fefec2632766730dc65a352c1acd2ab7"
+  },
+  {
+    "file": "52348.xlsx",
+    "sha256": "0021fa21968bb6083b7f58506269cac214faecaf81d79c3091f36d0fca9cae76"
+  },
+  {
+    "file": "52425.xlsx",
+    "sha256": "42462e58c1d01b70b69c280f9a42d54b3916da076b070d23d2a6518dc6a72168"
+  },
+  {
+    "file": "52575_main.xlsx",
+    "sha256": "34dabf3b7cb6ab84d5429196259a3b95de77ae3ee46241f074126a8df65c7e4b"
+  },
+  {
+    "file": "52716.xlsx",
+    "sha256": "5085d404c3fa54bef1d7e5d3234992ddfbea1057653730fb762cf5d26fef5235"
+  },
+  {
+    "file": "53101.xlsx",
+    "sha256": "8b494d0eb63786f8c3a1ca64c7f3f4d2d07de27c1c02d073dd3720d0c87526dd"
+  },
+  {
+    "file": "53105.xlsx",
+    "sha256": "7086065eb87271333338a4ba5c6ae0cc24d1ffc605204dcc23a4b58dc800070f"
+  },
+  {
+    "file": "53282.xlsx",
+    "sha256": "110ea3a6dd7b7c0224901fe0fff46db6f6e6f55854257207ad5a7783afc2ea0c"
+  },
+  {
+    "file": "53282b.xlsx",
+    "sha256": "7dc1e944e014f2bdeee7220cd7509d308104dbd7fc2ea4fdf59200b5aa62c552"
+  },
+  {
+    "file": "53568.xlsx",
+    "sha256": "2a134d6a424f9dc60b80dd002917ffdbe3f0bba7c46883ed3562e958826ae048"
+  },
+  {
+    "file": "53734.xlsx",
+    "sha256": "ee3abb66fcc3774806bd5f725d9b53e7f5d5a605e3b16d26735d7304a20b34ed"
+  },
+  {
+    "file": "53798.xlsx",
+    "sha256": "cf466036304f95dae2c3cdabf8b9ed69856c835f5987dcf6b71117d3d11ffcad"
+  },
+  {
+    "file": "53798_shiftNegative_TMPL.xlsx",
+    "sha256": "cf466036304f95dae2c3cdabf8b9ed69856c835f5987dcf6b71117d3d11ffcad"
+  },
+  {
+    "file": "54034.xlsx",
+    "sha256": "6e6bd9c1376b2361320aec8b7be63b2a8083eb63bbc29edce15d8766fb2b72f6"
+  },
+  {
+    "file": "54071.xlsx",
+    "sha256": "627e4e6c512bf12a66856749070d03f1ea51936192d57b9077568bbf9c9c09a1"
+  },
+  {
+    "file": "54084 - Greek - beyond BMP.xlsx",
+    "sha256": "ba91f677a35478dcdb5452a9ec65235ea506d352f74d624f8c96bfb319cd83b0"
+  },
+  {
+    "file": "54206.xlsx",
+    "sha256": "1d62b1109bef4a4ef1f74ef43739bf67feff709b5a68f17e8b5c68bf79e66f1e"
+  },
+  {
+    "file": "54288-ref.xlsx",
+    "sha256": "91273f55a578438ab8fe57cb3dc8b2fc6e8c8274c18d215e75511567e642992d"
+  },
+  {
+    "file": "54288.xlsx",
+    "sha256": "31eb4f7ca7b345d44265bb07212207dce09a53060f93ad03e51ed2d7e0e6e292"
+  },
+  {
+    "file": "54399.xlsx",
+    "sha256": "ac1770a7887c87ddffca3c1f692089e1c718136704b6199c19520bd10e28d450"
+  },
+  {
+    "file": "54436.xlsx",
+    "sha256": "658dd3273ddb40f1984c38bd587973546b7adffaab1135c0c8bb47035bba0e52"
+  },
+  {
+    "file": "54524.xlsx",
+    "sha256": "a8199a507f91e521baac4a3e5c8b44881ef6a3cc83227fbaf79235cee53382f3"
+  },
+  {
+    "file": "54607.xlsx",
+    "sha256": "c27ca48e67ad3e8a6dca800628dac949863c9da54d09b29bb9aa63567bad3b06"
+  },
+  {
+    "file": "54764-2.xlsx",
+    "sha256": "f5086915bf75301648346126b02c89ca18084d8b8ec8becbb47fcb276c806566"
+  },
+  {
+    "file": "54764.xlsx",
+    "sha256": "9b200eadb9ec0bc0f9c9b088a2f4f8bb3d73983e45a947a8929c9c22fd635886"
+  },
+  {
+    "file": "55406_Conditional_formatting_sample.xlsx",
+    "sha256": "882c71f142549f67cfb1231352f0d87059054d9016582de6531142783f2353df"
+  },
+  {
+    "file": "55640.xlsx",
+    "sha256": "d062756457e79efed42655700f454e6e7ad69a9499e011570aa99216adbbbd09"
+  },
+  {
+    "file": "55745.xlsx",
+    "sha256": "fcd144c2693cba8e04dbd07f6b02b4961389eb60bcc65c094fcbae2bda901ac7"
+  },
+  {
+    "file": "55814.xlsx",
+    "sha256": "95ecf8b64c84e749f29689e8bb72a2c8faf192932cd8e7bed294e2242d5fd217"
+  },
+  {
+    "file": "55850.xlsx",
+    "sha256": "fc8393fc5f9d4d8b436aa65abb6b79ed744ab5c71ff0bcf42b2aade78a5a8a5f"
+  },
+  {
+    "file": "55864.xlsx",
+    "sha256": "d717501f966bfb57fac57cb6e358a7adefd1b7d763c62ead690b7e98f253041f"
+  },
+  {
+    "file": "55906-MultiSheetRefs.xlsx",
+    "sha256": "7a5cb4687ad8835a83fee98bf451b400b8ec7c2ae7fa88793930cab648c6e362"
+  },
+  {
+    "file": "55923.xlsx",
+    "sha256": "0ed4cebe5c65232841640364468187f6b60daa9459a05c93ffa734e322910508"
+  },
+  {
+    "file": "55924.xlsx",
+    "sha256": "25189a83c958e37c236cf4324705f2de965f3bded911794834027c2f9e1b3daa"
+  },
+  {
+    "file": "55926.xlsx",
+    "sha256": "2415613d76651c5c2c95569927a6076b1a345775e3373d3976a122b1bf921dd0"
+  },
+  {
+    "file": "55927.xlsx",
+    "sha256": "7237c5703405b1ad6f53bf50375042de2c22d070dbf0a05fd4f44280493b7170"
+  },
+  {
+    "file": "56011.xlsx",
+    "sha256": "4ebeb7ad840439033ed573a74295ca700036d35a9be9fe6a04d7d9613dad8cbe"
+  },
+  {
+    "file": "56017.xlsx",
+    "sha256": "6a8e7358db7a10864cf971d7e6c51e692936248f468d32798dacb33e7672f9f3"
+  },
+  {
+    "file": "56169.xlsx",
+    "sha256": "58321b693403c75286a8898b0427dd2b672f9a4cc29bb5972fae3a926e104278"
+  },
+  {
+    "file": "56170.xlsx",
+    "sha256": "0c5bfaed727ae07b46ca53a3a7d11d6bbfbc6d687f14460c2c975f548da407d7"
+  },
+  {
+    "file": "56274.xlsx",
+    "sha256": "6a6ba76a44b725c7c465aa65f5a0c4ad6a21707b04a8386181d1625f48320548"
+  },
+  {
+    "file": "56278.xlsx",
+    "sha256": "b82c3e993e54c89323afe50a44c8259de22bad42e1d705a64bb3f02a9ae37833"
+  },
+  {
+    "file": "56295.xlsx",
+    "sha256": "d3bf7fc2da4c96868f4f77c705e21bd844746654ad3d503cc1170bc4117dc75e"
+  },
+  {
+    "file": "56315.xlsx",
+    "sha256": "697d648d16ff68992300bdc24ea0937505e822d6dce1735e402552a07339d53b"
+  },
+  {
+    "file": "56420.xlsx",
+    "sha256": "4242d24c266c82004c039498f6b580b4c338c1b981e0f4cf4f6e692147fa5c5c"
+  },
+  {
+    "file": "56502.xlsx",
+    "sha256": "e03e09742a9ef67b3c988d83371b92bd25c771d17896d827a8af97c816a63fed"
+  },
+  {
+    "file": "56511.xlsx",
+    "sha256": "6f7cf0eb6fbe79763b5c9a11b539cfbcabe5e1ba37e30025a415a11579352c85"
+  },
+  {
+    "file": "56514.xlsx",
+    "sha256": "b76459bddc14074f75e9f03af3fdb7cacb7225c4bb26f71fd7efaafbc893ccce"
+  },
+  {
+    "file": "56557.xlsx",
+    "sha256": "1660ad90dfb9e81d4b3fb6bf35d8a24d9515fdbe7abcfebaa909da08f1c01f2d"
+  },
+  {
+    "file": "56574.xlsx",
+    "sha256": "e5eee015cd0de3def4b4a0d16cc3c68cfc340249fd830ed92b1c093ba53a38c3"
+  },
+  {
+    "file": "56644.xlsx",
+    "sha256": "ea2c622a3123d258d09fa47c68822978054c9b43975722362a535e4a01ce10fa"
+  },
+  {
+    "file": "56688_1.xlsx",
+    "sha256": "865eb0645b095f56e1057ecc25673b91604040f3e4ef362d56504ba8ffc02639"
+  },
+  {
+    "file": "56688_2.xlsx",
+    "sha256": "28a2ed967d41887a32a2862c66b8db31f28b16109e0a02477570c90ad516fc5b"
+  },
+  {
+    "file": "56688_3.xlsx",
+    "sha256": "d257f64763257f03a89e19d8968d9dd967339118d2d93cb1e69439250d10609d"
+  },
+  {
+    "file": "56688_4.xlsx",
+    "sha256": "aef8bab8e5ef9a9a9165aef0ff34fa6ca4ed626668ecb1145d8e1c337da7952b"
+  },
+  {
+    "file": "56702.xlsx",
+    "sha256": "9254edcfc95feefdbdd622894ee76ba154f7b828ebdc5313933c221d55cfc080"
+  },
+  {
+    "file": "56730.xlsx",
+    "sha256": "18fafdf037da3cc9651bfbcbdf22d75d14e17db6abd0171630e9c72f6de79b45"
+  },
+  {
+    "file": "56737.xlsx",
+    "sha256": "454c2baa4359ab4ba7c9b840bf470c9d0a0d15b681809e497fb6b2f818d2ef97"
+  },
+  {
+    "file": "56822-Countifs.xlsx",
+    "sha256": "dfa6d0e1b6a9983f34344bacdde63a0ba93a5c794b1e454efe181f6b04074711"
+  },
+  {
+    "file": "56957.xlsx",
+    "sha256": "3fe6d13e7d9d7cc0ac8d2f254753ad898c9126c432c0b7b4e8a0a5a2510e0542"
+  },
+  {
+    "file": "57171_57163_57165.xlsx",
+    "sha256": "e395daff19d0f745827b02d8f4b65ed6f00b1dbb48d0cc1fcf67b0ac5d61671b"
+  },
+  {
+    "file": "57176.xlsx",
+    "sha256": "868c2f942c3bfea112363df9409092075d2377b09da16d925c86761cdf662078"
+  },
+  {
+    "file": "57196.xlsx",
+    "sha256": "41fc0b0fbd3f4a9c0f472ac0e39e8bc949a82b22df20747d8510db74c8dc59db"
+  },
+  {
+    "file": "57236.xlsx",
+    "sha256": "326ed022df7d55ba01f8571830254b1d2aeaa3e4ba939be53e324d267554009a"
+  },
+  {
+    "file": "57362.xlsx",
+    "sha256": "9f06f767e5b665965e892e3213e8c529ad42b2b12d2cccf9594eb3ffe945a86e"
+  },
+  {
+    "file": "57423.xlsx",
+    "sha256": "4192016284070ba4f29e5a4ec5aba39894d2d8bc9c604dc2d548674a5eccc919"
+  },
+  {
+    "file": "57482-OnlyNumeric.xlsx",
+    "sha256": "c2e538a986540f9ebb3056284a04cd9e58403a1141be2d3ab195db50166fdec7"
+  },
+  {
+    "file": "57523.xlsx",
+    "sha256": "24b8c9f2ed26d56d2ab5b27ffe5e88db5080f76a584b98acfd9ba81f40761316"
+  },
+  {
+    "file": "57535.xlsx",
+    "sha256": "106508ec8816a61ce51b1103c750823d965fb5d9eedfd5f8f063a4f846fe787f"
+  },
+  {
+    "file": "57798.xlsx",
+    "sha256": "95932fd86315566576e06b484b8bafe5fb83d0a0cafc9d3a1580a5c4ec324797"
+  },
+  {
+    "file": "57826.xlsx",
+    "sha256": "17bb08266af466ca891415763f9fd092a4d24fb008d6f903b1b100f10a8e0eb1"
+  },
+  {
+    "file": "57828.xlsx",
+    "sha256": "8733106f00ea87341dd1140035d3c541c623ffe93f3d5103a7a0fd77b2d85ddb"
+  },
+  {
+    "file": "57838.xlsx",
+    "sha256": "b7ca4751a24911d8b635e17a143254f947f9fb760621f9ec18a9e6cc23abe249"
+  },
+  {
+    "file": "57890.xlsx",
+    "sha256": "2ac3a7a7d165b6fb7e63a93e0de6f26582e4e18554f61daafa969f4aa25fd225"
+  },
+  {
+    "file": "57893-many-merges.xlsx",
+    "sha256": "f1b0cc07459a2e00f1e930ff54330e45b9d0626f45468b1ffa7eb3dc21d6f46b"
+  },
+  {
+    "file": "57914.xlsx",
+    "sha256": "7b2c695d4fb3bec5d2f346cf3a07ae3804d6f51d0df282e5b88fd56ee9f5d072"
+  },
+  {
+    "file": "58106.xlsx",
+    "sha256": "88c0e478f174b166190abfd0cf416a033d03252049a998441b98f9841613761f"
+  },
+  {
+    "file": "58315.xlsx",
+    "sha256": "434fabc617abf29b62bfbc1634e9f5bb0e59658b996ef218f1a92ceee4d793a1"
+  },
+  {
+    "file": "58325_db.xlsx",
+    "sha256": "a3320089b55a71f35bce6c51eb15bc37361823807e01f585a1dd77154acbf7fe"
+  },
+  {
+    "file": "58325_lt.xlsx",
+    "sha256": "0f8733f7948f5d343e958d1f5b698506825ba531879fe64a4a9a37497bc82fa7"
+  },
+  {
+    "file": "58616.xlsx",
+    "sha256": "32613e96db73590cb63c9194e5b1190ba7eb4552f4638afecd584dfd5931988f"
+  },
+  {
+    "file": "58648.xlsx",
+    "sha256": "087142751d7e90aefc6c49f61a11041c58bc0d11bf60f949879ef6eb946d1990"
+  },
+  {
+    "file": "58731.xlsx",
+    "sha256": "7c9ea2dc47e651b5b95071719cc3f57e5a97e2e5493b7d81e9ed1acd3deab21c"
+  },
+  {
+    "file": "58747.xlsx",
+    "sha256": "6f0c0ef8e1f1cfaf7d4140e206c27b495bec9d0c1de0d9eac5ba68e1f11f5033"
+  },
+  {
+    "file": "58760.xlsx",
+    "sha256": "5badd810c8c99f42eab4c783da65b02f2e9ca7eae6fe11c0e92192ab3b2cac0d"
+  },
+  {
+    "file": "58896.xlsx",
+    "sha256": "e067e207f4ceab277b4f6c37bb1ac143b9117718d29d2ea95481008201e9a1fd"
+  },
+  {
+    "file": "59021.xlsx",
+    "sha256": "997e89569a755137fe27ada119ab2850ed88b7ec1d2592e613567c3ad562de46"
+  },
+  {
+    "file": "59026.xlsx",
+    "sha256": "738ce0f68555e3cc0f3c63bf06639212ef512754ed60b5eba77f39b58b73dfa1"
+  },
+  {
+    "file": "59106.xlsx",
+    "sha256": "e89fb8a826a64aefd457b225d8fe875d26ecc5c08f979707cc7d7b92b4cac80d"
+  },
+  {
+    "file": "59132.xlsx",
+    "sha256": "cfbda71a1935e6fab94f348409f5168ba4a1dc3b3d03edf88773e262ac0d99f8"
+  },
+  {
+    "file": "59264.xlsx",
+    "sha256": "3173d18657a14bba33d127c2d95f7116e521d32c1ea38409963ffc807d06b283"
+  },
+  {
+    "file": "59388.xlsx",
+    "sha256": "d4108db1115be3c902bf8d5bd39d8ce268e13a229b5ab410eb3b46f0c9f96fcc"
+  },
+  {
+    "file": "59687.xlsx",
+    "sha256": "ee23ffdda17ae423203a82e6096bdb2d3e596f6a7deb9558826d8f7a178e1496"
+  },
+  {
+    "file": "59736.xlsx",
+    "sha256": "5c7f47a903bfb7acdac72db42a9b2359ae4c48e77fa10a46c4233891458002ca"
+  },
+  {
+    "file": "59746_NoRowNums.xlsx",
+    "sha256": "ebb5f8647fa9495bc49f08c7b42916bbef68527301d72053273376fb73fa62ff"
+  },
+  {
+    "file": "59775.xlsx",
+    "sha256": "8800024c3f42ecc1c4171d6c34e35fced0a3c82f10ad5939f01ba85579979871"
+  },
+  {
+    "file": "60255_extra_drawingparts.xlsx",
+    "sha256": "2eb3b758062092344e8512f86aa26f6032e19d76d9b070ee9c24d4659732ee24"
+  },
+  {
+    "file": "60289.xlsx",
+    "sha256": "1b9826bf19b72647a212be454a8ad9808c71df82b026d1cdc9247544386a7ece"
+  },
+  {
+    "file": "60384.xlsx",
+    "sha256": "6301c882c7562c6e83d3d09ba7fc4db4b71fcc099d67e09bc4780af2056f729e"
+  },
+  {
+    "file": "60509.xlsx",
+    "sha256": "9890bc6a8630a0c2e371ae643b2743395adf3fc7c49e289799c853919105d99d"
+  },
+  {
+    "file": "60709.xlsx",
+    "sha256": "367ba43f164936e93f10dac9fe6f01b3721980e934d152d35d7a029958b2a43c"
+  },
+  {
+    "file": "60825.xlsx",
+    "sha256": "5edd00c29d528fc987f50b86dd8ac407ec4e49f5a0d0b282662156ac726f4fa1"
+  },
+  {
+    "file": "61034.xlsx",
+    "sha256": "9b62e496695791931a51e0541e4fec1138e0b372a406ae7f87bb03bb5af5b2ce"
+  },
+  {
+    "file": "61060-conditional-number-formatting.xlsx",
+    "sha256": "9d57919aa4f6036fb922daba5d1dc913a8847581fd9a3dd3c4d79bca7d28bdb8"
+  },
+  {
+    "file": "61063.xlsx",
+    "sha256": "c3e08940b17d4f0e1d2d278e26a4c59c4f4d66370ce6306aa930f31006473982"
+  },
+  {
+    "file": "61281.xlsx",
+    "sha256": "9acdd4578b28638423d7103810e69a5e69fdc11e14dab6cd71aebcf53f4fcc6d"
+  },
+  {
+    "file": "61605.xlsx",
+    "sha256": "1d41b31a788fdf2ce234660f6d2db5a8dc830a06a3886147cb8200bcdc964590"
+  },
+  {
+    "file": "61652.xlsx",
+    "sha256": "187d6ca93dd8c063f7a15c5b4f62e368254a727b731faa9a844941dfa87d1dab"
+  },
+  {
+    "file": "61869.xlsx",
+    "sha256": "ec108001bfa4679a67eabdcb13b8a231e6c33ef5d06d4f6140f9a47c16724e56"
+  },
+  {
+    "file": "62272.xlsx",
+    "sha256": "44dd0f2c41b74267aa315883b133874ba3cf672003ad997b04d93865e587296c"
+  },
+  {
+    "file": "62629_toMerge.xlsx",
+    "sha256": "f1b366244c3c1af0a61f97e777ebe9fd00576ef6c16f48f65fc755fa6e8a498f"
+  },
+  {
+    "file": "62834.xlsx",
+    "sha256": "e6984c58eba3d0746303c64fc4db73462ea1b6e5a4960e3c3dc550b64ddb0b42"
+  },
+  {
+    "file": "63934.xlsx",
+    "sha256": "8c9b96204e289ce6dffbf60d3a348c8045bdec10645a92ac0b7ff97ec0d78230"
+  },
+  {
+    "file": "64450.xlsx",
+    "sha256": "203eaf3275f3d4edaf000728defcece4bc44306852f27b59c9371e52d2338dec"
+  },
+  {
+    "file": "64508.xlsx",
+    "sha256": "c5eaddea897df3eed95140c70000d7c5c75371e6d9aca2c5aee075bc7e6f953d"
+  },
+  {
+    "file": "64667.xlsx",
+    "sha256": "28a8961ba0296b839988c66d0b779f2bb5e2fbfb2edc619e164302ee512c5760"
+  },
+  {
+    "file": "64750.xlsx",
+    "sha256": "7f6de70efff0e048bca78f0aa9ca5e40f6d42b3acdeb5aea3d9612ffd4a37307"
+  },
+  {
+    "file": "64759.xlsx",
+    "sha256": "43f3c765678160e26fab0e3963782a941fb3d41a6a4a9904a48656aa284d68e8"
+  },
+  {
+    "file": "65016.xlsx",
+    "sha256": "c66bdc4ea8135da1b05679ec2814952d10a01e35756fc0e768bcb1a199f13b03"
+  },
+  {
+    "file": "66365.xlsx",
+    "sha256": "244452f8198102b2191646cca864afdf243620c95988869f31c82ac2fc8be6b8"
+  },
+  {
+    "file": "70005-countifs.xlsx",
+    "sha256": "15cc9f6a1f08c631f3dd097e88c2f889ef7a8772c3625de58b594e7ddc932467"
+  },
+  {
+    "file": "AmpersandHeader.xlsx",
+    "sha256": "8996c5807a831043b6b457d6de6f748e46fdf66aa434a5b6a92ef0d87343db1d"
+  },
+  {
+    "file": "AverageTaxRates.xlsx",
+    "sha256": "094b2facaf85870a3230a3b097b82b4bedd7659583e34977d196d04be3211367"
+  },
+  {
+    "file": "Booleans.xlsx",
+    "sha256": "5803ffe3c16185b195d81bb475ed8b63623a4a19060f69165d97150708ec59da"
+  },
+  {
+    "file": "BrNotClosed.xlsx",
+    "sha256": "94fbe64babf5be655fb8bf1d0866f7ac66f1ff50e1039b1ac8cf84289600521e"
+  },
+  {
+    "file": "CVLKRA-KYC_Download_File_Structure_V3.1.xlsx",
+    "sha256": "a6a7bf557df8048108502973ecedc31d96f27d09ac166eedeae32fc96c13e8db"
+  },
+  {
+    "file": "ConditionalFormattingSamples.xlsx",
+    "sha256": "8dfa997a642c00a1da8c0750c371f204553a98c537ca046028b052f9b424a074"
+  },
+  {
+    "file": "CustomXMLMapping-singleattributenamespace.xlsx",
+    "sha256": "9db4c7e7f9828d4029963eff7b726cabb7c032c9e6a7b3628a2f3d827d1f8f80"
+  },
+  {
+    "file": "CustomXMLMappings-complex-type.xlsx",
+    "sha256": "04455b63ab8f8fd3d879b63a7d2bacc5518821ede0c933a2799354a9adaf4b68"
+  },
+  {
+    "file": "CustomXMLMappings.xlsx",
+    "sha256": "6a5fbb160c7c9c2add5125ac07ceaf3f841d40e03d5c75025ab71946d49af289"
+  },
+  {
+    "file": "CustomXmlMappings-inverse-order.xlsx",
+    "sha256": "acbba8c672a3977e24813f017c276986d06909760835a5a3a12899e2a8816c87"
+  },
+  {
+    "file": "DataTableCities.xlsx",
+    "sha256": "3b17486d4015b124423d38966a0aa88757b2177087941a905704b634204aed4e"
+  },
+  {
+    "file": "DataValidationEvaluations.xlsx",
+    "sha256": "ea5706d9afc031a8c2afef880559483bad30ab2c18e2857aca5f3cfaa74decf4"
+  },
+  {
+    "file": "DataValidationListTooLong.xlsx",
+    "sha256": "25785bbdbfe495db4bddbdb578b0239faa1715d40ede2b6003776e0a75a9a15a"
+  },
+  {
+    "file": "DataValidations-49244.xlsx",
+    "sha256": "8066b12c878d74aa35b55b22dc9daba9a56e91332a35cf96c4fc0f6af6bd3bd1"
+  },
+  {
+    "file": "DateFormatNumberTests.xlsx",
+    "sha256": "d18aade6ad10435baa4be3ac1c4ba4c15e48248bc24b91926920f3dec0aca033"
+  },
+  {
+    "file": "DateFormatTests.xlsx",
+    "sha256": "16445dc0deba00671ee4315015a970d415ce9886da59c974532d946e99276c66"
+  },
+  {
+    "file": "ElapsedFormatTests.xlsx",
+    "sha256": "c3e574f098855b4d28e618353337c10941fc01d8e6c320c46a79731d5425c7ca"
+  },
+  {
+    "file": "ExcelPivotTableSample.xlsx",
+    "sha256": "f0ef1d61c9f3d8b27b18a876b8e24676314c6450ed64a725a7bfaa603fdd67e3"
+  },
+  {
+    "file": "ExcelTables.xlsx",
+    "sha256": "1e43011440eb39000d1751abaf9ded42d37b26f91b4f586a94bf91ce8ecbe9e5"
+  },
+  {
+    "file": "Excel_file_with_trash_item.xlsx",
+    "sha256": "e9c4515c22be30487a9ce3c081e74cf58b5143aa42b6dc07e891aa261066fa98"
+  },
+  {
+    "file": "FillWithoutColor.xlsx",
+    "sha256": "95d1e35be1ab210c1e9ac29e53fe53c764379931b1df8ab9f98a71c060ef143e"
+  },
+  {
+    "file": "ForShifting.xlsx",
+    "sha256": "acdee44e5923153f3d2edb1130d9a37bd9ff0674a61115924782c9a0fde2e1e5"
+  },
+  {
+    "file": "FormatChoiceTests.xlsx",
+    "sha256": "c8a86eedc7da9b9f421210cd42bb1164df4d068f39c1b10768f8e780f4f58852"
+  },
+  {
+    "file": "FormatConditionTests.xlsx",
+    "sha256": "96afa10c8f1f633fc2eaebf21a0883c96a8be2cc5f38fc8c2e826b5d9c140d4f"
+  },
+  {
+    "file": "FormatKM.xlsx",
+    "sha256": "ab5b08e968898f40477c2599dab9285c4557e6f212f3b942011e6588018244e0"
+  },
+  {
+    "file": "Formatting.xlsx",
+    "sha256": "5a0aa7c36c53b22cd26e3eeb2ee49bf16f7e4101aafa8b1503a0778f4010ddbc"
+  },
+  {
+    "file": "FormulaEvalTestData_Copy.xlsx",
+    "sha256": "01b21647d53501e8ec10f4eb522945d41ea3c8d1fdd57f8b0142ec34884c33eb"
+  },
+  {
+    "file": "FormulaSheetRange.xlsx",
+    "sha256": "1943a81a9d439e3bb843b66fd2f9bcdcf37e31232c850ea31d47681b5d5efa12"
+  },
+  {
+    "file": "GeneralFormatTests.xlsx",
+    "sha256": "607ff06ff0295d0920d81b27e09b91e86301b9f3862d1d22b093f8f8c5a4de28"
+  },
+  {
+    "file": "GroupTest.xlsx",
+    "sha256": "a14e6d478004720480cb99844fd6b00260c804bfa02b3da3f496e2c1fb5c8949"
+  },
+  {
+    "file": "HeaderFooterComplexFormats.xlsx",
+    "sha256": "70828c7e2e8b0068410009e7ab5054e475d1195ad6c6f4303e03732ab8f7ca9c"
+  },
+  {
+    "file": "HsGetVal.xlsx",
+    "sha256": "d4f4ee2a7f1a539f887f044bad19d33fb6476c60bf68640b5a64aa80a49cd65d"
+  },
+  {
+    "file": "InlineString.xlsx",
+    "sha256": "c92383b48d5141248c7fb37e077b1aa02f716a995d57b779c357758b8afb5478"
+  },
+  {
+    "file": "InlineStrings.xlsx",
+    "sha256": "bdfd54e82e7eec3a16bc12708dd2fbb8ebee12921215f6ed78fd32a84bfbfd74"
+  },
+  {
+    "file": "Intersection-52111-xssf.xlsx",
+    "sha256": "3630eed0229c419651e03e134af8121e81ef60761ddf6b613ce83a75dff0ca4e"
+  },
+  {
+    "file": "LIBRE_OFFICE-116306-0.xlsx",
+    "sha256": "44d0f41ed21aec02f9a6bbd22cf73f9bd313b16006fe867e6c5fbe5a0a25e5f1"
+  },
+  {
+    "file": "LIBRE_OFFICE-128382-0.xlsx",
+    "sha256": "e6dbe8f5da66804b39f17f02183a63005a7c418d636ad5d43f21b9d39f22e800"
+  },
+  {
+    "file": "MalformedSSTCount.xlsx",
+    "sha256": "c3c025bed1736a240e0e91960aaaaebd795d95b54a7b977c2e451406aa1f9462"
+  },
+  {
+    "file": "MatrixFormulaEvalTestData.xlsx",
+    "sha256": "12f1dcef889c20fe54a09857790ba9803a7b061cc9fc5b85d0038cd6c86faa79"
+  },
+  {
+    "file": "NewStyleConditionalFormattings.xlsx",
+    "sha256": "1e97af3b87636bd0a759c25439a21b928c2ff3b9a3c57ca49ae24cb1ccdb7e2f"
+  },
+  {
+    "file": "NewlineInFormulas.xlsx",
+    "sha256": "3ec9c0c59a6e3f1ec66ca023c4a4ba0235c8047a41bf859fd223f352146637de"
+  },
+  {
+    "file": "NumberFormatApproxTests.xlsx",
+    "sha256": "0ed1e83006006bde250044e4f776238b11baea158ef27cd4b95be2363b98004a"
+  },
+  {
+    "file": "NumberFormatTests.xlsx",
+    "sha256": "a11d437ee538abe36d630a4795dd30d5823a68dce02a404a45e085dd49c4435d"
+  },
+  {
+    "file": "RepeatingRowsCols.xlsx",
+    "sha256": "ff67241b278977c97f8f540fe935e087763db0c0e404bd71777f913a3d698c0b"
+  },
+  {
+    "file": "SampleSS.strict.xlsx",
+    "sha256": "cbfff2096b33055de1686ae99ff649f78f3cc97d7271c242840be6b40837f6e6"
+  },
+  {
+    "file": "SampleSS.xlsx",
+    "sha256": "44f1b6ef310c370d4902ee3452e6174da25a67bdb09f47850d51b3287cb3db71"
+  },
+  {
+    "file": "SheetTabColors.xlsx",
+    "sha256": "1e0bc29719430c8e221465ce026e78063587516ef5037acafc466ce835356930"
+  },
+  {
+    "file": "ShrinkToFit.xlsx",
+    "sha256": "a07b41551780d0a40755f74ea85bf21a327330e8e922504365283678e2d0038e"
+  },
+  {
+    "file": "SimpleMultiCell.xlsx",
+    "sha256": "119b6e70c5bbca6ca3e46f981e0719c154d87203adb4b5b61210d726deab9f7a"
+  },
+  {
+    "file": "SimpleNormal.xlsx",
+    "sha256": "6b300c76d7b6ba32e45c40086f5c8cea4b269946f7786a73e0d6f08c3acfe1e4"
+  },
+  {
+    "file": "SimpleScatterChart.xlsx",
+    "sha256": "c3024ac94d6d42cbe48d20a798eda98b06d8dba6e2ed2b1fcda10659883c7be4"
+  },
+  {
+    "file": "SimpleStrict.xlsx",
+    "sha256": "dd6d2142e4c440c5cfaa241aa48883bfc0a76742b4531102dd41aea2f7a4d2ad"
+  },
+  {
+    "file": "SimpleWithComments.xlsx",
+    "sha256": "d7d337b3436e863487d26439a57ef749950c599862325d7bce7e830acf1df0ba"
+  },
+  {
+    "file": "SingleCellTable.xlsx",
+    "sha256": "81703720d256b69aebfeefac6134e81fd1b014104408db752f0ff24d46e4ba61"
+  },
+  {
+    "file": "StructuredReferences.xlsx",
+    "sha256": "a746e336176f8157c50a0a3b017c4633b7b1d546bd1b8af0f8165a48d1bacc56"
+  },
+  {
+    "file": "StructuredRefs-lots-with-lookups.xlsx",
+    "sha256": "09af82b9abae2ffcff04777b69cbb23dfd15df788426153bcfa1e9359c3552be"
+  },
+  {
+    "file": "Tables.xlsx",
+    "sha256": "3402bd6406a6ef32c3b88c45decb820f0ca797a8d971007f869b5ad3743bcbc8"
+  },
+  {
+    "file": "TablesWithDifferentHeaders.xlsx",
+    "sha256": "bf6ac00bcc85e46c38eec0e643727fc8d3e55b2cc7c8e37e5972fa9f1c1373be"
+  },
+  {
+    "file": "TestShiftRowSharedFormula.xlsx",
+    "sha256": "21f222c39b70fee2aad244b70a06123aa3bbd2e99ba29cfbc2ed157bcae095cd"
+  },
+  {
+    "file": "TextFormatTests.xlsx",
+    "sha256": "c224c784e77f321c59c90f6d93380ff74a0e0013f0346e4b2cdf0a5ff5e3840b"
+  },
+  {
+    "file": "Themes.xlsx",
+    "sha256": "675234ce15443e36e8bb41869cfc700143b1ac7152ebb7531fc49a92789b3be4"
+  },
+  {
+    "file": "Themes2.xlsx",
+    "sha256": "f1c6597315e27b30cadcfa7bd4494a2a52e8a5a17a1a91dcc83fc29922d24c00"
+  },
+  {
+    "file": "TwoSheetsNoneHidden.xlsx",
+    "sha256": "62f83686811614842efe4606d07669fd3c70b8ed8c8ff1459c2c329c802a2e59"
+  },
+  {
+    "file": "TwoSheetsOneHidden.xlsx",
+    "sha256": "3e9749837cac5a19a7628d7e60c1a1c6d0ff7657f27fa7904b217b96e0dc534f"
+  },
+  {
+    "file": "VLookupFullColumn.xlsx",
+    "sha256": "2788b77ec3407056e75a56ae1ee01b0222e353ca29910a12ffc1e9a62569a990"
+  },
+  {
+    "file": "ValueFunctionOfBlank.xlsx",
+    "sha256": "202d993c1bdcde6f30619044a711f79f535bd0c8459f5e6ed30994962fdb09dd"
+  },
+  {
+    "file": "WidthsAndHeights.xlsx",
+    "sha256": "72a84c23b2939f31fa6357867e6b34d3454efb84c830739c10797f767de1007e"
+  },
+  {
+    "file": "WithChart.xlsx",
+    "sha256": "51f27aabf7417f5aaa0542857b6bb56a92d4afbabdc5c63f084c06f92b67429d"
+  },
+  {
+    "file": "WithChartSheet.xlsx",
+    "sha256": "792b9f21afdb6b8b1f82345864ee15d55c17a1b54d71c250e82c87304385d362"
+  },
+  {
+    "file": "WithConditionalFormatting.xlsx",
+    "sha256": "ead4aad13d2b975f795b50e7c8b7da443fb1525a8f9fa7347a5f09041a3ed426"
+  },
+  {
+    "file": "WithDrawing.xlsx",
+    "sha256": "97b1ab359d6aecbe37864f30c85106e386f0a19bea8f290103927362a2701066"
+  },
+  {
+    "file": "WithEmbeded.xlsx",
+    "sha256": "2bdaa7dbae4e739a5b1dc2654ccaeb15fe4d6a62cd47ab742db78100a7dcf9de"
+  },
+  {
+    "file": "WithMoreVariousData.xlsx",
+    "sha256": "9cf5ac25bbe59ee30d954983e7803a854909be6d53e184933d4c47e8f6b248bb"
+  },
+  {
+    "file": "WithTable.xlsx",
+    "sha256": "624b33056b0d2686f4264eb21281fc0245167490463d2fdeb556984c239f7fa8"
+  },
+  {
+    "file": "WithTextBox.xlsx",
+    "sha256": "4626f09c5d870726d6c7837b37c2bbfe7376cb025f61648af39a63ee8be1b1be"
+  },
+  {
+    "file": "WithTextBox2.xlsx",
+    "sha256": "b06a125aeb8d032a196d2cc8cb221197e6bc53d2be8ad08d29f404108857eb6c"
+  },
+  {
+    "file": "WithThreeCharts.xlsx",
+    "sha256": "629b69bd250d9b4e173eb2088eb80b656b7748b0287cd7b0df0c2dc22c6af7b0"
+  },
+  {
+    "file": "WithTwoCharts.xlsx",
+    "sha256": "7d29c92e9f7968a5bc9ec076458785295c24d13916b02b8a467c0a8fd013cddd"
+  },
+  {
+    "file": "WithVariousData.xlsx",
+    "sha256": "1440a832bb810c09687d3498b841782964b0b697e9242428fed1072ab22d078a"
+  },
+  {
+    "file": "XSSFSheet.copyRows.xlsx",
+    "sha256": "85b76d790c3eeb07693ea94293440a9efa2b91e41e2a6bea4b7bbd7ab9edba90"
+  },
+  {
+    "file": "absolute-anchor-over-empty-sheet.xlsx",
+    "sha256": "af3a4e266888c804c974d2de0fd1da1e9fd467c8071456b10380040c4755d28b"
+  },
+  {
+    "file": "atp.xlsx",
+    "sha256": "32f3e668515150721147a1ee3a41c95b70beee7cc67dcbb005c8fca08f20d58f"
+  },
+  {
+    "file": "bug54803.xlsx",
+    "sha256": "9a5d37e34672dc45fa5e534178ed85d0dce2c5b59b0a706a3edfc85d22c2f84d"
+  },
+  {
+    "file": "bug60848_sumproduct_unary_minus.xlsx",
+    "sha256": "11ff0732cda143fd2d6db6d2a8d330c3bd68cf9e3fd41e086fde38943afe224e"
+  },
+  {
+    "file": "bug60858.xlsx",
+    "sha256": "4a5dcfb4fa3406cecf7bdb52d5794a0660ca691c9dfebe94f48818e6cc091d67"
+  },
+  {
+    "file": "bug62181.xlsx",
+    "sha256": "f818f27a244f8527a055a56f7a8f838f517615aa6abca16f586d89bf70183a3a"
+  },
+  {
+    "file": "bug63189.xlsx",
+    "sha256": "0671f497436a34ac15ae63f22407e6eb791be03efde38f87b10adf41e2051104"
+  },
+  {
+    "file": "bug64512_embed.xlsx",
+    "sha256": "50a8f8c88c7308dd4a0b4eb61cd58fa34063243e62a22af7ffd5a59d34180f5b"
+  },
+  {
+    "file": "bug65306.xlsx",
+    "sha256": "1dd83824fa99da09d0501b2e588575c4cede000c44542ac7fb9bbe06631de245"
+  },
+  {
+    "file": "bug65464.xlsx",
+    "sha256": "f2edc77ca170b11940e69a31b3ec5b88849b08ee493a0155fffb0ebdda961420"
+  },
+  {
+    "file": "bug66215.xlsx",
+    "sha256": "6574c2ee6665fa4d3bdad2cc6775658e0d5d24cc2c31eaaf2fa50b54851c34ba"
+  },
+  {
+    "file": "bug66675.xlsx",
+    "sha256": "3a1ad731e168ebec18a2ddee93455511d70d8ca8b489c44bbd189ef9cd8ed403"
+  },
+  {
+    "file": "bug66827.xlsx",
+    "sha256": "9e1de44faaf365b5ac744af4a01fe0dc9371b77a44fc9a7faf1d546400460a2b"
+  },
+  {
+    "file": "bug67784.xlsx",
+    "sha256": "cc5996a1f9f4a0357553d4e32197d40379a9dcf9656121d4b10f4bb709ace76b"
+  },
+  {
+    "file": "bug69769.xlsx",
+    "sha256": "098d7379336832d5c286bf93163c760d6595197b970b7a5c1156209169c0480c"
+  },
+  {
+    "file": "bug69812.xlsx",
+    "sha256": "762af996469e67c16165e3106b95af5aed6794ed0d9996d67f3eeb2e2def239f"
+  },
+  {
+    "file": "chartTitle_noTitle.xlsx",
+    "sha256": "9be4f74eea0dcbb802473be420f0e0ce0c45a47deec398d71c7411483a4ddf70"
+  },
+  {
+    "file": "chartTitle_withTitle.xlsx",
+    "sha256": "586c174285621c081020da523c4a814a9ad62b75d86f49276faa1b6036919395"
+  },
+  {
+    "file": "chartTitle_withTitleFormula.xlsx",
+    "sha256": "120375c8bfd5b5e7cbb388531a1f328adde31f628419cfdc29202981e3a7bd93"
+  },
+  {
+    "file": "chart_sheet.xlsx",
+    "sha256": "93e2d8663bc1a6b7d961f2a74440953ecdaadb1a3f171960129b730f7c935d3e"
+  },
+  {
+    "file": "clone_sheet.xlsx",
+    "sha256": "c562b328818341d7daa28d5dbd2168946aeecbdb30a6e49d9b982da511879875"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-POIFuzzer-5040805309710336.xlsx",
+    "sha256": "ab7e62cbb8990befd18ac61d9114af4bdeb8d4d8dcc9ed2b219b74244d19652d"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-POIXSSFFuzzer-4828727001088000.xlsx",
+    "sha256": "95d38f6b6ba90f977a30428ae11ea673a1519984165827f7818a8a310964d34d"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-POIXSSFFuzzer-5089447305609216.xlsx",
+    "sha256": "81b40a100a7521f5b560bc3d1d7128c54bf1a0711e3da8e72dad8b70ace2e255"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-POIXSSFFuzzer-5185049589579776.xlsx",
+    "sha256": "fe393e289221e5d0fc1611ec9a416a826bfa8cf4d4d3cc061a45b93ef447e378"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-POIXSSFFuzzer-5265527465181184.xlsx",
+    "sha256": "3df2702db5e10050701637415465bad583d97e8126121660c229b331c3e3c439"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-POIXSSFFuzzer-5937385319563264.xlsx",
+    "sha256": "150097f203a5d18f29c4799a477e403565c95d16a7f03d9503cba73429f4266a"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-POIXSSFFuzzer-6123461607817216.xlsx",
+    "sha256": "759df2993da5c960644be3f51e01073502a8a80b2d63c52253f4ec853bf32f5d"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-POIXSSFFuzzer-6419366255919104.xlsx",
+    "sha256": "0a98e11497a7596b6b0d8e4dee5a537b7a02d3cc558d06ee05a6563399d14ffd"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-POIXSSFFuzzer-6448258963341312.xlsx",
+    "sha256": "002b86de5d3bc0764bbba7f52ca7416c7d813640a205a23b55529dd50669c3d9"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-XLSX2CSVFuzzer-5025401116950528.xlsx",
+    "sha256": "2471661d4400985eaaa1d3f41de214da43b84c8ace42b0a9e9cfb386d910509a"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-XLSX2CSVFuzzer-5542865479270400.xlsx",
+    "sha256": "11d74c8026c6635b4175d6250cae75d4cace74e1d92e71124a3863bc7bcb3274"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-XLSX2CSVFuzzer-5636439151607808.xlsx",
+    "sha256": "57c472b9fbb1a5ca1337189465c010cfab59516d532e446b172f2a4d5f88e23f"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-XLSX2CSVFuzzer-6504225896792064.xlsx",
+    "sha256": "a4e85686a0c801774ca5fad9beac37073ffbc68772bb2937bf133bc34695d482"
+  },
+  {
+    "file": "clusterfuzz-testcase-minimized-XLSX2CSVFuzzer-6594557414080512.xlsx",
+    "sha256": "9313f4e25f326db2bc1ef5d4087db9e94267184df76b1bd4b6aff1e4d7171f7b"
+  },
+  {
+    "file": "commentTest.xlsx",
+    "sha256": "2e359c938c9984ea70afe4a04087ab33333a30e66ff8747b47645eb75aac4bb3"
+  },
+  {
+    "file": "comments.xlsx",
+    "sha256": "6c0b2e28e42d80115d88ac70bf5a610a61bc325d5886a6689ddeee34eefe7a2d"
+  },
+  {
+    "file": "conditional_formatting_cell_is.xlsx",
+    "sha256": "7deed8f22cb3cf45733a94b975950b49f6ab89e37e891e62f0be8a0b07d9bc26"
+  },
+  {
+    "file": "conditional_formatting_multiple_ranges.xlsx",
+    "sha256": "2ee236b3134d0494f44fc122b59ba883762a87415a332a3bd1cb972f7e0fcb0d"
+  },
+  {
+    "file": "conditional_formatting_with_formula_on_second_sheet.xlsx",
+    "sha256": "c69d5988b66917d9e51dfdea04a75358b77061feebd2d7fc625c6ffdda85d816"
+  },
+  {
+    "file": "craftonhills.edu_programreview_report.aspx_goalpriorityreport_0011d159-1eeb-4b63-8833-867b0926e5f3.xlsx",
+    "sha256": "f55df0f7a40110814ec257950c499cae8aa5a336cf03abb269fa2ea51836817c"
+  },
+  {
+    "file": "crash-274d6342e4842d61be0fb48eaadad6208ae767ae.xlsx",
+    "sha256": "002b86de5d3bc0764bbba7f52ca7416c7d813640a205a23b55529dd50669c3d9"
+  },
+  {
+    "file": "crash-9bf3cd4bd6f50a8a9339d363c2c7af14b536865c.xlsx",
+    "sha256": "3c7cc047fae52016c6b89f5461411feb371cb71614bcd6422d92bf74b8141ccd"
+  },
+  {
+    "file": "customIndexedColors.xlsx",
+    "sha256": "6f9372b9c67e932e79aec95dae15fcd05877eac289895537aee80ce9c2bd8b00"
+  },
+  {
+    "file": "dataValidationTableRange.xlsx",
+    "sha256": "2a41971477de7c0af993a6a8bc3082145230ef04d087170797d167e563da84da"
+  },
+  {
+    "file": "decimal-format.xlsx",
+    "sha256": "077dc9ab231d3c1d29c2a3db305d3b499643d7cdf4c58cf8ecd75bcfe1dd2da7"
+  },
+  {
+    "file": "deep-data.xlsx",
+    "sha256": "382a42a0febe5e79a3053059c81bd8b15486e28e1ed9632b5675cb53980d0c96"
+  },
+  {
+    "file": "duplicate-filename-case-insensitive.xlsx",
+    "sha256": "a89d81163b3ce26b5c6f809d6848559458a5988f4303c00337b63c16279b5422"
+  },
+  {
+    "file": "duplicate-filename.xlsx",
+    "sha256": "5aa65f91139a76cdd4d80e71e1483aa13e6d35ea1dd97017d61ff3d4849c7ba7"
+  },
+  {
+    "file": "evaluate_formula_with_structured_table_references.xlsx",
+    "sha256": "f460fced2f6bac1f5b4b7d400fd7f2e3ff379af478c01d26388744cefd37a93a"
+  },
+  {
+    "file": "formula-eval.xlsx",
+    "sha256": "b82ba9d02f362acd061b4e0018dedc8b59db4c616c8768d89383a0806014eaa8"
+  },
+  {
+    "file": "github-321.xlsx",
+    "sha256": "d21baec31e606f2d5b59ada58e91430347ca85a1395bc256c03d905bd8b17da0"
+  },
+  {
+    "file": "headerFooterTest.xlsx",
+    "sha256": "db7483ac7bc96d071db57ec6239d2c1b8593a5ef3c7f5b7418df0309753c1fe2"
+  },
+  {
+    "file": "invalid_cell_reference.xlsx",
+    "sha256": "dcef0b8054b8a24944c95e60307f8a6fc2cb408ba33e60af7e59538a28043eb4"
+  },
+  {
+    "file": "link-external-workbook-a.xlsx",
+    "sha256": "930049ddea88c58fbef66620fcba333790aed8da9a003ab209da6955fee1f5c2"
+  },
+  {
+    "file": "link-external-workbook-b.xlsx",
+    "sha256": "6e0e5c2aa3bf870cfeba03cb2350c312c639f2875b6501029d0bc134916b2361"
+  },
+  {
+    "file": "noSharedStringTable.xlsx",
+    "sha256": "2aa358a1ab04cfffca6d13d827e4a5e12aea8376cdefc3a6e93575ce365d8ab6"
+  },
+  {
+    "file": "no_drawing_patriarch.xlsx",
+    "sha256": "53403358038a3c62ae2d1c4994a03a7c236015a1fcaad67e222588d6f43dec14"
+  },
+  {
+    "file": "npe.xlsx",
+    "sha256": "433adf34e97d8a1d291a96f50ba7d6e1a9275ea9bd20346f0853126307b99a32"
+  },
+  {
+    "file": "picture-and-shape-same-size.xlsx",
+    "sha256": "0a5262599a8f5ba12db065ce89bfa3fe16b19ae1a97ece449021c188eda00437"
+  },
+  {
+    "file": "picture.xlsx",
+    "sha256": "fea2f13189e87d06297d7b5313abca4d0b6cd8747d5ca450e4db11273b265279"
+  },
+  {
+    "file": "poc-shared-strings.xlsx",
+    "sha256": "4f1e4ceab11073cd591712e5d4dbeb19a3894fd69134a910fcd6132ec9348599"
+  },
+  {
+    "file": "poc-xmlbomb-empty.xlsx",
+    "sha256": "4ba7b6c26d74df6da8b46fab945b09f96180a75aad88914cea7b98e787a5cb11"
+  },
+  {
+    "file": "poc-xmlbomb.xlsx",
+    "sha256": "5edcd16d3efccd3a8ae5e0bddd7ae5ed52abb0359ba71af81370cbf869ab8d56"
+  },
+  {
+    "file": "protected_passtika.xlsx",
+    "sha256": "e58713895915de62efead6d99018245cc5490cddd2493c84508b4a67fb001581"
+  },
+  {
+    "file": "ref-56737.xlsx",
+    "sha256": "8d319dad6cbcd0d2279add01365d59f5ef4f5a60938d6dafdbe8d1cfbf47cc87"
+  },
+  {
+    "file": "ref2-56737.xlsx",
+    "sha256": "7ee59e3710f1aa75cbc6585ac6548f8ce3b3bca04a4cbebb079c455773bce344"
+  },
+  {
+    "file": "reordered_sheets.xlsx",
+    "sha256": "b63047a3727a53a75a8cef399e7ec44caeb8e52b0f95eab6e960343e600d9213"
+  },
+  {
+    "file": "resize_compare.xlsx",
+    "sha256": "1b9a1ef6efc253bd0f1fc5edd0b8449b096a7d043ce1ecc013f4f06dbf0d8c76"
+  },
+  {
+    "file": "right-to-left.xlsx",
+    "sha256": "419ef388b20501009a8c546f20ca0371abac168389b556ba47c52f48f0e7f3b0"
+  },
+  {
+    "file": "sample-beta.xlsx",
+    "sha256": "c5c9700749e90709ed38841129ca6e31a9e3d5414f4b6ce5f163a30994e96e37"
+  },
+  {
+    "file": "sample.strict.xlsx",
+    "sha256": "0696839769a9e5b44639b64ca9b1b6bf18ce8fead412c28f11f98e6bbd658de0"
+  },
+  {
+    "file": "sample.xlsx",
+    "sha256": "7c88883ea9ff72d8f90239cb1a5f5d9744014b611d9b1588a090ba7629a381de"
+  },
+  {
+    "file": "shared_formulas.xlsx",
+    "sha256": "31612d513b5ea5aaa69764779f87ac52588687770f3ccbf4b420ec21bc70561f"
+  },
+  {
+    "file": "sharedhyperlink.xlsx",
+    "sha256": "91329edc5d293926c0294b6443449d90b3ac9d53a174c2f5c4d9e59ecea8fc73"
+  },
+  {
+    "file": "sheetProtection_allLocked.xlsx",
+    "sha256": "ea89db75ac2ab78d1dced2ccd6f57d8ad200f015ac9e49b988f1a9df2fc36d83"
+  },
+  {
+    "file": "sheetProtection_not_protected.xlsx",
+    "sha256": "36d855f2915a60424c9d38dc8f53ab7021664f10672c66c79777d4b7ee78484a"
+  },
+  {
+    "file": "simple-monthly-budget.xlsx",
+    "sha256": "cae00c6894b95743017aeded4186f15a12c2d8382d71760029df490d58197db6"
+  },
+  {
+    "file": "simple-table-named-range.xlsx",
+    "sha256": "e0ee2fee568358edffac97ad935966b09664625283af2797e4fc4657479f0645"
+  },
+  {
+    "file": "style-alternate-content.xlsx",
+    "sha256": "43dd13d6bd6c4683aeea8f5baee8d0abb75e788986819a3debf3690e9d1b26ad"
+  },
+  {
+    "file": "styles.xlsx",
+    "sha256": "4b544c197c391a8eb1711e9c6a962fd6371a96815dded21aa2461d71e27a046c"
+  },
+  {
+    "file": "table-sample.xlsx",
+    "sha256": "d43a2c85e8f91c100a62f0ed0006789604ff818f017dd3be90e10a1af2093462"
+  },
+  {
+    "file": "tableStyle.xlsx",
+    "sha256": "494f76f9c9fa63f1980b7a250bbfcf6f8df7fb0b1cd5528307deef1b0b5b6cb8"
+  },
+  {
+    "file": "template.xlsx",
+    "sha256": "a65f5451466d42905ad0d50f3068820f423654eb9b060768878d8b6073747441"
+  },
+  {
+    "file": "testSharedFormulasRangeSetBlankBug.xlsx",
+    "sha256": "95c54e12bc9a7a80191fe1c9e2df866f029913d4b0cf8136fc0f5a65a63758c6"
+  },
+  {
+    "file": "testSharedFormulasSetBlank.xlsx",
+    "sha256": "c32169723f04c099700eca384550728a547aea1e969ff0cd50ff6071eaa847c0"
+  },
+  {
+    "file": "test_conditional_formatting.xlsx",
+    "sha256": "dca9ea05ea5cf2a52941e10c1e1ce44ee2416b309771b5e93ae6fdb625010ebe"
+  },
+  {
+    "file": "tile-range-test.xlsx",
+    "sha256": "67047a246face4c6f4ae29c02882ccfc8d03657dfd9ebe3f7bc8d6406bf42ef9"
+  },
+  {
+    "file": "unicodeSheetName.xlsx",
+    "sha256": "2d7414dd71e5b3e33602c19ad454f072771ea164d7477a3b3b4cddf6c622dc67"
+  },
+  {
+    "file": "workbookProtection-sheet_password-2013.xlsx",
+    "sha256": "829b200dfdb5047764edd88201e565036ddeb45b70f0796e4b45dad5ada2666f"
+  },
+  {
+    "file": "workbookProtection-workbook_password-2013.xlsx",
+    "sha256": "0ca1ab7d0e90087316072f89d181067c91c170f0718b109a8ee20867b23c58c2"
+  },
+  {
+    "file": "workbookProtection-workbook_password_user_range-2010.xlsx",
+    "sha256": "9b43ef4a09734c4c49f6f663da12d5bd7f4afcae9bfcc0cca87a09547dd0e1cc"
+  },
+  {
+    "file": "workbookProtection_not_protected.xlsx",
+    "sha256": "36d855f2915a60424c9d38dc8f53ab7021664f10672c66c79777d4b7ee78484a"
+  },
+  {
+    "file": "workbookProtection_workbook_revision_protected.xlsx",
+    "sha256": "257afc6f7b67869647569d8fda3285351e1a496741a3409a5ab28983ddfbc737"
+  },
+  {
+    "file": "workbookProtection_workbook_structure_protected.xlsx",
+    "sha256": "fabdf603bc807c22ad2778d60f48b70864079554f1ed467cbb1acbe673ecb979"
+  },
+  {
+    "file": "workbookProtection_workbook_windows_protected.xlsx",
+    "sha256": "140f21b2125ff19911ca2350a009061b5564702f14d80ff0ae7c55ef6fa2faf4"
+  },
+  {
+    "file": "workbookProtection_worksheet_protected.xlsx",
+    "sha256": "95a35c2e6b9a3f73539a67c63105b6a69d68f52a39eb768ed47f419e7fb8f7cd"
+  },
+  {
+    "file": "xlookup.xlsx",
+    "sha256": "4d8fd3db6469df14f280964b3a447e0be027eda0e2195ca62693e92d8d353910"
+  },
+  {
+    "file": "xlsx-corrupted.xlsx",
+    "sha256": "56f6e3105f5123f8cebb35ea722a54fb101e16e1e1146097e61dce59d561c50c"
+  },
+  {
+    "file": "xlsx-jdbc.xlsx",
+    "sha256": "dc5ab675789c7a8e4381f6f805879c9d56f4ec184ca38dd5fbd4b1125e388ebb"
+  },
+  {
+    "file": "xssf-enum.xltx.xlsx",
+    "sha256": "d33450a2bc1e9f3ea0ffae1df5a748c8acfee2d8dd37dd43486ecc5149699c7e"
+  },
+  {
+    "file": "xxe_in_schema.xlsx",
+    "sha256": "95dc84089f255d5878d89fdc1826edd112a9addd88b25a444f323aadc870c79d"
+  }
+]
