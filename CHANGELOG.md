@@ -17,15 +17,20 @@
   than `OSError`. Environment ZIP-size overrides do not raise these new
   per-load budgets; pass an explicit `Limits` as well. Existing ZIP admission
   guards remain in force.
-- Path-backed XLSX loads open the file once and never reopen the original path.
-  On Linux and macOS the source is a read-only memory map of the opened file
-  rather than an in-memory copy; Windows reads the compressed package into
-  memory. Feature readers use the same source; modify mode uses a private
-  temporary copy. Saves back to a mapped source path write a new file and
-  rename it over the path instead of rewriting it in place. Writing to or
-  truncating a loaded file in place, rather than renaming a new file over it,
-  changes what the open workbook reads and can terminate the process with
-  `SIGBUS`.
+- After format detection, path-backed XLSX loads open the file once for
+  admission, loading and later reads, never reopening the original path. On
+  Linux and macOS the source is a read-only memory map where the filesystem
+  supports it; otherwise, and on Windows, the compressed package is read into
+  memory. Feature readers use the same source; modify mode uses a private copy.
+  Saves back to a mapped source path write a new file and rename it over the
+  path instead of rewriting it in place. On Linux and macOS, writing to or
+  truncating that loaded file in place changes what the open workbook reads
+  and can terminate the process with `SIGBUS`.
+- On Linux and macOS, closing releases native readers and private temporary
+  files but retains the source map until the workbook and remaining source
+  readers are collected, preserving source-backed saves after close without
+  copying the whole package. Before Python 3.13 the map also retains a file
+  descriptor.
 
 ### Fixed
 

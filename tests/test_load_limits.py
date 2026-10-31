@@ -546,7 +546,8 @@ def test_path_load_shares_one_read_only_map_without_copies(tmp_path, monkeypatch
     # retained map itself; any bytes() conversion would be a distinct object.
     assert received and all(item is source for item in received)
     wb.close()
-    assert wb._source_bytes is None
+    assert wb._source_bytes is source
+    assert not source.closed
 
 
 @pytest.mark.parametrize("kind", ["bytes", pytest.param("mapped", marks=requires_mapped_paths)])
@@ -658,3 +659,61 @@ def test_mutable_buffers_are_copied_once_and_never_retained():
     copied = _source_buffer.as_source(writable)
     assert type(copied) is bytes and copied == data
     writable.close()
+
+
+@pytest.mark.parametrize("mapped", [pytest.param(True, marks=requires_mapped_paths), False])
+@pytest.mark.parametrize("read_only", [False, True])
+def test_unmodified_source_can_be_saved_after_close(tmp_path, monkeypatch, mapped, read_only):
+    monkeypatch.setattr(_source_buffer, "MAP_PATH_SOURCES", mapped)
+    original = tmp_path / "before-close.xlsx"
+    destination = tmp_path / "after-close.xlsx"
+    data = workbook_bytes(text="retained after close", cells=4)
+    original.write_bytes(data)
+    workbook = wolfxl.load_workbook(original, read_only=read_only)
+    workbook.close()
+    workbook.save(destination)
+    assert destination.read_bytes() == data
+
+
+@requires_mapped_paths
+@pytest.mark.parametrize("edited", [False, True])
+@pytest.mark.parametrize("through_symlink", [False, True])
+def test_mapped_save_preserves_target_permissions_and_symlink(tmp_path, edited, through_symlink):
+    import stat
+
+    target = tmp_path / "target.xlsx"
+    target.write_bytes(workbook_bytes(text="before"))
+    target.chmod(0o640)
+    path = target
+    if through_symlink:
+        path = tmp_path / "link.xlsx"
+        path.symlink_to(target)
+    workbook = wolfxl.load_workbook(path)
+    if edited:
+        workbook.active["A1"] = "after"
+    workbook.save(path)
+    assert stat.S_IMODE(target.stat().st_mode) == 0o640
+    if through_symlink:
+        assert path.is_symlink()
+    reloaded = wolfxl.load_workbook(target)
+    assert reloaded.active["A1"].value == ("after" if edited else "before")
+    reloaded.close()
+    workbook.close()
+
+
+@pytest.mark.parametrize("mode", [{}, {"read_only": True}, {"modify": True}, {"password": "unused"}])
+def test_path_load_uses_bounded_bytes_when_filesystem_cannot_map(tmp_path, monkeypatch, mode):
+    import errno
+
+    path = tmp_path / "unmappable.xlsx"
+    path.write_bytes(workbook_bytes(text="readable without mmap"))
+
+    def unsupported_mapping(*args, **kwargs):
+        raise OSError(errno.ENODEV, "filesystem does not support mappings")
+
+    monkeypatch.setattr(_source_buffer, "MAP_PATH_SOURCES", True)
+    monkeypatch.setattr(_source_buffer, "_map_file", unsupported_mapping)
+    workbook = wolfxl.load_workbook(path, **mode)
+    assert type(workbook._source_bytes) is bytes
+    assert workbook.active["A1"].value == "readable without mmap"
+    workbook.close()

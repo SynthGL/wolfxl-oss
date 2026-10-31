@@ -85,7 +85,7 @@ def _stream_shared_strings(wb: Any, source: str | bytes | mmap.mmap) -> Any:
     cached = getattr(wb, "_stream_shared_strings", None)
     native = getattr(getattr(wb, "_rust_reader", None), "shared_strings", None)
     if isinstance(source, SOURCE_BUFFERS):
-        # Immutable bytes or a read-only map owned by the workbook: identity is
+        # Bytes or a read-only map owned by the workbook: identity is
         # the cache key.
         if cached is not None and cached[0] is source:
             return cached[1]

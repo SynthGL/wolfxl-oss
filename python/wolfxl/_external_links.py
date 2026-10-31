@@ -256,7 +256,7 @@ def load_external_links(source_path: str | None) -> ExternalLinkCollection:
 
 
 def load_external_links_from_bytes(data: bytes | mmap.mmap) -> ExternalLinkCollection:
-    """Load external-link parts from a workbook's immutable source buffer."""
+    """Load external-link parts from a workbook's read-only source buffer."""
     from wolfxl._source_buffer import open_zip
 
     try:

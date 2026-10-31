@@ -247,8 +247,8 @@ workbook is split across three worksheets. Every part and worksheet stays
 within the default admission budgets and Excel's row limit. No opaque padding
 or adversarial compression is used; generated binaries are not committed.
 
-For Bash/Zsh on Linux, from the repository root with an installed release-mode
-extension:
+For Bash/Zsh on Linux with Python 3.11 or later, from the repository root with
+an installed release-mode extension:
 
 ```bash
 python benchmarks/large_path_reads.py generate large-inputs

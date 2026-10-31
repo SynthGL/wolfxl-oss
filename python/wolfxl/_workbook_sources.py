@@ -467,7 +467,7 @@ def from_bytes(
     from wolfxl._source_buffer import as_source, write_source
 
     # Normalize mutable buffers once. NativeXlsxBook retains this exact
-    # immutable bytes object or read-only map, which streaming and package
+    # bytes object or read-only map, which streaming and package
     # metadata reads also use.
     source = as_source(data)
     normalized_path = _normalize_nonstandard_workbook_part(source)

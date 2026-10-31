@@ -1487,6 +1487,7 @@ impl NativeXlsxBook {
             None => Vec::new(),
         };
 
+        drop(zip);
         Ok(Self {
             source,
             sheets,

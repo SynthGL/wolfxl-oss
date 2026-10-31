@@ -235,24 +235,32 @@ Cell and text budgets use a streaming admission pass, including for read-only
 loads. This reads worksheet XML before iteration and can add startup work for
 large inputs.
 
-Path-backed loads open the file once and admit, load and later read only that
-opened file, never reopening the caller's path. On Linux and macOS the source is
-a read-only memory map of that file, so pages load on demand and the compressed
-package is not copied into memory; on Windows the compressed package is read
-into memory instead, because Windows cannot replace or delete a mapped file. The
+After format detection, path-backed loads open the file once and admit, load
+and later read only that opened file, never reopening the caller's path. On
+Linux and macOS the source is a read-only memory map where supported: pages load
+on demand without copying the compressed package into a private in-memory
+buffer. On unsupported filesystems and Windows the compressed package is read
+into memory instead; Windows cannot replace or delete a mapped file. The
 compressed file also must fit `max_package_bytes`.
 Nonstandard workbook parts selected by package relationships receive the same
 cell and text budgets before normalization.
 Replacing the path afterwards, including an atomic rename over it, does not
 change what the open workbook reads. The map is not an immutable copy: writing
-to or truncating that same file in place while the workbook is open changes
-what it reads, and reading past a truncation can terminate the process with
+to or truncating that same file in place while the source map remains alive,
+including after `close()`, changes what it reads; reading past a truncation can terminate the process with
 `SIGBUS`. Replace workbooks by writing a new file and renaming it over the old
 one. Feature readers consume the same source without reopening the caller's
 path. Modify mode uses a private temporary copy, removed on close or collection.
 Saving back to the original path advances the private source and then publishes
 it atomically through a new file renamed over the path, adding a second write of
 the compressed package.
+
+On Linux and macOS, `close()` releases native readers and private temporary
+files, but retains the source map so an unmodified workbook can still be saved
+after closing, as with byte-backed loads. The map and its opened inode are
+released when the workbook and remaining source readers are collected; a
+replaced file can therefore keep using disk space until then. On Python
+versions before 3.13 the retained map also holds an open file descriptor.
 
 ### For AI coding agents
 

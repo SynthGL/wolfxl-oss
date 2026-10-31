@@ -170,16 +170,27 @@ def _replace_file(filename: str, write: Callable[[BinaryIO], None]) -> None:
     The existing file is never truncated or rewritten in place, so a workbook
     that still maps it keeps reading the bytes it loaded.
     """
+    import stat
     import tempfile
 
-    parent = os.path.dirname(os.path.abspath(filename)) or "."
+    target = os.path.realpath(filename)
+    parent = os.path.dirname(target) or "."
+    try:
+        mode = stat.S_IMODE(os.stat(target).st_mode)
+    except FileNotFoundError:
+        mode = None
     fd, tmp_name = tempfile.mkstemp(prefix=".wolfxl-save-", suffix=".xlsx.tmp", dir=parent)
     try:
         with os.fdopen(fd, "w+b") as dst:
             write(dst)
+            if mode is not None:
+                if hasattr(os, "fchmod"):
+                    os.fchmod(dst.fileno(), mode)
+                else:
+                    os.chmod(tmp_name, mode)
             dst.flush()
             os.fsync(dst.fileno())
-        os.replace(tmp_name, filename)
+        os.replace(tmp_name, target)
         try:
             directory = os.open(parent, os.O_RDONLY)
             try:

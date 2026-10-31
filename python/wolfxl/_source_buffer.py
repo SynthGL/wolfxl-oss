@@ -8,10 +8,10 @@ into memory, so pages load on demand and can be discarded after use.
 The map stays bound to the file opened at load time: replacing or renaming the
 path afterwards, including an atomic rename over it, does not change what the
 workbook reads. The map does not make the content immutable. Writing to or
-truncating that same file in place while the workbook is open changes the
+truncating that same file in place while the map remains alive changes the
 mapped bytes, and reading pages past a truncation can terminate the process
-with ``SIGBUS``. Windows does not allow replacing, renaming or deleting a mapped
-file, so Windows path loads keep an in-memory copy of the package instead.
+with ``SIGBUS``. Windows does not allow replacing or deleting a mapped file,
+so Windows path loads keep an in-memory copy of the package instead.
 """
 
 from __future__ import annotations
@@ -29,11 +29,11 @@ from wolfxl._limits import LimitExceeded
 #: Windows keeps the copy so callers can still replace or delete the file.
 MAP_PATH_SOURCES = os.name != "nt"
 
-#: Immutable buffer types handed to native readers and package metadata reads.
+#: Read-only buffer types handed to native readers and package metadata reads.
 SOURCE_BUFFERS = (bytes, mmap.mmap)
 
 # Whole-source copies advance in page-aligned chunks and discard each chunk's
-# mapped pages afterwards, so a copy never leaves the package resident.
+# mapped pages where the platform honors the advice.
 _COPY_CHUNK = 8 * 1024 * 1024
 _DISCARD = getattr(mmap, "MADV_DONTNEED", None)
 
@@ -51,9 +51,9 @@ class MappedSource(mmap.mmap):
 def snapshot_file(source: BinaryIO, limit: int | None = None) -> bytes | MappedSource:
     """Return the source buffer for an opened workbook file.
 
-    Regular non-empty files are mapped read-only when :data:`MAP_PATH_SOURCES`
-    is set. Other files, and every file on Windows, are read into ``bytes``.
-    ``limit`` bounds the accepted file size in bytes.
+    Regular non-empty files are mapped read-only where the filesystem supports
+    it and :data:`MAP_PATH_SOURCES` is set. Other files, and every file on
+    Windows, are read into ``bytes``. ``limit`` bounds the accepted file size.
     """
     status = os.fstat(source.fileno())
     size = status.st_size
@@ -62,11 +62,16 @@ def snapshot_file(source: BinaryIO, limit: int | None = None) -> bytes | MappedS
     if MAP_PATH_SOURCES and size and stat.S_ISREG(status.st_mode):
         try:
             mapped = _map_file(source.fileno(), size)
+        except OSError:
+            # Some otherwise readable filesystems do not support mmap.
+            # Keep the same opened file and use the bounded read below.
+            pass
         except (OverflowError, ValueError) as error:
             # The file shrank after fstat or exceeds the address space.
             raise OSError(str(error)) from error
-        mapped.file_id = (status.st_dev, status.st_ino)
-        return mapped
+        else:
+            mapped.file_id = (status.st_dev, status.st_ino)
+            return mapped
     cap = size + 1 if limit is None else min(size + 1, limit + 1)
     data = source.read(cap)
     if limit is not None and len(data) > limit:
@@ -91,7 +96,7 @@ def _package_limit_error(observed: int, limit: int) -> LimitExceeded:
 
 
 def as_source(data: Any) -> bytes | mmap.mmap:
-    """Return ``data`` as an immutable source buffer.
+    """Return ``data`` as a read-only source buffer.
 
     ``bytes`` and read-only maps are used as they are. Mutable buffers, which
     must never be retained, are copied once into ``bytes``.
