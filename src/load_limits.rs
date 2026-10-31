@@ -159,8 +159,8 @@ fn validate<R: Read + Seek>(source: R, limits: Limits, permissive: bool) -> PyRe
                         }
                         b"t" if !empty => in_text = true,
                         b"f" => {
-                            formula_index = if crate::ooxml_util::attr_value(&e, b"t")
-                                .as_deref() == Some("shared")
+                            formula_index = if crate::ooxml_util::attr_value(&e, b"t").as_deref()
+                                == Some("shared")
                             {
                                 crate::ooxml_util::attr_value(&e, b"si")
                             } else {
@@ -169,7 +169,11 @@ fn validate<R: Read + Seek>(source: R, limits: Limits, permissive: bool) -> PyRe
                             formula_len = 0;
                             in_formula = !empty;
                             if empty {
-                                record_shared_formula(&mut shared_formulas, formula_index.take(), 0);
+                                record_shared_formula(
+                                    &mut shared_formulas,
+                                    formula_index.take(),
+                                    0,
+                                );
                             }
                         }
                         b"v" if !empty => in_value = true,
@@ -198,7 +202,10 @@ fn validate<R: Read + Seek>(source: R, limits: Limits, permissive: bool) -> PyRe
         }
         for (master_len, children) in shared_formulas.into_values() {
             account(
-                master_len.unwrap_or(0).saturating_mul(children).saturating_mul(copies),
+                master_len
+                    .unwrap_or(0)
+                    .saturating_mul(children)
+                    .saturating_mul(copies),
                 false,
                 true,
                 &mut shared_bytes,
