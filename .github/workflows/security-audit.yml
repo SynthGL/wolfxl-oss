@@ -39,7 +39,9 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
       - uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
           tool: cargo-deny@0.20.2
@@ -56,18 +58,130 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
+          python-version: "3.15"
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: "0.12.3"
+      - name: Export all published extras for the newest supported Python
+        run: >-
+          uv export --locked --no-dev --all-extras --no-emit-project
+          --format requirements-txt --output-file "$RUNNER_TEMP/requirements-extras.txt"
+      - name: Include every runtime dependency marker branch
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from collections import defaultdict
+          from pathlib import Path
+
+          packages = tomllib.loads(Path("uv.lock").read_text())["package"]
+          project = next(p for p in packages if p["source"] == {"editable": "."})
+          pending = list(project.get("dependencies", []))
+          seen = set()
+          pins = defaultdict(set)
+          while pending:
+              dependency = pending.pop()
+              matches = [
+                  p for p in packages if p["name"] == dependency["name"]
+                  and ("version" not in dependency or p["version"] == dependency["version"])
+              ]
+              if not matches:
+                  raise ValueError(f"Missing runtime dependency: {dependency['name']}")
+              for package in matches:
+                  identity = (package["name"], package["version"])
+                  if identity in seen:
+                      continue
+                  seen.add(identity)
+                  if package["source"] != {"registry": "https://pypi.org/simple"}:
+                      raise ValueError(f"Unsupported audit source: {package['name']}")
+                  pins[package["name"]].add(package["version"])
+                  pending.extend(package.get("dependencies", []))
+          batches = []
+          for name, versions in sorted(pins.items()):
+              for index, version in enumerate(sorted(versions)):
+                  if index == len(batches):
+                      batches.append([])
+                  batches[index].append(f"{name}=={version}")
+          for index, batch in enumerate(batches):
+              path = Path(os.environ["RUNNER_TEMP"]) / f"requirements-runtime-{index}.txt"
+              path.write_text("\n".join(batch) + "\n")
+          print(f"Auditing {len(seen)} runtime pins across all marker branches")
+          PY
+      - name: Audit runtime and published extras
+        # Only extras are evaluated on Python 3.15. Runtime requirements above
+        # have no markers, so every supported runtime branch is checked.
+        run: |
+          for requirements in "$RUNNER_TEMP/requirements-extras.txt" "$RUNNER_TEMP"/requirements-runtime-*.txt; do
+            uvx --python 3.15 --from pip-audit==2.10.0 pip-audit \
+              --strict --no-deps --disable-pip --requirement "$requirements"
+          done
+
+  pip-audit-full-lock:
+    name: Python full-lock report
+    # Includes old-Python test-only pins with no compatible patched release.
+    # Keep findings visible without silently excluding them from the audit.
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           version: "0.12.3"
-      - name: Export the complete Python lock without the local extension
-        run: >-
-          uv export --locked --all-extras --all-groups --no-emit-project
-          --format requirements-txt --output-file "$RUNNER_TEMP/requirements-audit.txt"
-      # The export is already pinned and hashed. Do not resolve, install, or
-      # execute the audited packages (including optional and test dependencies).
-      - name: Audit locked Python dependencies
-        run: >-
-          uvx --python 3.12 --from pip-audit==2.10.0 pip-audit
-          --strict --no-deps --disable-pip
-          --requirement "$RUNNER_TEMP/requirements-audit.txt"
+      - name: Verify that uv.lock matches the project
+        run: uv lock --check
+      - name: Generate marker-independent audit requirements
+        # Audit every locked version, not just markers matching Linux/Python
+        # 3.12. Separate alternative versions into batches so each audit has
+        # one version per package. Only the local extension is excluded.
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from collections import defaultdict
+          from pathlib import Path
+
+          lock = tomllib.loads(Path("uv.lock").read_text())
+          pins = defaultdict(set)
+          for package in lock["package"]:
+              source = package["source"]
+              if package["name"] == "wolfxl" and source == {"editable": "."}:
+                  continue
+              if source != {"registry": "https://pypi.org/simple"}:
+                  raise ValueError(f"Unsupported audit source: {package['name']}")
+              pins[package["name"]].add(package["version"])
+          batches = []
+          for name, versions in sorted(pins.items()):
+              for index, version in enumerate(sorted(versions)):
+                  if index == len(batches):
+                      batches.append([])
+                  batches[index].append(f"{name}=={version}")
+          for index, batch in enumerate(batches):
+              path = Path(os.environ["RUNNER_TEMP"]) / f"requirements-audit-{index}.txt"
+              path.write_text("\n".join(batch) + "\n")
+          print(f"Auditing {sum(map(len, batches))} locked pins in {len(batches)} batches")
+          PY
+      # No resolver, package installation, or audited package execution.
+      - name: Audit all locked Python versions and platforms
+        run: |
+          status=0
+          for requirements in "$RUNNER_TEMP"/requirements-audit-*.txt; do
+            uvx --python 3.12 --from pip-audit==2.10.0 pip-audit \
+              --strict --no-deps --disable-pip --requirement "$requirements" \
+              2>&1 | tee "${requirements%.txt}.log" || status=1
+          done
+          {
+            echo "## Full Python lock audit (non-blocking)"
+            echo "Includes all development/test pins and old-Python marker branches."
+            for report in "$RUNNER_TEMP"/requirements-audit-*.log; do
+              echo '```text'
+              cat "$report"
+              echo '```'
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
