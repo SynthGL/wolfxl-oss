@@ -423,14 +423,17 @@ def test_nonstandard_normalization_cannot_activate_unscanned_orphan_rels(mode, f
         wolfxl.load_workbook(data, limits=wolfxl.Limits(**{field: budget}), **mode)
 
 
-def test_path_snapshot_tempfile_is_removed_when_workbook_is_collected(tmp_path):
+@pytest.mark.parametrize("modify", [False, True])
+def test_path_snapshot_tempfile_is_removed_when_workbook_is_collected(tmp_path, modify):
     import gc
     from pathlib import Path
     import weakref
 
     path = tmp_path / "source.xlsx"
     path.write_bytes(workbook_bytes())
-    wb = wolfxl.load_workbook(path, modify=True)
+    wb = wolfxl.load_workbook(path, modify=modify)
+    if not modify:
+        wb.create_sheet("Added")
     snapshot_path = Path(wb._tempfile_path)
     assert snapshot_path.exists()
     reference = weakref.ref(wb)

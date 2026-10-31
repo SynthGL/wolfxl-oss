@@ -208,6 +208,7 @@ def load_workbook(
     from wolfxl._workbook_sources import open_workbook_source
 
     fmt, data, path = classify_input(filename)
+    source_fmt = fmt
     if limits is not None and fmt in ("xls", "xlsb"):
         raise NotImplementedError("limits= is supported for XLSX-family workbooks only")
     if limits is None:
@@ -285,6 +286,12 @@ def load_workbook(
         limits=limits,
         ),
     )
+
+    if path is not None and source_fmt == "xlsx":
+        # XLSX loads keep a private snapshot instead of the caller's file.
+        # Remember the caller path so saving back to it advances the private
+        # patcher source in place before publishing.
+        wb._source_origin_path = os.path.abspath(path)  # noqa: SLF001
 
     if keep_vba:
         try:
