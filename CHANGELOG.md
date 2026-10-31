@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+
+- Update anyhow to 1.0.104 (RUSTSEC-2026-0190).
+
 ## 2.0.35 - 2026-10-30
 
 ### Changed
