@@ -20,7 +20,7 @@ quick-xml = "0.42"
 # Already built for quick-xml; the streaming row scanner uses it directly.
 memchr = "2.7"
 chrono = "0.4"
-anyhow = "1"
+anyhow = "1.0.103"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11"
