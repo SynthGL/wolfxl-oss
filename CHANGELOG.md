@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Removed
+
+- Drop Python 3.9 and 3.10 support; Python 3.11 is now the minimum supported
+  version. Version 2.0.36 is the last release supporting Python 3.9 and 3.10;
+  pip on those versions continues to resolve compatible 2.0.x releases.
+
 ## 2.0.36 - 2026-10-31
 
 ### Added

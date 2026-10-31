@@ -16,13 +16,13 @@ jobs:
       matrix:
         target: [x86_64, aarch64]
         libc:
-          - { name: manylinux, compatibility: "2_28", image: "python:3.12-bookworm", python39_image: "python:3.9-bookworm" }
-          - { name: musllinux, compatibility: "musllinux_1_2", image: "python:3.12-alpine", python39_image: "python:3.9-alpine" }
+          - { name: manylinux, compatibility: "2_28", image: "python:3.12-bookworm", minimum_image: "python:3.11-bookworm" }
+          - { name: musllinux, compatibility: "musllinux_1_2", image: "python:3.12-alpine", minimum_image: "python:3.11-alpine" }
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: "3.9"
+          python-version: "3.11"
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           version: "0.12.3"
@@ -39,17 +39,7 @@ jobs:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.libc.compatibility }}
           args: --release --locked --compatibility pypi --out dist --find-interpreter
-      # Discovery compares only major/minor versions, so the patch-level
-      # Requires-Python exclusions also hide supported CPython 3.9 releases.
-      - name: Build CPython 3.9 wheel explicitly
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          maturin-version: v1.14.1
-          sccache: true
-          target: ${{ matrix.target }}
-          manylinux: ${{ matrix.libc.compatibility }}
-          args: --release --locked --compatibility pypi --out dist --interpreter ${{ (matrix.target == 'x86_64' && matrix.libc.name == 'manylinux') && '/opt/python/cp39-cp39/bin/python' || 'python3.9' }}
-      - name: Clean-install CPython 3.9 calculate regression
+      - name: Clean-install minimum-supported CPython 3.11 calculate regression
         shell: bash
         run: |
           platform=linux/amd64
@@ -57,8 +47,8 @@ jobs:
             platform=linux/arm64
           fi
           docker run --rm --platform "$platform" \
-            -v "$PWD:/work:ro" -w /work ${{ matrix.libc.python39_image }} \
-            sh -c 'python -m venv /opt/smoke && /opt/smoke/bin/python -m pip install --require-hashes -r runtime-requirements.txt && /opt/smoke/bin/python .github/scripts/hashed_artifact_requirements.py --output /tmp/wheel-requirements.txt "dist/*cp39-cp39-${{ matrix.libc.name }}*.whl" && /opt/smoke/bin/python -m pip install --require-hashes --no-deps -r /tmp/wheel-requirements.txt && /opt/smoke/bin/python tests/community_wheel_smoke.py'
+            -v "$PWD:/work:ro" -w /work ${{ matrix.libc.minimum_image }} \
+            sh -c 'python -m venv /opt/smoke && /opt/smoke/bin/python -m pip install --require-hashes -r runtime-requirements.txt && /opt/smoke/bin/python .github/scripts/hashed_artifact_requirements.py --output /tmp/wheel-requirements.txt "dist/*cp311-cp311-${{ matrix.libc.name }}*.whl" && /opt/smoke/bin/python -m pip install --require-hashes --no-deps -r /tmp/wheel-requirements.txt && /opt/smoke/bin/python tests/community_wheel_smoke.py'
       - name: Smoke CPython 3.12 wheel
         shell: bash
         run: |
@@ -92,8 +82,6 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: |
-            3.9
-            3.10
             3.11
             3.12
             3.13
@@ -111,20 +99,13 @@ jobs:
           sccache: true
           target: ${{ matrix.target }}
           args: --release --locked --compatibility pypi --out dist --find-interpreter
-      - name: Build CPython 3.9 wheel explicitly
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          maturin-version: v1.14.1
-          sccache: true
-          target: ${{ matrix.target }}
-          args: --release --locked --compatibility pypi --out dist --interpreter python3.9
-      - name: Clean-install CPython 3.9 calculate regression
+      - name: Clean-install minimum-supported CPython 3.11 calculate regression
         run: |
-          python3.9 -m venv "$RUNNER_TEMP/community-py39"
-          "$RUNNER_TEMP/community-py39/bin/python" -m pip install --require-hashes -r runtime-requirements.txt
-          "$RUNNER_TEMP/community-py39/bin/python" .github/scripts/hashed_artifact_requirements.py --output artifact-requirements.txt "dist/*cp39-cp39-macosx*.whl"
-          "$RUNNER_TEMP/community-py39/bin/python" -m pip install --require-hashes --no-deps -r artifact-requirements.txt
-          "$RUNNER_TEMP/community-py39/bin/python" tests/community_wheel_smoke.py
+          python3.11 -m venv "$RUNNER_TEMP/community-py311"
+          "$RUNNER_TEMP/community-py311/bin/python" -m pip install --require-hashes -r runtime-requirements.txt
+          "$RUNNER_TEMP/community-py311/bin/python" .github/scripts/hashed_artifact_requirements.py --output artifact-requirements.txt "dist/*cp311-cp311-macosx*.whl"
+          "$RUNNER_TEMP/community-py311/bin/python" -m pip install --require-hashes --no-deps -r artifact-requirements.txt
+          "$RUNNER_TEMP/community-py311/bin/python" tests/community_wheel_smoke.py
       - name: Smoke CPython 3.12 wheel
         run: |
           python3.12 -m pip install --require-hashes -r runtime-requirements.txt
@@ -149,8 +130,6 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: |
-            3.9
-            3.10
             3.11
             3.12
             3.13
@@ -169,20 +148,13 @@ jobs:
           sccache: true
           target: x86_64-pc-windows-msvc
           args: --release --locked --compatibility pypi --out dist --find-interpreter
-      - name: Build CPython 3.9 wheel explicitly
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          maturin-version: v1.14.1
-          sccache: true
-          target: x86_64-pc-windows-msvc
-          args: --release --locked --compatibility pypi --out dist --interpreter python3.9
-      - name: Clean-install CPython 3.9 calculate regression
+      - name: Clean-install minimum-supported CPython 3.11 calculate regression
         shell: pwsh
         run: |
-          py -3.9 -m venv "$env:RUNNER_TEMP/community-py39"
-          $python = "$env:RUNNER_TEMP/community-py39/Scripts/python.exe"
-          $wheel = Get-ChildItem "dist/wolfxl-*-cp39-cp39-win_amd64.whl"
-          if ($wheel.Count -ne 1) { throw "expected one CPython 3.9 wheel" }
+          py -3.11 -m venv "$env:RUNNER_TEMP/community-py311"
+          $python = "$env:RUNNER_TEMP/community-py311/Scripts/python.exe"
+          $wheel = Get-ChildItem "dist/wolfxl-*-cp311-cp311-win_amd64.whl"
+          if ($wheel.Count -ne 1) { throw "expected one CPython 3.11 wheel" }
           & $python -m pip install --require-hashes -r runtime-requirements.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $python .github/scripts/hashed_artifact_requirements.py --output artifact-requirements.txt $wheel[0].FullName
@@ -275,9 +247,12 @@ jobs:
           if not baseline:
               raise SystemExit("published 2.0.10 wheel inventory is empty")
           platforms = {tag[2] for tag in baseline}
+          supported = ("cp311", "cp312", "cp313", "cp314")
+          dropped = {"cp39", "cp310", "pp39", "pp310"}
+          baseline = {tag for tag in baseline if tag[0] not in dropped}
           declared = {
               (tag, tag, platform)
-              for tag in ("cp39", "cp310", "cp311", "cp312", "cp313", "cp314")
+              for tag in supported
               for platform in platforms
           }
           # CPython 3.15 is provisioned explicitly on macOS and Windows and
@@ -295,5 +270,8 @@ jobs:
           missing = sorted((baseline | declared) - actual)
           if missing:
               raise SystemExit(f"missing supported wheel tags: {missing}")
-          print(f"verified {len(actual)} wheel tags; all {len(baseline)} published tags retained")
+          unsupported = sorted(tag for tag in actual if tag[0] in dropped)
+          if unsupported:
+              raise SystemExit(f"unsupported wheel tags: {unsupported}")
+          print(f"verified {len(actual)} wheel tags; all supported published platforms retained")
           PY

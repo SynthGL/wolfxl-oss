@@ -141,16 +141,10 @@ def _doc_props_from_dict(raw: dict[str, Any] | None) -> DocumentProperties:
             return value
         if not isinstance(value, str) or not value:
             return None
-        # OOXML uses ISO 8601 with a trailing Z. Python 3.11+'s
-        # fromisoformat handles Z; fall back on a manual strip for 3.10.
+        # Python 3.11+ accepts OOXML's ISO 8601 trailing Z directly.
         try:
             return datetime.fromisoformat(value)
         except ValueError:
-            if value.endswith("Z"):
-                try:
-                    return datetime.fromisoformat(value[:-1])
-                except ValueError:
-                    return None
             return None
 
     return DocumentProperties(

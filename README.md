@@ -15,7 +15,7 @@ python -m pip install wolfxl
 ```
 
 [![PyPI](https://img.shields.io/pypi/v/wolfxl)](https://pypi.org/project/wolfxl/)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/wolfxl/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://pypi.org/project/wolfxl/)
 [![License: MIT](https://img.shields.io/github/license/SynthGL/wolfxl-oss)](LICENSE)
 
 [When to use WolfXL](#when-to-use-wolfxl-instead-of-openpyxl-xlsxwriter-or-pandas) ·
@@ -174,8 +174,9 @@ Install the current Community release:
 python -m pip install wolfxl==2.0.36
 ```
 
-WolfXL Community supports Python 3.9 and newer CPython versions for which a
-wheel is published.
+WolfXL Community supports Python 3.11 and newer CPython versions for which a
+wheel is published. Version 2.0.36 is the last release supporting Python 3.9
+and 3.10; pip on those versions continues to resolve compatible 2.0.x releases.
 
 ```python
 from wolfxl import Alignment, Font, PatternFill, Workbook, load_workbook

@@ -15,7 +15,7 @@ deduplicated by resolved path and written in sorted order as:
 
 The output is meant for ``pip install --require-hashes --no-deps -r PATH``.
 Nothing is written when any pattern fails to match or names a non-regular
-file. Standard library only, Python 3.9 compatible.
+file. Standard library only.
 """
 
 from __future__ import annotations

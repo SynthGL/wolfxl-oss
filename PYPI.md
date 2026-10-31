@@ -18,6 +18,11 @@ WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported 
 python -m pip install wolfxl==2.0.36
 ```
 
+Requires Python 3.11 or newer CPython with a published wheel, or a Rust
+toolchain to build from source. Version 2.0.36 is the last release supporting
+Python 3.9 and 3.10; pip on those versions continues to resolve compatible
+2.0.x releases.
+
 ## When to use WolfXL instead of openpyxl, XlsxWriter, or pandas
 
 | Job | Use |

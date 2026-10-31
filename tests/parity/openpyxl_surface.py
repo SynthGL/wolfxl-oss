@@ -34,7 +34,7 @@ class SurfaceCategory(str, Enum):
     """Logical grouping of the openpyxl API surface.
 
     ``str`` mixin keeps ``SurfaceCategory.WORKBOOK_OPEN == "workbook_open"``
-    true on Python 3.9-3.10 (``enum.StrEnum`` is 3.11+)."""
+    true while preserving the existing Enum string representation."""
 
     WORKBOOK_OPEN = "workbook_open"
     SHEET_ACCESS = "sheet_access"
