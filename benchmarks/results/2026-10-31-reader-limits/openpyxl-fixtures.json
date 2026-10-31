@@ -1,0 +1,169 @@
+{
+  "source": "openpyxl-3.1.5",
+  "library": "openpyxl",
+  "iterations": 1,
+  "warmups": 0,
+  "cache_state": "fresh interpreter, warm OS cache unspecified",
+  "build_mode": "pure Python",
+  "timeout_s": 5,
+  "memory_address_space_limit_bytes": 2147483648,
+  "binary": {
+    "sha256": "b36b17729f138575c7b3035287e52e422e411eca1ab2e7335328cd373d15ba97",
+    "mtime_ns": 1790456167329417374,
+    "bytes": 603,
+    "version": "3.1.5",
+    "file": "__init__.py"
+  },
+  "results": [
+    {
+      "error": null,
+      "file": "poc-shared-strings.xlsx",
+      "load_scan_s": 0.12605063687078655,
+      "nonempty": 11997,
+      "read_only": false,
+      "sheets": [
+        {
+          "name": "Tabelle1",
+          "nonempty": 11997,
+          "values_sha256": "20982493da57c5484f2ceeaf4dea6b4c7affde04c4728822069db885c3446d4e",
+          "row_count": 3999
+        }
+      ],
+      "status": "ok",
+      "peak_rss_bytes": 39874560,
+      "wall_s": 0.16
+    },
+    {
+      "error": null,
+      "file": "poc-shared-strings.xlsx",
+      "load_scan_s": 0.04818581999279559,
+      "nonempty": 3,
+      "read_only": true,
+      "sheets": [
+        {
+          "name": "Tabelle1",
+          "nonempty": 3,
+          "values_sha256": "f82cedbfbd9579ac26c5744dd0899961994507cc9f78558356286160ba79030b",
+          "row_count": 1
+        }
+      ],
+      "status": "ok",
+      "peak_rss_bytes": 31051776,
+      "wall_s": 0.07
+    },
+    {
+      "error": {
+        "message": "Unable to read workbook: could not read strings from $SCRATCH/corpus/poc-xmlbomb.xlsx.\nThis is most probably because the workbook source files contain some invalid XML.\nPlease see the exception for more details.",
+        "type": "ValueError"
+      },
+      "file": "poc-xmlbomb.xlsx",
+      "load_scan_s": 0.037389804143458605,
+      "nonempty": 0,
+      "read_only": false,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 28114944,
+      "wall_s": 0.06
+    },
+    {
+      "error": {
+        "message": "Unable to read workbook: could not read strings from $SCRATCH/corpus/poc-xmlbomb.xlsx.\nThis is most probably because the workbook source files contain some invalid XML.\nPlease see the exception for more details.",
+        "type": "ValueError"
+      },
+      "file": "poc-xmlbomb.xlsx",
+      "load_scan_s": 0.04004776291549206,
+      "nonempty": 0,
+      "read_only": true,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 27582464,
+      "wall_s": 0.07
+    },
+    {
+      "error": {
+        "message": "Unable to read workbook: could not read strings from $SCRATCH/corpus/poc-xmlbomb-empty.xlsx.\nThis is most probably because the workbook source files contain some invalid XML.\nPlease see the exception for more details.",
+        "type": "ValueError"
+      },
+      "file": "poc-xmlbomb-empty.xlsx",
+      "load_scan_s": 0.039937853114679456,
+      "nonempty": 0,
+      "read_only": false,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 27037696,
+      "wall_s": 0.07
+    },
+    {
+      "error": {
+        "message": "Unable to read workbook: could not read strings from $SCRATCH/corpus/poc-xmlbomb-empty.xlsx.\nThis is most probably because the workbook source files contain some invalid XML.\nPlease see the exception for more details.",
+        "type": "ValueError"
+      },
+      "file": "poc-xmlbomb-empty.xlsx",
+      "load_scan_s": 0.039664703886955976,
+      "nonempty": 0,
+      "read_only": true,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 27836416,
+      "wall_s": 0.06
+    },
+    {
+      "error": {
+        "message": "File contains no valid workbook part",
+        "type": "OSError"
+      },
+      "file": "generated-zip-bomb.xlsx",
+      "load_scan_s": 0.04417841206304729,
+      "nonempty": 0,
+      "read_only": false,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 27090944,
+      "wall_s": 0.07
+    },
+    {
+      "error": {
+        "message": "File contains no valid workbook part",
+        "type": "OSError"
+      },
+      "file": "generated-zip-bomb.xlsx",
+      "load_scan_s": 0.04094166308641434,
+      "nonempty": 0,
+      "read_only": true,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 27230208,
+      "wall_s": 0.07
+    },
+    {
+      "error": {
+        "message": "File contains no valid workbook part",
+        "type": "OSError"
+      },
+      "file": "generated-many-members.xlsx",
+      "load_scan_s": 0.5039691880811006,
+      "nonempty": 0,
+      "read_only": false,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 156569600,
+      "wall_s": 0.53
+    },
+    {
+      "error": {
+        "message": "File contains no valid workbook part",
+        "type": "OSError"
+      },
+      "file": "generated-many-members.xlsx",
+      "load_scan_s": 0.5252268800977618,
+      "nonempty": 0,
+      "read_only": true,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 157827072,
+      "wall_s": 0.55
+    }
+  ],
+  "raw_sha256": "ab2eeb919b24355ade7ae50a668fa9aeef8e1a21fe149e0682cc520cf2787ab8",
+  "normalization": "Normalized row arrays replaced by row_count; value hashes and measurement fields unchanged."
+}
