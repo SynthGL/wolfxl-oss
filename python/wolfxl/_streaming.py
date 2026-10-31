@@ -63,10 +63,10 @@ _UNSET = object()
 
 def stream_source(wb: Any) -> str | bytes | None:
     """Path, or in-memory bytes for file-like loads, the workbook came from."""
-    path = getattr(wb, "_source_path", None)
-    if path:
-        return path
-    return getattr(wb, "_source_bytes", None)
+    data = getattr(wb, "_source_bytes", None)
+    if data is not None:
+        return data
+    return getattr(wb, "_source_path", None)
 
 
 def _open_source_zip(source: str | bytes) -> zipfile.ZipFile:

@@ -240,6 +240,9 @@ loading and later read-only iteration use that snapshot, even if the original
 file is replaced. The compressed snapshot also must fit `max_package_bytes`.
 Nonstandard workbook parts selected by package relationships receive the same
 cell and text budgets before normalization.
+The snapshot keeps the compressed file in memory in every mode, including
+read-only. Path-backed feature readers and modify mode use a private temporary
+copy rather than reopening the caller's path; normal workbook cleanup removes it.
 
 ### For AI coding agents
 

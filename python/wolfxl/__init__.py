@@ -288,7 +288,10 @@ def load_workbook(
 
     if keep_vba:
         try:
-            wb.vba_archive = _copy_archive(filename)  # type: ignore[attr-defined]
+            snapshot = getattr(wb, "_source_bytes", None)
+            source = BytesIO(snapshot) if snapshot is not None else getattr(wb, "_source_path", None)
+            if source is not None:
+                wb.vba_archive = _copy_archive(source)  # type: ignore[attr-defined]
         except Exception:
             pass
 

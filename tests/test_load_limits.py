@@ -310,11 +310,16 @@ def test_path_replacement_after_admission_loads_the_admitted_snapshot(tmp_path, 
 
 
 @pytest.mark.parametrize("read_only", [False, True])
-def test_replacement_before_first_stream_read_keeps_admitted_string_table(tmp_path, read_only):
+def test_replacement_before_first_stream_read_keeps_admitted_string_table(tmp_path, monkeypatch, read_only):
     path = tmp_path / "source.xlsx"
     admitted = workbook_bytes(text="admitted shared value")
     path.write_bytes(admitted)
     wb = wolfxl.load_workbook(path, read_only=read_only)
+    from wolfxl import _streaming
+
+    first = wb.active["A1"].value
+    assert first == "admitted shared value"
+    monkeypatch.setattr(_streaming, "AUTO_STREAM_ROW_THRESHOLD", 1)
     path.write_bytes(workbook_bytes(text="replacement shared value"))
     assert list(wb.active.iter_rows(values_only=True)) == [("admitted shared value",)] * 4
     assert wb.active["A1"].value == "admitted shared value"
@@ -354,3 +359,64 @@ def test_nonstandard_workbook_part_is_admitted_before_normalization(
     wb = wolfxl.load_workbook(source, **mode)
     assert wb.active["A1"].value == "four"
     wb.close()
+
+
+@pytest.mark.parametrize("read_only", [False, True])
+def test_path_snapshot_preserves_named_and_differential_styles(tmp_path, read_only):
+    import openpyxl
+    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.styles import NamedStyle, PatternFill
+
+    path = tmp_path / "styles.xlsx"
+    original = openpyxl.Workbook()
+    original.add_named_style(NamedStyle(name="SnapshotStyle"))
+    original.active["A1"] = 1
+    original.active.conditional_formatting.add(
+        "A1:A4", CellIsRule(
+            operator="greaterThan", formula=["0"],
+            fill=PatternFill(fill_type="solid", fgColor="FFFF0000"),
+        )
+    )
+    original.save(path)
+    wb = wolfxl.load_workbook(path, read_only=read_only)
+    assert "SnapshotStyle" in wb.style_names
+    ranges = list(wb.active.conditional_formatting)
+    rule = wb.active.conditional_formatting[ranges[0]][0]
+    assert rule.operator == "greaterThan"
+    assert rule.dxf.fill.fgColor.rgb == "FFFF0000"
+    wb.close()
+
+
+def test_keep_vba_uses_admitted_snapshot_after_path_replacement(tmp_path, monkeypatch):
+    path = tmp_path / "source.xlsm"
+    admitted = workbook_bytes(text="admitted")
+    path.write_bytes(admitted)
+    validate = wolfxl.Limits._validate
+
+    def swap_after_scan(self, source, *, permissive=False):
+        validate(self, source, permissive=permissive)
+        path.write_bytes(workbook_bytes(text="replacement"))
+
+    monkeypatch.setattr(wolfxl.Limits, "_validate", swap_after_scan)
+    wb = wolfxl.load_workbook(path, keep_vba=True)
+    assert b"admitted" in wb.vba_archive.read("xl/sharedStrings.xml")
+    assert b"replacement" not in wb.vba_archive.read("xl/sharedStrings.xml")
+    wb.close()
+
+
+@pytest.mark.parametrize("mode", [{}, {"read_only": True}, {"modify": True}])
+@pytest.mark.parametrize("field,budget", [
+    ("max_cells", 3), ("max_materialized_string_bytes", 15),
+])
+def test_nonstandard_normalization_cannot_activate_unscanned_orphan_rels(mode, field, budget):
+    def transform(name, value):
+        if name == "xl/workbook.xml":
+            name = "custom/book.xml"
+        elif name in ("_rels/.rels", "[Content_Types].xml"):
+            value = value.replace(b"xl/workbook.xml", b"custom/book.xml")
+        # Deliberately retain canonical rels without custom/_rels/book.xml.rels.
+        return name, value
+
+    data = replace_parts(workbook_bytes(text="four", inline=True), transform)
+    with pytest.raises(wolfxl.LimitExceeded, match=field):
+        wolfxl.load_workbook(data, limits=wolfxl.Limits(**{field: budget}), **mode)

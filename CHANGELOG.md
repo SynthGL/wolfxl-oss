@@ -17,6 +17,9 @@
   than `OSError`. Environment ZIP-size overrides do not raise these new
   per-load budgets; pass an explicit `Limits` as well. Existing ZIP admission
   guards remain in force.
+- Path-backed XLSX loads retain the compressed input in memory in every mode,
+  including read-only, and use a private temporary copy for path-only features
+  and modify saves. Loading and later reads never reopen the original path.
 
 ### Fixed
 
