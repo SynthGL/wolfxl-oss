@@ -149,7 +149,18 @@ def publish_modify_source(wb: Any, source: str, filename: str) -> None:
     try:
         with os.fdopen(fd, "wb") as dst:
             dst.write(data)
+            dst.flush()
+            os.fsync(dst.fileno())
         os.replace(tmp_name, filename)
+        try:
+            directory = os.open(parent, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        except OSError:
+            # Some platforms do not permit opening or syncing directories.
+            pass
     finally:
         if os.path.exists(tmp_name):
             os.unlink(tmp_name)

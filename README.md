@@ -243,6 +243,8 @@ cell and text budgets before normalization.
 The snapshot keeps the compressed file in memory in every mode, including
 read-only. Feature readers consume the same bytes without reopening the caller's
 path. Modify mode uses a private temporary copy, removed on close or collection.
+Saving edits back to the original path advances the private source and then
+publishes it atomically, adding a second write of the compressed package.
 
 ### For AI coding agents
 
