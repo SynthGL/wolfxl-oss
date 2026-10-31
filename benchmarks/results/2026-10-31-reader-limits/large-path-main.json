@@ -1,0 +1,118 @@
+{
+  "label": "Main before fix (04804b02)",
+  "source": "04804b02bcf3da5b233ddea273b262afebff089e",
+  "binary": {
+    "sha256": "afdcab1e9781ea35c43b0fe0c1c5013ae3733278b9db71197c2d012ac94d8ff8",
+    "bytes": 7196472,
+    "mtime_ns": 1793458581197548381
+  },
+  "iterations": 1,
+  "warmups": 0,
+  "per_run_timeout_s": 600,
+  "address_space_limit_bytes": 8589934592,
+  "os_page_cache": "unspecified; generation and prior runs may warm it",
+  "fresh_interpreter": true,
+  "build_mode": "release",
+  "build_reuse": "rebuilt-workspace-crates-existing-release-target",
+  "scenario": "path input, data_only=True; iterate every sheet with iter_rows(values_only=True); full means read_only=False and does not disable the library's automatic large-sheet streaming",
+  "inputs": {
+    "recipe": "SHAKE256 + base64 unique 256-byte inline string payloads; two string and two numeric columns; DEFLATE level 6; ordinary worksheet dimensions; no padding or opaque members",
+    "inputs": [
+      {
+        "label": "50mb",
+        "path": "50mb.xlsx",
+        "bytes": 49959975,
+        "sha256": "5a7f76630a91a2b0e8a95cce8865934aa2cfb19222989bf9cc757a3fc46894a0",
+        "rows": 91000,
+        "cells": 364000,
+        "sheet_rows": [
+          91000
+        ],
+        "generation_wall_s": 1.7800764970015734
+      },
+      {
+        "label": "250mb",
+        "path": "250mb.xlsx",
+        "bytes": 249818535,
+        "sha256": "2ec6ab90e8bc3db993a40215ac7ac71f86457af65eb565e861d2103716039111",
+        "rows": 455000,
+        "cells": 1820000,
+        "sheet_rows": [
+          151667,
+          151667,
+          151666
+        ],
+        "generation_wall_s": 9.518757787067443
+      }
+    ]
+  },
+  "results": [
+    {
+      "input": "50mb",
+      "mode": "read_only",
+      "returncode": 0,
+      "timed_out": false,
+      "stdout": "{\"mode\": \"read_only\", \"rows\": 91000, \"cells\": 364000, \"value_sha256\": \"3caa5d34f2600edd30de1235bd72093b60940651d9c19970d8a86c9d41c984a6\", \"load_s\": 0.13720664498396218, \"iterate_and_close_s\": 0.5258374910335988, \"library_s\": 0.6630442959722131, \"python\": \"3.12.14\", \"version\": \"2.0.35\"}\n",
+      "stderr": "",
+      "wall_s": 0.7480625209864229,
+      "peak_rss_bytes": 33705984,
+      "result": {
+        "mode": "read_only",
+        "rows": 91000,
+        "cells": 364000,
+        "value_sha256": "3caa5d34f2600edd30de1235bd72093b60940651d9c19970d8a86c9d41c984a6",
+        "load_s": 0.13720664498396218,
+        "iterate_and_close_s": 0.5258374910335988,
+        "library_s": 0.6630442959722131,
+        "python": "3.12.14",
+        "version": "2.0.35"
+      }
+    },
+    {
+      "input": "250mb",
+      "mode": "read_only",
+      "returncode": 0,
+      "timed_out": false,
+      "stdout": "{\"mode\": \"read_only\", \"rows\": 455000, \"cells\": 1820000, \"value_sha256\": \"c3ff7ecc4923b8e779b24f541916a334b42b554b9d97865f93f8f14b164917d2\", \"load_s\": 0.003424437018111348, \"iterate_and_close_s\": 3.1182457499671727, \"library_s\": 3.1216703669633716, \"python\": \"3.12.14\", \"version\": \"2.0.35\"}\n",
+      "stderr": "",
+      "wall_s": 3.1742530579213053,
+      "peak_rss_bytes": 32124928,
+      "result": {
+        "mode": "read_only",
+        "rows": 455000,
+        "cells": 1820000,
+        "value_sha256": "c3ff7ecc4923b8e779b24f541916a334b42b554b9d97865f93f8f14b164917d2",
+        "load_s": 0.003424437018111348,
+        "iterate_and_close_s": 3.1182457499671727,
+        "library_s": 3.1216703669633716,
+        "python": "3.12.14",
+        "version": "2.0.35"
+      }
+    },
+    {
+      "input": "50mb",
+      "mode": "full",
+      "returncode": 0,
+      "timed_out": false,
+      "stdout": "{\"mode\": \"full\", \"rows\": 91000, \"cells\": 364000, \"value_sha256\": \"3caa5d34f2600edd30de1235bd72093b60940651d9c19970d8a86c9d41c984a6\", \"load_s\": 0.002944387961179018, \"iterate_and_close_s\": 0.7070576120167971, \"library_s\": 0.7100022200029343, \"python\": \"3.12.14\", \"version\": \"2.0.35\"}\n",
+      "stderr": "",
+      "wall_s": 0.788695861119777,
+      "peak_rss_bytes": 30662656,
+      "result": {
+        "mode": "full",
+        "rows": 91000,
+        "cells": 364000,
+        "value_sha256": "3caa5d34f2600edd30de1235bd72093b60940651d9c19970d8a86c9d41c984a6",
+        "load_s": 0.002944387961179018,
+        "iterate_and_close_s": 0.7070576120167971,
+        "library_s": 0.7100022200029343,
+        "python": "3.12.14",
+        "version": "2.0.35"
+      }
+    }
+  ],
+  "harness_sha256": "13df16efa3e17b8e0cc60b6ff9b73fd6f69ee5d722c5840c82488b000be72c53",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "raw_sha256": "cbd8126b0a0dfd388e6fd3df18d0029715aac3eb8d2430d681d7d24478df619f",
+  "publication_normalization": "Display label expanded; all measurement, input, hash, and error fields retained."
+}

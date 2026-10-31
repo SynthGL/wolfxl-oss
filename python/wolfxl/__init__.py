@@ -288,17 +288,24 @@ def load_workbook(
     )
 
     if path is not None and source_fmt == "xlsx":
-        # XLSX loads keep a private snapshot instead of the caller's file.
-        # Remember the caller path so saving back to it advances the private
-        # patcher source in place before publishing.
+        # XLSX path loads read a private source (a read-only map of the file
+        # opened at load, or a copy on Windows) instead of reopening the
+        # caller's path. Remember the caller path so saving back to it advances
+        # the private patcher source in place before publishing.
         wb._source_origin_path = os.path.abspath(path)  # noqa: SLF001
 
     if keep_vba:
         try:
+            from wolfxl._source_buffer import source_file
+
             snapshot = getattr(wb, "_source_bytes", None)
-            source = BytesIO(snapshot) if snapshot is not None else getattr(wb, "_source_path", None)
-            if source is not None:
-                wb.vba_archive = _copy_archive(source)  # type: ignore[attr-defined]
+            source_path = getattr(wb, "_source_path", None)
+            if snapshot is not None:
+                # Close the cursor so it does not hold the source map export.
+                with source_file(snapshot) as cursor:
+                    wb.vba_archive = _copy_archive(cursor)  # type: ignore[attr-defined]
+            elif source_path is not None:
+                wb.vba_archive = _copy_archive(source_path)  # type: ignore[attr-defined]
         except Exception:
             pass
 

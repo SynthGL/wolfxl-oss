@@ -238,3 +238,37 @@ The [2026-10-31 manifest](results/2026-10-31-reader-limits/manifest.json)
 links raw measurement summaries, all fixture hashes, the corpus comparison
 and the separately labeled verification results. Summary files omit normalized
 row arrays but retain row counts and value hashes; the harness emits all rows.
+
+## Large path-backed inputs
+
+`large_path_reads.py` generates ordinary approximately 50 MB and 250 MB XLSX
+packages, with two unique inline-string and two numeric columns. The larger
+workbook is split across three worksheets. Every part and worksheet stays
+within the default admission budgets and Excel's row limit. No opaque padding
+or adversarial compression is used; generated binaries are not committed.
+
+For Bash/Zsh on Linux, from the repository root with an installed release-mode
+extension:
+
+```bash
+python benchmarks/large_path_reads.py generate large-inputs
+python benchmarks/large_path_reads.py measure large-inputs \
+    --python .venv/bin/python --label candidate \
+    --source "$(git rev-parse HEAD)" \
+    --build-reuse "describe the actual release rebuild or cache reuse" \
+    --output large-path-candidate.json
+```
+
+Repeat the measurement with separately installed baseline interpreters against
+the same generated files. Each of three cases uses a fresh interpreter: both
+sizes with `read_only=True`, then the smaller size with `read_only=False`.
+Every sheet is consumed with `iter_rows(values_only=True)`, hashing every value.
+The latter case measures the default non-read-only API, not forced Cell-object
+hydration; the library may automatically stream large worksheets in that mode.
+
+The harness records GNU time peak RSS, total process wall time, load/iteration
+time, value and input hashes, native binary hash/mtime, source identity and
+build-reuse description. Each case has a 600-second timeout and an 8 GiB address
+space ceiling. There is one measured iteration and no warmup. OS page-cache
+state is unspecified, including warming from generation or earlier cases;
+these resource observations are not a cold-cache or speedup claim.

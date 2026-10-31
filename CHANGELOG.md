@@ -17,17 +17,23 @@
   than `OSError`. Environment ZIP-size overrides do not raise these new
   per-load budgets; pass an explicit `Limits` as well. Existing ZIP admission
   guards remain in force.
-- Path-backed XLSX loads retain the compressed input in memory in every mode,
-  including read-only. Feature readers use the same bytes; modify mode uses a
-  private temporary copy. Loading and later reads never reopen the original path.
+- Path-backed XLSX loads open the file once and never reopen the original path.
+  On Linux and macOS the source is a read-only memory map of the opened file
+  rather than an in-memory copy; Windows reads the compressed package into
+  memory. Feature readers use the same source; modify mode uses a private
+  temporary copy. Saves back to a mapped source path write a new file and
+  rename it over the path instead of rewriting it in place. Writing to or
+  truncating a loaded file in place, rather than renaming a new file over it,
+  changes what the open workbook reads and can terminate the process with
+  `SIGBUS`.
 
 ### Fixed
 
 - Bound memory for shared strings referenced by many cells. Eager and
   streaming readers reuse shared text and Python string objects per workbook.
-- Admit and load one immutable snapshot for path-backed XLSX inputs, keeping
-  streaming strings bound to that source after the original path is replaced.
-  Compressed path snapshots are also bounded by `max_package_bytes`.
+- Admit and load one opened file for path-backed XLSX inputs, keeping
+  streaming strings bound to that source after the original path is replaced
+  by rename. Compressed path sources are also bounded by `max_package_bytes`.
 - Apply worksheet cell and text budgets when package relationships select a
   nonstandard workbook part, before normalizing that part for loading.
 

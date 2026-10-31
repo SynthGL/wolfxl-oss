@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import mmap
 import re
 from typing import Any
 
@@ -125,8 +126,8 @@ def retarget_pending_created_sheet(wb: Any, old: str, new: str, index: int) -> b
 def _promote_source_backed_read_workbook(wb: Any) -> None:
     """Enable lazy openpyxl-style editing for a loaded XLSX workbook.
 
-    XLSX loads keep an in-memory snapshot rather than the caller's file, so the
-    snapshot is written to a private tempfile that the workbook removes on
+    XLSX loads keep a private source buffer rather than the caller's file, so
+    that buffer is written to a private tempfile that the workbook removes on
     ``close()``. That tempfile becomes the patcher source, exactly as for a
     modify load, so saves back to the loaded path advance it in place.
     """
@@ -144,15 +145,17 @@ def _promote_source_backed_read_workbook(wb: Any) -> None:
     wb._source_path = source_path  # noqa: SLF001
 
 
-def _write_source_tempfile(wb: Any, source_bytes: bytes) -> str:
+def _write_source_tempfile(wb: Any, source_bytes: bytes | mmap.mmap) -> str:
     import os
     import tempfile
+
+    from wolfxl._source_buffer import write_source
 
     tmp_path = getattr(wb, "_tempfile_path", None)
     if tmp_path is not None and os.path.exists(tmp_path):
         return str(tmp_path)
     with tempfile.NamedTemporaryFile(prefix="wolfxl-", suffix=".xlsx", delete=False) as tmp:
-        tmp.write(source_bytes)
+        write_source(tmp, source_bytes)
     wb._tempfile_path = tmp.name  # noqa: SLF001
     import weakref
     from wolfxl._workbook_lifecycle import _remove_temporary_source

@@ -24,7 +24,7 @@
 //! sheets and inflates large sheets from the ZIP entry as rows are read.
 
 use std::fs::File;
-use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom};
+use std::io::{self, BufReader, Read, Seek, SeekFrom};
 use std::sync::Arc;
 
 use flate2::read::DeflateDecoder;
@@ -37,10 +37,12 @@ use pyo3::IntoPyObjectExt;
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader as XmlReader;
+use wolfxl_reader::{ConsumedRanges, WorkbookBytesCursor};
 use zip::{CompressionMethod, ZipArchive};
 
 use crate::iso8601::{is_iso8601, iso8601_to_py};
 use crate::ooxml_util;
+use crate::py_workbook_bytes::PyWorkbookBytes;
 use crate::streaming_scan::{HandoffReader, RowScanner};
 
 type PyObjectOwned = Py<PyAny>;
@@ -300,10 +302,11 @@ impl StreamingSharedStrings {
         Self::from_archive(zip)
     }
 
-    /// [`Self::load`] for in-memory xlsx bytes (file-like sources).
+    /// [`Self::load`] for in-memory xlsx bytes or a read-only mapping of the
+    /// workbook file (file-like and path sources).
     #[staticmethod]
-    pub fn load_from_bytes(data: &Bound<'_, PyBytes>) -> PyResult<Self> {
-        let zip = ZipArchive::new(PyBytesCursor::new(data))
+    pub fn load_from_bytes(data: PyWorkbookBytes) -> PyResult<Self> {
+        let zip = ZipArchive::new(WorkbookBytesCursor::new(&data))
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
         Self::from_archive(zip)
     }
@@ -551,11 +554,13 @@ impl SheetXmlReader {
 /// while it is parsed after the archive itself has been released.
 enum EntrySource {
     File(io::Take<File>),
-    /// A range of the caller's immutable `bytes` object, shared rather than copied.
+    /// A range of the caller's `bytes` or read-only mapping, shared rather
+    /// than copied. Consumed input is reported so mapped pages can be released.
     Bytes {
-        data: Py<PyBytes>,
+        data: PyWorkbookBytes,
         pos: usize,
         end: usize,
+        consumed: ConsumedRanges,
     },
 }
 
@@ -563,13 +568,28 @@ impl Read for EntrySource {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             Self::File(source) => source.read(buf),
-            Self::Bytes { data, pos, end } => Python::attach(|py| {
-                let available = &data.as_bytes(py)[*pos..*end];
+            Self::Bytes {
+                data,
+                pos,
+                end,
+                consumed,
+            } => {
+                let start = *pos;
+                let available = &data.as_ref()[start..*end];
                 let n = available.len().min(buf.len());
                 buf[..n].copy_from_slice(&available[..n]);
                 *pos += n;
+                consumed.record(data, start..start + n);
                 Ok(n)
-            }),
+            }
+        }
+    }
+}
+
+impl Drop for EntrySource {
+    fn drop(&mut self) {
+        if let Self::Bytes { data, consumed, .. } = self {
+            consumed.flush(data);
         }
     }
 }
@@ -586,37 +606,12 @@ impl IntoEntrySource for File {
     }
 }
 
-/// Caller-owned xlsx bytes read through a cursor; the owner is kept so the
-/// sheet entry can stream from the same buffer without a copy.
-struct PyBytesCursor<'a, 'py> {
-    owner: &'a Bound<'py, PyBytes>,
-    cursor: Cursor<&'a [u8]>,
-}
-
-impl<'a, 'py> PyBytesCursor<'a, 'py> {
-    fn new(owner: &'a Bound<'py, PyBytes>) -> Self {
-        Self {
-            owner,
-            cursor: Cursor::new(owner.as_bytes()),
-        }
-    }
-}
-
-impl Read for PyBytesCursor<'_, '_> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.cursor.read(buf)
-    }
-}
-
-impl Seek for PyBytesCursor<'_, '_> {
-    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
-        self.cursor.seek(pos)
-    }
-}
-
-impl IntoEntrySource for PyBytesCursor<'_, '_> {
+/// Caller-owned workbook bytes read through an independent cursor; the sheet
+/// entry shares the cursor's owner so it streams from the same buffer.
+impl IntoEntrySource for WorkbookBytesCursor<'_, PyWorkbookBytes> {
     fn into_entry_source(self, start: u64, len: u64) -> io::Result<EntrySource> {
-        let total = self.cursor.get_ref().len();
+        let data = self.get_ref();
+        let total = data.as_ref().len();
         let range = usize::try_from(start)
             .ok()
             .zip(usize::try_from(len).ok())
@@ -629,9 +624,10 @@ impl IntoEntrySource for PyBytesCursor<'_, '_> {
                 )
             })?;
         Ok(EntrySource::Bytes {
-            data: self.owner.clone().unbind(),
+            data: data.clone(),
             pos: range.start,
             end: range.end,
+            consumed: ConsumedRanges::default(),
         })
     }
 }
@@ -749,12 +745,13 @@ impl StreamingSheetReader {
         )
     }
 
-    /// Prepare to stream `sheet` from in-memory xlsx bytes (file-like sources).
+    /// Prepare to stream `sheet` from in-memory xlsx bytes or a read-only
+    /// mapping of the workbook file (file-like and path sources).
     #[staticmethod]
     #[pyo3(signature = (data, sheet, min_row=None, max_row=None, min_col=None, max_col=None, shared_strings=None))]
     #[allow(clippy::too_many_arguments)]
     pub fn open_from_bytes(
-        data: &Bound<'_, PyBytes>,
+        data: PyWorkbookBytes,
         sheet: &str,
         min_row: Option<u32>,
         max_row: Option<u32>,
@@ -762,7 +759,7 @@ impl StreamingSheetReader {
         max_col: Option<u32>,
         shared_strings: Option<&StreamingSharedStrings>,
     ) -> PyResult<Self> {
-        let zip = ZipArchive::new(PyBytesCursor::new(data))
+        let zip = ZipArchive::new(WorkbookBytesCursor::new(&data))
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
         Self::from_archive(
             zip,
@@ -787,10 +784,10 @@ impl StreamingSheetReader {
         archive_cell_bounds(zip, sheet)
     }
 
-    /// [`Self::cell_bounds`] for in-memory xlsx bytes (file-like sources).
+    /// [`Self::cell_bounds`] for in-memory xlsx bytes or a read-only mapping.
     #[staticmethod]
-    pub fn cell_bounds_from_bytes(data: &Bound<'_, PyBytes>, sheet: &str) -> PyResult<(u32, u32)> {
-        let zip = ZipArchive::new(PyBytesCursor::new(data))
+    pub fn cell_bounds_from_bytes(data: PyWorkbookBytes, sheet: &str) -> PyResult<(u32, u32)> {
+        let zip = ZipArchive::new(WorkbookBytesCursor::new(&data))
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
         archive_cell_bounds(zip, sheet)
     }
@@ -806,14 +803,14 @@ impl StreamingSheetReader {
         archive_row_tags_exceed(zip, sheet, limit)
     }
 
-    /// [`Self::row_tags_exceed`] for in-memory xlsx bytes (file-like sources).
+    /// [`Self::row_tags_exceed`] for in-memory xlsx bytes or a read-only mapping.
     #[staticmethod]
     pub fn row_tags_exceed_from_bytes(
-        data: &Bound<'_, PyBytes>,
+        data: PyWorkbookBytes,
         sheet: &str,
         limit: usize,
     ) -> PyResult<bool> {
-        let zip = ZipArchive::new(PyBytesCursor::new(data))
+        let zip = ZipArchive::new(WorkbookBytesCursor::new(&data))
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
         archive_row_tags_exceed(zip, sheet, limit)
     }
@@ -2865,9 +2862,10 @@ mod tests {
     fn bytes_source(data: &[u8]) -> EntrySource {
         pyo3::Python::initialize();
         Python::attach(|py| EntrySource::Bytes {
-            data: PyBytes::new(py, data).unbind(),
+            data: PyWorkbookBytes::new(PyBytes::new(py, data).as_any()).unwrap(),
             pos: 0,
             end: data.len(),
+            consumed: ConsumedRanges::default(),
         })
     }
 
@@ -2940,13 +2938,15 @@ mod tests {
     fn entry_source_rejects_ranges_past_the_package() {
         pyo3::Python::initialize();
         Python::attach(|py| {
-            let data = PyBytes::new(py, &[0u8; 8]);
-            let mut source = PyBytesCursor::new(&data).into_entry_source(4, 4).unwrap();
+            let data = PyWorkbookBytes::new(PyBytes::new(py, &[0u8; 8]).as_any()).unwrap();
+            let mut source = WorkbookBytesCursor::new(&data)
+                .into_entry_source(4, 4)
+                .unwrap();
             let mut out = Vec::new();
             source.read_to_end(&mut out).unwrap();
             assert_eq!(out, [0u8; 4]);
             for (start, len) in [(4, 5), (9, 0), (u64::MAX, 1)] {
-                assert!(PyBytesCursor::new(&data)
+                assert!(WorkbookBytesCursor::new(&data)
                     .into_entry_source(start, len)
                     .is_err());
             }

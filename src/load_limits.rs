@@ -1,15 +1,17 @@
 //! Bounded, streaming admission before eager worksheet materialization.
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, Cursor, Read, Seek};
+use std::io::{BufReader, Read, Seek};
 
-use pyo3::exceptions::{PyIOError, PyValueError};
+use pyo3::exceptions::PyIOError;
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
 use quick_xml::events::Event;
 use quick_xml::Reader;
+use wolfxl_reader::WorkbookBytesCursor;
 use wolfxl_rels::package_guard::{check, LimitExceeded, Limits};
 use zip::ZipArchive;
+
+use crate::py_workbook_bytes::PyWorkbookBytes;
 
 fn limit_error(error: LimitExceeded) -> PyErr {
     Python::attach(|py| {
@@ -57,16 +59,17 @@ pub fn validate_load_limits(
         max_shared_string_bytes,
         max_materialized_string_bytes,
     };
-    if let Ok(data) = source.cast::<PyBytes>() {
-        validate(Cursor::new(data.as_bytes()), limits, permissive)
-    } else if let Ok(path) = source.extract::<String>() {
+    if let Ok(path) = source.extract::<String>() {
         validate(
             File::open(path).map_err(|e| PyIOError::new_err(e.to_string()))?,
             limits,
             permissive,
         )
     } else {
-        Err(PyValueError::new_err("expected workbook path or bytes"))
+        // `bytes` or a read-only mapping of the workbook file; the cursor
+        // releases consumed mapped pages as the package is scanned.
+        let data = PyWorkbookBytes::new(source)?;
+        validate(WorkbookBytesCursor::new(&data), limits, permissive)
     }
 }
 

@@ -8,12 +8,12 @@ use std::collections::HashMap;
 
 use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::pybacked::PyBackedBytes;
 
 type PyObject = Py<PyAny>;
 
 use crate::native_reader_cell_helpers::SharedStringCache;
 use crate::native_reader_dimensions::{parse_range_1based, update_bounds};
+use crate::py_workbook_bytes::PyWorkbookBytes;
 use crate::util::a1_to_row_col;
 use wolfxl_reader::{
     Cell, NativeXlsbBook as NativeXlsbReaderBook, NativeXlsxBook as NativeReaderBook, WorksheetData,
@@ -52,10 +52,11 @@ impl NativeXlsxBook {
         crate::native_reader_workbook_basics::open_xlsx_path(path, permissive)
     }
 
-    /// Open an XLSX/XLSM workbook from raw bytes.
+    /// Open an XLSX/XLSM workbook from `bytes` or a read-only mapping of the
+    /// workbook file, sharing the input rather than copying it.
     #[staticmethod]
     #[pyo3(signature = (data, permissive = false))]
-    pub fn open_from_bytes(data: PyBackedBytes, permissive: bool) -> PyResult<Self> {
+    pub fn open_from_bytes(data: PyWorkbookBytes, permissive: bool) -> PyResult<Self> {
         crate::native_reader_workbook_basics::open_xlsx_bytes(data, permissive)
     }
 

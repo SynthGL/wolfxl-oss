@@ -1,10 +1,26 @@
 """Generated workbook resource regressions; no binary fixtures required."""
 from dataclasses import replace
 from io import BytesIO
+import mmap
+import os
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
 import wolfxl
+from wolfxl import _source_buffer
+from wolfxl._source_buffer import SOURCE_BUFFERS
+
+
+requires_mapped_paths = pytest.mark.skipif(
+    not _source_buffer.MAP_PATH_SOURCES, reason="Windows path loads keep an in-memory copy"
+)
+
+
+def replace_path(path, data):
+    """Rename new contents over ``path``; a loaded workbook keeps the old file."""
+    staged = path.with_name(path.name + ".staged")
+    staged.write_bytes(data)
+    os.replace(staged, path)
 
 
 NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -297,14 +313,14 @@ def test_path_replacement_after_admission_loads_the_admitted_snapshot(tmp_path, 
     scanned = []
 
     def swap_after_scan(self, source, *, permissive=False):
-        assert isinstance(source, bytes)
+        assert isinstance(source, SOURCE_BUFFERS)
         scanned.append(source)
         validate(self, source, permissive=permissive)
-        path.write_bytes(workbook_bytes(text="replacement", cells=8))
+        replace_path(path, workbook_bytes(text="replacement", cells=8))
 
     monkeypatch.setattr(wolfxl.Limits, "_validate", swap_after_scan)
     wb = wolfxl.load_workbook(path, limits=wolfxl.Limits(max_cells=4), **mode)
-    assert scanned and all(source == admitted for source in scanned)
+    assert scanned and all(source[:] == admitted for source in scanned)
     assert list(wb.active.iter_rows(values_only=True)) == [("admitted",)] * 4
     wb.close()
 
@@ -320,7 +336,7 @@ def test_replacement_before_first_stream_read_keeps_admitted_string_table(tmp_pa
     first = wb.active["A1"].value
     assert first == "admitted shared value"
     monkeypatch.setattr(_streaming, "AUTO_STREAM_ROW_THRESHOLD", 1)
-    path.write_bytes(workbook_bytes(text="replacement shared value"))
+    replace_path(path, workbook_bytes(text="replacement shared value"))
     assert list(wb.active.iter_rows(values_only=True)) == [("admitted shared value",)] * 4
     assert wb.active["A1"].value == "admitted shared value"
     wb.close()
@@ -395,7 +411,7 @@ def test_keep_vba_uses_admitted_snapshot_after_path_replacement(tmp_path, monkey
 
     def swap_after_scan(self, source, *, permissive=False):
         validate(self, source, permissive=permissive)
-        path.write_bytes(workbook_bytes(text="replacement"))
+        replace_path(path, workbook_bytes(text="replacement"))
 
     monkeypatch.setattr(wolfxl.Limits, "_validate", swap_after_scan)
     wb = wolfxl.load_workbook(path, keep_vba=True)
@@ -472,3 +488,173 @@ def test_decrypted_path_read_does_not_write_a_plaintext_snapshot(tmp_path, monke
     assert wb._source_path is None
     assert getattr(wb, "_tempfile_path", None) is None
     wb.close()
+
+
+@requires_mapped_paths
+@pytest.mark.parametrize("mode", [{}, {"read_only": True}, {"modify": True}, {"password": "unused"}])
+def test_path_load_shares_one_read_only_map_without_copies(tmp_path, monkeypatch, mode):
+    from wolfxl import _rust, _streaming
+
+    path = tmp_path / "mapped.xlsx"
+    path.write_bytes(workbook_bytes(text="mapped", cells=4))
+    received = []
+
+    class Recorder:
+        """Record the source handed to each native ``*_from_bytes`` entry point."""
+
+        def __init__(self, real):
+            self._real = real
+
+        def __getattr__(self, name):
+            attr = getattr(self._real, name)
+            if not name.endswith("_from_bytes"):
+                return attr
+
+            def record(source, *args, **kwargs):
+                received.append(source)
+                return attr(source, *args, **kwargs)
+
+            return record
+
+    for name in ("NativeXlsxBook", "StreamingSheetReader", "StreamingSharedStrings"):
+        monkeypatch.setattr(_rust, name, Recorder(getattr(_rust, name)))
+    validate = wolfxl.Limits._validate
+
+    def record_admission(self, source, *, permissive=False):
+        received.append(source)
+        validate(self, source, permissive=permissive)
+
+    monkeypatch.setattr(wolfxl.Limits, "_validate", record_admission)
+    cursor_init = _source_buffer.SourceCursor.__init__
+
+    def record_cursor(self, source):
+        received.append(source)
+        cursor_init(self, source)
+
+    monkeypatch.setattr(_source_buffer.SourceCursor, "__init__", record_cursor)
+    monkeypatch.setattr(_streaming, "AUTO_STREAM_ROW_THRESHOLD", 1)
+
+    wb = wolfxl.load_workbook(path, **mode)
+    source = wb._source_bytes
+    assert isinstance(source, mmap.mmap)
+    with memoryview(source) as view:
+        assert view.readonly
+    assert source[:] == path.read_bytes()
+    assert list(wb.active.iter_rows(values_only=True)) == [("mapped",)] * 4
+    assert wb.style_names is not None
+    # Admission, native readers, streaming and ZIP metadata all received the
+    # retained map itself; any bytes() conversion would be a distinct object.
+    assert received and all(item is source for item in received)
+    wb.close()
+    assert wb._source_bytes is None
+
+
+@pytest.mark.parametrize("kind", ["bytes", pytest.param("mapped", marks=requires_mapped_paths)])
+def test_source_cursors_keep_independent_positions(tmp_path, kind):
+    data = workbook_bytes(second_sheet=True)
+    source = data
+    if kind == "mapped":
+        path = tmp_path / "cursor.xlsx"
+        path.write_bytes(data)
+        with open(path, "rb") as fh:
+            source = _source_buffer.snapshot_file(fh)
+        assert isinstance(source, _source_buffer.MappedSource)
+    first = _source_buffer.source_file(source)
+    second = _source_buffer.source_file(source)
+    first.seek(10)
+    assert second.tell() == 0
+    assert second.read(2) == b"PK"
+    assert first.read(4) == data[10:14]
+    with _source_buffer.open_zip(source) as left, _source_buffer.open_zip(source) as right:
+        with left.open("xl/worksheets/sheet1.xml") as one, right.open("xl/worksheets/sheet2.xml") as two:
+            assert one.read(16) == two.read(16)
+            assert one.read() == two.read()
+    first.close()
+    second.close()
+    _source_buffer.release(source)
+
+
+@pytest.mark.parametrize("mapped", [pytest.param(True, marks=requires_mapped_paths), False])
+@pytest.mark.parametrize("modify", [False, True])
+def test_edited_path_load_saves_back_to_its_own_path(tmp_path, monkeypatch, mapped, modify):
+    monkeypatch.setattr(_source_buffer, "MAP_PATH_SOURCES", mapped)
+    path = tmp_path / "same-origin.xlsx"
+    path.write_bytes(workbook_bytes(text="before"))
+    wb = wolfxl.load_workbook(path, modify=modify)
+    assert isinstance(wb._source_bytes, mmap.mmap) is mapped
+    if not mapped:
+        assert type(wb._source_bytes) is bytes
+    wb.active["B1"] = "after"
+    wb.save(path)
+    # The source buffer follows the published package, never the private
+    # patcher source that later in-place saves rewrite.
+    assert wb._source_bytes[:] == path.read_bytes()
+    assert _source_buffer.maps_file(wb._source_bytes, str(path)) is mapped
+    wb.active["B2"] = "again"
+    wb.save(path)
+    wb.close()
+    reloaded = wolfxl.load_workbook(path)
+    assert reloaded.active["A1"].value == "before"
+    assert reloaded.active["B1"].value == "after"
+    assert reloaded.active["B2"].value == "again"
+    reloaded.close()
+
+
+@requires_mapped_paths
+def test_unedited_save_to_own_path_replaces_instead_of_truncating_the_map(tmp_path):
+    path = tmp_path / "self-save.xlsx"
+    path.write_bytes(workbook_bytes(text="kept"))
+    loaded_inode = os.stat(path).st_ino
+    wb = wolfxl.load_workbook(path)
+    source = wb._source_bytes
+    assert _source_buffer.maps_file(source, str(path))
+    wb.save(path)
+    assert os.stat(path).st_ino != loaded_inode
+    assert source[:2] == b"PK"
+    assert wb.active["A1"].value == "kept"
+    wb.close()
+    reloaded = wolfxl.load_workbook(path)
+    assert reloaded.active["A1"].value == "kept"
+    reloaded.close()
+
+
+def test_windows_path_loads_keep_an_in_memory_copy(tmp_path, monkeypatch):
+    monkeypatch.setattr(_source_buffer, "MAP_PATH_SOURCES", False)
+    path = tmp_path / "copied.xlsx"
+    data = workbook_bytes(text="copied")
+    path.write_bytes(data)
+    with pytest.raises(wolfxl.LimitExceeded, match="max_package_bytes"):
+        wolfxl.load_workbook(path, limits=wolfxl.Limits(max_package_bytes=len(data) - 1))
+    wb = wolfxl.load_workbook(path, read_only=True)
+    assert type(wb._source_bytes) is bytes
+    assert wb._source_bytes == data
+    os.unlink(path)
+    assert list(wb.active.iter_rows(values_only=True)) == [("copied",)] * 4
+    wb.close()
+
+
+@pytest.mark.parametrize("mapped", [pytest.param(True, marks=requires_mapped_paths), False])
+def test_empty_file_snapshot_is_empty_bytes(tmp_path, monkeypatch, mapped):
+    monkeypatch.setattr(_source_buffer, "MAP_PATH_SOURCES", mapped)
+    path = tmp_path / "empty.xlsx"
+    path.write_bytes(b"")
+    with open(path, "rb") as fh:
+        assert _source_buffer.snapshot_file(fh) == b""
+
+
+def test_mutable_buffers_are_copied_once_and_never_retained():
+    data = workbook_bytes(text="mutable")
+    buffer = bytearray(data)
+    wb = wolfxl.load_workbook(buffer)
+    assert type(wb._source_bytes) is bytes
+    buffer[:] = bytes(len(buffer))
+    assert wb.active["A1"].value == "mutable"
+    wb.close()
+    assert _source_buffer.as_source(data) is data
+    assert type(_source_buffer.as_source(buffer)) is bytes
+    assert type(_source_buffer.as_source(memoryview(buffer))) is bytes
+    writable = mmap.mmap(-1, len(data))
+    writable.write(data)
+    copied = _source_buffer.as_source(writable)
+    assert type(copied) is bytes and copied == data
+    writable.close()

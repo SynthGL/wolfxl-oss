@@ -7,7 +7,7 @@ preserving the exact writer/patcher flush order used by the save pipeline.
 from __future__ import annotations
 
 import os
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Callable
 
 from wolfxl._workbook_state import same_existing_path
 from wolfxl.xml.constants import (
@@ -117,38 +117,66 @@ def save_workbook(
 def modify_source_target(wb: Any, filename: str) -> str:
     """Return the path a patcher-backed save should write first.
 
-    Modify loads and edited read loads patch a private snapshot of the caller's
-    file. A save back to that caller path targets the private source instead,
-    which makes it an in-place save: the patcher, reader, and image indices
-    advance to the saved package exactly as they did when the caller file was
-    the source. Other destinations remain copy saves.
+    Modify loads and edited read loads patch a private copy of the caller's
+    file. A save back to that caller path, or to whichever path now names the
+    file the workbook source maps, targets the private source instead, which
+    makes it an in-place save: the patcher, reader, and image indices advance
+    to the saved package exactly as they did when the caller file was the
+    source. Other destinations remain copy saves.
     """
+    from wolfxl._source_buffer import maps_file
+
     if wb._rust_patcher is None:  # noqa: SLF001
         return filename
     origin = getattr(wb, "_source_origin_path", None)
     source = getattr(wb, "_source_path", None)
-    if origin is None or source is None or not same_existing_path(filename, origin):
+    if source is None or not (
+        same_existing_path(filename, origin)
+        or maps_file(getattr(wb, "_source_bytes", None), filename)
+    ):
         return filename
     return source
 
 
 def publish_modify_source(wb: Any, source: str, filename: str) -> None:
-    """Refresh the snapshot from the saved private source and publish it.
+    """Refresh the source buffer from the saved private source and publish it.
 
-    The snapshot must match the private source that later saves and metadata
-    reads use. The caller path is replaced atomically so a failed copy never
-    leaves a partial workbook behind.
+    The source buffer must match the private source that later saves and
+    metadata reads use. The caller path is replaced atomically so a failed copy
+    never leaves a partial workbook behind.
+    """
+    import shutil
+
+    from wolfxl._source_buffer import release, snapshot_file
+
+    def copy_private_source(dst: BinaryIO) -> None:
+        with open(source, "rb") as src:
+            shutil.copyfileobj(src, dst)
+        dst.flush()
+        dst.seek(0)
+        # Map (or on Windows read) the published copy, never the private
+        # source that later in-place saves rewrite.
+        previous = getattr(wb, "_source_bytes", None)
+        wb._source_bytes = snapshot_file(dst)  # noqa: SLF001
+        if previous is not wb._source_bytes:  # noqa: SLF001
+            release(previous)
+
+    _replace_file(filename, copy_private_source)
+
+
+def _replace_file(filename: str, write: Callable[[BinaryIO], None]) -> None:
+    """Write ``filename`` through a synced sibling tempfile and an atomic rename.
+
+    The existing file is never truncated or rewritten in place, so a workbook
+    that still maps it keeps reading the bytes it loaded.
     """
     import tempfile
 
-    with open(source, "rb") as src:
-        data = src.read()
-    wb._source_bytes = data  # noqa: SLF001
     parent = os.path.dirname(os.path.abspath(filename)) or "."
     fd, tmp_name = tempfile.mkstemp(prefix=".wolfxl-save-", suffix=".xlsx.tmp", dir=parent)
     try:
-        with os.fdopen(fd, "wb") as dst:
-            dst.write(data)
+        with os.fdopen(fd, "w+b") as dst:
+            write(dst)
             dst.flush()
             os.fsync(dst.fileno())
         os.replace(tmp_name, filename)
@@ -232,13 +260,19 @@ def save_read_mode(wb: Any, filename: str) -> None:
     """Save an unmodified source-backed read workbook by copying the source package."""
     import shutil
 
+    from wolfxl._source_buffer import maps_file, write_source
+
     source_path = getattr(wb, "_source_path", None)
     source_bytes = getattr(wb, "_source_bytes", None)
     if source_path is None and source_bytes is None:
         raise RuntimeError("save requires write or modify mode")
     if source_path is None:
-        with open(filename, "wb") as out:
-            out.write(source_bytes)
+        if maps_file(source_bytes, filename):
+            # Truncating the mapped file would invalidate the pages it serves.
+            _replace_file(filename, lambda dst: write_source(dst, source_bytes))
+        else:
+            with open(filename, "wb") as out:
+                write_source(out, source_bytes)
     else:
         shutil.copyfile(source_path, filename)
     normalize_openpyxl_package_shape(wb, filename)

@@ -215,7 +215,7 @@ except LimitExceeded as error:
 
 | Field | Default | Counts |
 | --- | --- | --- |
-| `max_package_bytes` | 4 GiB | Sum of uncompressed ZIP member sizes; also bounds path snapshot bytes |
+| `max_package_bytes` | 4 GiB | Sum of uncompressed ZIP member sizes; also bounds the compressed file size of path loads |
 | `max_part_bytes` | 512 MiB | Uncompressed bytes in one member |
 | `max_cells` | 64,000,000 | Stored cell elements across all worksheets |
 | `max_shared_string_bytes` | 256 MiB | Decoded UTF-8 text in the shared-string table |
@@ -235,16 +235,24 @@ Cell and text budgets use a streaming admission pass, including for read-only
 loads. This reads worksheet XML before iteration and can add startup work for
 large inputs.
 
-Path-backed loads capture one immutable byte snapshot before admission. Native
-loading and later read-only iteration use that snapshot, even if the original
-file is replaced. The compressed snapshot also must fit `max_package_bytes`.
+Path-backed loads open the file once and admit, load and later read only that
+opened file, never reopening the caller's path. On Linux and macOS the source is
+a read-only memory map of that file, so pages load on demand and the compressed
+package is not copied into memory; on Windows the compressed package is read
+into memory instead, because Windows cannot replace or delete a mapped file. The
+compressed file also must fit `max_package_bytes`.
 Nonstandard workbook parts selected by package relationships receive the same
 cell and text budgets before normalization.
-The snapshot keeps the compressed file in memory in every mode, including
-read-only. Feature readers consume the same bytes without reopening the caller's
+Replacing the path afterwards, including an atomic rename over it, does not
+change what the open workbook reads. The map is not an immutable copy: writing
+to or truncating that same file in place while the workbook is open changes
+what it reads, and reading past a truncation can terminate the process with
+`SIGBUS`. Replace workbooks by writing a new file and renaming it over the old
+one. Feature readers consume the same source without reopening the caller's
 path. Modify mode uses a private temporary copy, removed on close or collection.
-Saving edits back to the original path advances the private source and then
-publishes it atomically, adding a second write of the compressed package.
+Saving back to the original path advances the private source and then publishes
+it atomically through a new file renamed over the path, adding a second write of
+the compressed package.
 
 ### For AI coding agents
 

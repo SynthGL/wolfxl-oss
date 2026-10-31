@@ -11,17 +11,19 @@
 mod merge_metadata;
 mod native_ods;
 mod native_xls;
+mod workbook_bytes;
 mod xlsb;
 
 pub mod external_links;
 
 pub use native_ods::NativeOdsBook;
 pub use native_xls::NativeXlsBook;
+pub use workbook_bytes::{ConsumedRanges, WorkbookBytes, WorkbookBytesCursor, RELEASE_WINDOW};
 pub use xlsb::NativeXlsbBook;
 
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{BufRead, BufReader, Cursor, Read, Seek};
+use std::io::{BufRead, BufReader, Read, Seek};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
@@ -1361,11 +1363,6 @@ pub struct NativeXlsxBook {
     persons: Vec<Person>,
 }
 
-// The owner must keep an immutable, stable buffer alive for every borrowed ZIP
-// reader. Python's PyBackedBytes satisfies this without extending a borrow.
-trait WorkbookBytes: AsRef<[u8]> + std::fmt::Debug + Send + Sync {}
-impl<T: AsRef<[u8]> + std::fmt::Debug + Send + Sync> WorkbookBytes for T {}
-
 #[derive(Debug, Clone)]
 enum WorkbookSource {
     Path(PathBuf),
@@ -1375,7 +1372,7 @@ enum WorkbookSource {
 
 enum ZipSource<'a> {
     Path(File),
-    Bytes(Cursor<&'a [u8]>),
+    Bytes(WorkbookBytesCursor<'a, dyn WorkbookBytes + 'a>),
 }
 
 impl Read for ZipSource<'_> {
@@ -1422,9 +1419,11 @@ impl NativeXlsxBook {
 
     /// Open bytes through their immutable owner without copying the input.
     ///
-    /// Cloning a book shares this owner; ZIP cursors borrow only for each read.
+    /// Cloning a book shares this owner. Each ZIP reader borrows it through
+    /// its own [`WorkbookBytesCursor`], which reports consumed input to the
+    /// owner so file-mapped owners can release resident pages.
     pub fn open_owned_bytes_permissive(
-        bytes: impl AsRef<[u8]> + std::fmt::Debug + Send + Sync + 'static,
+        bytes: impl WorkbookBytes + 'static,
         permissive: bool,
     ) -> Result<Self> {
         Self::open_source_permissive(WorkbookSource::SharedBytes(Arc::new(bytes)), permissive)
@@ -7154,10 +7153,10 @@ enum TextTarget {
 fn zip_from_source(source: &WorkbookSource) -> Result<ZipArchive<ZipSource<'_>>> {
     let reader = match source {
         WorkbookSource::Path(path) => ZipSource::Path(File::open(path)?),
-        WorkbookSource::Bytes(bytes) => ZipSource::Bytes(Cursor::new(bytes.as_slice())),
-        WorkbookSource::SharedBytes(bytes) => {
-            ZipSource::Bytes(Cursor::new(bytes.as_ref().as_ref()))
+        WorkbookSource::Bytes(bytes) => {
+            ZipSource::Bytes(WorkbookBytesCursor::new(bytes as &dyn WorkbookBytes))
         }
+        WorkbookSource::SharedBytes(bytes) => ZipSource::Bytes(WorkbookBytesCursor::new(&**bytes)),
     };
     ZipArchive::new(reader).map_err(ReaderError::Zip)
 }
@@ -7609,6 +7608,7 @@ pub(crate) fn row_col_to_a1(row: u32, col: u32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     const XLSX_BYTES: &[u8] = include_bytes!("../../../tests/fixtures/sprint_kappa_smoke.xlsx");
 

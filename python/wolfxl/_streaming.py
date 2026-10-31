@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import date, datetime, time, timedelta
-import io
+import mmap
 import os
 import posixpath
 import re
@@ -32,6 +32,7 @@ from wolfxl._cell_annotations import get_hyperlink
 from wolfxl._utils import a1_to_rowcol
 from wolfxl._utils import column_letter as _column_letter
 from wolfxl._utils import rowcol_to_a1
+from wolfxl._source_buffer import SOURCE_BUFFERS, open_zip
 from wolfxl._zip_safety import read_entry, validate_zipfile
 from wolfxl.utils.datetime import from_excel
 from wolfxl._streaming_styles import (
@@ -61,32 +62,31 @@ _DIMENSION_REF_RE = re.compile(rb"<(?:[A-Za-z0-9_]+:)?dimension\b[^>]*\bref=[\"'
 _UNSET = object()
 
 
-def stream_source(wb: Any) -> str | bytes | None:
-    """Path, or in-memory bytes for file-like loads, the workbook came from."""
+def stream_source(wb: Any) -> str | bytes | mmap.mmap | None:
+    """Path, or the immutable bytes or read-only map, the workbook came from."""
     data = getattr(wb, "_source_bytes", None)
     if data is not None:
         return data
     return getattr(wb, "_source_path", None)
 
 
-def _open_source_zip(source: str | bytes) -> zipfile.ZipFile:
-    if isinstance(source, (bytes, bytearray)):
-        return zipfile.ZipFile(io.BytesIO(source))
-    return zipfile.ZipFile(source)
+def _open_source_zip(source: str | bytes | mmap.mmap) -> zipfile.ZipFile:
+    return open_zip(source)
 
 
-def _stream_shared_strings(wb: Any, source: str | bytes) -> Any:
+def _stream_shared_strings(wb: Any, source: str | bytes | mmap.mmap) -> Any:
     """Shared-strings table for ``source``, parsed once per workbook.
 
-    Native tables belong only to the workbook's admitted immutable byte source.
+    Native tables belong only to the workbook's admitted source buffer.
     Other sources must build their own table, even on the first streaming read.
     """
     from wolfxl import _rust
 
     cached = getattr(wb, "_stream_shared_strings", None)
     native = getattr(getattr(wb, "_rust_reader", None), "shared_strings", None)
-    if isinstance(source, bytes):
-        # Immutable bytes owned by the workbook: identity is the cache key.
+    if isinstance(source, SOURCE_BUFFERS):
+        # Immutable bytes or a read-only map owned by the workbook: identity is
+        # the cache key.
         if cached is not None and cached[0] is source:
             return cached[1]
         key: Any = source
@@ -95,8 +95,6 @@ def _stream_shared_strings(wb: Any, source: str | bytes) -> Any:
             if cached is None and native is not None and source is getattr(wb, "_source_bytes", None)
             else _rust.StreamingSharedStrings.load_from_bytes(source)
         )
-    elif isinstance(source, bytearray):
-        return _rust.StreamingSharedStrings.load_from_bytes(bytes(source))
     else:
         st = os.stat(source)
         key = (source, st.st_ino, st.st_size, st.st_mtime_ns)
@@ -112,14 +110,14 @@ def _stream_shared_strings(wb: Any, source: str | bytes) -> Any:
 
 
 def _open_stream_reader(
-    wb: Any, source: str | bytes, sheet_title: str, *bounds: int | None
+    wb: Any, source: str | bytes | mmap.mmap, sheet_title: str, *bounds: int | None
 ) -> Any:
     from wolfxl import _rust
 
     shared_strings = _stream_shared_strings(wb, source)
-    if isinstance(source, (bytes, bytearray)):
+    if isinstance(source, SOURCE_BUFFERS):
         return _rust.StreamingSheetReader.open_from_bytes(
-            bytes(source), sheet_title, *bounds, shared_strings=shared_strings
+            source, sheet_title, *bounds, shared_strings=shared_strings
         )
     return _rust.StreamingSheetReader.open(
         source, sheet_title, *bounds, shared_strings=shared_strings
@@ -224,7 +222,7 @@ def _bounds_from_dimension_ref(ref: str) -> tuple[int, int, int, int] | None:
 
 
 def _source_dimension_bounds(
-    source: str | bytes, sheet_title: str
+    source: str | bytes | mmap.mmap, sheet_title: str
 ) -> tuple[int, int, int, int] | None:
     try:
         with _open_source_zip(source) as zf:
@@ -238,20 +236,20 @@ def _source_dimension_bounds(
         return None
 
 
-def _source_cell_bounds(source: str | bytes, sheet_title: str) -> tuple[int, int, int, int]:
+def _source_cell_bounds(
+    source: str | bytes | mmap.mmap, sheet_title: str
+) -> tuple[int, int, int, int]:
     """Eager cell/merge bounds, scanned natively without decoding values."""
     from wolfxl import _rust
 
-    if isinstance(source, (bytes, bytearray)):
-        max_row, max_col = _rust.StreamingSheetReader.cell_bounds_from_bytes(
-            bytes(source), sheet_title
-        )
+    if isinstance(source, SOURCE_BUFFERS):
+        max_row, max_col = _rust.StreamingSheetReader.cell_bounds_from_bytes(source, sheet_title)
     else:
         max_row, max_col = _rust.StreamingSheetReader.cell_bounds(source, sheet_title)
     return 1, 1, max_row, max_col
 
 
-def _source_dimension_max_row(source: str | bytes, sheet_title: str) -> int | None:
+def _source_dimension_max_row(source: str | bytes | mmap.mmap, sheet_title: str) -> int | None:
     try:
         with _open_source_zip(source) as zf:
             validate_zipfile(zf)
@@ -269,14 +267,12 @@ def _source_dimension_max_row(source: str | bytes, sheet_title: str) -> int | No
         return None
 
 
-def _row_tags_exceed(source: str | bytes, sheet_title: str, limit: int) -> bool:
+def _row_tags_exceed(source: str | bytes | mmap.mmap, sheet_title: str, limit: int) -> bool:
     """Whether the sheet XML holds more than ``limit`` ``<row>`` tags, counted natively."""
     from wolfxl import _rust
 
-    if isinstance(source, (bytes, bytearray)):
-        return _rust.StreamingSheetReader.row_tags_exceed_from_bytes(
-            bytes(source), sheet_title, limit
-        )
+    if isinstance(source, SOURCE_BUFFERS):
+        return _rust.StreamingSheetReader.row_tags_exceed_from_bytes(source, sheet_title, limit)
     return _rust.StreamingSheetReader.row_tags_exceed(source, sheet_title, limit)
 
 

@@ -41,6 +41,7 @@ mod native_writer_workbook;
 mod native_writer_workbook_metadata;
 mod native_xls_backend;
 mod ooxml_util;
+mod py_workbook_bytes;
 mod streaming;
 mod streaming_blank_rows;
 mod streaming_scan;
