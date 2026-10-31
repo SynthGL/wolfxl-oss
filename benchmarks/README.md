@@ -216,7 +216,8 @@ once so repeated shared strings do not dominate the measurement.
 Use the `.xlsx` files from Apache POI's `test-data/spreadsheet` directory at
 revision `6327f056ba3cfdae326a0261a236460592b80f5c` in a `corpus` directory.
 That revision has 352 XLSX files and no `zip-bomb.xlsx`. Generate the substitute
-1 GiB high-ratio part and 200,002-member ZIP locally; do not commit binaries:
+1 GiB high-ratio part and 200,002-member ZIP; do not commit binaries.
+Generation reuses the pytest helpers, so it also requires `pytest`:
 
 ```bash
 python benchmarks/reader_limits.py --corpus-dir corpus --generate-cases
@@ -232,3 +233,8 @@ checkout with `maturin develop --release` for the candidate. Keep the exact
 source SHA, build configuration, Python version, native-library hash, fixture
 hashes, iteration count and cache state with the raw results. One resource
 sample is a bounded-load observation, not a throughput or speedup benchmark.
+
+The [2026-10-31 manifest](results/2026-10-31-reader-limits/manifest.json)
+links raw measurement summaries, all fixture hashes, the corpus comparison
+and the separately labeled verification results. Summary files omit normalized
+row arrays but retain row counts and value hashes; the harness emits all rows.

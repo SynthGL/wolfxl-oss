@@ -231,6 +231,10 @@ still apply; `limits=` does not weaken those guards. These are input budgets,
 not a process-memory or execution-time sandbox. They apply to XLSX-family
 packages, including decrypted inputs, not legacy XLS or XLSB.
 
+Cell and text budgets use a streaming admission pass, including for read-only
+loads. This reads worksheet XML before iteration and can add startup work for
+large inputs.
+
 ### For AI coding agents
 
 [`skills/wolfxl-xlsx`](skills/wolfxl-xlsx/SKILL.md) is an agent skill for
