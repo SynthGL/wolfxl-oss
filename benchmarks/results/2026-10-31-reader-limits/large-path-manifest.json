@@ -9,11 +9,12 @@
     "isolated": false
   },
   "candidate_source": "a506450b614ab887db891a05cfc1a664739b4e64",
-  "implementation_and_publication": "Measured implementation commit is followed by an evidence/docs-only publication commit; no library, test, build input or measurement harness changes in that successor.",
+  "implementation_and_publication": "Measured implementation commit is followed by evidence/docs-only publication commits; no library, test, build input or measurement harness changes in those successors.",
   "candidate_source_receipt": {
     "source": "a506450b614ab887db891a05cfc1a664739b4e64",
     "source_tree": "f0e0854eecf6452ac40213316216ebe25e13c548",
     "python_git_tree": "390b2db6c232a21daca54b6342e1b2c99bc1ebde",
+    "python_git_tree_scope": "Git tree at HEAD:python/wolfxl",
     "tracked_and_untracked_status": "",
     "module_relative_to_checkout": "python/wolfxl/__init__.py",
     "native_relative_to_checkout": "python/wolfxl/_rust.cpython-312-x86_64-linux-gnu.so",
@@ -56,10 +57,11 @@
     ],
     "cargo_build_jobs": 4,
     "native_build_source": "506dc7f8dbd7daaf90269cc6fa5c9dd9a0fa0023",
+    "native_sha256": "8e923f5553e37b88246fb088a18aba8d0f409d6efb0fed8641402dafc5cbf7a5",
     "native_workspace_rebuild_wall_s": 55.76,
     "candidate_install_cargo_wall_s": 0.14,
     "cache": "Existing shared release target and dependency cache. Native workspace rebuilt at native_build_source; candidate installation reused byte-identical native artifacts because only Python lifecycle, tests and docs changed.",
-    "native_input_diff_files": [
+    "files_changed_since_native_build": [
       "CHANGELOG.md",
       "README.md",
       "python/wolfxl/_workbook_lifecycle.py",
@@ -76,7 +78,7 @@
   },
   "harness_sha256": "13df16efa3e17b8e0cc60b6ff9b73fd6f69ee5d722c5840c82488b000be72c53",
   "artifacts": {
-    "released": "large-path-released.json",
+    "release": "large-path-released.json",
     "main": "large-path-main.json",
     "PR_head_before_fix": "large-path-before.json",
     "baseline_source_receipts": "large-path-baseline-sources.json",

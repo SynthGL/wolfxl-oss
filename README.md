@@ -247,16 +247,20 @@ cell and text budgets before normalization.
 Replacing the path afterwards, including an atomic rename over it, does not
 change what the open workbook reads. The map is not an immutable copy: writing
 to or truncating that same file in place while the source map remains alive,
-including after `close()`, changes what it reads; reading past a truncation can terminate the process with
-`SIGBUS`. Replace workbooks by writing a new file and renaming it over the old
-one. Feature readers consume the same source without reopening the caller's
-path. Modify mode uses a private temporary copy, removed on close or collection.
+including when a reader outlives `close()`, changes what it reads. Reading past
+a truncation can terminate the process with `SIGBUS`. Replace workbooks by
+writing a new file and renaming it over the old one. Feature readers consume the
+same source without reopening the caller's path. Modify mode uses a private
+temporary copy, removed on close or collection.
 Saving back to the original path advances the private source and then publishes
 it atomically through a new file renamed over the path, adding a second write of
 the compressed package.
-Atomic publication requires write permission on the target directory. Existing
-permission bits and symlinks are preserved; ownership, ACLs and extended
-attributes are not copied, and replacing one hard-link name breaks its sharing.
+Atomic publication requires write permission on the target directory. The
+publication step keeps existing permission bits and resolves symlinks;
+ownership, ACLs and extended attributes are not copied, and replacing one
+hard-link name breaks its sharing. Later package rewrites performed by some
+saves, such as VBA package-shape normalization, keep their existing replacement
+behavior.
 
 On Linux and macOS, `close()` releases the map unless a live reader or row
 iterator still uses it; it is then released when the last reader is collected.

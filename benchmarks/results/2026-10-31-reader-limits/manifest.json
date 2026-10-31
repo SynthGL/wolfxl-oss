@@ -46,11 +46,13 @@
   },
   "released_baseline": {
     "distribution": "wolfxl==2.0.35 from PyPI",
-    "harness_source": "fd939a9929e13ff9b34034bb12c21460d668050a",
+    "harness_source": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2",
     "artifacts": [
       "released-fixtures.json",
       "released-corpus.json"
-    ]
+    ],
+    "harness_blob": "608e5f877e342e689dc0d2af7e0d78641ea81907",
+    "harness_provenance": "Recorded before the rebase using a byte-identical harness. harness_source identifies its equivalent in-branch source; harness_blob is the exact measured script content."
   },
   "candidate_artifacts": [
     "candidate-fixtures.json",
@@ -59,8 +61,10 @@
   "reference": {
     "distribution": "openpyxl==3.1.5",
     "artifact": "openpyxl-fixtures.json",
-    "harness_source": "fd939a9929e13ff9b34034bb12c21460d668050a",
-    "harness": "The same committed reader_limits.py used for the released and candidate runs; fixture hashes, Python/platform and process configuration are recorded."
+    "harness_source": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2",
+    "harness": "The same committed reader_limits.py used for the released and candidate runs; fixture hashes, Python/platform and process configuration are recorded.",
+    "harness_blob": "608e5f877e342e689dc0d2af7e0d78641ea81907",
+    "harness_provenance": "Recorded before the rebase using a byte-identical harness. harness_source identifies its equivalent in-branch source; harness_blob is the exact measured script content."
   },
   "fixture_provenance": {
     "repository": "https://github.com/apache/poi",
@@ -120,7 +124,7 @@
     "explanation": "Default read_only iteration honors the declared dimension. Row-zero cells are outside normal default iteration. Both candidate mode hashes match openpyxl 3.1.5; this mode difference is retained for compatibility."
   },
   "raw_results_policy": "All measurement and error fields are retained. Normalized row arrays are replaced by row_count and per-sheet value hashes in committed summaries. raw_sha256 identifies the complete original JSON. The harness emits complete rows by default.",
-  "integration_base": "17da1f925",
+  "integration_base": "04804b02bcf3da5b233ddea273b262afebff089e",
   "snapshot_policy": "POSIX read-only same-descriptor mmap, with buffer-protocol native access and consumed-page release advice where supported. Windows and filesystems that reject mmap use bounded immutable bytes. The mapping survives rename-over but is not protected against in-place writes or truncation of the same inode.",
   "large_path_evidence": "large-path-manifest.json"
 }

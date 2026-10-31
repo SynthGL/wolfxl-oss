@@ -295,3 +295,6 @@ range from 6,209,536 to 9,424,896 bytes. This is one non-isolated observation,
 not a cold-cache, speedup or statistically established timing comparison.
 The non-read-only case uses the default auto-streaming behavior, not forced
 Cell-object hydration. Windows uses bounded bytes and was not measured.
+The candidate's observed wall time is higher than main in all three samples
+and higher than released 2.0.35 in both read-only samples; no statistical timing
+conclusion is drawn.
