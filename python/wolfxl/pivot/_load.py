@@ -56,8 +56,10 @@ def load_pivot_tables_for_sheet(
     failure — accessing ``ws.pivot_tables`` must never raise on a
     well-formed workbook that simply has no pivots.
     """
-    source_path = getattr(workbook, "_source_path", None)
-    if not source_path:
+    from wolfxl._streaming import _open_source_zip, stream_source
+
+    source = stream_source(workbook)
+    if not source:
         return []
 
     sheet_zip_path = _resolve_sheet_zip_path(workbook, worksheet)
@@ -81,7 +83,7 @@ def load_pivot_tables_for_sheet(
 
     handles: list[PivotTableHandle] = []
     try:
-        with zipfile.ZipFile(source_path) as zf:
+        with _open_source_zip(source) as zf:
             validate_zipfile(zf)
             sheet_rels_xml = _safe_read(zf, sheet_rels_path)
             if not sheet_rels_xml:
@@ -184,11 +186,13 @@ def _resolve_sheet_zip_path(
 ) -> str | None:
     """Return the ZIP entry path for ``worksheet`` (e.g.
     ``xl/worksheets/sheet1.xml``)."""
-    source_path = getattr(workbook, "_source_path", None)
-    if not source_path:
+    from wolfxl._streaming import _open_source_zip, stream_source
+
+    source = stream_source(workbook)
+    if not source:
         return None
     try:
-        with zipfile.ZipFile(source_path) as zf:
+        with _open_source_zip(source) as zf:
             validate_zipfile(zf)
             wb_rels = _safe_read(zf, "xl/_rels/workbook.xml.rels")
             wb_xml = _safe_read(zf, "xl/workbook.xml")

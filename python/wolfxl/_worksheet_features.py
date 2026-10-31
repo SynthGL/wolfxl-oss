@@ -546,13 +546,15 @@ def _load_conditional_format_rule_attrs(
     wb: Any,
     ws: Worksheet,
 ) -> dict[tuple[str, int], dict[str, str]]:
-    source_path = getattr(wb, "_source_path", None)
-    if not source_path:
+    from wolfxl._streaming import _open_source_zip, stream_source
+
+    source = stream_source(wb)
+    if not source:
         return {}
     try:
         from wolfxl.pivot._load import _resolve_sheet_zip_path
 
-        with zipfile.ZipFile(source_path, "r") as zf:
+        with _open_source_zip(source) as zf:
             sheet_path = _resolve_sheet_zip_path(wb, ws)
             if not sheet_path:
                 return {}
@@ -586,13 +588,15 @@ def _load_differential_styles(wb: Any) -> dict[int, Any]:
     cached = getattr(wb, "_differential_styles_cache", None)
     if cached is not None:
         return cached
-    source_path = getattr(wb, "_source_path", None)
+    from wolfxl._streaming import _open_source_zip, stream_source
+
+    source = stream_source(wb)
     result: dict[int, Any] = {}
-    if not source_path:
+    if not source:
         setattr(wb, "_differential_styles_cache", result)
         return result
     try:
-        with zipfile.ZipFile(source_path, "r") as zf:
+        with _open_source_zip(source) as zf:
             styles_xml = zf.read("xl/styles.xml")
     except (KeyError, OSError, zipfile.BadZipFile):
         setattr(wb, "_differential_styles_cache", result)

@@ -21,12 +21,14 @@ ET.register_namespace("c", "http://schemas.openxmlformats.org/drawingml/2006/cha
 ET.register_namespace("r", REL_NS)
 
 
-def source_chart_refs(path: str | None, sheet_title: str) -> list[dict[str, str]]:
+def source_chart_refs(source: str | bytes | None, sheet_title: str) -> list[dict[str, str]]:
     """Return source chart OOXML identities for ``sheet_title`` in reader order."""
-    if not path:
+    if not source:
         return []
+    from wolfxl._streaming import _open_source_zip
+
     try:
-        with zipfile.ZipFile(path, "r") as zf:
+        with _open_source_zip(source) as zf:
             sheet_path = _sheet_path_for_title(zf, sheet_title)
             if not sheet_path:
                 return []

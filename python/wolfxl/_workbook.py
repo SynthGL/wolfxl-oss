@@ -585,11 +585,13 @@ class Workbook:
             return None
         if getattr(self, "_style_names_cache", None) is not None:
             return list(self._style_names_cache)
-        source_path = getattr(self, "_source_path", None)
-        if not source_path:
+        from wolfxl._streaming import _open_source_zip, stream_source
+
+        source = stream_source(self)
+        if not source:
             return None
         try:
-            with zipfile.ZipFile(source_path) as zf:
+            with _open_source_zip(source) as zf:
                 validate_zipfile(zf)
                 styles_xml = read_entry(zf, "xl/styles.xml")
         except (KeyError, OSError, zipfile.BadZipFile, ValueError):

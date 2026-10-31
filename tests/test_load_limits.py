@@ -430,7 +430,7 @@ def test_path_snapshot_tempfile_is_removed_when_workbook_is_collected(tmp_path):
 
     path = tmp_path / "source.xlsx"
     path.write_bytes(workbook_bytes())
-    wb = wolfxl.load_workbook(path)
+    wb = wolfxl.load_workbook(path, modify=True)
     snapshot_path = Path(wb._tempfile_path)
     assert snapshot_path.exists()
     reference = weakref.ref(wb)
@@ -440,7 +440,8 @@ def test_path_snapshot_tempfile_is_removed_when_workbook_is_collected(tmp_path):
     assert not snapshot_path.exists()
 
 
-def test_decrypted_path_read_does_not_write_a_plaintext_snapshot(tmp_path, monkeypatch):
+@pytest.mark.parametrize("read_only", [False, True])
+def test_decrypted_path_read_does_not_write_a_plaintext_snapshot(tmp_path, monkeypatch, read_only):
     import sys
     from types import SimpleNamespace
     from wolfxl._workbook_sources import from_encrypted
@@ -463,7 +464,7 @@ def test_decrypted_path_read_does_not_write_a_plaintext_snapshot(tmp_path, monke
     monkeypatch.setitem(sys.modules, "msoffcrypto", SimpleNamespace(OfficeFile=EncryptedOffice))
     path = tmp_path / "encrypted.xlsx"
     path.write_bytes(b"encrypted source")
-    wb = from_encrypted(wolfxl.Workbook, str(path), password="password")
+    wb = from_encrypted(wolfxl.Workbook, str(path), password="password", read_only=read_only)
     assert wb._source_bytes == decrypted
     assert wb._source_path is None
     assert getattr(wb, "_tempfile_path", None) is None
