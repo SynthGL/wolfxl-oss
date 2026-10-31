@@ -8,10 +8,10 @@
     "memory_bytes": 32102088704,
     "isolated": false
   },
-  "candidate_source": "fd939a9929e13ff9b34034bb12c21460d668050a",
-  "candidate_tree": "d4a191ff84ea5a0f1b065db384d983662a778d6a",
-  "native_build_source": "fd939a9929e13ff9b34034bb12c21460d668050a",
-  "native_reuse": "No reuse across source commits: the native extension was rebuilt with locked release configuration at the candidate source before checks and measurements.",
+  "candidate_source": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2",
+  "candidate_tree": "b18f7edce8874a5c3b8aa1a1de3464afbbb83d00",
+  "native_build_source": "573a20d5ef3044babd69ff63c38bd7d2b58b916f",
+  "native_reuse": "Native sources and build inputs are unchanged since 573a20d5e. The locked release developer installation ran again at the candidate source and reused native Cargo artifacts. Candidate Python sources, focused tests, corpus and fixture measurements are at candidate_source.",
   "native_build": {
     "program": "maturin",
     "arguments": [
@@ -46,11 +46,13 @@
   },
   "released_baseline": {
     "distribution": "wolfxl==2.0.35 from PyPI",
-    "harness_source": "fd939a9929e13ff9b34034bb12c21460d668050a",
+    "harness_source": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2",
     "artifacts": [
       "released-fixtures.json",
       "released-corpus.json"
-    ]
+    ],
+    "harness_blob": "608e5f877e342e689dc0d2af7e0d78641ea81907",
+    "harness_provenance": "Recorded before the rebase using a byte-identical harness. harness_source identifies its equivalent in-branch source; harness_blob is the exact measured script content."
   },
   "candidate_artifacts": [
     "candidate-fixtures.json",
@@ -59,8 +61,10 @@
   "reference": {
     "distribution": "openpyxl==3.1.5",
     "artifact": "openpyxl-fixtures.json",
-    "harness_source": "fd939a9929e13ff9b34034bb12c21460d668050a",
-    "harness": "The same committed reader_limits.py used for the released and candidate runs; fixture hashes, Python/platform and process configuration are recorded."
+    "harness_source": "cfab6e26cc0f5ed8e5ace6572d33f3f14abb05f2",
+    "harness": "The same committed reader_limits.py used for the released and candidate runs; fixture hashes, Python/platform and process configuration are recorded.",
+    "harness_blob": "608e5f877e342e689dc0d2af7e0d78641ea81907",
+    "harness_provenance": "Recorded before the rebase using a byte-identical harness. harness_source identifies its equivalent in-branch source; harness_blob is the exact measured script content."
   },
   "fixture_provenance": {
     "repository": "https://github.com/apache/poi",
@@ -120,5 +124,6 @@
     "explanation": "Default read_only iteration honors the declared dimension. Row-zero cells are outside normal default iteration. Both candidate mode hashes match openpyxl 3.1.5; this mode difference is retained for compatibility."
   },
   "raw_results_policy": "All measurement and error fields are retained. Normalized row arrays are replaced by row_count and per-sheet value hashes in committed summaries. raw_sha256 identifies the complete original JSON. The harness emits complete rows by default.",
-  "integration_base": "17da1f925"
+  "integration_base": "04804b02b",
+  "snapshot_policy": "Path inputs are opened once into immutable bytes bounded by max_package_bytes. Admission, loading, metadata, streaming and VBA copying use those bytes. Non-modify reads do not spool; modify and edited-read promotion use a private temporary source with close/collection cleanup. Same-origin saves advance the private source then publish a synced atomic replacement."
 }
