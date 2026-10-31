@@ -5,6 +5,8 @@
 ### Security
 
 - Update anyhow to 1.0.104 (RUSTSEC-2026-0190).
+- Require pytest 9.0.3 or newer in the test extra on Python 3.10 and newer,
+  while retaining the compatible pytest range on Python 3.9.
 
 ## 2.0.35 - 2026-10-30
 

@@ -9,10 +9,7 @@ all-features = true
 unsound = "all"
 unmaintained = "all"
 yanked = "warn"
-ignore = [
-    # Reviewed 2026-10-31. Remove this exception when the dependency fix lands.
-    { id = "RUSTSEC-2026-0190", reason = "Reviewed 2026-10-31; retain the unsoundness warning in cargo-audit while the patched anyhow update is reviewed at https://github.com/SynthGL/wolfxl-oss/pull/88" },
-]
+ignore = []
 
 [licenses]
 # Permissive dependency licenses compatible with distributing WolfXL as MIT.
