@@ -17,6 +17,7 @@ import importlib
 import json
 import os
 from pathlib import Path
+import platform
 import resource
 import runpy
 import signal
@@ -107,12 +108,35 @@ def measure(args):
                         measured = json.loads(line)
                         result.update(peak_rss_bytes=measured["peak_rss_kib"] * 1024, wall_s=measured["wall_s"])
                 timing.unlink()
+            result["fixture_sha256"] = hashlib.sha256((args.corpus_dir / filename).read_bytes()).hexdigest()
             results.append(result)
     if args.source == "HEAD":
         args.source = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent.parent, text=True
         ).strip()
-    args.output.write_text(json.dumps({"source": args.source, "library": args.library, "iterations": 1, "warmups": 0, "cache_state": "fresh interpreter; OS cache unspecified", "build_mode": "release" if args.library == "wolfxl" else "pure Python", "timeout_s": 5, "memory_address_space_limit_bytes": 2 * 1024**3, "binary": identity, "results": results}, indent=2))
+    metadata = {
+        "source": args.source,
+        "library": args.library,
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        "architecture": platform.machine(),
+        "zip_environment": {
+            key: os.environ.get(key)
+            for key in (
+                "WOLFXL_MAX_ZIP_ENTRIES", "WOLFXL_MAX_ZIP_ENTRY_BYTES",
+                "WOLFXL_MAX_ZIP_TOTAL_BYTES", "WOLFXL_MAX_ZIP_COMPRESSION_RATIO",
+            )
+        },
+        "iterations": 1,
+        "warmups": 0,
+        "cache_state": "fresh interpreter; OS cache unspecified",
+        "build_mode": "release" if args.library == "wolfxl" else "pure Python",
+        "timeout_s": 5,
+        "memory_address_space_limit_bytes": 2 * 1024**3,
+        "binary": identity,
+        "results": results,
+    }
+    args.output.write_text(json.dumps(metadata, indent=2))
     print(args.output.name, len(results))
 
 
