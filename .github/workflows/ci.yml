@@ -48,15 +48,15 @@ jobs:
         with:
           toolchain: stable
       - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
-      - name: Install test dependencies
-        run: >-
-          uv pip install --system maturin
-          "pytest>=7.4" "pytest-xdist>=3.3"
-          "openpyxl>=3.1" "Pillow>=10.0" "defusedxml>=0.7.1,<1.0"
+      - name: Install hash-checked test dependencies
+        run: |
+          uv export --locked --no-dev --extra test --group ci-build --no-emit-project --format requirements.txt --output-file "$RUNNER_TEMP/test-requirements.txt"
+          uv pip install --system --require-hashes -r "$RUNNER_TEMP/test-requirements.txt"
       - name: Build and install the extension
         run: |
           maturin build --release --locked --out dist
-          uv pip install --system --no-index --find-links dist wolfxl
+          python .github/scripts/hashed_artifact_requirements.py --output "$RUNNER_TEMP/wheel-requirements.txt" "dist/*.whl"
+          uv pip install --system --require-hashes --no-deps --no-index -r "$RUNNER_TEMP/wheel-requirements.txt"
       - name: Run offline workbook editing study tests
         run: python -m unittest discover -s study/agent-edit -p 'test_*.py' -v
       - name: Run Python tests
