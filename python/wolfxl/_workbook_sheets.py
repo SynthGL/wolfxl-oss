@@ -20,7 +20,11 @@ def remove_sheet(wb: Any, worksheet: Worksheet) -> None:
         ValueError: If ``worksheet`` is not registered on ``wb``.
     """
     in_memory_read = wb._rust_patcher is None and wb._rust_writer is None  # noqa: SLF001
-    if in_memory_read and getattr(wb, "_source_path", None) is None:
+    if (
+        in_memory_read
+        and getattr(wb, "_source_path", None) is None
+        and getattr(wb, "_source_origin_path", None) is None
+    ):
         # Streams and bytes (pandas ``ExcelWriter(mode="a")``) edit like openpyxl.
         _promote_source_backed_read_workbook(wb)
     if wb._rust_writer is None and wb._rust_patcher is None:  # noqa: SLF001
