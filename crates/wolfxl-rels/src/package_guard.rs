@@ -47,7 +47,11 @@ impl std::error::Error for LimitExceeded {}
 
 pub fn check(name: &'static str, observed: u64, configured: u64) -> Result<(), LimitExceeded> {
     if observed > configured {
-        Err(LimitExceeded { name, observed, configured })
+        Err(LimitExceeded {
+            name,
+            observed,
+            configured,
+        })
     } else {
         Ok(())
     }

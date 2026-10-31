@@ -133,3 +133,52 @@ def test_generated_high_ratio_part_is_refused(tmp_path, read_only):
     generate_zip_bomb(path, uncompressed_bytes=4 * 1024**2)
     with pytest.raises((OSError, ValueError), match="compression ratio"):
         wolfxl.load_workbook(path, read_only=read_only)
+
+
+def replace_parts(data, transform):
+    out = BytesIO()
+    with ZipFile(BytesIO(data)) as source, ZipFile(out, "w", ZIP_DEFLATED) as target:
+        for info in source.infolist():
+            name, value = transform(info.filename, source.read(info))
+            target.writestr(name, value)
+    return out.getvalue()
+
+
+def test_limits_follow_relationship_targets_not_part_names_or_root_tags():
+    def transform(name, value):
+        if name == "xl/_rels/workbook.xml.rels":
+            value = value.replace(b"worksheets/sheet1.xml", b"custom/data.part")
+        elif name == "xl/worksheets/sheet1.xml":
+            name = "xl/custom/data.part"
+            value = value.replace(b"worksheet", b"legacyWrapper")
+        return name, value
+
+    data = replace_parts(workbook_bytes(), transform)
+    with pytest.raises(wolfxl.LimitExceeded, match="max_cells"):
+        wolfxl.load_workbook(data, limits=wolfxl.Limits(max_cells=3))
+
+
+def test_rich_shared_run_text_is_materialized_once():
+    def transform(name, value):
+        if name == "xl/sharedStrings.xml":
+            value = value.replace(b"<si><t>", b"<si><r><rPr><b/></rPr><t>")
+            value = value.replace(b"</t></si>", b"</t></r></si>")
+        return name, value
+
+    data = replace_parts(workbook_bytes(text="rich payload " * 4096, cells=128), transform)
+    wb = wolfxl.load_workbook(data, rich_text=True)
+    first = wb.active["A1"].value[0].text
+    for row in wb.active.iter_rows():
+        assert row[0].value[0].text is first
+    wb.close()
+
+
+def test_eager_and_streaming_share_one_workbook_string_cache():
+    from wolfxl._streaming import _open_stream_reader, stream_source
+
+    wb = wolfxl.load_workbook(workbook_bytes(text="cross-path payload " * 1024))
+    first = wb.active["A1"].value
+    reader = _open_stream_reader(wb, stream_source(wb), "Sheet1", None, None, None, None)
+    rows = [reader.read_next_row() for _ in range(4)]
+    assert all(cell[1] is first for _, cells in rows for cell in cells)
+    wb.close()

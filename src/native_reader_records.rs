@@ -296,14 +296,7 @@ pub(crate) fn append_native_record<B: NativeStyleResolver>(
         if options.include_cached_formula_value && has_cached_value {
             record.set_item(
                 "cached_value",
-                cell_to_plain(
-                    py,
-                    cell,
-                    true,
-                    number_format,
-                    book.serial_dates(),
-                    strings,
-                )?,
+                cell_to_plain(py, cell, true, number_format, book.serial_dates(), strings)?,
             )?;
         }
     }

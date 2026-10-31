@@ -74,7 +74,9 @@ impl SharedStringCache {
         let (_, values) = entries.entry(key).or_insert_with(|| {
             (
                 Arc::clone(runs),
-                runs.iter().map(|run| PyString::new(py, &run.text).unbind()).collect(),
+                runs.iter()
+                    .map(|run| PyString::new(py, &run.text).unbind())
+                    .collect(),
             )
         });
         values[index].clone_ref(py).into_any()
@@ -126,9 +128,7 @@ pub(crate) fn cell_to_dict(
             }
         }
         CellValue::String(s) => cell_with_value(py, "string", s),
-        CellValue::SharedString(s) => {
-            cell_with_value(py, "string", strings.get_or_insert(py, s)?)
-        }
+        CellValue::SharedString(s) => cell_with_value(py, "string", strings.get_or_insert(py, s)?),
         CellValue::Number(n) if is_date_format(number_format) => {
             let d = PyDict::new(py);
             d.set_item("type", "datetime")?;

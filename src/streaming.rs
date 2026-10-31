@@ -3160,7 +3160,9 @@ mod tests {
         bounds: [Option<u32>; 4],
         fast: bool,
     ) -> Vec<String> {
-        let sst = Arc::new(SharedStringTable::new((0..3).map(|i| format!("s{i}")).collect()));
+        let sst = Arc::new(SharedStringTable::new(
+            (0..3).map(|i| format!("s{i}")).collect(),
+        ));
         let mut sheet = test_reader(xml, sst, output, bounds, fast);
         let mut rows = Vec::new();
         loop {
@@ -3194,7 +3196,10 @@ mod tests {
             let table = Arc::new(SharedStringTable::new(vec!["s0".into(), "x".repeat(4096)]));
             let expected = table.get_py(py, 1).unwrap();
             assert!(expected.bind(py).is(table.get_py(py, 1).unwrap()));
-            assert_eq!(table.get_py(py, 7).unwrap().extract::<String>(py).unwrap(), "");
+            assert_eq!(
+                table.get_py(py, 7).unwrap().extract::<String>(py).unwrap(),
+                ""
+            );
 
             // Every reader sharing the table, on both values-only paths and
             // the cell path, returns the one cached object for entry 1.
@@ -3218,8 +3223,13 @@ mod tests {
             // per cached-value pass.
             assert_eq!(matches, 2 * 3 + 2 * 4);
 
-            let mut sheet =
-                test_reader(xml, Arc::clone(&table), CellOutput::Payload, [None; 4], false);
+            let mut sheet = test_reader(
+                xml,
+                Arc::clone(&table),
+                CellOutput::Payload,
+                [None; 4],
+                false,
+            );
             let mut payload_matches = 0;
             while let StepResult::Row(_, cells) = sheet.parse_one_row(py).unwrap() {
                 for cell in cells {
