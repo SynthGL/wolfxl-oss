@@ -168,6 +168,7 @@ jobs:
           PY
       # No resolver, package installation, or audited package execution.
       - name: Audit all locked Python versions and platforms
+        shell: bash
         run: |
           status=0
           for requirements in "$RUNNER_TEMP"/requirements-audit-*.txt; do
