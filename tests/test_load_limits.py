@@ -546,8 +546,8 @@ def test_path_load_shares_one_read_only_map_without_copies(tmp_path, monkeypatch
     # retained map itself; any bytes() conversion would be a distinct object.
     assert received and all(item is source for item in received)
     wb.close()
-    assert wb._source_bytes is source
-    assert not source.closed
+    assert wb._source_bytes is None
+    assert source.closed
 
 
 @pytest.mark.parametrize("kind", ["bytes", pytest.param("mapped", marks=requires_mapped_paths)])
@@ -659,20 +659,6 @@ def test_mutable_buffers_are_copied_once_and_never_retained():
     copied = _source_buffer.as_source(writable)
     assert type(copied) is bytes and copied == data
     writable.close()
-
-
-@pytest.mark.parametrize("mapped", [pytest.param(True, marks=requires_mapped_paths), False])
-@pytest.mark.parametrize("read_only", [False, True])
-def test_unmodified_source_can_be_saved_after_close(tmp_path, monkeypatch, mapped, read_only):
-    monkeypatch.setattr(_source_buffer, "MAP_PATH_SOURCES", mapped)
-    original = tmp_path / "before-close.xlsx"
-    destination = tmp_path / "after-close.xlsx"
-    data = workbook_bytes(text="retained after close", cells=4)
-    original.write_bytes(data)
-    workbook = wolfxl.load_workbook(original, read_only=read_only)
-    workbook.close()
-    workbook.save(destination)
-    assert destination.read_bytes() == data
 
 
 @requires_mapped_paths

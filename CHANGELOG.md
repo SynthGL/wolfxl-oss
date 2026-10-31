@@ -26,11 +26,8 @@
   path instead of rewriting it in place. On Linux and macOS, writing to or
   truncating that loaded file in place changes what the open workbook reads
   and can terminate the process with `SIGBUS`.
-- On Linux and macOS, closing releases native readers and private temporary
-  files but retains the source map until the workbook and remaining source
-  readers are collected, preserving source-backed saves after close without
-  copying the whole package. Before Python 3.13 the map also retains a file
-  descriptor.
+- Closing releases a mapped source unless a live reader still uses it; the
+  mapping is then released when the last reader is collected.
 
 ### Fixed
 

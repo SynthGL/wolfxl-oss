@@ -255,12 +255,11 @@ Saving back to the original path advances the private source and then publishes
 it atomically through a new file renamed over the path, adding a second write of
 the compressed package.
 
-On Linux and macOS, `close()` releases native readers and private temporary
-files, but retains the source map so an unmodified workbook can still be saved
-after closing, as with byte-backed loads. The map and its opened inode are
-released when the workbook and remaining source readers are collected; a
-replaced file can therefore keep using disk space until then. On Python
-versions before 3.13 the retained map also holds an open file descriptor.
+On Linux and macOS, `close()` releases the map unless a live reader or row
+iterator still uses it; it is then released when the last reader is collected.
+Until release, a replaced source file can keep using disk space. On Python
+versions before 3.13 each map also holds an open file descriptor. Save workbooks
+before closing them.
 
 ### For AI coding agents
 
