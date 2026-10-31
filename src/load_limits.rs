@@ -1,5 +1,5 @@
 //! Bounded, streaming admission before eager worksheet materialization.
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Cursor, Read, Seek};
 
@@ -48,6 +48,7 @@ pub fn validate_load_limits(
     max_cells: u64,
     max_shared_string_bytes: u64,
     max_materialized_string_bytes: u64,
+    permissive: bool,
 ) -> PyResult<()> {
     let limits = Limits {
         max_package_bytes,
@@ -57,18 +58,19 @@ pub fn validate_load_limits(
         max_materialized_string_bytes,
     };
     if let Ok(data) = source.cast::<PyBytes>() {
-        validate(Cursor::new(data.as_bytes()), limits)
+        validate(Cursor::new(data.as_bytes()), limits, permissive)
     } else if let Ok(path) = source.extract::<String>() {
         validate(
             File::open(path).map_err(|e| PyIOError::new_err(e.to_string()))?,
             limits,
+            permissive,
         )
     } else {
         Err(PyValueError::new_err("expected workbook path or bytes"))
     }
 }
 
-fn validate<R: Read + Seek>(source: R, limits: Limits) -> PyResult<()> {
+fn validate<R: Read + Seek>(source: R, limits: Limits, permissive: bool) -> PyResult<()> {
     let mut zip = ZipArchive::new(source).map_err(|e| PyIOError::new_err(e.to_string()))?;
     let mut package_bytes = 0u64;
     // Check the central directory before decompressing any entry.
@@ -82,7 +84,7 @@ fn validate<R: Read + Seek>(source: R, limits: Limits) -> PyResult<()> {
     }
     // Retain all existing path, duplicate-entry and compression-ratio checks.
     crate::ooxml_util::validate_zip_archive(&mut zip)?;
-    let worksheet_parts = worksheet_parts(&mut zip)?;
+    let worksheet_parts = worksheet_parts(&mut zip, permissive)?;
     let mut cells = 0u64;
     let mut shared_bytes = 0u64;
     let mut text_bytes = 0u64;
@@ -95,7 +97,8 @@ fn validate<R: Read + Seek>(source: R, limits: Limits) -> PyResult<()> {
             .map_err(|e| PyIOError::new_err(e.to_string()))?
             .to_ascii_lowercase();
         let shared = name == "xl/sharedstrings.xml";
-        let worksheet = worksheet_parts.contains(&name);
+        let copies = worksheet_parts.get(&name).copied().unwrap_or(0);
+        let worksheet = copies != 0;
         if !shared && !worksheet {
             continue;
         }
@@ -105,121 +108,163 @@ fn validate<R: Read + Seek>(source: R, limits: Limits) -> PyResult<()> {
         let mut in_formula = false;
         let mut in_value = false;
         let mut string_cell = false;
+        let mut formula_index = None;
+        let mut formula_len = 0u64;
+        let mut shared_formulas: HashMap<String, (Option<u64>, u64)> = HashMap::new();
         loop {
             let event = reader.read_event_into(&mut buf);
+            let len = match &event {
+                Ok(Event::Text(e)) => Some(normalized_text_len(e)),
+                Ok(Event::CData(e)) => Some(normalized_text_len(e)),
+                Ok(Event::GeneralRef(e)) => Some(
+                    e.resolve_char_ref()
+                        .ok()
+                        .flatten()
+                        .map(|c| c.len_utf8() as u64)
+                        .or_else(|| {
+                            quick_xml::escape::resolve_predefined_entity(e).map(|s| s.len() as u64)
+                        })
+                        .unwrap_or(0),
+                ),
+                _ => None,
+            };
+            if let Some(len) = len {
+                if in_formula {
+                    formula_len = formula_len.saturating_add(len);
+                }
+                if shared && in_text {
+                    account(len, true, false, &mut shared_bytes, &mut text_bytes, limits)?;
+                }
+                account(
+                    len.saturating_mul(copies.max(1)),
+                    false,
+                    in_text || in_formula || (in_value && string_cell),
+                    &mut shared_bytes,
+                    &mut text_bytes,
+                    limits,
+                )?;
+            }
             let empty = matches!(&event, Ok(Event::Empty(_)));
             match event {
                 Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                     let tag = e.local_name();
                     match tag.as_ref().as_bytes() {
                         b"c" if worksheet => {
-                            cells = cells.saturating_add(1);
+                            cells = cells.saturating_add(copies);
                             check("max_cells", cells, limits.max_cells).map_err(limit_error)?;
-                            string_cell = e.attributes().flatten().any(|a| {
-                                a.key.as_ref().as_bytes() == b"t"
-                                    && matches!(a.value.as_ref(), "str" | "inlineStr" | "e" | "d")
-                            });
+                            string_cell = matches!(
+                                crate::ooxml_util::attr_value(&e, b"t").as_deref(),
+                                Some("str" | "inlineStr" | "e" | "d")
+                            );
                         }
                         b"t" if !empty => in_text = true,
-                        b"f" if !empty => in_formula = true,
+                        b"f" => {
+                            formula_index = if crate::ooxml_util::attr_value(&e, b"t")
+                                .as_deref() == Some("shared")
+                            {
+                                crate::ooxml_util::attr_value(&e, b"si")
+                            } else {
+                                None
+                            };
+                            formula_len = 0;
+                            in_formula = !empty;
+                            if empty {
+                                record_shared_formula(&mut shared_formulas, formula_index.take(), 0);
+                            }
+                        }
                         b"v" if !empty => in_value = true,
                         _ => {}
                     }
                 }
                 Ok(Event::End(e)) => match e.local_name().as_ref().as_bytes() {
                     b"t" => in_text = false,
-                    b"f" => in_formula = false,
+                    b"f" => {
+                        in_formula = false;
+                        record_shared_formula(
+                            &mut shared_formulas,
+                            formula_index.take(),
+                            formula_len,
+                        );
+                    }
                     b"v" => in_value = false,
                     b"c" => string_cell = false,
                     _ => {}
                 },
-                Ok(Event::Text(e)) => {
-                    let len = e.as_ref().len() as u64;
-                    account(
-                        len,
-                        shared && in_text,
-                        in_text || in_formula || (in_value && string_cell),
-                        &mut shared_bytes,
-                        &mut text_bytes,
-                        limits,
-                    )?;
-                }
-                Ok(Event::CData(e)) => {
-                    let len = e.as_ref().len() as u64;
-                    account(
-                        len,
-                        shared && in_text,
-                        in_text || in_formula || (in_value && string_cell),
-                        &mut shared_bytes,
-                        &mut text_bytes,
-                        limits,
-                    )?;
-                }
-                Ok(Event::GeneralRef(e)) => {
-                    let len = e
-                        .resolve_char_ref()
-                        .ok()
-                        .flatten()
-                        .map(|c| c.len_utf8() as u64)
-                        .or_else(|| {
-                            quick_xml::escape::resolve_predefined_entity(&e).map(|s| s.len() as u64)
-                        })
-                        .unwrap_or(0);
-                    account(
-                        len,
-                        shared && in_text,
-                        in_text || in_formula || (in_value && string_cell),
-                        &mut shared_bytes,
-                        &mut text_bytes,
-                        limits,
-                    )?;
-                }
                 // Preserve the existing reader's malformed-XML diagnostics.
                 Ok(Event::Eof) | Err(_) => break,
                 _ => {}
             }
             buf.clear();
         }
+        for (master_len, children) in shared_formulas.into_values() {
+            account(
+                master_len.unwrap_or(0).saturating_mul(children).saturating_mul(copies),
+                false,
+                true,
+                &mut shared_bytes,
+                &mut text_bytes,
+                limits,
+            )?;
+        }
     }
     Ok(())
 }
 
-fn worksheet_parts<R: Read + Seek>(zip: &mut ZipArchive<R>) -> PyResult<HashSet<String>> {
-    let mut out = HashSet::new();
+fn normalized_text_len(text: &str) -> u64 {
+    // XML 1.0 maps CR LF to one LF before materializing literal text.
+    (text.len() - memchr::memmem::find_iter(text.as_bytes(), b"\r\n").count()) as u64
+}
+
+fn worksheet_parts<R: Read + Seek>(
+    zip: &mut ZipArchive<R>,
+    permissive: bool,
+) -> PyResult<HashMap<String, u64>> {
+    let mut workbook_xml = String::new();
+    let mut workbook_rels = String::new();
     for index in 0..zip.len() {
-        let entry = zip
+        let mut entry = zip
             .by_index(index)
             .map_err(|e| PyIOError::new_err(e.to_string()))?;
         let name = entry
             .name()
             .map_err(|e| PyIOError::new_err(e.to_string()))?;
-        if !name.eq_ignore_ascii_case("xl/_rels/workbook.xml.rels") {
+        let destination = if name.eq_ignore_ascii_case("xl/workbook.xml") {
+            &mut workbook_xml
+        } else if name.eq_ignore_ascii_case("xl/_rels/workbook.xml.rels") {
+            &mut workbook_rels
+        } else {
             continue;
+        };
+        // Let the reader produce its existing malformed-metadata diagnostic.
+        if entry.read_to_string(destination).is_err() {
+            return Ok(HashMap::new());
         }
-        let mut reader = Reader::from_reader(BufReader::new(entry));
-        let mut buf = Vec::new();
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) | Ok(Event::Empty(e))
-                    if e.local_name().as_ref() == "Relationship" =>
-                {
-                    let kind = crate::ooxml_util::attr_value(&e, b"Type").unwrap_or_default();
-                    if kind.ends_with("/worksheet") || kind.ends_with("/chartsheet") {
-                        if let Some(target) = crate::ooxml_util::attr_value(&e, b"Target") {
-                            out.insert(
-                                crate::ooxml_util::join_and_normalize("xl/", &target)
-                                    .to_ascii_lowercase(),
-                            );
-                        }
-                    }
-                }
-                Ok(Event::Eof) | Err(_) => break,
-                _ => {}
-            }
-            buf.clear();
+    }
+    let mut out = HashMap::new();
+    if let Ok(targets) =
+        wolfxl_reader::worksheet_load_targets(&workbook_xml, &workbook_rels, permissive)
+    {
+        for target in targets {
+            let copies = out.entry(target.to_ascii_lowercase()).or_insert(0u64);
+            *copies = copies.saturating_add(1);
         }
     }
     Ok(out)
+}
+
+fn record_shared_formula(
+    formulas: &mut HashMap<String, (Option<u64>, u64)>,
+    index: Option<String>,
+    len: u64,
+) {
+    if let Some(index) = index {
+        let (master, children) = formulas.entry(index).or_default();
+        if len == 0 {
+            *children = children.saturating_add(1);
+        } else if master.is_none() {
+            *master = Some(len);
+        }
+    }
 }
 
 fn account(

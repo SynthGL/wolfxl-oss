@@ -3020,7 +3020,7 @@ mod tests {
                     &mut buf,
                     py,
                     &CellTypeAttr::Number,
-                    &[],
+                    &SharedStringTable::new(Vec::new()),
                     CellOutput::Payload,
                 )
                 .is_err());
@@ -3045,7 +3045,7 @@ mod tests {
                     &mut buf,
                     py,
                     &CellTypeAttr::Number,
-                    &[],
+                    &SharedStringTable::new(Vec::new()),
                     output,
                 )
                 .unwrap()

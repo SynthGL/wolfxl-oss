@@ -2367,6 +2367,24 @@ fn sheet_name_from_ref(refers_to: &str) -> Option<String> {
     Some(unquoted.replace("''", "'"))
 }
 
+/// Resolve the worksheet targets consumed by a workbook load, including aliases.
+pub fn worksheet_load_targets(
+    workbook_xml: &str,
+    workbook_rels: &str,
+    permissive: bool,
+) -> Result<Vec<String>> {
+    let rels = RelsGraph::parse(workbook_rels.as_bytes())
+        .map_err(|e| ReaderError::Xml(format!("failed to parse workbook rels: {e}")))?;
+    let (sheet_refs, ..) = parse_workbook(workbook_xml)?;
+    let sheet_refs = if permissive && sheet_refs.is_empty() {
+        synthesize_sheet_refs_from_rels(&rels)
+    } else {
+        sheet_refs
+    };
+    let (sheets, _) = resolve_sheet_paths(sheet_refs, &rels)?;
+    Ok(sheets.into_iter().map(|sheet| sheet.path).collect())
+}
+
 fn resolve_sheet_paths(
     sheet_refs: Vec<SheetRef>,
     rels: &RelsGraph,

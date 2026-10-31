@@ -30,7 +30,7 @@ class Limits:
     max_part_bytes: int = _PART
     """Maximum uncompressed size of any package member (default 512 MiB)."""
     max_cells: int = _CELLS
-    """Maximum stored worksheet cell elements, workbook-wide (default 8 million)."""
+    """Maximum stored worksheet cell elements, workbook-wide (default 64 million)."""
     max_shared_string_bytes: int = _SHARED
     """Maximum decoded shared-string text bytes (default 256 MiB)."""
     max_materialized_string_bytes: int = _TEXT
@@ -42,5 +42,9 @@ class Limits:
             if type(value) is not int or not 0 <= value <= 2**64 - 1:
                 raise ValueError(f"{field.name} must be an integer between 0 and 2**64 - 1")
 
-    def _validate(self, source: str | bytes) -> None:
-        validate_load_limits(source, *(getattr(self, f.name) for f in fields(self)))
+    def _validate(self, source: str | bytes, *, permissive: bool = False) -> None:
+        try:
+            validate_load_limits(source, *(getattr(self, f.name) for f in fields(self)), permissive)
+        except OSError as error:
+            # Preserve the established load error contract for malformed ZIPs.
+            raise OSError(f"native xlsx open failed: {error}") from error

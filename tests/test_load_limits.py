@@ -182,3 +182,107 @@ def test_eager_and_streaming_share_one_workbook_string_cache():
     rows = [reader.read_next_row() for _ in range(4)]
     assert all(cell[1] is first for _, cells in rows for cell in cells)
     wb.close()
+
+
+def test_literal_xml_line_endings_count_after_normalization():
+    data = workbook_bytes(text="a\r\nb\rc", cells=2)
+    limits = wolfxl.Limits(max_shared_string_bytes=5, max_materialized_string_bytes=5)
+    wb = wolfxl.load_workbook(data, limits=limits)
+    assert wb.active["A1"].value == "a\nb\nc"
+    wb.close()
+
+
+def test_preexisting_package_errors_keep_their_load_context():
+    def transform(name, value):
+        return ("xl\\styles.xml", value) if name == "xl/sharedStrings.xml" else (name, value)
+
+    data = replace_parts(workbook_bytes(), transform)
+    with pytest.raises(OSError, match=r"^native xlsx open failed: unsafe OOXML package part path:"):
+        wolfxl.load_workbook(data)
+
+
+@pytest.mark.parametrize("mode", [{}, {"read_only": True}, {"modify": True}])
+def test_sheet_relationship_type_does_not_bypass_cell_budget(mode):
+    def transform(name, value):
+        if name == "xl/_rels/workbook.xml.rels":
+            value = value.replace(b"/worksheet", b"/custom-sheet")
+        return name, value
+
+    data = replace_parts(workbook_bytes(), transform)
+    with pytest.raises(wolfxl.LimitExceeded, match="max_cells"):
+        wolfxl.load_workbook(data, limits=wolfxl.Limits(max_cells=3), **mode)
+
+
+@pytest.mark.parametrize("mode", [{}, {"read_only": True}, {"modify": True}])
+@pytest.mark.parametrize("field,budget", [("max_cells", 7), ("max_materialized_string_bytes", 31)])
+def test_sheet_aliases_are_counted_per_reference(mode, field, budget):
+    def transform(name, value):
+        if name == "xl/_rels/workbook.xml.rels":
+            value = value.replace(b"worksheets/sheet2.xml", b"worksheets/sheet1.xml")
+        return name, value
+
+    data = replace_parts(workbook_bytes(text="four", inline=True, second_sheet=True), transform)
+    with pytest.raises(wolfxl.LimitExceeded, match=field):
+        wolfxl.load_workbook(data, limits=wolfxl.Limits(**{field: budget}), **mode)
+
+
+@pytest.mark.parametrize("mode", [{}, {"read_only": True}, {"modify": True}])
+@pytest.mark.parametrize("master_last", [False, True])
+def test_shared_formula_templates_are_charged_for_each_child(mode, master_last):
+    formula = "1+2+3+4+5"
+    master_row = 4 if master_last else 1
+    cells = "".join(
+        f'<row r="{r}"><c r="A{r}">'
+        + (f'<f t="&#115;hared" si="&#48;">{formula}</f>' if r == master_row else '<f t="shared" si="0"/>')
+        + "</c></row>"
+        for r in range(1, 5)
+    )
+
+    def transform(name, value):
+        if name == "xl/worksheets/sheet1.xml":
+            value = f'<worksheet xmlns="{NS}"><sheetData>{cells}</sheetData></worksheet>'.encode()
+        return name, value
+
+    data = replace_parts(workbook_bytes(text=""), transform)
+    with pytest.raises(wolfxl.LimitExceeded, match="max_materialized_string_bytes"):
+        wolfxl.load_workbook(
+            data, limits=wolfxl.Limits(max_materialized_string_bytes=4 * len(formula) - 1), **mode
+        )
+
+
+@pytest.mark.parametrize("mode", [{}, {"read_only": True}, {"modify": True}])
+def test_escaped_cell_type_is_counted_as_string(mode):
+    def transform(name, value):
+        if name == "xl/worksheets/sheet1.xml":
+            value = value.replace(b't="s"', b't="&#115;tr"').replace(b"<v>0</v>", b"<v>12345</v>")
+        return name, value
+
+    data = replace_parts(workbook_bytes(text=""), transform)
+    with pytest.raises(wolfxl.LimitExceeded, match="max_materialized_string_bytes"):
+        wolfxl.load_workbook(data, limits=wolfxl.Limits(max_materialized_string_bytes=19), **mode)
+
+
+def test_permissive_synthesized_sheets_are_counted():
+    def transform(name, value):
+        if name == "xl/workbook.xml":
+            value = value[:value.index(b"<sheets>")] + b"</workbook>"
+        return name, value
+
+    data = replace_parts(workbook_bytes(), transform)
+    with pytest.raises(wolfxl.LimitExceeded, match="max_cells"):
+        wolfxl.load_workbook(data, permissive=True, limits=wolfxl.Limits(max_cells=3))
+
+
+@pytest.mark.parametrize("mode", [{}, {"read_only": True}, {"modify": True}])
+def test_shared_strings_part_used_as_sheet_counts_each_alias(mode):
+    def transform(name, value):
+        if name == "xl/_rels/workbook.xml.rels":
+            value = value.replace(b"worksheets/sheet1.xml", b"sharedStrings.xml")
+            value = value.replace(b"worksheets/sheet2.xml", b"sharedStrings.xml")
+        elif name == "xl/worksheets/sheet1.xml":
+            name = "xl/sharedStrings.xml"
+        return name, value
+
+    data = replace_parts(workbook_bytes(text="four", inline=True, second_sheet=True), transform)
+    with pytest.raises(wolfxl.LimitExceeded, match="max_materialized_string_bytes"):
+        wolfxl.load_workbook(data, limits=wolfxl.Limits(max_materialized_string_bytes=31), **mode)

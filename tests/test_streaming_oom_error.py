@@ -58,11 +58,16 @@ CHILD = textwrap.dedent(
 )
 
 
-def _package(cells: int) -> bytes:
-    """One row of ``cells`` cells that all share one ``STRING_BYTES`` string."""
+def _package(cells: int, *, unique: bool = False) -> bytes:
+    """One row with either repeated or distinct ``STRING_BYTES`` strings."""
     rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
     pkg = "http://schemas.openxmlformats.org/package/2006/relationships"
-    row = "".join(f'<c r="{_column(i)}1" t="s"><v>0</v></c>' for i in range(cells))
+    row = "".join(f'<c r="{_column(i)}1" t="s"><v>{i if unique else 0}</v></c>' for i in range(cells))
+    entries = cells if unique else 1
+    strings = "".join(
+        f"<si><t>{chr(65 + i) + 'a' * (STRING_BYTES - 1)}</t></si>"
+        for i in range(entries)
+    )
     parts = {
         "[Content_Types].xml": (
             '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
@@ -92,8 +97,9 @@ def _package(cells: int) -> bytes:
             f'<worksheet xmlns="{NS}"><sheetData><row r="1">{row}</row></sheetData></worksheet>'
         ),
         "xl/sharedStrings.xml": (
-            f'<sst xmlns="{NS}" count="{cells}" uniqueCount="1">'
-            f"<si><t>{'a' * STRING_BYTES}</t></si></sst>"
+            f'<sst xmlns="{NS}" count="{cells}" uniqueCount="{entries}">'
+            f"{strings}"
+            "</sst>"
         ),
     }
     result = io.BytesIO()
@@ -107,9 +113,9 @@ def _column(index: int) -> str:
     return chr(ord("A") + index)
 
 
-def _read_under_cap(tmp_path: Path, cells: int, method: str) -> dict:
+def _read_under_cap(tmp_path: Path, cells: int, method: str, *, unique: bool = False) -> dict:
     path = tmp_path / "shared-strings.xlsx"
-    path.write_bytes(_package(cells))
+    path.write_bytes(_package(cells, unique=unique))
     # The 16 MiB string deflates past the default 1000:1 package ratio limit.
     env = {**os.environ, "WOLFXL_MAX_ZIP_COMPRESSION_RATIO": "1000000"}
     proc = subprocess.run(
@@ -134,8 +140,13 @@ def test_row_that_fits_the_cap_is_read(tmp_path: Path, method: str) -> None:
 
 @pytest.mark.parametrize("method", METHODS)
 def test_allocation_failure_raises_memory_error_not_panic(tmp_path: Path, method: str) -> None:
-    # Twelve 16 MiB cells need 192 MiB; the cap leaves 64 MiB.
-    assert _read_under_cap(tmp_path, 12, method) == {
+    # Distinct entries still need 192 MiB of Python strings; only 64 MiB fits.
+    assert _read_under_cap(tmp_path, 12, method, unique=True) == {
         "error": "MemoryError",
         "is_exception": True,
     }
+
+
+@pytest.mark.parametrize("method", METHODS)
+def test_repeated_shared_strings_fit_the_cap(tmp_path: Path, method: str) -> None:
+    assert _read_under_cap(tmp_path, 12, method) == {"error": None, "rows": True}

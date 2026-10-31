@@ -8,6 +8,16 @@
   part bytes, stored cells, shared-string bytes, and materialized text bytes
   with `load_workbook(..., limits=...)`.
 
+### Changed
+
+- XLSX loads now apply default workbook-wide budgets in every mode: 64 million
+  stored cell elements, 256 MiB of shared text, and 512 MiB of decoded text and
+  formulas. Package and part defaults remain 4 GiB and 512 MiB respectively.
+  Oversized packages and parts raise `LimitExceeded` (a `ValueError`) rather
+  than `OSError`. Environment ZIP-size overrides do not raise these new
+  per-load budgets; pass an explicit `Limits` as well. Existing ZIP admission
+  guards remain in force.
+
 ### Fixed
 
 - Bound memory for shared strings referenced by many cells. Eager and

@@ -18,6 +18,7 @@ import json
 import os
 from pathlib import Path
 import resource
+import runpy
 import signal
 import subprocess
 import sys
@@ -107,6 +108,10 @@ def measure(args):
                         result.update(peak_rss_bytes=measured["peak_rss_kib"] * 1024, wall_s=measured["wall_s"])
                 timing.unlink()
             results.append(result)
+    if args.source == "HEAD":
+        args.source = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent.parent, text=True
+        ).strip()
     args.output.write_text(json.dumps({"source": args.source, "library": args.library, "iterations": 1, "warmups": 0, "cache_state": "fresh interpreter; OS cache unspecified", "build_mode": "release" if args.library == "wolfxl" else "pure Python", "timeout_s": 5, "memory_address_space_limit_bytes": 2 * 1024**3, "binary": identity, "results": results}, indent=2))
     print(args.output.name, len(results))
 
@@ -114,6 +119,7 @@ def measure(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--corpus-dir", type=Path, required=True)
+    parser.add_argument("--generate-cases", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--source")
     parser.add_argument("--library", default="wolfxl")
@@ -122,6 +128,13 @@ def main():
     parser.add_argument("--file")
     parser.add_argument("--read-only", action="store_true")
     args = parser.parse_args()
+    if args.generate_cases:
+        args.corpus_dir.mkdir(parents=True, exist_ok=True)
+        helper = Path(__file__).resolve().parent.parent / "tests" / "test_load_limits.py"
+        generate = runpy.run_path(str(helper))["generate_zip_bomb"]
+        generate(args.corpus_dir / "generated-zip-bomb.xlsx")
+        generate(args.corpus_dir / "generated-many-members.xlsx", members=200_001)
+        return
     if sys.platform != "linux":
         parser.error("requires Linux /usr/bin/time")
     if args.child:

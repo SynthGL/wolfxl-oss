@@ -47,7 +47,7 @@ def open_workbook_source(
     if fmt == "xlsx":
         limits = limits if limits is not None else Limits()
         if password is None:
-            limits._validate(data if data is not None else path)
+            limits._validate(data if data is not None else path, permissive=permissive)
         if password is not None:
             return from_encrypted(
                 cls,
@@ -415,7 +415,7 @@ def from_encrypted(
 
     if is_plain_xlsx:
         (limits if limits is not None else Limits())._validate(
-            bytes(data) if data is not None else path
+            bytes(data) if data is not None else path, permissive=permissive
         )
         return _open_plain_xlsx_source(
             cls,
@@ -475,7 +475,9 @@ def from_encrypted(
         except Exception as exc:
             raise ValueError(f"failed to decrypt workbook (wrong password?): {exc}") from exc
         decrypted_bytes = buf.getvalue()
-        (limits if limits is not None else Limits())._validate(decrypted_bytes)
+        (limits if limits is not None else Limits())._validate(
+            decrypted_bytes, permissive=permissive
+        )
     finally:
         src_fp.close()
 
