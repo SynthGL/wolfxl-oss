@@ -22,15 +22,40 @@ def close_workbook(workbook: Any) -> None:
     workbook._stream_shared_strings = None
     workbook._rust_writer = None
     workbook._rust_patcher = None
+    _release_mapped_source(workbook)
     tmp_path = getattr(workbook, "_tempfile_path", None)
     if tmp_path is not None:
-        import os
-
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        finalizer = getattr(workbook, "_tempfile_finalizer", None)
+        if finalizer is not None:
+            finalizer()
+        else:
+            _remove_temporary_source(tmp_path)
         workbook._tempfile_path = None
+
+
+def _release_mapped_source(workbook: Any) -> None:
+    """Drop a mapped source once the workbook's readers are gone.
+
+    Readers or row iterators that outlive ``close()`` keep the map alive until
+    they are collected; byte sources stay in place as before.
+    """
+    import mmap
+
+    from wolfxl._source_buffer import release
+
+    source = getattr(workbook, "_source_bytes", None)
+    if isinstance(source, mmap.mmap):
+        workbook._source_bytes = None
+        release(source)
+
+
+def _remove_temporary_source(path: str) -> None:
+    import os
+
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
 
 
 def _clear_worksheet_style_caches(workbook: Any) -> None:

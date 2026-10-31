@@ -214,6 +214,8 @@ fn native_to_cell_value(
                 CellValue::String(text)
             }
         }
+        // Shared-string cells are never `t="d"`; the core model owns its text.
+        NativeCellValue::SharedString(text) => CellValue::String(text.to_string()),
         NativeCellValue::Bool(b) => CellValue::Bool(b),
         NativeCellValue::Error(e) => CellValue::Error(e),
         NativeCellValue::Number(n) => native_number_to_cell_value(n, number_format, date1904),

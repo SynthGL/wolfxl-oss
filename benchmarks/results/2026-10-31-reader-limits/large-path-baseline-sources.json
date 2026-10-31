@@ -1,0 +1,53 @@
+{
+  "receipts": [
+    {
+      "label": "main-before",
+      "source": "04804b02bcf3da5b233ddea273b262afebff089e",
+      "python_git_tree": "ef5501efc66db3067dc9d3963ebf6e163fddb4c3",
+      "tracked_status": "",
+      "module_relative_to_checkout": "python/wolfxl/__init__.py",
+      "native_sha256": "afdcab1e9781ea35c43b0fe0c1c5013ae3733278b9db71197c2d012ac94d8ff8",
+      "editable": true,
+      "wheel_metadata": "Wheel-Version: 1.0\nGenerator: maturin (1.14.1)\nRoot-Is-Purelib: false\nTag: cp312-cp312-linux_x86_64\n"
+    },
+    {
+      "label": "PR-head-before-fix",
+      "source": "6be833b3469f0a4ad1c45411ac644afb502dbf6b",
+      "python_git_tree": "232f0658cc8242a02cf36c4a2a4f71638fe18376",
+      "tracked_status": "",
+      "module_relative_to_checkout": "python/wolfxl/__init__.py",
+      "native_sha256": "4a476e62383a76e3da4a985566a2611fd8400ece3ad3f5c1b6908013bcafafed",
+      "editable": true,
+      "wheel_metadata": "Wheel-Version: 1.0\nGenerator: maturin (1.16.0)\nRoot-Is-Purelib: false\nTag: cp312-cp312-linux_x86_64\n"
+    },
+    {
+      "label": "released-2.0.35",
+      "editable": false,
+      "wheel_metadata": "Wheel-Version: 1.0\nGenerator: maturin (1.14.1)\nRoot-Is-Purelib: false\nTag: cp312-cp312-manylinux_2_28_x86_64\n"
+    }
+  ],
+  "identity_capture": "After the baseline measurements and before any checkout or installation change. Tracked source status is empty; generated data and scratch artifacts are untracked and outside the Python source tree.",
+  "build_receipts": {
+    "main-before": {
+      "source": "04804b02bcf3da5b233ddea273b262afebff089e",
+      "program": "maturin",
+      "arguments": [
+        "develop",
+        "--release",
+        "--locked"
+      ],
+      "profile_observed": "release [optimized]",
+      "workspace_recompiled": true,
+      "target_cache": "Existing release target and dependency cache reused; workspace crates rebuilt in a separate checkout.",
+      "maturin_version": "1.14.1",
+      "cargo_build_jobs": 4,
+      "native_sha256": "afdcab1e9781ea35c43b0fe0c1c5013ae3733278b9db71197c2d012ac94d8ff8"
+    },
+    "PR-head-before-fix": {
+      "source": "6be833b3469f0a4ad1c45411ac644afb502dbf6b",
+      "native_build_source": "573a20d5ef3044babd69ff63c38bd7d2b58b916f",
+      "build_reuse": "Unchanged native inputs and the same installed release binary; its hash and mtime match the earlier reader-limits record.",
+      "native_sha256": "4a476e62383a76e3da4a985566a2611fd8400ece3ad3f5c1b6908013bcafafed"
+    }
+  }
+}

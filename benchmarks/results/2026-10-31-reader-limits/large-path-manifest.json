@@ -1,0 +1,174 @@
+{
+  "date": "2026-10-31",
+  "scenario": "path input, data_only=True; iterate every sheet with iter_rows(values_only=True); full means read_only=False and does not disable the library's automatic large-sheet streaming",
+  "hardware": {
+    "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+    "physical_cores": 16,
+    "logical_cpus": 32,
+    "memory_bytes": 32102088704,
+    "isolated": false
+  },
+  "candidate_source": "a506450b614ab887db891a05cfc1a664739b4e64",
+  "implementation_and_publication": "Measured implementation commit is followed by evidence/docs-only publication commits; no library, test, build input or measurement harness changes in those successors.",
+  "candidate_source_receipt": {
+    "source": "a506450b614ab887db891a05cfc1a664739b4e64",
+    "source_tree": "f0e0854eecf6452ac40213316216ebe25e13c548",
+    "python_git_tree": "390b2db6c232a21daca54b6342e1b2c99bc1ebde",
+    "python_git_tree_scope": "Git tree at HEAD:python/wolfxl",
+    "tracked_and_untracked_status": "",
+    "module_relative_to_checkout": "python/wolfxl/__init__.py",
+    "native_relative_to_checkout": "python/wolfxl/_rust.cpython-312-x86_64-linux-gnu.so",
+    "editable": true,
+    "native_sha256": "8e923f5553e37b88246fb088a18aba8d0f409d6efb0fed8641402dafc5cbf7a5",
+    "native_bytes": 7264704,
+    "native_mtime_ns": 1793460891979455777,
+    "wheel_metadata": "Wheel-Version: 1.0\nGenerator: maturin (1.16.0)\nRoot-Is-Purelib: false\nTag: cp312-cp312-linux_x86_64\n",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "maturin": "maturin 1.16.0"
+  },
+  "checkout_receipts": [
+    {
+      "stage": "before release installation",
+      "source": "a506450b614ab887db891a05cfc1a664739b4e64",
+      "porcelain": ""
+    },
+    {
+      "stage": "after large-path measurements",
+      "source": "a506450b614ab887db891a05cfc1a664739b4e64",
+      "porcelain": ""
+    },
+    {
+      "stage": "after Python and Rust tests and corpus measurements",
+      "source": "a506450b614ab887db891a05cfc1a664739b4e64",
+      "porcelain": ""
+    }
+  ],
+  "build": {
+    "program": "maturin",
+    "arguments": [
+      "develop",
+      "--release",
+      "--locked"
+    ],
+    "profile": "release",
+    "features": [
+      "extension-module"
+    ],
+    "cargo_build_jobs": 4,
+    "native_build_source": "506dc7f8dbd7daaf90269cc6fa5c9dd9a0fa0023",
+    "native_sha256": "8e923f5553e37b88246fb088a18aba8d0f409d6efb0fed8641402dafc5cbf7a5",
+    "native_workspace_rebuild_wall_s": 55.76,
+    "candidate_install_cargo_wall_s": 0.14,
+    "cache": "Existing shared release target and dependency cache. Native workspace rebuilt at native_build_source; candidate installation reused byte-identical native artifacts because only Python lifecycle, tests and docs changed.",
+    "files_changed_since_native_build": [
+      "CHANGELOG.md",
+      "README.md",
+      "python/wolfxl/_workbook_lifecycle.py",
+      "tests/test_load_limits.py"
+    ],
+    "source_transport": "Git bundle of committed source",
+    "environment_overrides": {
+      "CARGO_BUILD_JOBS": "4",
+      "PYO3_PYTHON": "virtualenv interpreter",
+      "LD_LIBRARY_PATH": "Python interpreter sysconfig LIBDIR",
+      "CARGO_TARGET_DIR": "external shared scratch target",
+      "TMPDIR": "external scratch directory on the same filesystem"
+    }
+  },
+  "harness_sha256": "13df16efa3e17b8e0cc60b6ff9b73fd6f69ee5d722c5840c82488b000be72c53",
+  "artifacts": {
+    "release": "large-path-released.json",
+    "main": "large-path-main.json",
+    "PR_head_before_fix": "large-path-before.json",
+    "baseline_source_receipts": "large-path-baseline-sources.json",
+    "candidate": "large-path-candidate.json"
+  },
+  "inputs_reused": true,
+  "configuration": {
+    "iterations": 1,
+    "warmups": 0,
+    "per_run_timeout_s": 600,
+    "address_space_limit_bytes": 8589934592,
+    "os_page_cache": "unspecified; generation and prior runs may warm it",
+    "fresh_interpreter": true,
+    "build_mode": "release",
+    "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43"
+  },
+  "memory_gate": {
+    "rule": "Candidate peak RSS must not exceed either released or main peak RSS by max(10% of compressed input size, 32 MiB). The full API case is checked too.",
+    "before_fix_failed": true,
+    "conservative_ceiling": "Minimum of the two baseline RSS observations plus the allowance.",
+    "results": [
+      {
+        "input": "50mb",
+        "mode": "read_only",
+        "file_bytes": 49959975,
+        "allowance_bytes": 33554432,
+        "baseline_rss_bytes": {
+          "release": 31322112,
+          "main": 33705984,
+          "before": 81539072
+        },
+        "candidate_rss_bytes": 39915520,
+        "candidate_wall_s": 1.262267328100279,
+        "ceiling_bytes": 64876544,
+        "headroom_bytes": 24961024,
+        "rss_deltas_bytes": {
+          "release": 8593408,
+          "main": 6209536,
+          "before": -41623552
+        },
+        "all_values_match": true,
+        "passed": true
+      },
+      {
+        "input": "250mb",
+        "mode": "read_only",
+        "file_bytes": 249818535,
+        "allowance_bytes": 33554432,
+        "baseline_rss_bytes": {
+          "release": 31907840,
+          "main": 32124928,
+          "before": 281153536
+        },
+        "candidate_rss_bytes": 40267776,
+        "candidate_wall_s": 3.583957778988406,
+        "ceiling_bytes": 65462272,
+        "headroom_bytes": 25194496,
+        "rss_deltas_bytes": {
+          "release": 8359936,
+          "main": 8142848,
+          "before": -240885760
+        },
+        "all_values_match": true,
+        "passed": true
+      },
+      {
+        "input": "50mb",
+        "mode": "full",
+        "file_bytes": 49959975,
+        "allowance_bytes": 33554432,
+        "baseline_rss_bytes": {
+          "release": 31559680,
+          "main": 30662656,
+          "before": 82137088
+        },
+        "candidate_rss_bytes": 40087552,
+        "candidate_wall_s": 1.3875802890397608,
+        "ceiling_bytes": 64217088,
+        "headroom_bytes": 24129536,
+        "rss_deltas_bytes": {
+          "release": 8527872,
+          "main": 9424896,
+          "before": -42049536
+        },
+        "all_values_match": true,
+        "passed": true
+      }
+    ],
+    "all_passed": true
+  },
+  "interpretation": "One fresh interpreter per case, no warmup, non-isolated host and unspecified OS page cache. Wall times are raw observations, not speedup or regression estimates. The full case means the default non-read-only API and may auto-stream; it does not force Cell-object hydration. Linux-only measurements do not establish Windows RSS behavior.",
+  "source_policy": "POSIX read-only same-descriptor mmap, with buffer-protocol native access and consumed-page release advice where supported. Windows and filesystems that reject mmap use bounded immutable bytes. The mapping survives rename-over but is not protected against in-place writes or truncation of the same inode."
+}

@@ -1,0 +1,160 @@
+{
+  "source": "b21ff6b72b77b357e78f7fe1e0e0723e1dd8d89d",
+  "library": "wolfxl",
+  "iterations": 1,
+  "warmups": 0,
+  "cache_state": "fresh interpreter, warm OS cache unspecified",
+  "build_mode": "release",
+  "timeout_s": 5,
+  "memory_address_space_limit_bytes": 2147483648,
+  "binary": {
+    "sha256": "afdcab1e9781ea35c43b0fe0c1c5013ae3733278b9db71197c2d012ac94d8ff8",
+    "mtime_ns": 1793450437910256822,
+    "bytes": 7196472,
+    "version": "2.0.35",
+    "file": "_rust.cpython-312-x86_64-linux-gnu.so"
+  },
+  "results": [
+    {
+      "file": "poc-shared-strings.xlsx",
+      "read_only": false,
+      "status": "crash",
+      "returncode": 134,
+      "stderr": "memory allocation of 1048576 bytes failed\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "peak_rss_bytes": 2112360448,
+      "wall_s": 0.5
+    },
+    {
+      "error": null,
+      "file": "poc-shared-strings.xlsx",
+      "load_scan_s": 0.04216452199034393,
+      "nonempty": 3,
+      "read_only": true,
+      "sheets": [
+        {
+          "name": "Tabelle1",
+          "nonempty": 3,
+          "values_sha256": "f82cedbfbd9579ac26c5744dd0899961994507cc9f78558356286160ba79030b",
+          "row_count": 1
+        }
+      ],
+      "status": "ok",
+      "peak_rss_bytes": 35667968,
+      "wall_s": 0.07
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: XML reference: at 1..3: unrecognized entity `a5`",
+        "type": "OSError"
+      },
+      "file": "poc-xmlbomb.xlsx",
+      "load_scan_s": 0.04648843104951084,
+      "nonempty": 0,
+      "read_only": false,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 28151808,
+      "wall_s": 0.07
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: XML reference: at 1..3: unrecognized entity `a5`",
+        "type": "OSError"
+      },
+      "file": "poc-xmlbomb.xlsx",
+      "load_scan_s": 0.03112038690596819,
+      "nonempty": 0,
+      "read_only": true,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 27602944,
+      "wall_s": 0.05
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: XML reference: at 1..3: unrecognized entity `a5`",
+        "type": "OSError"
+      },
+      "file": "poc-xmlbomb-empty.xlsx",
+      "load_scan_s": 0.030238687992095947,
+      "nonempty": 0,
+      "read_only": false,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 27148288,
+      "wall_s": 0.05
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: XML reference: at 1..3: unrecognized entity `a5`",
+        "type": "OSError"
+      },
+      "file": "poc-xmlbomb-empty.xlsx",
+      "load_scan_s": 0.032431656029075384,
+      "nonempty": 0,
+      "read_only": true,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 28086272,
+      "wall_s": 0.05
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: OOXML package part xl/worksheets/sheet1.xml is too large: 1073741824 > 536870912 bytes",
+        "type": "OSError"
+      },
+      "file": "generated-zip-bomb.xlsx",
+      "load_scan_s": 0.031835666159167886,
+      "nonempty": 0,
+      "read_only": false,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 26865664,
+      "wall_s": 0.05
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: OOXML package part xl/worksheets/sheet1.xml is too large: 1073741824 > 536870912 bytes",
+        "type": "OSError"
+      },
+      "file": "generated-zip-bomb.xlsx",
+      "load_scan_s": 0.03186033689416945,
+      "nonempty": 0,
+      "read_only": true,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 27529216,
+      "wall_s": 0.05
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: OOXML package has too many ZIP entries: 200002 > 200000",
+        "type": "OSError"
+      },
+      "file": "generated-many-members.xlsx",
+      "load_scan_s": 0.6335217838641256,
+      "nonempty": 0,
+      "read_only": false,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 167448576,
+      "wall_s": 0.66
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: OOXML package has too many ZIP entries: 200002 > 200000",
+        "type": "OSError"
+      },
+      "file": "generated-many-members.xlsx",
+      "load_scan_s": 0.6552454947959632,
+      "nonempty": 0,
+      "read_only": true,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 167944192,
+      "wall_s": 0.68
+    }
+  ],
+  "raw_sha256": "b47b83a6c7bcc100e24ea20cfb1213a8fd2008cf3ca869b5d39c1a07f37ddf37",
+  "normalization": "Normalized row arrays replaced by row_count; value hashes and measurement fields unchanged."
+}

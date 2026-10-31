@@ -5,7 +5,6 @@ use std::collections::HashMap;
 
 use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::pybacked::PyBackedBytes;
 use pyo3::types::PyDict;
 
 use wolfxl_reader::{
@@ -13,6 +12,8 @@ use wolfxl_reader::{
 };
 
 use crate::native_reader_backend::{NativeXlsbBook, NativeXlsxBook};
+use crate::native_reader_cell_helpers::SharedStringCache;
+use crate::py_workbook_bytes::PyWorkbookBytes;
 
 type PyObject = Py<PyAny>;
 
@@ -29,12 +30,14 @@ pub(crate) fn open_xlsx_path(path: &str, permissive: bool) -> PyResult<NativeXls
         sheet_merge_metadata: HashMap::new(),
         opened_from_bytes: false,
         source_path: Some(path.to_string()),
+        shared_string_values: SharedStringCache::default(),
     })
 }
 
-pub(crate) fn open_xlsx_bytes(data: PyBackedBytes, permissive: bool) -> PyResult<NativeXlsxBook> {
-    // PyBackedBytes owns the immutable Python bytes, whose storage cannot move
-    // or mutate. The native book and Python streaming source share that owner.
+pub(crate) fn open_xlsx_bytes(data: PyWorkbookBytes, permissive: bool) -> PyResult<NativeXlsxBook> {
+    // The book owns the caller's `bytes` or read-only mapping without copying
+    // it; every ZIP reader it opens later borrows that one owner through its
+    // own cursor, and Python streaming readers share the same source object.
     let book = NativeReaderBook::open_owned_bytes_permissive(data, permissive)
         .map_err(|e| PyErr::new::<PyIOError, _>(format!("native xlsx open failed: {e}")))?;
     let sheet_names = book.sheet_names().into_iter().map(str::to_string).collect();
@@ -47,6 +50,7 @@ pub(crate) fn open_xlsx_bytes(data: PyBackedBytes, permissive: bool) -> PyResult
         sheet_merge_metadata: HashMap::new(),
         opened_from_bytes: true,
         source_path: None,
+        shared_string_values: SharedStringCache::default(),
     })
 }
 
@@ -59,6 +63,7 @@ pub(crate) fn open_xlsb_path(path: &str) -> PyResult<NativeXlsbBook> {
         sheet_names,
         sheet_cache: HashMap::new(),
         sheet_cell_indexes: HashMap::new(),
+        shared_string_values: SharedStringCache::default(),
     })
 }
 
@@ -71,6 +76,7 @@ pub(crate) fn open_xlsb_bytes(data: &[u8]) -> PyResult<NativeXlsbBook> {
         sheet_names,
         sheet_cache: HashMap::new(),
         sheet_cell_indexes: HashMap::new(),
+        shared_string_values: SharedStringCache::default(),
     })
 }
 

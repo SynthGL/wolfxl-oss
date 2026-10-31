@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import mmap
 from pathlib import PurePosixPath
 from typing import Any
+from wolfxl._limits import Limits
 
 from wolfxl._workbook_state import (
     build_xlsb_xls_wb,
@@ -25,6 +27,7 @@ def open_workbook_source(
     permissive: bool,
     modify: bool,
     read_only: bool,
+    limits: Limits | None = None,
 ) -> Any:
     """Open a classified workbook source through the matching constructor.
 
@@ -43,6 +46,15 @@ def open_workbook_source(
         A workbook instance opened in the requested mode.
     """
     if fmt == "xlsx":
+        limits = limits if limits is not None else Limits()
+        # Own one source buffer for admission, native loading and streaming:
+        # a read-only map of the file opened here (a copy on Windows). Never
+        # reopen the caller's path after accepting its contents.
+        if data is None:
+            data = _snapshot_xlsx_path(path, limits)
+            path = None
+        if password is None:
+            limits._validate(data if data is not None else path, permissive=permissive)
         if password is not None:
             return from_encrypted(
                 cls,
@@ -55,35 +67,18 @@ def open_workbook_source(
                 permissive=permissive,
                 modify=modify,
                 read_only=read_only,
+                limits=limits,
             )
-        if data is not None:
-            return from_bytes(
-                cls,
-                data,
-                data_only=data_only,
-                keep_links=keep_links,
-                keep_vba=keep_vba,
-                permissive=permissive,
-                modify=modify,
-                read_only=read_only,
-            )
-        if modify:
-            return from_patcher(
-                cls,
-                path,
-                data_only=data_only,
-                keep_links=keep_links,
-                keep_vba=keep_vba,
-                permissive=permissive,
-            )
-        return from_reader(
+        return from_bytes(
             cls,
-            path,
+            data,
             data_only=data_only,
             keep_links=keep_links,
             keep_vba=keep_vba,
             permissive=permissive,
+            modify=modify,
             read_only=read_only,
+            limits=limits,
         )
 
     if fmt == "xlsb":
@@ -105,6 +100,17 @@ def open_workbook_source(
         )
 
     raise ValueError(f"unsupported workbook format: {fmt!r}")
+
+
+def _snapshot_xlsx_path(path: str, limits: Limits) -> bytes | mmap.mmap:
+    """Snapshot ``path`` through one opened descriptor within the package budget."""
+    from wolfxl._source_buffer import snapshot_file
+
+    try:
+        with open(path, "rb") as source:
+            return snapshot_file(source, limits.max_package_bytes)
+    except OSError as error:
+        raise OSError(f"native xlsx open failed: {error}") from error
 
 
 def from_reader(
@@ -149,60 +155,18 @@ def from_reader(
     return wb
 
 
-def _open_plain_xlsx_source(
-    cls: type,
-    *,
-    path: str | None,
-    data: bytes | bytearray | memoryview | None,
-    data_only: bool,
-    keep_links: bool,
-    keep_vba: bool,
-    permissive: bool,
-    modify: bool,
-    read_only: bool,
-) -> Any:
-    """Open an unencrypted XLSX path or byte buffer with the requested mode."""
-    if path is not None:
-        if modify:
-            return from_patcher(
-                cls,
-                path,
-                data_only=data_only,
-                keep_links=keep_links,
-                keep_vba=keep_vba,
-                permissive=permissive,
-            )
-        return from_reader(
-            cls,
-            path,
-            data_only=data_only,
-            keep_links=keep_links,
-            keep_vba=keep_vba,
-            permissive=permissive,
-            read_only=read_only,
-        )
-    return from_bytes(
-        cls,
-        bytes(data),  # type: ignore[arg-type]
-        data_only=data_only,
-        keep_links=keep_links,
-        keep_vba=keep_vba,
-        permissive=permissive,
-        modify=modify,
-        read_only=read_only,
-    )
-
-
-def _normalize_nonstandard_workbook_part(path: str) -> str | None:
+def _normalize_nonstandard_workbook_part(source: str | bytes | mmap.mmap) -> str | None:
     """Return a temp XLSX path when the workbook part is not ``xl/workbook.xml``."""
     import os
     import tempfile
     import zipfile
     from xml.etree import ElementTree as ET
 
+    from wolfxl._source_buffer import open_zip
+
     tmp_path = None
     try:
-        with zipfile.ZipFile(path, "r") as src:
+        with open_zip(source) as src:
             names = set(src.namelist())
             if "xl/workbook.xml" in names:
                 return None
@@ -387,7 +351,7 @@ def from_encrypted(
     cls: type,
     path: str | None = None,
     *,
-    data: bytes | bytearray | memoryview | None = None,
+    data: bytes | bytearray | memoryview | mmap.mmap | None = None,
     password: str | bytes,
     data_only: bool = False,
     keep_links: bool = True,
@@ -395,28 +359,34 @@ def from_encrypted(
     permissive: bool = False,
     modify: bool = False,
     read_only: bool = False,
+    limits: Limits | None = None,
 ) -> Any:
     """Open an OOXML-encrypted .xlsx via msoffcrypto-tool."""
     if (path is None) == (data is None):
         raise TypeError("_from_encrypted requires exactly one of path / data")
 
+    from wolfxl._source_buffer import as_source, source_file
+
+    limits = limits if limits is not None else Limits()
     if path is not None:
-        with open(path, "rb") as fp:
-            is_plain_xlsx = fp.read(4).startswith(b"PK")
-    else:
-        is_plain_xlsx = bytes(data).startswith(b"PK")  # type: ignore[arg-type]
+        data = _snapshot_xlsx_path(path, limits)
+        path = None
+    # Normalize mutable input once; plain packages keep this buffer unchanged.
+    source = as_source(data)
+    is_plain_xlsx = source[:2] == b"PK"
 
     if is_plain_xlsx:
-        return _open_plain_xlsx_source(
+        limits._validate(source, permissive=permissive)
+        return from_bytes(
             cls,
-            path=path,
-            data=data,
+            source,
             data_only=data_only,
             keep_links=keep_links,
             keep_vba=keep_vba,
             permissive=permissive,
             modify=modify,
             read_only=read_only,
+            limits=limits,
         )
 
     try:
@@ -429,10 +399,7 @@ def from_encrypted(
     import io
 
     pw_str = password.decode("utf-8") if isinstance(password, bytes) else password
-    if path is not None:
-        src_fp = open(path, "rb")  # noqa: SIM115 - closed in finally
-    else:
-        src_fp = io.BytesIO(bytes(data))  # type: ignore[arg-type]
+    src_fp = source_file(source)
 
     try:
         office = msoffcrypto.OfficeFile(src_fp)
@@ -442,16 +409,17 @@ def from_encrypted(
             is_encrypted = False
 
         if not is_encrypted:
-            return _open_plain_xlsx_source(
+            limits._validate(source, permissive=permissive)
+            return from_bytes(
                 cls,
-                path=path,
-                data=data,
+                source,
                 data_only=data_only,
                 keep_links=keep_links,
                 keep_vba=keep_vba,
                 permissive=permissive,
                 modify=modify,
                 read_only=read_only,
+                limits=limits,
             )
 
         try:
@@ -465,6 +433,7 @@ def from_encrypted(
         except Exception as exc:
             raise ValueError(f"failed to decrypt workbook (wrong password?): {exc}") from exc
         decrypted_bytes = buf.getvalue()
+        limits._validate(decrypted_bytes, permissive=permissive)
     finally:
         src_fp.close()
 
@@ -477,12 +446,13 @@ def from_encrypted(
         permissive=permissive,
         modify=modify,
         read_only=read_only,
+        limits=limits,
     )
 
 
 def from_bytes(
     cls: type,
-    data: bytes | bytearray | memoryview,
+    data: bytes | bytearray | memoryview | mmap.mmap,
     *,
     data_only: bool = False,
     keep_links: bool = True,
@@ -490,13 +460,26 @@ def from_bytes(
     permissive: bool = False,
     modify: bool = False,
     read_only: bool = False,
+    limits: Limits | None = None,
 ) -> Any:
-    """Open an .xlsx blob from memory."""
+    """Open an .xlsx blob or read-only mapped source."""
     from wolfxl import _rust
+    from wolfxl._source_buffer import as_source, write_source
 
-    # Normalize mutable buffers once. NativeXlsxBook retains this exact immutable
-    # bytes object, also used by streaming and package metadata reads.
-    data_bytes = bytes(data)
+    # Normalize mutable buffers once. NativeXlsxBook retains this exact
+    # bytes object or read-only map, which streaming and package
+    # metadata reads also use.
+    source = as_source(data)
+    normalized_path = _normalize_nonstandard_workbook_part(source)
+    if normalized_path is not None:
+        import os
+
+        try:
+            with open(normalized_path, "rb") as normalized:
+                source = normalized.read()
+        finally:
+            os.unlink(normalized_path)
+        (limits if limits is not None else Limits())._validate(source, permissive=permissive)
     reader_cls = _xlsx_reader_class(
         _rust,
         modify=modify,
@@ -511,7 +494,7 @@ def from_bytes(
         import tempfile
 
         with tempfile.NamedTemporaryFile(prefix="wolfxl-", suffix=".xlsx", delete=False) as tmp:
-            tmp.write(data_bytes)
+            write_source(tmp, source)
             tmp_path = tmp.name
 
         try:
@@ -540,16 +523,21 @@ def from_bytes(
             finally:
                 raise
         wb._tempfile_path = tmp_path
+        import weakref
+        from wolfxl._workbook_lifecycle import _remove_temporary_source
+
+        wb._tempfile_finalizer = weakref.finalize(wb, _remove_temporary_source, tmp_path)
+        wb._source_bytes = source
         return wb
 
     return build_xlsx_wb(
         cls,
-        rust_reader=bytes_open(data_bytes, permissive),
+        rust_reader=bytes_open(source, permissive),
         rust_patcher=None,
         data_only=data_only,
         read_only=read_only,
         source_path=None,
-        source_bytes=data_bytes,
+        source_bytes=source,
         keep_links=keep_links,
         keep_vba=keep_vba,
     )

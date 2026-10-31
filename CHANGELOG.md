@@ -2,6 +2,43 @@
 
 ## [Unreleased]
 
+### Added
+
+- `Limits` and `LimitExceeded` let XLSX callers bound uncompressed package and
+  part bytes, stored cells, shared-string bytes, and materialized text bytes
+  with `load_workbook(..., limits=...)`.
+
+### Changed
+
+- XLSX loads now apply default workbook-wide budgets in every mode: 64 million
+  stored cell elements, 256 MiB of shared text, and 512 MiB of decoded text and
+  formulas. Package and part defaults remain 4 GiB and 512 MiB respectively.
+  Oversized packages and parts raise `LimitExceeded` (a `ValueError`) rather
+  than `OSError`. Environment ZIP-size overrides do not raise these new
+  per-load budgets; pass an explicit `Limits` as well. Existing ZIP admission
+  guards remain in force.
+- After format detection, path-backed XLSX loads open the file once for
+  admission, loading and later reads, never reopening the original path. On
+  Linux and macOS the source is a read-only memory map where the filesystem
+  supports it; otherwise, and on Windows, the compressed package is read into
+  memory. Feature readers use the same source; modify mode uses a private copy.
+  Saves back to a mapped source path write a new file and rename it over the
+  path instead of rewriting it in place. On Linux and macOS, writing to or
+  truncating that loaded file in place changes what the open workbook reads
+  and can terminate the process with `SIGBUS`.
+- Closing releases a mapped source unless a live reader still uses it; the
+  mapping is then released when the last reader is collected.
+
+### Fixed
+
+- Bound memory for shared strings referenced by many cells. Eager and
+  streaming readers reuse shared text and Python string objects per workbook.
+- Admit and load one opened file for path-backed XLSX inputs, keeping
+  streaming strings bound to that source after the original path is replaced
+  by rename. Compressed path sources are also bounded by `max_package_bytes`.
+- Apply worksheet cell and text budgets when package relationships select a
+  nonstandard workbook part, before normalizing that part for loading.
+
 ### Security
 
 - Update anyhow to 1.0.104 (RUSTSEC-2026-0190).

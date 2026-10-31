@@ -477,9 +477,14 @@ def _watches_from_root(root: Any) -> CellWatches:
 def load_cell_watches(source: Any, sheet: str) -> CellWatches:
     """Read the watches of worksheet ``sheet`` from a package.
 
-    ``source`` is a path, the package bytes, or a binary file object.
+    ``source`` is a path, the package bytes or read-only map, or a binary
+    file object.
     """
-    if isinstance(source, (bytes, bytearray, memoryview)):
+    from wolfxl._source_buffer import SOURCE_BUFFERS, source_file
+
+    if isinstance(source, SOURCE_BUFFERS):
+        source = source_file(source)
+    elif isinstance(source, (bytearray, memoryview)):
         source = BytesIO(bytes(source))
     with zipfile.ZipFile(source) as archive:
         _, parts = _read_parts(archive)

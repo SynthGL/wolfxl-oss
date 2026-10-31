@@ -224,9 +224,10 @@ def _source_chart_refs_for_ws(ws: Worksheet) -> list[dict[str, str]]:
     if getattr(workbook, "_rust_patcher", None) is None:
         return []
     from wolfxl import _source_charts
+    from wolfxl._streaming import stream_source
 
     return _source_charts.source_chart_refs(
-        getattr(workbook, "_source_path", None), ws._title  # noqa: SLF001
+        stream_source(workbook), ws._title  # noqa: SLF001
     )
 
 

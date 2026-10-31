@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import zipfile
 import os
+import mmap
 import re
 import tempfile
 from dataclasses import dataclass, field
@@ -254,12 +255,12 @@ def load_external_links(source_path: str | None) -> ExternalLinkCollection:
         return ExternalLinkCollection()
 
 
-def load_external_links_from_bytes(data: bytes | bytearray | memoryview) -> ExternalLinkCollection:
-    """Load external-link parts from an in-memory xlsx blob."""
-    import io
+def load_external_links_from_bytes(data: bytes | mmap.mmap) -> ExternalLinkCollection:
+    """Load external-link parts from a workbook's read-only source buffer."""
+    from wolfxl._source_buffer import open_zip
 
     try:
-        with zipfile.ZipFile(io.BytesIO(bytes(data)), "r") as zf:
+        with open_zip(data) as zf:
             return ExternalLinkCollection(_load_from_zip(zf))
     except (zipfile.BadZipFile, KeyError, OSError):
         return ExternalLinkCollection()

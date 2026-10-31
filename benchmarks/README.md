@@ -204,3 +204,97 @@ under an hour.
 - Engines that exceed the per-round budget are recorded as DNF, not omitted.
 - Numbers are from the pinned versions, hardware, and OS recorded in the
   results JSON. Different machines will produce different absolute times.
+
+## Bounded reader admission
+
+`reader_limits.py` runs each workbook in a fresh Linux interpreter with GNU
+`/usr/bin/time`, a 5-second timeout and a 2 GiB address-space ceiling. It records
+peak RSS in bytes, wall seconds, fixture SHA-256, normalized per-sheet value
+hashes and errors. String normalization hashes each Python string identity
+once so repeated shared strings do not dominate the measurement.
+
+Use the `.xlsx` files from Apache POI's `test-data/spreadsheet` directory at
+revision `6327f056ba3cfdae326a0261a236460592b80f5c` in a `corpus` directory.
+That revision has 352 XLSX files and no `zip-bomb.xlsx`. Generate the substitute
+1 GiB high-ratio part and 200,002-member ZIP; do not commit binaries.
+Generation reuses the pytest helpers, so it also requires `pytest`:
+
+```bash
+python benchmarks/reader_limits.py --corpus-dir corpus --generate-cases
+python benchmarks/reader_limits.py --corpus-dir corpus \
+    --source HEAD --output reader-fixtures.json
+python benchmarks/reader_limits.py --corpus-dir corpus --corpus \
+    --source HEAD --output reader-corpus.json
+```
+
+Run the same committed harness in an isolated environment with `wolfxl==2.0.35`
+for the released baseline (`--source pypi-wolfxl-2.0.35`). Install the current
+checkout with `maturin develop --release` for the candidate. Keep the exact
+source SHA, build configuration, Python version, native-library hash, fixture
+hashes, iteration count and cache state with the raw results. One resource
+sample is a bounded-load observation, not a throughput or speedup benchmark.
+
+The [2026-10-31 manifest](results/2026-10-31-reader-limits/manifest.json)
+links raw measurement summaries, all fixture hashes, the corpus comparison
+and the separately labeled verification results. Summary files omit normalized
+row arrays but retain row counts and value hashes; the harness emits all rows.
+
+## Large path-backed inputs
+
+`large_path_reads.py` generates ordinary approximately 50 MB and 250 MB XLSX
+packages, with two unique inline-string and two numeric columns. The larger
+workbook is split across three worksheets. Every part and worksheet stays
+within the default admission budgets and Excel's row limit. No opaque padding
+or adversarial compression is used; generated binaries are not committed.
+
+For Bash/Zsh on Linux with Python 3.11 or later, from the repository root with
+an installed release-mode extension:
+
+```bash
+python benchmarks/large_path_reads.py generate large-inputs
+python benchmarks/large_path_reads.py measure large-inputs \
+    --python .venv/bin/python --label candidate \
+    --source "$(git rev-parse HEAD)" \
+    --build-reuse "describe the actual release rebuild or cache reuse" \
+    --output large-path-candidate.json
+```
+
+Repeat the measurement with separately installed baseline interpreters against
+the same generated files. Each of three cases uses a fresh interpreter: both
+sizes with `read_only=True`, then the smaller size with `read_only=False`.
+Every sheet is consumed with `iter_rows(values_only=True)`, hashing every value.
+The latter case measures the default non-read-only API, not forced Cell-object
+hydration; the library may automatically stream large worksheets in that mode.
+
+The harness records GNU time peak RSS, total process wall time, load/iteration
+time, value and input hashes, native binary hash/mtime, source identity and
+build-reuse description. Each case has a 600-second timeout and an 8 GiB address
+space ceiling. There is one measured iteration and no warmup. OS page-cache
+state is unspecified, including warming from generation or earlier cases;
+these resource observations are not a cold-cache or speedup claim.
+
+### 2026-10-31 observations
+
+The [large-path evidence manifest](results/2026-10-31-reader-limits/large-path-manifest.json)
+records exact input, harness, source and native-binary hashes, build reuse and
+raw JSON artifacts. Compressed sizes are 49,959,975 and 249,818,535 bytes.
+The same inputs were reused for all four implementations on Linux x86_64,
+Python 3.12.14, Ryzen 9 9950X3D, one fresh interpreter per case and no warmup:
+
+| Input / API | Released 2.0.35 RSS bytes / wall s | Main `04804b02` | Before fix `6be833b3` | Candidate `a506450b` |
+| --- | ---: | ---: | ---: | ---: |
+| 50 MB / read-only | 31,322,112 / 0.729600 | 33,705,984 / 0.748063 | 81,539,072 / 0.819356 | 39,915,520 / 1.262267 |
+| 250 MB / read-only | 31,907,840 / 2.688875 | 32,124,928 / 3.174253 | 281,153,536 / 4.831362 | 40,267,776 / 3.583958 |
+| 50 MB / non-read-only | 31,559,680 / 1.747720 | 30,662,656 / 0.788696 | 82,137,088 / 0.953748 | 40,087,552 / 1.387580 |
+
+All row, cell and value hashes match. The candidate passes the conservative
+RSS gate against both released and main: added RSS is below
+`max(10% of compressed file size, 32 MiB)` for each case. The allowance is
+33,554,432 bytes here; observed candidate increases over those two baselines
+range from 6,209,536 to 9,424,896 bytes. This is one non-isolated observation,
+not a cold-cache, speedup or statistically established timing comparison.
+The non-read-only case uses the default auto-streaming behavior, not forced
+Cell-object hydration. Windows uses bounded bytes and was not measured.
+The candidate's observed wall time is higher than main in all three samples
+and higher than released 2.0.35 in both read-only samples; no statistical timing
+conclusion is drawn.

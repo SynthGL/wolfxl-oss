@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import mmap
 import os
 import zipfile
 from dataclasses import dataclass
@@ -78,7 +79,7 @@ def build_xlsx_wb(
     data_only: bool,
     read_only: bool,
     source_path: str | None,
-    source_bytes: bytes | None = None,
+    source_bytes: bytes | mmap.mmap | None = None,
     keep_links: bool = True,
     keep_vba: bool = False,
 ) -> Any:
@@ -91,6 +92,8 @@ def build_xlsx_wb(
         data_only: Whether formula cells should expose cached values.
         read_only: Whether streaming read mode was explicitly requested.
         source_path: Source path, or ``None`` for bytes-backed readers.
+        source_bytes: Immutable bytes or read-only map the reader was opened
+            from; package metadata reads use it instead of ``source_path``.
 
     Returns:
         A workbook instance with sheet proxies and pending queues initialized.
@@ -136,7 +139,7 @@ def _hydrate_stylesheet(
     wb: Any,
     *,
     source_path: str | None,
-    source_bytes: bytes | None,
+    source_bytes: bytes | mmap.mmap | None,
     read_only: bool = False,
 ) -> None:
     """Load workbook-level styles without walking worksheet XML.
@@ -146,12 +149,11 @@ def _hydrate_stylesheet(
     native reader on demand, so workbook open only needs `xl/styles.xml`.
     """
     try:
-        from io import BytesIO
-
+        from wolfxl._source_buffer import open_zip
         from wolfxl.styles.stylesheet import apply_stylesheet
 
         if source_bytes is not None:
-            with zipfile.ZipFile(BytesIO(source_bytes), "r") as archive:
+            with open_zip(source_bytes) as archive:
                 apply_stylesheet(archive, wb)
         elif source_path is not None:
             with zipfile.ZipFile(source_path, "r") as archive:
@@ -283,15 +285,15 @@ def build_xlsb_xls_wb(
 def _source_is_template(
     *,
     source_path: str | None,
-    source_bytes: bytes | None,
+    source_bytes: bytes | mmap.mmap | None,
 ) -> bool:
     """Return whether the OOXML source declares a template workbook part."""
+    from wolfxl._source_buffer import open_zip
+
     data: bytes | None = None
     try:
         if source_bytes is not None:
-            from io import BytesIO
-
-            with zipfile.ZipFile(BytesIO(source_bytes), "r") as zf:
+            with open_zip(source_bytes) as zf:
                 data = zf.read("[Content_Types].xml")
         elif source_path is not None:
             with zipfile.ZipFile(source_path, "r") as zf:
@@ -317,19 +319,19 @@ def _source_is_template(
 def _read_source_active_tab(
     *,
     source_path: str | None,
-    source_bytes: bytes | None,
+    source_bytes: bytes | mmap.mmap | None,
 ) -> int | None:
     """Read workbook.xml activeTab exactly, including openpyxl's ``-1``."""
-    from io import BytesIO
+    from wolfxl._source_buffer import open_zip
 
     try:
         if source_bytes is not None:
-            archive_obj: str | BytesIO = BytesIO(source_bytes)
+            archive_obj: Any = source_bytes
         elif source_path is not None:
             archive_obj = source_path
         else:
             return None
-        with zipfile.ZipFile(archive_obj) as archive:
+        with open_zip(archive_obj) as archive:
             workbook_xml = archive.read("xl/workbook.xml")
     except (KeyError, OSError, zipfile.BadZipFile):
         return None

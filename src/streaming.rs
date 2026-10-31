@@ -4,7 +4,9 @@
 //! a sheet has > 50k rows). Walks `xl/worksheets/sheetN.xml` one row at a
 //! time using an incremental XML reader over a bounded in-memory sheet part, or
 //! for larger worksheets over the sheet part inflated from its ZIP entry while
-//! parsing, resolving shared-string-table (SST) references upfront. Style metadata is
+//! parsing, resolving shared-string-table (SST) references against a table
+//! loaded once per workbook. Each SST entry becomes one Python `str` on first
+//! reference, reused by every later reference. Style metadata is
 //! exposed as a `style_id` only — Python-side `StreamingCell` resolves the
 //! actual font/fill/etc. via the eager Rust reader code path
 //! (which already loads `xl/styles.xml` and exposes O(1) style lookups).
@@ -22,22 +24,25 @@
 //! sheets and inflates large sheets from the ZIP entry as rows are read.
 
 use std::fs::File;
-use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom};
+use std::io::{self, BufReader, Read, Seek, SeekFrom};
 use std::sync::Arc;
 
 use flate2::read::DeflateDecoder;
 use pyo3::exceptions::{PyIOError, PyMemoryError, PyStopIteration, PyValueError};
 use pyo3::ffi;
 use pyo3::prelude::*;
+use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBytes, PyDateTime, PyDict, PyFloat, PyInt, PyList, PyString, PyTime, PyTuple};
 use pyo3::IntoPyObjectExt;
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader as XmlReader;
+use wolfxl_reader::{ConsumedRanges, WorkbookBytesCursor};
 use zip::{CompressionMethod, ZipArchive};
 
 use crate::iso8601::{is_iso8601, iso8601_to_py};
 use crate::ooxml_util;
+use crate::py_workbook_bytes::PyWorkbookBytes;
 use crate::streaming_scan::{HandoffReader, RowScanner};
 
 type PyObjectOwned = Py<PyAny>;
@@ -231,11 +236,58 @@ fn resolve_sheet_xml_path<R: Read + Seek>(
     )))
 }
 
+/// Shared-string entries of one workbook. An entry becomes a Python `str` on
+/// its first reference and every later reference, from any reader sharing the
+/// table, returns that same object, so a string repeated across many cells is
+/// materialized once rather than once per cell. The native xlsx backend builds
+/// its table from the native reader's entries, so its eager reads and the
+/// streaming readers it hands the table to share one `str` per entry.
+pub(crate) struct SharedStringTable {
+    strings: Vec<Arc<str>>,
+    py_strings: Box<[PyOnceLock<PyObjectOwned>]>,
+}
+
+impl SharedStringTable {
+    fn new(strings: Vec<String>) -> Self {
+        Self::from_shared(strings.into_iter().map(Arc::from).collect())
+    }
+
+    /// Table over entries already held as `Arc<str>`, without copying text.
+    pub(crate) fn from_shared(strings: Vec<Arc<str>>) -> Self {
+        let py_strings = strings.iter().map(|_| PyOnceLock::new()).collect();
+        Self {
+            strings,
+            py_strings,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.strings.len()
+    }
+
+    /// Python `str` of entry `idx`; an index past the table reads as `""`.
+    pub(crate) fn get_py(&self, py: Python<'_>, idx: usize) -> PyResult<PyObjectOwned> {
+        let (Some(text), Some(slot)) = (self.strings.get(idx), self.py_strings.get(idx)) else {
+            return str_to_py(py, "");
+        };
+        if let Some(cached) = slot.get(py) {
+            return Ok(cached.clone_ref(py));
+        }
+        let created = str_to_py(py, text)?;
+        match slot.set(py, created.clone_ref(py)) {
+            Ok(()) => Ok(created),
+            // Another thread stored this entry first; share its object.
+            Err(_) => Ok(slot.get(py).map_or(created, |stored| stored.clone_ref(py))),
+        }
+    }
+}
+
 /// Parsed `xl/sharedStrings.xml`, loaded once per workbook and shared by
-/// every [`StreamingSheetReader`] opened from the same source.
+/// every [`StreamingSheetReader`] opened from the same source, together with
+/// the Python `str` of each entry already referenced.
 #[pyclass(frozen, module = "wolfxl._rust")]
 pub struct StreamingSharedStrings {
-    sst: Arc<Vec<String>>,
+    sst: Arc<SharedStringTable>,
 }
 
 #[pymethods]
@@ -250,10 +302,11 @@ impl StreamingSharedStrings {
         Self::from_archive(zip)
     }
 
-    /// [`Self::load`] for in-memory xlsx bytes (file-like sources).
+    /// [`Self::load`] for in-memory xlsx bytes or a read-only mapping of the
+    /// workbook file (file-like and path sources).
     #[staticmethod]
-    pub fn load_from_bytes(data: &Bound<'_, PyBytes>) -> PyResult<Self> {
-        let zip = ZipArchive::new(PyBytesCursor::new(data))
+    pub fn load_from_bytes(data: PyWorkbookBytes) -> PyResult<Self> {
+        let zip = ZipArchive::new(WorkbookBytesCursor::new(&data))
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
         Self::from_archive(zip)
     }
@@ -267,8 +320,13 @@ impl StreamingSharedStrings {
     fn from_archive<R: Read + Seek>(mut zip: ZipArchive<R>) -> PyResult<Self> {
         ooxml_util::validate_zip_archive(&mut zip)?;
         Ok(Self {
-            sst: Arc::new(load_sst(&mut zip)?),
+            sst: Arc::new(SharedStringTable::new(load_sst(&mut zip)?)),
         })
+    }
+
+    /// Handle over a table another backend already holds.
+    pub(crate) fn from_table(sst: Arc<SharedStringTable>) -> Self {
+        Self { sst }
     }
 }
 
@@ -281,7 +339,7 @@ pub struct StreamingSheetReader {
     event_buf: Vec<u8>,
     /// Shared-strings table: supplied by the caller or loaded from
     /// `xl/sharedStrings.xml` when the reader opens.
-    sst: Arc<Vec<String>>,
+    sst: Arc<SharedStringTable>,
     /// Whether the reader has been exhausted.
     exhausted: bool,
     /// Optional `min_row` bound (1-based, inclusive). Rows below are skipped.
@@ -496,11 +554,13 @@ impl SheetXmlReader {
 /// while it is parsed after the archive itself has been released.
 enum EntrySource {
     File(io::Take<File>),
-    /// A range of the caller's immutable `bytes` object, shared rather than copied.
+    /// A range of the caller's `bytes` or read-only mapping, shared rather
+    /// than copied. Consumed input is reported so mapped pages can be released.
     Bytes {
-        data: Py<PyBytes>,
+        data: PyWorkbookBytes,
         pos: usize,
         end: usize,
+        consumed: ConsumedRanges,
     },
 }
 
@@ -508,13 +568,28 @@ impl Read for EntrySource {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             Self::File(source) => source.read(buf),
-            Self::Bytes { data, pos, end } => Python::attach(|py| {
-                let available = &data.as_bytes(py)[*pos..*end];
+            Self::Bytes {
+                data,
+                pos,
+                end,
+                consumed,
+            } => {
+                let start = *pos;
+                let available = &data.as_ref()[start..*end];
                 let n = available.len().min(buf.len());
                 buf[..n].copy_from_slice(&available[..n]);
                 *pos += n;
+                consumed.record(data, start..start + n);
                 Ok(n)
-            }),
+            }
+        }
+    }
+}
+
+impl Drop for EntrySource {
+    fn drop(&mut self) {
+        if let Self::Bytes { data, consumed, .. } = self {
+            consumed.flush(data);
         }
     }
 }
@@ -531,37 +606,12 @@ impl IntoEntrySource for File {
     }
 }
 
-/// Caller-owned xlsx bytes read through a cursor; the owner is kept so the
-/// sheet entry can stream from the same buffer without a copy.
-struct PyBytesCursor<'a, 'py> {
-    owner: &'a Bound<'py, PyBytes>,
-    cursor: Cursor<&'a [u8]>,
-}
-
-impl<'a, 'py> PyBytesCursor<'a, 'py> {
-    fn new(owner: &'a Bound<'py, PyBytes>) -> Self {
-        Self {
-            owner,
-            cursor: Cursor::new(owner.as_bytes()),
-        }
-    }
-}
-
-impl Read for PyBytesCursor<'_, '_> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.cursor.read(buf)
-    }
-}
-
-impl Seek for PyBytesCursor<'_, '_> {
-    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
-        self.cursor.seek(pos)
-    }
-}
-
-impl IntoEntrySource for PyBytesCursor<'_, '_> {
+/// Caller-owned workbook bytes read through an independent cursor; the sheet
+/// entry shares the cursor's owner so it streams from the same buffer.
+impl IntoEntrySource for WorkbookBytesCursor<'_, PyWorkbookBytes> {
     fn into_entry_source(self, start: u64, len: u64) -> io::Result<EntrySource> {
-        let total = self.cursor.get_ref().len();
+        let data = self.get_ref();
+        let total = data.as_ref().len();
         let range = usize::try_from(start)
             .ok()
             .zip(usize::try_from(len).ok())
@@ -574,9 +624,10 @@ impl IntoEntrySource for PyBytesCursor<'_, '_> {
                 )
             })?;
         Ok(EntrySource::Bytes {
-            data: self.owner.clone().unbind(),
+            data: data.clone(),
             pos: range.start,
             end: range.end,
+            consumed: ConsumedRanges::default(),
         })
     }
 }
@@ -694,12 +745,13 @@ impl StreamingSheetReader {
         )
     }
 
-    /// Prepare to stream `sheet` from in-memory xlsx bytes (file-like sources).
+    /// Prepare to stream `sheet` from in-memory xlsx bytes or a read-only
+    /// mapping of the workbook file (file-like and path sources).
     #[staticmethod]
     #[pyo3(signature = (data, sheet, min_row=None, max_row=None, min_col=None, max_col=None, shared_strings=None))]
     #[allow(clippy::too_many_arguments)]
     pub fn open_from_bytes(
-        data: &Bound<'_, PyBytes>,
+        data: PyWorkbookBytes,
         sheet: &str,
         min_row: Option<u32>,
         max_row: Option<u32>,
@@ -707,7 +759,7 @@ impl StreamingSheetReader {
         max_col: Option<u32>,
         shared_strings: Option<&StreamingSharedStrings>,
     ) -> PyResult<Self> {
-        let zip = ZipArchive::new(PyBytesCursor::new(data))
+        let zip = ZipArchive::new(WorkbookBytesCursor::new(&data))
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
         Self::from_archive(
             zip,
@@ -732,10 +784,10 @@ impl StreamingSheetReader {
         archive_cell_bounds(zip, sheet)
     }
 
-    /// [`Self::cell_bounds`] for in-memory xlsx bytes (file-like sources).
+    /// [`Self::cell_bounds`] for in-memory xlsx bytes or a read-only mapping.
     #[staticmethod]
-    pub fn cell_bounds_from_bytes(data: &Bound<'_, PyBytes>, sheet: &str) -> PyResult<(u32, u32)> {
-        let zip = ZipArchive::new(PyBytesCursor::new(data))
+    pub fn cell_bounds_from_bytes(data: PyWorkbookBytes, sheet: &str) -> PyResult<(u32, u32)> {
+        let zip = ZipArchive::new(WorkbookBytesCursor::new(&data))
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
         archive_cell_bounds(zip, sheet)
     }
@@ -751,14 +803,14 @@ impl StreamingSheetReader {
         archive_row_tags_exceed(zip, sheet, limit)
     }
 
-    /// [`Self::row_tags_exceed`] for in-memory xlsx bytes (file-like sources).
+    /// [`Self::row_tags_exceed`] for in-memory xlsx bytes or a read-only mapping.
     #[staticmethod]
     pub fn row_tags_exceed_from_bytes(
-        data: &Bound<'_, PyBytes>,
+        data: PyWorkbookBytes,
         sheet: &str,
         limit: usize,
     ) -> PyResult<bool> {
-        let zip = ZipArchive::new(PyBytesCursor::new(data))
+        let zip = ZipArchive::new(WorkbookBytesCursor::new(&data))
             .map_err(|e| PyErr::new::<PyIOError, _>(format!("Failed to open zip: {e}")))?;
         archive_row_tags_exceed(zip, sheet, limit)
     }
@@ -1047,7 +1099,7 @@ impl StreamingSheetReader {
 
         let sst = match shared_strings {
             Some(shared) => Arc::clone(&shared.sst),
-            None => Arc::new(load_sst(&mut zip)?),
+            None => Arc::new(SharedStringTable::new(load_sst(&mut zip)?)),
         };
         let sheet_path = resolve_sheet_xml_path(&mut zip, sheet)?;
         let mut sheet_entry = zip.by_name(&sheet_path).map_err(|e| {
@@ -1315,7 +1367,7 @@ fn read_cells_until_row_end(
     reader: &mut SheetXmlReader,
     buf: &mut Vec<u8>,
     py: Python<'_>,
-    sst: &[String],
+    sst: &SharedStringTable,
     row_idx: u32,
 ) -> PyResult<Vec<ParsedCell>> {
     let mut cells: Vec<ParsedCell> = Vec::new();
@@ -1384,7 +1436,7 @@ fn read_values_until_row_end<'py>(
     reader: &mut SheetXmlReader,
     buf: &mut Vec<u8>,
     py: Python<'py>,
-    sst: &[String],
+    sst: &SharedStringTable,
     date_styles: &DateStyles,
     output: CellOutput,
     row_idx: u32,
@@ -1499,7 +1551,7 @@ fn empty_value_row<'py>(
 fn scan_value_row_body<'py>(
     body: &str,
     py: Python<'py>,
-    sst: &[String],
+    sst: &SharedStringTable,
     date_styles: &DateStyles,
     output: CellOutput,
     min_col: Option<u32>,
@@ -1564,7 +1616,7 @@ fn scan_cell_value(
     start: usize,
     py: Python<'_>,
     t_attr: &CellTypeAttr,
-    sst: &[String],
+    sst: &SharedStringTable,
     output: CellOutput,
 ) -> PyResult<Option<(PyObjectOwned, &'static str, usize)>> {
     let bytes = text.as_bytes();
@@ -1795,7 +1847,7 @@ fn read_cell_contents(
     buf: &mut Vec<u8>,
     py: Python<'_>,
     t_attr: &CellTypeAttr,
-    sst: &[String],
+    sst: &SharedStringTable,
     output: CellOutput,
 ) -> PyResult<(PyObjectOwned, &'static str)> {
     let mut v_text: Option<String> = None;
@@ -1941,13 +1993,11 @@ fn read_cell_contents(
                             return Ok((value, "n"));
                         }
                         if let Some(idx) = fast_shared {
-                            let resolved = sst.get(idx).map_or("", String::as_str);
-                            return Ok((str_to_py(py, resolved)?, "s"));
+                            return Ok((sst.get_py(py, idx)?, "s"));
                         }
                     } else if let Some(idx) = fast_shared {
                         let formula = f_text.unwrap_or_default();
-                        let resolved = sst.get(idx).map_or("", String::as_str);
-                        let cached = str_to_py(py, resolved)?;
+                        let cached = sst.get_py(py, idx)?;
                         return Ok((build_formula_dict(py, &formula, cached)?, "formula"));
                     }
                     // `<v>` before `<f>` already parsed the numeric cache.
@@ -2456,7 +2506,7 @@ fn parse_cell_inner(
     py: Python<'_>,
     inner: &[u8],
     t_attr: &str,
-    sst: &[String],
+    sst: &SharedStringTable,
 ) -> PyResult<(PyObjectOwned, &'static str)> {
     let v_text = extract_inner_text(inner, b"v");
     let f_text = extract_inner_text(inner, b"f");
@@ -2484,7 +2534,7 @@ fn value_cell_object(
     fast_number: Option<PyObjectOwned>,
     fast_shared: Option<usize>,
     raw_value: Option<String>,
-    sst: &[String],
+    sst: &SharedStringTable,
 ) -> PyResult<(PyObjectOwned, &'static str)> {
     if has_formula && output == CellOutput::FormulaText {
         let formula = formula.unwrap_or_default();
@@ -2503,12 +2553,12 @@ fn value_cell_object(
     }
     if !has_formula {
         if let Some(idx) = fast_shared {
-            return Ok((str_to_py(py, sst.get(idx).map_or("", String::as_str))?, "s"));
+            return Ok((sst.get_py(py, idx)?, "s"));
         }
         return build_cell_object(py, t_attr, None, raw_value, sst);
     }
     let cached = match fast_shared {
-        Some(idx) => str_to_py(py, sst.get(idx).map_or("", String::as_str))?,
+        Some(idx) => sst.get_py(py, idx)?,
         None => {
             let raw_value =
                 raw_value.filter(|v| !v.is_empty() || matches!(t_attr, CellTypeAttr::InlineString));
@@ -2541,7 +2591,7 @@ fn build_cell_object(
     t_attr: &CellTypeAttr,
     formula: Option<String>,
     raw_value: Option<String>,
-    sst: &[String],
+    sst: &SharedStringTable,
 ) -> PyResult<(PyObjectOwned, &'static str)> {
     // Value text as openpyxl reads it: an empty `<v>` is no value.
     let raw_value =
@@ -2603,7 +2653,7 @@ fn cached_value_to_py(
     py: Python<'_>,
     t_attr: &CellTypeAttr,
     raw_value: Option<String>,
-    sst: &[String],
+    sst: &SharedStringTable,
 ) -> PyResult<PyObjectOwned> {
     let Some(v) = raw_value else {
         return Ok(py.None());
@@ -2614,7 +2664,7 @@ fn cached_value_to_py(
                 .trim()
                 .parse()
                 .map_err(|_| PyErr::new::<PyValueError, _>(format!("Bad SST index: {v:?}")))?;
-            str_to_py(py, sst.get(idx).map_or("", String::as_str))
+            sst.get_py(py, idx)
         }
         CellTypeAttr::Bool => match v.trim().parse::<i64>() {
             Ok(n) => Ok((n != 0).into_py_any(py)?),
@@ -2778,7 +2828,9 @@ mod tests {
     fn parse_cell_inner_number() {
         pyo3::Python::initialize();
         Python::attach(|py| {
-            let (obj, kind) = parse_cell_inner(py, b"<v>42</v>", "n", &[]).unwrap();
+            let (obj, kind) =
+                parse_cell_inner(py, b"<v>42</v>", "n", &SharedStringTable::new(Vec::new()))
+                    .unwrap();
             let value: i64 = obj.extract(py).unwrap();
             assert_eq!(kind, "n");
             assert_eq!(value, 42);
@@ -2810,9 +2862,10 @@ mod tests {
     fn bytes_source(data: &[u8]) -> EntrySource {
         pyo3::Python::initialize();
         Python::attach(|py| EntrySource::Bytes {
-            data: PyBytes::new(py, data).unbind(),
+            data: PyWorkbookBytes::new(PyBytes::new(py, data).as_any()).unwrap(),
             pos: 0,
             end: data.len(),
+            consumed: ConsumedRanges::default(),
         })
     }
 
@@ -2885,13 +2938,15 @@ mod tests {
     fn entry_source_rejects_ranges_past_the_package() {
         pyo3::Python::initialize();
         Python::attach(|py| {
-            let data = PyBytes::new(py, &[0u8; 8]);
-            let mut source = PyBytesCursor::new(&data).into_entry_source(4, 4).unwrap();
+            let data = PyWorkbookBytes::new(PyBytes::new(py, &[0u8; 8]).as_any()).unwrap();
+            let mut source = WorkbookBytesCursor::new(&data)
+                .into_entry_source(4, 4)
+                .unwrap();
             let mut out = Vec::new();
             source.read_to_end(&mut out).unwrap();
             assert_eq!(out, [0u8; 4]);
             for (start, len) in [(4, 5), (9, 0), (u64::MAX, 1)] {
-                assert!(PyBytesCursor::new(&data)
+                assert!(WorkbookBytesCursor::new(&data)
                     .into_entry_source(start, len)
                     .is_err());
             }
@@ -2924,7 +2979,8 @@ mod tests {
                         reader.read_event_into(&mut buf).unwrap(),
                         Event::Start(_)
                     ));
-                    let sst: Vec<_> = (0..11).map(|i| format!("entry {i}")).collect();
+                    let sst =
+                        SharedStringTable::new((0..11).map(|i| format!("entry {i}")).collect());
                     let (value, _) = read_cell_contents(
                         &mut reader,
                         &mut buf,
@@ -2964,7 +3020,7 @@ mod tests {
                     &mut buf,
                     py,
                     &CellTypeAttr::Number,
-                    &[],
+                    &SharedStringTable::new(Vec::new()),
                     CellOutput::Payload,
                 )
                 .is_err());
@@ -2989,7 +3045,7 @@ mod tests {
                     &mut buf,
                     py,
                     &CellTypeAttr::Number,
-                    &[],
+                    &SharedStringTable::new(Vec::new()),
                     output,
                 )
                 .unwrap()
@@ -3062,15 +3118,15 @@ mod tests {
         assert!(!row_tags_exceed(&many[5..], 50_000).unwrap());
     }
 
-    /// Value rows as `repr` strings (or the error), read through the row
-    /// scanner when `fast`, else through quick-xml events only.
-    fn value_rows(
-        py: Python<'_>,
+    /// Reader over `xml` resolving shared strings against `sst`, through the
+    /// row scanner when `fast`, else through quick-xml events only.
+    fn test_reader(
         xml: &str,
+        sst: Arc<SharedStringTable>,
         output: CellOutput,
         bounds: [Option<u32>; 4],
         fast: bool,
-    ) -> Vec<String> {
+    ) -> StreamingSheetReader {
         let reader = if fast {
             SheetXmlReader::new(xml.as_bytes().to_vec(), None)
         } else {
@@ -3079,10 +3135,10 @@ mod tests {
             events
         };
         let [min_row, max_row, min_col, max_col] = bounds;
-        let mut sheet = StreamingSheetReader {
+        StreamingSheetReader {
             reader: Some(reader),
             event_buf: Vec::new(),
-            sst: Arc::new((0..3).map(|i| format!("s{i}")).collect()),
+            sst,
             exhausted: false,
             min_row,
             max_row,
@@ -3092,7 +3148,22 @@ mod tests {
             last_row: 0,
             date_styles: DateStyles::default(),
             value_output: output,
-        };
+        }
+    }
+
+    /// Value rows as `repr` strings (or the error), read through the row
+    /// scanner when `fast`, else through quick-xml events only.
+    fn value_rows(
+        py: Python<'_>,
+        xml: &str,
+        output: CellOutput,
+        bounds: [Option<u32>; 4],
+        fast: bool,
+    ) -> Vec<String> {
+        let sst = Arc::new(SharedStringTable::new(
+            (0..3).map(|i| format!("s{i}")).collect(),
+        ));
+        let mut sheet = test_reader(xml, sst, output, bounds, fast);
         let mut rows = Vec::new();
         loop {
             match sheet.parse_one_value_row(py) {
@@ -3109,6 +3180,72 @@ mod tests {
         }
         rows.push(format!("past max: {}", sheet.stopped_past_max_row));
         rows
+    }
+
+    #[test]
+    fn shared_string_references_share_one_python_str() {
+        let xml = concat!(
+            "<worksheet><sheetData><row r=\"1\">",
+            "<c r=\"A1\" t=\"s\"><v>1</v></c><c r=\"B1\" t=\"s\"><v> 1 </v></c>",
+            "<c r=\"C1\" t=\"s\"><f>X1</f><v>1</v></c></row>",
+            "<row r=\"2\"><c r=\"A2\" t=\"s\"><v>1</v></c><c r=\"B2\" t=\"s\"><v>7</v></c></row>",
+            "</sheetData></worksheet>",
+        );
+        pyo3::Python::initialize();
+        Python::attach(|py| {
+            let table = Arc::new(SharedStringTable::new(vec!["s0".into(), "x".repeat(4096)]));
+            let expected = table.get_py(py, 1).unwrap();
+            assert!(expected.bind(py).is(table.get_py(py, 1).unwrap()));
+            assert_eq!(
+                table.get_py(py, 7).unwrap().extract::<String>(py).unwrap(),
+                ""
+            );
+
+            // Every reader sharing the table, on both values-only paths and
+            // the cell path, returns the one cached object for entry 1.
+            let mut matches = 0;
+            for output in [CellOutput::FormulaText, CellOutput::CachedValue] {
+                for fast in [true, false] {
+                    let mut sheet = test_reader(xml, Arc::clone(&table), output, [None; 4], fast);
+                    while let ValueStepResult::Row(_, values) =
+                        sheet.parse_one_value_row(py).unwrap()
+                    {
+                        for value in values.iter() {
+                            if value.eq(&expected).unwrap() {
+                                assert!(value.is(&expected));
+                                matches += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            // A1, B1, A2 per formula-text pass; C1's cached result as well
+            // per cached-value pass.
+            assert_eq!(matches, 2 * 3 + 2 * 4);
+
+            let mut sheet = test_reader(
+                xml,
+                Arc::clone(&table),
+                CellOutput::Payload,
+                [None; 4],
+                false,
+            );
+            let mut payload_matches = 0;
+            while let StepResult::Row(_, cells) = sheet.parse_one_row(py).unwrap() {
+                for cell in cells {
+                    let value = cell.value.bind(py);
+                    let value = match value.cast::<PyDict>() {
+                        Ok(payload) => payload.get_item("cached").unwrap().unwrap(),
+                        Err(_) => value.clone(),
+                    };
+                    if value.eq(&expected).unwrap() {
+                        assert!(value.is(&expected));
+                        payload_matches += 1;
+                    }
+                }
+            }
+            assert_eq!(payload_matches, 4);
+        });
     }
 
     #[test]

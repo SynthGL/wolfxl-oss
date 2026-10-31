@@ -1,0 +1,188 @@
+{
+  "source": "a506450b614ab887db891a05cfc1a664739b4e64",
+  "library": "wolfxl",
+  "python": "3.12.14",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "architecture": "x86_64",
+  "zip_environment": {
+    "WOLFXL_MAX_ZIP_ENTRIES": null,
+    "WOLFXL_MAX_ZIP_ENTRY_BYTES": null,
+    "WOLFXL_MAX_ZIP_TOTAL_BYTES": null,
+    "WOLFXL_MAX_ZIP_COMPRESSION_RATIO": null
+  },
+  "iterations": 1,
+  "warmups": 0,
+  "cache_state": "fresh interpreter; OS cache unspecified",
+  "build_mode": "release",
+  "timeout_s": 5,
+  "memory_address_space_limit_bytes": 2147483648,
+  "binary": {
+    "sha256": "8e923f5553e37b88246fb088a18aba8d0f409d6efb0fed8641402dafc5cbf7a5",
+    "mtime_ns": 1793460891979455777,
+    "bytes": 7264704,
+    "version": "2.0.35",
+    "file": "_rust.cpython-312-x86_64-linux-gnu.so"
+  },
+  "results": [
+    {
+      "error": null,
+      "file": "poc-shared-strings.xlsx",
+      "load_scan_s": 0.10051801800727844,
+      "nonempty": 11997,
+      "read_only": false,
+      "sheets": [
+        {
+          "name": "Tabelle1",
+          "nonempty": 11997,
+          "values_sha256": "20982493da57c5484f2ceeaf4dea6b4c7affde04c4728822069db885c3446d4e",
+          "row_count": 3999
+        }
+      ],
+      "status": "ok",
+      "peak_rss_bytes": 39079936,
+      "wall_s": 0.12,
+      "fixture_sha256": "4f1e4ceab11073cd591712e5d4dbeb19a3894fd69134a910fcd6132ec9348599"
+    },
+    {
+      "error": null,
+      "file": "poc-shared-strings.xlsx",
+      "load_scan_s": 0.03862983197905123,
+      "nonempty": 3,
+      "read_only": true,
+      "sheets": [
+        {
+          "name": "Tabelle1",
+          "nonempty": 3,
+          "values_sha256": "f82cedbfbd9579ac26c5744dd0899961994507cc9f78558356286160ba79030b",
+          "row_count": 1
+        }
+      ],
+      "status": "ok",
+      "peak_rss_bytes": 36286464,
+      "wall_s": 0.06,
+      "fixture_sha256": "4f1e4ceab11073cd591712e5d4dbeb19a3894fd69134a910fcd6132ec9348599"
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: XML reference: at 1..3: unrecognized entity `a5`",
+        "type": "OSError"
+      },
+      "file": "poc-xmlbomb.xlsx",
+      "load_scan_s": 0.033456265926361084,
+      "nonempty": 0,
+      "read_only": false,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 28164096,
+      "wall_s": 0.05,
+      "fixture_sha256": "5edcd16d3efccd3a8ae5e0bddd7ae5ed52abb0359ba71af81370cbf869ab8d56"
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: XML reference: at 1..3: unrecognized entity `a5`",
+        "type": "OSError"
+      },
+      "file": "poc-xmlbomb.xlsx",
+      "load_scan_s": 0.031896658008918166,
+      "nonempty": 0,
+      "read_only": true,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 28504064,
+      "wall_s": 0.05,
+      "fixture_sha256": "5edcd16d3efccd3a8ae5e0bddd7ae5ed52abb0359ba71af81370cbf869ab8d56"
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: XML reference: at 1..3: unrecognized entity `a5`",
+        "type": "OSError"
+      },
+      "file": "poc-xmlbomb-empty.xlsx",
+      "load_scan_s": 0.029669868992641568,
+      "nonempty": 0,
+      "read_only": false,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 28913664,
+      "wall_s": 0.05,
+      "fixture_sha256": "4ba7b6c26d74df6da8b46fab945b09f96180a75aad88914cea7b98e787a5cb11"
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: XML reference: at 1..3: unrecognized entity `a5`",
+        "type": "OSError"
+      },
+      "file": "poc-xmlbomb-empty.xlsx",
+      "load_scan_s": 0.0311995770316571,
+      "nonempty": 0,
+      "read_only": true,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 28442624,
+      "wall_s": 0.05,
+      "fixture_sha256": "4ba7b6c26d74df6da8b46fab945b09f96180a75aad88914cea7b98e787a5cb11"
+    },
+    {
+      "error": {
+        "message": "max_part_bytes exceeded: observed 1073741824, configured 536870912; adjust load_workbook(..., limits=Limits(max_part_bytes=...))",
+        "type": "LimitExceeded"
+      },
+      "file": "generated-zip-bomb.xlsx",
+      "load_scan_s": 0.10938755189999938,
+      "nonempty": 0,
+      "read_only": false,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 27746304,
+      "wall_s": 0.13,
+      "fixture_sha256": "7c83fea69460941836093b9502b8ed1e21ab824901397a3afecbd018068ca4a7"
+    },
+    {
+      "error": {
+        "message": "max_part_bytes exceeded: observed 1073741824, configured 536870912; adjust load_workbook(..., limits=Limits(max_part_bytes=...))",
+        "type": "LimitExceeded"
+      },
+      "file": "generated-zip-bomb.xlsx",
+      "load_scan_s": 0.028386658988893032,
+      "nonempty": 0,
+      "read_only": true,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 27635712,
+      "wall_s": 0.05,
+      "fixture_sha256": "7c83fea69460941836093b9502b8ed1e21ab824901397a3afecbd018068ca4a7"
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: OOXML package has too many ZIP entries: 200002 > 200000",
+        "type": "OSError"
+      },
+      "file": "generated-many-members.xlsx",
+      "load_scan_s": 2.4427314249332994,
+      "nonempty": 0,
+      "read_only": false,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 75841536,
+      "wall_s": 2.46,
+      "fixture_sha256": "9c1f2d714053d87171fc93e420b540fcc6c7c31a5aea224a1470f0e79e280921"
+    },
+    {
+      "error": {
+        "message": "native xlsx open failed: OOXML package has too many ZIP entries: 200002 > 200000",
+        "type": "OSError"
+      },
+      "file": "generated-many-members.xlsx",
+      "load_scan_s": 0.13323752395808697,
+      "nonempty": 0,
+      "read_only": true,
+      "sheets": [],
+      "status": "error",
+      "peak_rss_bytes": 77135872,
+      "wall_s": 0.15,
+      "fixture_sha256": "9c1f2d714053d87171fc93e420b540fcc6c7c31a5aea224a1470f0e79e280921"
+    }
+  ],
+  "raw_sha256": "b5e6b59992b4b9c43ee843acc38763e00617eaefaf4174e4148839c70a2deb5b",
+  "normalization": "Normalized row arrays replaced by row_count; value hashes and measurement fields unchanged."
+}

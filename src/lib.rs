@@ -5,6 +5,7 @@ type PyObject = Py<PyAny>;
 
 mod atomic_save;
 mod iso8601;
+mod load_limits;
 mod native_reader_backend;
 mod native_reader_cell_helpers;
 mod native_reader_cf;
@@ -40,6 +41,7 @@ mod native_writer_workbook;
 mod native_writer_workbook_metadata;
 mod native_xls_backend;
 mod ooxml_util;
+mod py_workbook_bytes;
 mod streaming;
 mod streaming_blank_rows;
 mod streaming_scan;
@@ -112,6 +114,8 @@ fn read_first_sheet_formula_summary(py: Python<'_>, path: &str) -> PyResult<PyOb
 fn _rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(build_info, m)?)?;
+    m.add_function(wrap_pyfunction!(load_limits::load_limit_defaults, m)?)?;
+    m.add_function(wrap_pyfunction!(load_limits::validate_load_limits, m)?)?;
     m.add_function(wrap_pyfunction!(read_first_sheet_value_summary, m)?)?;
     m.add_function(wrap_pyfunction!(read_first_sheet_formula_summary, m)?)?;
     m.add_class::<native_reader_backend::NativeXlsxBook>()?;

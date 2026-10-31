@@ -7,7 +7,7 @@ preserving the exact writer/patcher flush order used by the save pipeline.
 from __future__ import annotations
 
 import os
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Callable
 
 from wolfxl._workbook_state import same_existing_path
 from wolfxl.xml.constants import (
@@ -46,7 +46,7 @@ def save_workbook(
     if hasattr(filename, "write") and not isinstance(filename, (str, bytes, os.PathLike)):
         save_workbook_to_fileobj(wb, filename, password=password)
         return
-    filename = str(filename)
+    destination = str(filename)
     # G20: write-only mode is consumed-on-save. A second save raises
     # WorkbookAlreadySaved (matches openpyxl's `_write_only.py`).
     # Eager-mode workbooks remain re-savable.
@@ -63,8 +63,15 @@ def save_workbook(
         from wolfxl._encryption import _coerce_password
 
         _coerce_password(password)  # raises ValueError on empty
-        save_encrypted(wb, filename, password)
+        save_encrypted(wb, destination, password)
         return
+
+    # Edited read workbooks become patcher-backed before the target is chosen,
+    # so they share the modify-mode source lifecycle below.
+    promote_pending_read_workbook(wb)
+    # Saving back to the loaded caller path saves the private patcher source in
+    # place first, so later saves build on this one, then publishes it.
+    filename = modify_source_target(wb, destination)
 
     from wolfxl._formula_cache import apply_formula_results, saved_formula_results
 
@@ -91,6 +98,8 @@ def save_workbook(
     apply_workbook_template_content_type(wb, filename)
     apply_custom_doc_props_authoring(wb, filename)
     apply_formula_results(wb, filename, formula_results, formula_results_stale)
+    if filename != destination:
+        publish_modify_source(wb, filename, destination)
     # Mark consumed AFTER save succeeds so a write failure leaves the
     # workbook in a re-tryable state for the eager path. Write-only
     # mode flips this once and never re-saves.
@@ -103,6 +112,97 @@ def save_workbook(
             close = getattr(ws, "close", None)
             if close is not None:
                 close()
+
+
+def modify_source_target(wb: Any, filename: str) -> str:
+    """Return the path a patcher-backed save should write first.
+
+    Modify loads and edited read loads patch a private copy of the caller's
+    file. A save back to that caller path, or to whichever path now names the
+    file the workbook source maps, targets the private source instead, which
+    makes it an in-place save: the patcher, reader, and image indices advance
+    to the saved package exactly as they did when the caller file was the
+    source. Other destinations remain copy saves.
+    """
+    from wolfxl._source_buffer import maps_file
+
+    if wb._rust_patcher is None:  # noqa: SLF001
+        return filename
+    origin = getattr(wb, "_source_origin_path", None)
+    source = getattr(wb, "_source_path", None)
+    if source is None or not (
+        same_existing_path(filename, origin)
+        or maps_file(getattr(wb, "_source_bytes", None), filename)
+    ):
+        return filename
+    return source
+
+
+def publish_modify_source(wb: Any, source: str, filename: str) -> None:
+    """Refresh the source buffer from the saved private source and publish it.
+
+    The source buffer must match the private source that later saves and
+    metadata reads use. The caller path is replaced atomically so a failed copy
+    never leaves a partial workbook behind.
+    """
+    import shutil
+
+    from wolfxl._source_buffer import release, snapshot_file
+
+    def copy_private_source(dst: BinaryIO) -> None:
+        with open(source, "rb") as src:
+            shutil.copyfileobj(src, dst)
+        dst.flush()
+        dst.seek(0)
+        # Map (or on Windows read) the published copy, never the private
+        # source that later in-place saves rewrite.
+        previous = getattr(wb, "_source_bytes", None)
+        wb._source_bytes = snapshot_file(dst)  # noqa: SLF001
+        if previous is not wb._source_bytes:  # noqa: SLF001
+            release(previous)
+
+    _replace_file(filename, copy_private_source)
+
+
+def _replace_file(filename: str, write: Callable[[BinaryIO], None]) -> None:
+    """Write ``filename`` through a synced sibling tempfile and an atomic rename.
+
+    The existing file is never truncated or rewritten in place, so a workbook
+    that still maps it keeps reading the bytes it loaded.
+    """
+    import stat
+    import tempfile
+
+    target = os.path.realpath(filename)
+    parent = os.path.dirname(target) or "."
+    try:
+        mode = stat.S_IMODE(os.stat(target).st_mode)
+    except FileNotFoundError:
+        mode = None
+    fd, tmp_name = tempfile.mkstemp(prefix=".wolfxl-save-", suffix=".xlsx.tmp", dir=parent)
+    try:
+        with os.fdopen(fd, "w+b") as dst:
+            write(dst)
+            if mode is not None:
+                if hasattr(os, "fchmod"):
+                    os.fchmod(dst.fileno(), mode)
+                else:
+                    os.chmod(tmp_name, mode)
+            dst.flush()
+            os.fsync(dst.fileno())
+        os.replace(tmp_name, target)
+        try:
+            directory = os.open(parent, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        except OSError:
+            # Some platforms do not permit opening or syncing directories.
+            pass
+    finally:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
 
 
 def save_workbook_to_fileobj(
@@ -138,33 +238,52 @@ def save_workbook_to_fileobj(
             pass
 
 
+def promote_pending_read_workbook(wb: Any) -> None:
+    """Open the patcher for a source-backed read workbook with pending edits.
+
+    Unedited read workbooks stay on the copy path in :func:`save_read_mode`.
+    """
+    if wb._rust_patcher is not None or wb._rust_writer is not None:  # noqa: SLF001
+        return
+    if getattr(wb, "_rust_reader", None) is None:
+        return
+    source_path = getattr(wb, "_source_path", None)
+    if source_path is None and getattr(wb, "_source_bytes", None) is None:
+        return
+    if not _read_mode_has_pending_changes(wb):
+        return
+    if getattr(wb, "_read_only", False):
+        raise RuntimeError(
+            "save() on a read_only=True workbook would discard pending changes; "
+            "reopen with modify=True before editing"
+        )
+    if source_path is None:
+        from wolfxl._workbook_sheets import _promote_source_backed_read_workbook
+
+        _promote_source_backed_read_workbook(wb)
+        if wb._rust_patcher is None:  # noqa: SLF001
+            raise RuntimeError("save requires write or modify mode")
+    else:
+        _promote_read_mode_to_patcher(wb, source_path)
+
+
 def save_read_mode(wb: Any, filename: str) -> None:
     """Save an unmodified source-backed read workbook by copying the source package."""
     import shutil
+
+    from wolfxl._source_buffer import maps_file, write_source
 
     source_path = getattr(wb, "_source_path", None)
     source_bytes = getattr(wb, "_source_bytes", None)
     if source_path is None and source_bytes is None:
         raise RuntimeError("save requires write or modify mode")
-    if _read_mode_has_pending_changes(wb):
-        if getattr(wb, "_read_only", False):
-            raise RuntimeError(
-                "save() on a read_only=True workbook would discard pending changes; "
-                "reopen with modify=True before editing"
-            )
-        if source_path is None:
-            from wolfxl._workbook_sheets import _promote_source_backed_read_workbook
-
-            _promote_source_backed_read_workbook(wb)
-            if wb._rust_patcher is None:  # noqa: SLF001
-                raise RuntimeError("save requires write or modify mode")
-        else:
-            _promote_read_mode_to_patcher(wb, source_path)
-        save_modify_mode(wb, filename)
-        return
     if source_path is None:
-        with open(filename, "wb") as out:
-            out.write(source_bytes)
+        if maps_file(source_bytes, filename):
+            # Truncating the mapped file would invalidate the pages it serves.
+            _replace_file(filename, lambda dst: write_source(dst, source_bytes))
+        else:
+            with open(filename, "wb") as out:
+                write_source(out, source_bytes)
     else:
         shutil.copyfile(source_path, filename)
     normalize_openpyxl_package_shape(wb, filename)

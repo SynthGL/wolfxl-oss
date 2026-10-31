@@ -195,6 +195,79 @@ print(loaded["Summary"]["B1"].value)
 loaded.close()
 ```
 
+### Limit workbook input
+
+`load_workbook` bounds input before materializing XLSX cells in full,
+`read_only=True`, and `modify=True` modes. Shared-string references reuse one
+string object per workbook rather than copying the text into every cell.
+
+```python
+from wolfxl import LimitExceeded, Limits, load_workbook
+
+try:
+    workbook = load_workbook(
+        "incoming.xlsx",
+        limits=Limits(max_cells=500_000, max_shared_string_bytes=32 * 1024**2),
+    )
+except LimitExceeded as error:
+    print(error)  # limit name, observed value, configured value, and limits= knob
+```
+
+| Field | Default | Counts |
+| --- | --- | --- |
+| `max_package_bytes` | 4 GiB | Sum of uncompressed ZIP member sizes; also bounds the compressed file size of path loads |
+| `max_part_bytes` | 512 MiB | Uncompressed bytes in one member |
+| `max_cells` | 64,000,000 | Stored cell elements across all worksheets |
+| `max_shared_string_bytes` | 256 MiB | Decoded UTF-8 text in the shared-string table |
+| `max_materialized_string_bytes` | 512 MiB | Decoded shared/inline text, string cached values, error/date text, and formulas |
+
+`Limits` is immutable. Omit `limits=` or pass `None` for these defaults. Shared
+strings count once, not once per reference. Worksheet aliases count once per
+sheet reference; shared-formula template bytes count once per formula cell,
+including children before their master. Formula translation can change the
+final text length. A value of zero permits no content for that counter.
+Existing ZIP entry-count, compression-ratio, and environment admission guards
+still apply; `limits=` does not weaken those guards. These are input budgets,
+not a process-memory or execution-time sandbox. They apply to XLSX-family
+packages, including decrypted inputs, not legacy XLS or XLSB.
+
+Cell and text budgets use a streaming admission pass, including for read-only
+loads. This reads worksheet XML before iteration and can add startup work for
+large inputs.
+
+After format detection, path-backed loads open the file once and admit, load
+and later read only that opened file, never reopening the caller's path. On
+Linux and macOS the source is a read-only memory map where supported: pages load
+on demand without copying the compressed package into a private in-memory
+buffer. On unsupported filesystems and Windows the compressed package is read
+into memory instead; Windows cannot replace or delete a mapped file. The
+compressed file also must fit `max_package_bytes`.
+Nonstandard workbook parts selected by package relationships receive the same
+cell and text budgets before normalization.
+Replacing the path afterwards, including an atomic rename over it, does not
+change what the open workbook reads. The map is not an immutable copy: writing
+to or truncating that same file in place while the source map remains alive,
+including when a reader outlives `close()`, changes what it reads. Reading past
+a truncation can terminate the process with `SIGBUS`. Replace workbooks by
+writing a new file and renaming it over the old one. Feature readers consume the
+same source without reopening the caller's path. Modify mode uses a private
+temporary copy, removed on close or collection.
+Saving back to the original path advances the private source and then publishes
+it atomically through a new file renamed over the path, adding a second write of
+the compressed package.
+Atomic publication requires write permission on the target directory. The
+publication step keeps existing permission bits and resolves symlinks;
+ownership, ACLs and extended attributes are not copied, and replacing one
+hard-link name breaks its sharing. Later package rewrites performed by some
+saves, such as VBA package-shape normalization, keep their existing replacement
+behavior.
+
+On Linux and macOS, `close()` releases the map unless a live reader or row
+iterator still uses it; it is then released when the last reader is collected.
+Until release, a replaced source file can keep using disk space. On Python
+versions before 3.13 each map also holds an open file descriptor. Save workbooks
+before closing them.
+
 ### For AI coding agents
 
 [`skills/wolfxl-xlsx`](skills/wolfxl-xlsx/SKILL.md) is an agent skill for
