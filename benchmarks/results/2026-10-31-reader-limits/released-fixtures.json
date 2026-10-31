@@ -30,14 +30,14 @@
       "status": "crash",
       "returncode": 134,
       "stderr": "memory allocation of 1048576 bytes failed\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
-      "peak_rss_bytes": 2112499712,
+      "peak_rss_bytes": 2112221184,
       "wall_s": 0.43,
       "fixture_sha256": "4f1e4ceab11073cd591712e5d4dbeb19a3894fd69134a910fcd6132ec9348599"
     },
     {
       "error": null,
       "file": "poc-shared-strings.xlsx",
-      "load_scan_s": 0.036534844897687435,
+      "load_scan_s": 0.03853686107322574,
       "nonempty": 3,
       "read_only": true,
       "sheets": [
@@ -49,8 +49,8 @@
         }
       ],
       "status": "ok",
-      "peak_rss_bytes": 35700736,
-      "wall_s": 0.05,
+      "peak_rss_bytes": 34672640,
+      "wall_s": 0.06,
       "fixture_sha256": "4f1e4ceab11073cd591712e5d4dbeb19a3894fd69134a910fcd6132ec9348599"
     },
     {
@@ -59,13 +59,13 @@
         "type": "OSError"
       },
       "file": "poc-xmlbomb.xlsx",
-      "load_scan_s": 0.02751323813572526,
+      "load_scan_s": 0.030516769038513303,
       "nonempty": 0,
       "read_only": false,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27848704,
-      "wall_s": 0.04,
+      "peak_rss_bytes": 27574272,
+      "wall_s": 0.05,
       "fixture_sha256": "5edcd16d3efccd3a8ae5e0bddd7ae5ed52abb0359ba71af81370cbf869ab8d56"
     },
     {
@@ -74,12 +74,12 @@
         "type": "OSError"
       },
       "file": "poc-xmlbomb.xlsx",
-      "load_scan_s": 0.02925338805653155,
+      "load_scan_s": 0.03115398809313774,
       "nonempty": 0,
       "read_only": true,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27344896,
+      "peak_rss_bytes": 27865088,
       "wall_s": 0.05,
       "fixture_sha256": "5edcd16d3efccd3a8ae5e0bddd7ae5ed52abb0359ba71af81370cbf869ab8d56"
     },
@@ -89,12 +89,12 @@
         "type": "OSError"
       },
       "file": "poc-xmlbomb-empty.xlsx",
-      "load_scan_s": 0.029900178080424666,
+      "load_scan_s": 0.03030159999616444,
       "nonempty": 0,
       "read_only": false,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27267072,
+      "peak_rss_bytes": 27377664,
       "wall_s": 0.05,
       "fixture_sha256": "4ba7b6c26d74df6da8b46fab945b09f96180a75aad88914cea7b98e787a5cb11"
     },
@@ -104,12 +104,12 @@
         "type": "OSError"
       },
       "file": "poc-xmlbomb-empty.xlsx",
-      "load_scan_s": 0.028438587905839086,
+      "load_scan_s": 0.029789060121402144,
       "nonempty": 0,
       "read_only": true,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27680768,
+      "peak_rss_bytes": 26943488,
       "wall_s": 0.05,
       "fixture_sha256": "4ba7b6c26d74df6da8b46fab945b09f96180a75aad88914cea7b98e787a5cb11"
     },
@@ -119,12 +119,12 @@
         "type": "OSError"
       },
       "file": "generated-zip-bomb.xlsx",
-      "load_scan_s": 0.02977567701600492,
+      "load_scan_s": 0.02963830018416047,
       "nonempty": 0,
       "read_only": false,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27340800,
+      "peak_rss_bytes": 27529216,
       "wall_s": 0.05,
       "fixture_sha256": "7c83fea69460941836093b9502b8ed1e21ab824901397a3afecbd018068ca4a7"
     },
@@ -134,13 +134,13 @@
         "type": "OSError"
       },
       "file": "generated-zip-bomb.xlsx",
-      "load_scan_s": 0.027850898914039135,
+      "load_scan_s": 0.028055021073669195,
       "nonempty": 0,
       "read_only": true,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27484160,
-      "wall_s": 0.04,
+      "peak_rss_bytes": 28184576,
+      "wall_s": 0.05,
       "fixture_sha256": "7c83fea69460941836093b9502b8ed1e21ab824901397a3afecbd018068ca4a7"
     },
     {
@@ -149,13 +149,13 @@
         "type": "OSError"
       },
       "file": "generated-many-members.xlsx",
-      "load_scan_s": 0.5701989510562271,
+      "load_scan_s": 0.5827126039657742,
       "nonempty": 0,
       "read_only": false,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 168165376,
-      "wall_s": 0.59,
+      "peak_rss_bytes": 167124992,
+      "wall_s": 0.6,
       "fixture_sha256": "9c1f2d714053d87171fc93e420b540fcc6c7c31a5aea224a1470f0e79e280921"
     },
     {
@@ -164,16 +164,16 @@
         "type": "OSError"
       },
       "file": "generated-many-members.xlsx",
-      "load_scan_s": 0.5765377779025584,
+      "load_scan_s": 0.5818889150395989,
       "nonempty": 0,
       "read_only": true,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 167882752,
+      "peak_rss_bytes": 168546304,
       "wall_s": 0.6,
       "fixture_sha256": "9c1f2d714053d87171fc93e420b540fcc6c7c31a5aea224a1470f0e79e280921"
     }
   ],
-  "raw_sha256": "635574f6388db530b1eac630a15d306aaf9eb3c88a6c552c39c652bad79af463",
+  "raw_sha256": "90cb54ea1dfcec83ba0570f6350b879f14e65ba2daf22a5dc6a1649d77ff442d",
   "normalization": "Normalized row arrays replaced by row_count; value hashes and measurement fields unchanged."
 }

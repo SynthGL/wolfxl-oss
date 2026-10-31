@@ -1,5 +1,5 @@
 {
-  "source": "e7d92a74809528eab96dbffd336d1a6c0656f255",
+  "source": "fd939a9929e13ff9b34034bb12c21460d668050a",
   "library": "wolfxl",
   "python": "3.12.14",
   "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
@@ -18,7 +18,7 @@
   "memory_address_space_limit_bytes": 2147483648,
   "binary": {
     "sha256": "e3b76d1bbe7613d14b72442abf8fe3c490edce66bd8d37678650bf121d1d7a9a",
-    "mtime_ns": 1793452488418293682,
+    "mtime_ns": 1793453660556159276,
     "bytes": 7316344,
     "version": "2.0.35",
     "file": "_rust.cpython-312-x86_64-linux-gnu.so"
@@ -27,7 +27,7 @@
     {
       "error": null,
       "file": "poc-shared-strings.xlsx",
-      "load_scan_s": 0.06245087389834225,
+      "load_scan_s": 0.4498066599480808,
       "nonempty": 11997,
       "read_only": false,
       "sheets": [
@@ -39,14 +39,14 @@
         }
       ],
       "status": "ok",
-      "peak_rss_bytes": 37376000,
-      "wall_s": 0.09,
+      "peak_rss_bytes": 37154816,
+      "wall_s": 0.47,
       "fixture_sha256": "4f1e4ceab11073cd591712e5d4dbeb19a3894fd69134a910fcd6132ec9348599"
     },
     {
       "error": null,
       "file": "poc-shared-strings.xlsx",
-      "load_scan_s": 0.042173922061920166,
+      "load_scan_s": 0.04172151698730886,
       "nonempty": 3,
       "read_only": true,
       "sheets": [
@@ -58,8 +58,8 @@
         }
       ],
       "status": "ok",
-      "peak_rss_bytes": 34848768,
-      "wall_s": 0.06,
+      "peak_rss_bytes": 35368960,
+      "wall_s": 0.07,
       "fixture_sha256": "4f1e4ceab11073cd591712e5d4dbeb19a3894fd69134a910fcd6132ec9348599"
     },
     {
@@ -68,13 +68,13 @@
         "type": "OSError"
       },
       "file": "poc-xmlbomb.xlsx",
-      "load_scan_s": 0.031243997160345316,
+      "load_scan_s": 0.039804969914257526,
       "nonempty": 0,
       "read_only": false,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27955200,
-      "wall_s": 0.05,
+      "peak_rss_bytes": 28106752,
+      "wall_s": 0.06,
       "fixture_sha256": "5edcd16d3efccd3a8ae5e0bddd7ae5ed52abb0359ba71af81370cbf869ab8d56"
     },
     {
@@ -83,12 +83,12 @@
         "type": "OSError"
       },
       "file": "poc-xmlbomb.xlsx",
-      "load_scan_s": 0.03352115582674742,
+      "load_scan_s": 0.03166480711661279,
       "nonempty": 0,
       "read_only": true,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27406336,
+      "peak_rss_bytes": 28344320,
       "wall_s": 0.05,
       "fixture_sha256": "5edcd16d3efccd3a8ae5e0bddd7ae5ed52abb0359ba71af81370cbf869ab8d56"
     },
@@ -98,13 +98,13 @@
         "type": "OSError"
       },
       "file": "poc-xmlbomb-empty.xlsx",
-      "load_scan_s": 0.03298426605761051,
+      "load_scan_s": 0.15793288894928992,
       "nonempty": 0,
       "read_only": false,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 28188672,
-      "wall_s": 0.06,
+      "peak_rss_bytes": 28508160,
+      "wall_s": 0.18,
       "fixture_sha256": "4ba7b6c26d74df6da8b46fab945b09f96180a75aad88914cea7b98e787a5cb11"
     },
     {
@@ -113,12 +113,12 @@
         "type": "OSError"
       },
       "file": "poc-xmlbomb-empty.xlsx",
-      "load_scan_s": 0.03215466602705419,
+      "load_scan_s": 0.030404939083382487,
       "nonempty": 0,
       "read_only": true,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 28631040,
+      "peak_rss_bytes": 28262400,
       "wall_s": 0.05,
       "fixture_sha256": "4ba7b6c26d74df6da8b46fab945b09f96180a75aad88914cea7b98e787a5cb11"
     },
@@ -128,13 +128,13 @@
         "type": "LimitExceeded"
       },
       "file": "generated-zip-bomb.xlsx",
-      "load_scan_s": 0.034717726055532694,
+      "load_scan_s": 0.06679204106330872,
       "nonempty": 0,
       "read_only": false,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 26333184,
-      "wall_s": 0.06,
+      "peak_rss_bytes": 28090368,
+      "wall_s": 0.09,
       "fixture_sha256": "7c83fea69460941836093b9502b8ed1e21ab824901397a3afecbd018068ca4a7"
     },
     {
@@ -143,12 +143,12 @@
         "type": "LimitExceeded"
       },
       "file": "generated-zip-bomb.xlsx",
-      "load_scan_s": 0.02922066696919501,
+      "load_scan_s": 0.029429169837385416,
       "nonempty": 0,
       "read_only": true,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27824128,
+      "peak_rss_bytes": 27316224,
       "wall_s": 0.05,
       "fixture_sha256": "7c83fea69460941836093b9502b8ed1e21ab824901397a3afecbd018068ca4a7"
     },
@@ -158,13 +158,13 @@
         "type": "OSError"
       },
       "file": "generated-many-members.xlsx",
-      "load_scan_s": 0.48158797807991505,
+      "load_scan_s": 1.0145256521645933,
       "nonempty": 0,
       "read_only": false,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 64573440,
-      "wall_s": 0.5,
+      "peak_rss_bytes": 63668224,
+      "wall_s": 1.04,
       "fixture_sha256": "9c1f2d714053d87171fc93e420b540fcc6c7c31a5aea224a1470f0e79e280921"
     },
     {
@@ -173,16 +173,16 @@
         "type": "OSError"
       },
       "file": "generated-many-members.xlsx",
-      "load_scan_s": 0.23478305200114846,
+      "load_scan_s": 0.21243106317706406,
       "nonempty": 0,
       "read_only": true,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 64045056,
-      "wall_s": 0.26,
+      "peak_rss_bytes": 65019904,
+      "wall_s": 0.23,
       "fixture_sha256": "9c1f2d714053d87171fc93e420b540fcc6c7c31a5aea224a1470f0e79e280921"
     }
   ],
-  "raw_sha256": "e00765e6ae60489020084f2d8e03c8cec18ce6b3e6b95b58e44791686da8a008",
+  "raw_sha256": "8e4537cdd9ec5c477c973689b88153659a103f7c25d85ffd03a5e24bede9ddb0",
   "normalization": "Normalized row arrays replaced by row_count; value hashes and measurement fields unchanged."
 }

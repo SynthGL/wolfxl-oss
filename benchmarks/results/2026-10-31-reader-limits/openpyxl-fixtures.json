@@ -1,9 +1,18 @@
 {
   "source": "openpyxl-3.1.5",
   "library": "openpyxl",
+  "python": "3.12.14",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "architecture": "x86_64",
+  "zip_environment": {
+    "WOLFXL_MAX_ZIP_ENTRIES": null,
+    "WOLFXL_MAX_ZIP_ENTRY_BYTES": null,
+    "WOLFXL_MAX_ZIP_TOTAL_BYTES": null,
+    "WOLFXL_MAX_ZIP_COMPRESSION_RATIO": null
+  },
   "iterations": 1,
   "warmups": 0,
-  "cache_state": "fresh interpreter, warm OS cache unspecified",
+  "cache_state": "fresh interpreter; OS cache unspecified",
   "build_mode": "pure Python",
   "timeout_s": 5,
   "memory_address_space_limit_bytes": 2147483648,
@@ -18,7 +27,7 @@
     {
       "error": null,
       "file": "poc-shared-strings.xlsx",
-      "load_scan_s": 0.12605063687078655,
+      "load_scan_s": 0.3303641320671886,
       "nonempty": 11997,
       "read_only": false,
       "sheets": [
@@ -30,13 +39,14 @@
         }
       ],
       "status": "ok",
-      "peak_rss_bytes": 39874560,
-      "wall_s": 0.16
+      "peak_rss_bytes": 39178240,
+      "wall_s": 0.36,
+      "fixture_sha256": "4f1e4ceab11073cd591712e5d4dbeb19a3894fd69134a910fcd6132ec9348599"
     },
     {
       "error": null,
       "file": "poc-shared-strings.xlsx",
-      "load_scan_s": 0.04818581999279559,
+      "load_scan_s": 0.03902303008362651,
       "nonempty": 3,
       "read_only": true,
       "sheets": [
@@ -48,64 +58,69 @@
         }
       ],
       "status": "ok",
-      "peak_rss_bytes": 31051776,
-      "wall_s": 0.07
+      "peak_rss_bytes": 30240768,
+      "wall_s": 0.06,
+      "fixture_sha256": "4f1e4ceab11073cd591712e5d4dbeb19a3894fd69134a910fcd6132ec9348599"
     },
     {
       "error": {
-        "message": "Unable to read workbook: could not read strings from $SCRATCH/corpus/poc-xmlbomb.xlsx.\nThis is most probably because the workbook source files contain some invalid XML.\nPlease see the exception for more details.",
+        "message": "Unable to read workbook: could not read strings from corpus/poc-xmlbomb.xlsx.\nThis is most probably because the workbook source files contain some invalid XML.\nPlease see the exception for more details.",
         "type": "ValueError"
       },
       "file": "poc-xmlbomb.xlsx",
-      "load_scan_s": 0.037389804143458605,
+      "load_scan_s": 0.19299656292423606,
       "nonempty": 0,
       "read_only": false,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 28114944,
-      "wall_s": 0.06
+      "peak_rss_bytes": 27832320,
+      "wall_s": 0.21,
+      "fixture_sha256": "5edcd16d3efccd3a8ae5e0bddd7ae5ed52abb0359ba71af81370cbf869ab8d56"
     },
     {
       "error": {
-        "message": "Unable to read workbook: could not read strings from $SCRATCH/corpus/poc-xmlbomb.xlsx.\nThis is most probably because the workbook source files contain some invalid XML.\nPlease see the exception for more details.",
+        "message": "Unable to read workbook: could not read strings from corpus/poc-xmlbomb.xlsx.\nThis is most probably because the workbook source files contain some invalid XML.\nPlease see the exception for more details.",
         "type": "ValueError"
       },
       "file": "poc-xmlbomb.xlsx",
-      "load_scan_s": 0.04004776291549206,
+      "load_scan_s": 0.036038223188370466,
       "nonempty": 0,
       "read_only": true,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27582464,
-      "wall_s": 0.07
+      "peak_rss_bytes": 26976256,
+      "wall_s": 0.06,
+      "fixture_sha256": "5edcd16d3efccd3a8ae5e0bddd7ae5ed52abb0359ba71af81370cbf869ab8d56"
     },
     {
       "error": {
-        "message": "Unable to read workbook: could not read strings from $SCRATCH/corpus/poc-xmlbomb-empty.xlsx.\nThis is most probably because the workbook source files contain some invalid XML.\nPlease see the exception for more details.",
+        "message": "Unable to read workbook: could not read strings from corpus/poc-xmlbomb-empty.xlsx.\nThis is most probably because the workbook source files contain some invalid XML.\nPlease see the exception for more details.",
         "type": "ValueError"
       },
       "file": "poc-xmlbomb-empty.xlsx",
-      "load_scan_s": 0.039937853114679456,
+      "load_scan_s": 0.03276779712177813,
       "nonempty": 0,
       "read_only": false,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27037696,
-      "wall_s": 0.07
+      "peak_rss_bytes": 27811840,
+      "wall_s": 0.05,
+      "fixture_sha256": "4ba7b6c26d74df6da8b46fab945b09f96180a75aad88914cea7b98e787a5cb11"
     },
     {
       "error": {
-        "message": "Unable to read workbook: could not read strings from $SCRATCH/corpus/poc-xmlbomb-empty.xlsx.\nThis is most probably because the workbook source files contain some invalid XML.\nPlease see the exception for more details.",
+        "message": "Unable to read workbook: could not read strings from corpus/poc-xmlbomb-empty.xlsx.\nThis is most probably because the workbook source files contain some invalid XML.\nPlease see the exception for more details.",
         "type": "ValueError"
       },
       "file": "poc-xmlbomb-empty.xlsx",
-      "load_scan_s": 0.039664703886955976,
+      "load_scan_s": 0.03166311793029308,
       "nonempty": 0,
       "read_only": true,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27836416,
-      "wall_s": 0.06
+      "peak_rss_bytes": 28471296,
+      "wall_s": 0.05,
+      "fixture_sha256": "4ba7b6c26d74df6da8b46fab945b09f96180a75aad88914cea7b98e787a5cb11"
     },
     {
       "error": {
@@ -113,13 +128,14 @@
         "type": "OSError"
       },
       "file": "generated-zip-bomb.xlsx",
-      "load_scan_s": 0.04417841206304729,
+      "load_scan_s": 0.03336476604454219,
       "nonempty": 0,
       "read_only": false,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27090944,
-      "wall_s": 0.07
+      "peak_rss_bytes": 27504640,
+      "wall_s": 0.05,
+      "fixture_sha256": "7c83fea69460941836093b9502b8ed1e21ab824901397a3afecbd018068ca4a7"
     },
     {
       "error": {
@@ -127,13 +143,14 @@
         "type": "OSError"
       },
       "file": "generated-zip-bomb.xlsx",
-      "load_scan_s": 0.04094166308641434,
+      "load_scan_s": 0.0326680860016495,
       "nonempty": 0,
       "read_only": true,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 27230208,
-      "wall_s": 0.07
+      "peak_rss_bytes": 27398144,
+      "wall_s": 0.05,
+      "fixture_sha256": "7c83fea69460941836093b9502b8ed1e21ab824901397a3afecbd018068ca4a7"
     },
     {
       "error": {
@@ -141,13 +158,14 @@
         "type": "OSError"
       },
       "file": "generated-many-members.xlsx",
-      "load_scan_s": 0.5039691880811006,
+      "load_scan_s": 0.4180692520458251,
       "nonempty": 0,
       "read_only": false,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 156569600,
-      "wall_s": 0.53
+      "peak_rss_bytes": 157782016,
+      "wall_s": 0.44,
+      "fixture_sha256": "9c1f2d714053d87171fc93e420b540fcc6c7c31a5aea224a1470f0e79e280921"
     },
     {
       "error": {
@@ -155,15 +173,16 @@
         "type": "OSError"
       },
       "file": "generated-many-members.xlsx",
-      "load_scan_s": 0.5252268800977618,
+      "load_scan_s": 0.42549993516877294,
       "nonempty": 0,
       "read_only": true,
       "sheets": [],
       "status": "error",
-      "peak_rss_bytes": 157827072,
-      "wall_s": 0.55
+      "peak_rss_bytes": 156581888,
+      "wall_s": 0.45,
+      "fixture_sha256": "9c1f2d714053d87171fc93e420b540fcc6c7c31a5aea224a1470f0e79e280921"
     }
   ],
-  "raw_sha256": "ab2eeb919b24355ade7ae50a668fa9aeef8e1a21fe149e0682cc520cf2787ab8",
+  "raw_sha256": "c7dce88e9bf0ff08892c15ca5ca7968f0db94d3ec2435423c426650085d042ca",
   "normalization": "Normalized row arrays replaced by row_count; value hashes and measurement fields unchanged."
 }

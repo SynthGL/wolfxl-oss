@@ -8,10 +8,10 @@
     "memory_bytes": 32102088704,
     "isolated": false
   },
-  "candidate_source": "e7d92a74809528eab96dbffd336d1a6c0656f255",
-  "candidate_tree": "ac8b84d773a08ff29557e27243d10653008d4667",
-  "native_build_source": "8538dc1d3619e966d2222f1086ba5755939e0916",
-  "native_reuse": "The successor changes only benchmark metadata recording. Native source, configuration and installed binary are unchanged.",
+  "candidate_source": "fd939a9929e13ff9b34034bb12c21460d668050a",
+  "candidate_tree": "d4a191ff84ea5a0f1b065db384d983662a778d6a",
+  "native_build_source": "fd939a9929e13ff9b34034bb12c21460d668050a",
+  "native_reuse": "No reuse across source commits: the native extension was rebuilt with locked release configuration at the candidate source before checks and measurements.",
   "native_build": {
     "program": "maturin",
     "arguments": [
@@ -46,7 +46,7 @@
   },
   "released_baseline": {
     "distribution": "wolfxl==2.0.35 from PyPI",
-    "harness_source": "e7d92a74809528eab96dbffd336d1a6c0656f255",
+    "harness_source": "fd939a9929e13ff9b34034bb12c21460d668050a",
     "artifacts": [
       "released-fixtures.json",
       "released-corpus.json"
@@ -59,7 +59,8 @@
   "reference": {
     "distribution": "openpyxl==3.1.5",
     "artifact": "openpyxl-fixtures.json",
-    "harness": "Bootstrap runner, as for the source-built base. This run predates per-fixture hashes and Python/platform metadata. Generated-fixture identity is inferred from unchanged file modification times and reuse of the same files, not recorded directly in this reference artifact."
+    "harness_source": "fd939a9929e13ff9b34034bb12c21460d668050a",
+    "harness": "The same committed reader_limits.py used for the released and candidate runs; fixture hashes, Python/platform and process configuration are recorded."
   },
   "fixture_provenance": {
     "repository": "https://github.com/apache/poi",
@@ -118,5 +119,6 @@
     "full_row_count": 3999,
     "explanation": "Default read_only iteration honors the declared dimension. Row-zero cells are outside normal default iteration. Both candidate mode hashes match openpyxl 3.1.5; this mode difference is retained for compatibility."
   },
-  "raw_results_policy": "All measurement and error fields are retained. Normalized row arrays are replaced by row_count and per-sheet value hashes in committed summaries. raw_sha256 identifies the complete original JSON. The harness emits complete rows by default."
+  "raw_results_policy": "All measurement and error fields are retained. Normalized row arrays are replaced by row_count and per-sheet value hashes in committed summaries. raw_sha256 identifies the complete original JSON. The harness emits complete rows by default.",
+  "integration_base": "17da1f925"
 }

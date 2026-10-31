@@ -19,7 +19,7 @@
     "expected_failure": "wolfxl.Limits is absent on the base; five independent budgets, three source kinds and two load modes are covered."
   },
   "candidate_focused": {
-    "source": "8538dc1d3619e966d2222f1086ba5755939e0916",
+    "source": "fd939a9929e13ff9b34034bb12c21460d668050a",
     "program": "python",
     "arguments": [
       "-m",
@@ -30,11 +30,11 @@
     ],
     "result": {
       "passed": 80,
-      "wall_s": 3.12
+      "wall_s": 6.72
     }
   },
   "candidate_public_python": {
-    "source": "e7d92a74809528eab96dbffd336d1a6c0656f255",
+    "source": "fd939a9929e13ff9b34034bb12c21460d668050a",
     "program": "python",
     "arguments": [
       "-m",
@@ -59,12 +59,12 @@
       "skipped": 51,
       "warnings": 36,
       "subtests_passed": 4,
-      "wall_s": 90.8
+      "wall_s": 589.39
     },
     "selection": "The existing public CI selection, not an unfiltered full-suite pass."
   },
   "candidate_rust": {
-    "source": "e7d92a74809528eab96dbffd336d1a6c0656f255",
+    "source": "fd939a9929e13ff9b34034bb12c21460d668050a",
     "program": "cargo",
     "arguments": [
       "test",
