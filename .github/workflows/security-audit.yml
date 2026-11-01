@@ -5,7 +5,8 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 6 * * *"
+    - cron: "17 7 * * *"
+      timezone: "America/Los_Angeles"
 
 permissions:
   contents: read

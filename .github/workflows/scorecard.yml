@@ -4,7 +4,9 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "43 6 * * 1"
+    # Monday 15:43 UTC (7:43 AM PST, 8:43 AM PDT). The Scorecard service re-parses this file,
+    # so it keeps a plain UTC cron rather than the newer schedule timezone key.
+    - cron: "43 15 * * 1"
 
 permissions:
   contents: read
