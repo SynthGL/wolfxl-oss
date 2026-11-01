@@ -26,6 +26,8 @@ python -m pip install wolfxl
 [Benchmarks](#performance) ·
 [Fidelity](#fidelity) ·
 [Community vs Commercial](#community-and-commercial) ·
+[Security policy](SECURITY.md) ·
+[Threat model](THREAT_MODEL.md) ·
 [wolfxl.com](https://wolfxl.com)
 
 ## When to use WolfXL instead of openpyxl, XlsxWriter, or pandas
@@ -460,7 +462,7 @@ documented adapter protocol.
 | | WolfXL Community | WolfXL Commercial |
 |---|---|---|
 | License | MIT | Commercial |
-| Release line | Maintained 2.0 generation | Current 2.1+ generation |
+| Release line | Long-term open I/O kernel, 2.0.x | Current 2.1+ generation |
 | Workbook I/O | Included | Included |
 | Existing 2.0 modify and pivot APIs | Included | Current implementations and fixes |
 | Native recalculation | Not included | Included |
@@ -470,9 +472,18 @@ documented adapter protocol.
 | Production operations SDK | Not included | Included |
 | Direct support | Community issues | Included with paid plans |
 
-Community receives critical correctness and security fixes. New engines,
-expanded compatibility work, production operations, and direct support ship in
-[WolfXL Commercial](https://wolfxl.com).
+Community is the long-term, MIT-licensed open I/O kernel, with
+[SynthGL/wolfxl-oss](https://github.com/SynthGL/wolfxl-oss) as its canonical
+source repository. Community receives critical correctness and security fixes,
+with security support through **2028-10-31**. Security fixes for shared
+functionality ship to Community and Commercial in the same release window.
+We maintain a weekly release train, immediate security releases, and `rc`
+pre-releases for compatibility validation. See the [security policy](SECURITY.md)
+for supported versions, remediation targets, CVEs, and disclosure, and the
+[threat model](THREAT_MODEL.md) before processing untrusted files.
+
+New engines, expanded compatibility work, production operations, and direct
+support ship in [WolfXL Commercial](https://wolfxl.com).
 
 This split keeps the useful Excel I/O layer open while funding the
 compatibility, fidelity, and support work required by production workbook
@@ -506,7 +517,7 @@ The distribution-boundary test verifies the Community version, compiled
 backends, and absence of Commercial-only Python modules.
 
 See the [contribution guidelines](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/CONTRIBUTING.md) and
-[security policy](https://github.com/SynthGL/wolfxl-oss/blob/206bf4e1cdc62c8121569066362c1521d9b94a72/SECURITY.md) for how to contribute or report a vulnerability.
+[security policy](SECURITY.md) for how to contribute or report a vulnerability.
 
 ## License
 
