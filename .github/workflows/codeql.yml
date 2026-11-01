@@ -6,6 +6,7 @@ on:
     branches: [main]
   schedule:
     - cron: "17 7 * * 2"
+      timezone: "America/Los_Angeles"
 
 permissions:
   contents: read
