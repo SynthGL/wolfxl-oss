@@ -10,7 +10,20 @@ Most openpyxl code runs after a one-line import change, so it is the first
 thing to try when an openpyxl script is too slow. No Excel or LibreOffice
 install is needed: wheels cover Linux (glibc and musl), macOS, and Windows.
 
-WolfXL Community is the maintained, MIT-licensed 2.0 release line for supported workbook creation, reading, writing, streaming exports, and existing-workbook edits. It is a free product, not a trial.
+WolfXL Community is the long-term, MIT-licensed open I/O kernel for supported
+workbook creation, reading, writing, streaming exports, and existing-workbook
+edits. It is a free product, not a trial. The canonical source repository is
+[SynthGL/wolfxl-oss](https://github.com/SynthGL/wolfxl-oss).
+
+Community security support continues through **2028-10-31**. Security fixes for
+shared functionality ship to Community and Commercial in the same release
+window, with immediate security releases alongside the weekly release train
+and `rc` pre-releases. Read the
+[security policy](https://github.com/SynthGL/wolfxl-oss/blob/main/SECURITY.md)
+for supported versions, remediation targets, CVEs, and disclosure. Review the
+[threat model](https://github.com/SynthGL/wolfxl-oss/blob/main/THREAT_MODEL.md)
+for guarantees, default resource limits, non-guarantees, and untrusted-file
+deployment guidance.
 
 ## Install
 
