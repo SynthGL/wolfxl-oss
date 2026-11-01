@@ -48,6 +48,16 @@ defaults:
 | Total uncompressed entry bytes | 4 GiB (4,294,967,296 bytes) | `WOLFXL_MAX_ZIP_TOTAL_BYTES` |
 | Uncompressed/compressed bytes per entry | 1,000:1 | `WOLFXL_MAX_ZIP_COMPRESSION_RATIO` |
 
+Every normal XLSX load also applies a per-load `wolfxl.Limits()` admission
+pass before these ZIP inspection helpers. Its `max_part_bytes` and
+`max_package_bytes` defaults are 512 MiB and 4 GiB, respectively. Both
+checks must accept the input: raising an environment variable alone does
+not raise the corresponding per-load budget, and raising a `Limits` budget
+alone does not raise an environment-controlled ZIP ceiling. To tighten a
+workload, pass stricter `limits=` values and keep the ZIP checks at their
+defaults or stricter values. `Limits` additionally bounds cells, shared-string
+bytes, and materialized text; see the README's load-limit guidance.
+
 Run with the defaults or stricter positive limits for untrusted input.
 Increasing a limit expands the admitted workload and its resource risk. Do
 not accept limit overrides from workbook content or an untrusted request.
