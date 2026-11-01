@@ -1,11 +1,14 @@
 # WolfXL Community threat model
 
-WolfXL Community is a library for reading, creating, and editing `.xlsx` and
-`.xlsm` workbooks. Treat workbook bytes, ZIP names and metadata, XML,
-relationships, dimensions, shared strings, formulas, and embedded content as
-untrusted. The security contract covers an attacker who supplies a workbook
-to an application using a supported, unmodified Community release with default
-limits. Report violations under the [security policy](SECURITY.md).
+WolfXL Community reads, creates, and edits `.xlsx` and `.xlsm` workbooks;
+`load_workbook()` also reads `.xlsb` and `.xls`. It detects format from content,
+so a filename ending in `.xlsx` does not establish the input format. Treat
+workbook bytes, ZIP names and metadata, XML, relationships, dimensions, shared
+strings, formulas, and embedded content as untrusted. The security contract
+covers an attacker supplying a workbook to a supported, unmodified Community
+release. The resource-admission guarantees below apply to XLSX-family input
+with default limits. Report security defects in every supported input format
+under the [security policy](SECURITY.md).
 
 ## Guarantees and trust boundaries
 
@@ -19,11 +22,11 @@ limits. Report violations under the [security policy](SECURITY.md).
   workbooks, images, or URLs specified by the workbook. Preserve or inspect
   references as data. Package installation and application-controlled I/O are
   outside this workbook-content boundary.
-- **Bounded resource admission under default limits.** Apply finite package
-  limits to reject excessive ZIP entry counts, declared decompressed sizes,
-  and compression ratios. Resource exhaustion that bypasses these protections,
-  including shared-string amplification, is a security defect, not an excluded
-  use case. These input bounds are not a process memory or execution-time cap.[^resources]
+- **Bounded resource admission for XLSX-family input under default limits.**
+  Apply finite package limits to reject excessive ZIP entry counts, declared
+  decompressed sizes, and compression ratios. Resource exhaustion that bypasses
+  these protections, including shared-string amplification, is a security
+  defect. These input bounds are not a process memory or execution-time cap.[^resources]
 - **Caller-controlled filesystem access.** Read the input and write the output
   selected by the caller. Do not treat workbook package paths or relationship
   targets as authorization to read or write arbitrary host files. Temporary
@@ -49,6 +52,12 @@ Run with the defaults or stricter positive limits for untrusted input.
 Increasing a limit expands the admitted workload and its resource risk. Do
 not accept limit overrides from workbook content or an untrusted request.
 Choose smaller limits for a service with less memory than these defaults.
+
+These ZIP defaults and the `wolfxl.Limits` workbook budgets apply to
+XLSX-family input. The `.xlsb` reader does not enforce the ZIP admission
+checks listed above, and `limits=` is unsupported for `.xlsb` and `.xls`.
+Those formats have no equivalent bounded-resource admission guarantee here.
+Resource-exhaustion reports involving them remain in scope.
 
 ## Non-guarantees
 
@@ -79,6 +88,13 @@ network egress, restrict filesystem access to the job's input/output area,
 limit uploads before parsing, and cancel jobs that exceed their budget. Keep
 security patches current and close workbooks after use. Validate and redact
 outputs before sharing them or opening them in a desktop application.
+
+If the service relies on XLSX-family admission limits, classify the input
+content with `wolfxl.classify_file_format` and reject other formats before
+calling `load_workbook()`. Classify and load the same immutable input.
+Do this work inside the resource-limited worker: classification and filename
+validation do not provide a sandbox. Treat `.xlsb` and `.xls` processing as
+unbounded unless the application supplies effective external containment.
 
 [^resources]: Package metadata limits bound admitted input, not all derived
     objects or work. Shared strings, dense cell expansion, styles, formula
