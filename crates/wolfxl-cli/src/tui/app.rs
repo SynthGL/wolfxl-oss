@@ -3,13 +3,17 @@
 //! the event loop acts on the returned [`Action`] and drawing reads the
 //! state, so every behavior here runs without a terminal.
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::mem;
+use std::path::Path;
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use unicode_width::UnicodeWidthStr;
 
-use super::grid::Grid;
+use super::draw::{elide, fit};
+use super::grid::{one_line, Grid};
 
 /// What the event loop does after a key.
 #[derive(Debug, PartialEq, Eq)]
@@ -95,7 +99,7 @@ pub(crate) struct App {
     pub(super) mode: Mode,
     /// One-key notice on the status line.
     pub(super) message: Option<String>,
-    /// Screen columns available to the grid.
+    /// Screen columns available to the grid and the status line.
     width: usize,
     /// Data rows on one screen.
     page: usize,
@@ -429,49 +433,88 @@ impl App {
     }
 
     /// The status line: file, sheet, cursor, sort and search state, notes.
+    /// Every name and note is shown on one line and cut to a bound, and the
+    /// line fits the screen with the cursor position whole whenever the
+    /// screen can hold it: the file and sheet before it give way first.
     pub(super) fn status(&self) -> String {
-        if let Mode::Search(query) = &self.mode {
-            return format!("/{query}");
-        }
         let view = &self.view;
         let grid = &view.grid;
         let rows = view.order.len();
         let columns = grid.headers.len();
-        let mut status = format!(
-            "{} | {} [{}/{}] | R{}/{rows} C{}/{columns}",
-            self.file,
-            grid.name,
-            self.current + 1,
-            self.names.len().max(1),
+        let cursor = format!(
+            "R{}/{rows} C{}/{columns}",
             if rows == 0 { 0 } else { view.row + 1 },
             if columns == 0 { 0 } else { view.col + 1 },
         );
+        let room = self.width.saturating_sub(cursor.width() + SEPARATOR.len());
+        if let Mode::Search(query) = &self.mode {
+            // Typing happens at the end, so a long query shows its end.
+            let query = one_line(query);
+            let query = elide(&query, room.saturating_sub(1), 0);
+            return fit(&format!("/{query}{SEPARATOR}{cursor}"), self.width).into_owned();
+        }
+        let file = Path::new(&self.file)
+            .file_name()
+            .map_or(Cow::Borrowed(self.file.as_str()), |name| {
+                name.to_string_lossy()
+            });
+        let file = one_line(&file);
+        let lead = format!(
+            "{} | {} [{}/{}]",
+            elide(&file, FIELD_WIDTH, FIELD_WIDTH / 2),
+            field(&grid.name, FIELD_WIDTH),
+            self.current + 1,
+            self.names.len().max(1),
+        );
+        let mut status = match fit(&lead, room) {
+            lead if lead.is_empty() => cursor,
+            lead => format!("{lead}{SEPARATOR}{cursor}"),
+        };
+        let mut rest = String::new();
         if let Some(header) = grid.headers.get(view.col) {
-            status.push(' ');
-            status.push_str(header);
+            rest.push(' ');
+            rest.push_str(&field(header, FIELD_WIDTH));
         }
         if let Some(sort) = view.sort {
             let header = grid.headers.get(sort.column).map_or("", String::as_str);
-            status.push_str(&format!(
-                " | sort {header} {} {}",
+            rest.push_str(&format!(
+                " | sort {} {} {}",
+                field(header, FIELD_WIDTH),
                 if sort.descending { "desc" } else { "asc" },
                 if sort.numeric { "numeric" } else { "text" }
             ));
         }
         if let Some(query) = &self.query {
+            let query = field(query, FIELD_WIDTH);
             match self.matches.binary_search(&(view.row, view.col)) {
                 Ok(index) => {
-                    status.push_str(&format!(" | /{query} {}/{}", index + 1, self.matches.len()))
+                    rest.push_str(&format!(" | /{query} {}/{}", index + 1, self.matches.len()))
                 }
-                Err(_) => status.push_str(&format!(" | /{query} {} hits", self.matches.len())),
+                Err(_) => rest.push_str(&format!(" | /{query} {} hits", self.matches.len())),
             }
         }
         for extra in [&grid.note, &self.message].into_iter().flatten() {
-            status.push_str(" | ");
-            status.push_str(extra);
+            rest.push_str(SEPARATOR);
+            rest.push_str(&field(extra, NOTE_WIDTH));
         }
-        status
+        // What follows the cursor takes only the cells left after it.
+        status.push_str(&fit(&rest, self.width.saturating_sub(status.width())));
+        fit(&status, self.width).into_owned()
     }
+}
+
+/// Between status line parts.
+const SEPARATOR: &str = " | ";
+
+/// Widest file, sheet, header, or query on the status line, in cells.
+const FIELD_WIDTH: usize = 40;
+
+/// Widest note or message on the status line, in cells.
+const NOTE_WIDTH: usize = 80;
+
+/// `text` with control characters shown as spaces, cut to `width` cells.
+fn field(text: &str, width: usize) -> String {
+    fit(&one_line(text), width).into_owned()
 }
 
 /// Screen columns needed to show columns `from..=to` with one separator
@@ -652,7 +695,7 @@ eve|7|oslo";
         press(&mut app, KeyCode::Char('/'));
         keys(&mut app, "OSLx");
         press(&mut app, KeyCode::Backspace);
-        assert_eq!(app.status(), "/OSL");
+        assert_eq!(app.status(), "/OSL | R1/5 C1/3");
         press(&mut app, KeyCode::Enter);
         assert_eq!(app.matches, [(0, 2), (2, 2), (4, 2)]);
         assert_eq!(cursor(&app), (0, 2));
@@ -833,5 +876,97 @@ eve|7|oslo";
         let mut app = app(PEOPLE);
         assert_eq!(press(&mut app, KeyCode::Tab), Action::Continue);
         assert_eq!(app.message.as_deref(), Some("only one sheet"));
+    }
+
+    #[test]
+    fn status_shows_names_and_load_errors_on_one_bounded_line() {
+        let long = "日本".repeat(40);
+        let file = format!("/tmp/private\ndir/{long}\tbook\u{1b}[31m.xlsx");
+        let sheet = format!("Q1\r\n{long}");
+        let note = format!("not loaded: bad\nzip\u{1b}]0;title\u{7} {long}");
+        let mut app = App::new(
+            file.clone(),
+            vec!["One".into(), sheet.clone()],
+            0,
+            grid("One", "A\nx"),
+        );
+        assert_eq!(press(&mut app, KeyCode::Tab), Action::Load(1));
+        app.insert(1, Grid::unavailable(&sheet, note.clone()));
+        let status = app.status();
+        assert!(!status.contains(char::is_control), "{status:?}");
+        assert!(!status.contains("private"), "only the file name: {status}");
+        assert!(status.contains("book [31m.xlsx | Q1  日本"), "{status}");
+        assert!(
+            status.contains("[2/2] | R0/0 C0/0 | not loaded: bad zip ]0;title"),
+            "{status}"
+        );
+        for part in status.split(SEPARATOR) {
+            assert!(part.width() <= NOTE_WIDTH, "{part}");
+        }
+        assert!(
+            status.width() <= 2 * FIELD_WIDTH + NOTE_WIDTH + 30,
+            "{status}"
+        );
+        assert_eq!(app.file, file, "the source path is kept");
+        assert_eq!(app.view.grid.name, sheet);
+        assert_eq!(app.sheet_name(1), sheet);
+        assert_eq!(app.view.grid.note.as_deref(), Some(note.as_str()));
+    }
+
+    #[test]
+    fn narrow_status_keeps_the_cursor_whole() {
+        let mut app = App::new(
+            format!("/data/{}.csv", "quarterly-revenue-".repeat(5)),
+            vec!["Sheet1".into()],
+            0,
+            grid(&"Very long sheet name ".repeat(4), PEOPLE),
+        );
+        press(&mut app, KeyCode::Down);
+        press(&mut app, KeyCode::End);
+        for width in [9, 12, 16, 20, 24, 30, 48, 200] {
+            app.set_viewport(width, 6);
+            let status = app.status();
+            assert!(status.contains("R2/5 C3/3"), "{width}: {status}");
+            assert!(status.width() <= usize::from(width), "{width}: {status}");
+        }
+        assert!(
+            app.status()
+                .starts_with("quarterly-revenue-qu…rterly-revenue-.csv | Very long"),
+            "{}",
+            app.status()
+        );
+        press(&mut app, KeyCode::Char('/'));
+        keys(&mut app, "needle-in-a-very-long-haystack-query");
+        for width in [14, 16, 20, 30, 200] {
+            app.set_viewport(width, 6);
+            let status = app.status();
+            assert!(status.starts_with('/'), "{width}: {status}");
+            assert!(status.ends_with(" | R2/5 C3/3"), "{width}: {status}");
+            assert!(status.width() <= usize::from(width), "{width}: {status}");
+        }
+        app.set_viewport(20, 6);
+        assert_eq!(app.status(), "/…-query | R2/5 C3/3", "typing shows the end");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(
+            app.query.as_deref(),
+            Some("needle-in-a-very-long-haystack-query")
+        );
+    }
+
+    #[test]
+    fn typed_control_characters_are_shown_as_spaces_and_searched_as_typed() {
+        let mut app = app("Note\na\tb\nab");
+        press(&mut app, KeyCode::Char('/'));
+        keys(&mut app, "a\tb");
+        assert_eq!(app.status(), "/a b | R1/2 C1/1");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(app.query.as_deref(), Some("a\tb"));
+        assert_eq!(app.message.as_deref(), Some("no match for /a\tb"));
+        let status = app.status();
+        assert!(!status.contains(char::is_control), "{status:?}");
+        assert!(
+            status.ends_with("| R1/2 C1/1 Note | /a b 0 hits | no match for /a b"),
+            "{status}"
+        );
     }
 }

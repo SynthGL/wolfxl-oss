@@ -13,9 +13,9 @@
 //!
 //! Exit codes: 0 success, 1 input or rendering failure, 2 a malformed or
 //! unresolvable `--where`/`--select`, a malformed or unsupported `--add`
-//! formula or a taken `--add` name, standard input without `--from`, or
-//! `--interactive` without a terminal on standard output or with standard
-//! input as the data source.
+//! formula or a taken `--add` name, standard input without `--from`, input
+//! over its `--from` spool limit, or `--interactive` without a terminal on
+//! standard output or with standard input as the data source.
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -73,8 +73,11 @@ fn peek(args: &PeekArgs) -> Result<(), Failure> {
         tui::preflight(&args.file).map_err(Failure::Usage)?;
     }
     let mut input = input::open(Some(args.file.as_path()), args.from).map_err(|error| {
-        // Without `--from`, `open` refuses standard input before reading it.
-        if args.from.is_none() && args.file == Path::new("-") {
+        // Without `--from`, `open` refuses standard input before reading it;
+        // input over its `--from` spool limit is refused the same way.
+        if (args.from.is_none() && args.file == Path::new("-"))
+            || error.downcast_ref::<input::SpoolLimitExceeded>().is_some()
+        {
             Failure::Usage(error)
         } else {
             Failure::Other(error)

@@ -244,6 +244,39 @@ fn keys_keep_their_source_spelling() {
 }
 
 #[test]
+fn numeric_looking_headers_resolve_by_source_spelling() {
+    // Typed, the headers `001`, `01`, and `1` would all read as 1.
+    let left = TempFile::new("left.csv", "001,01,1\n007,a,10\n8,b,20\n");
+    let run = diff(
+        &[
+            left.path(),
+            "-",
+            "--key",
+            "001",
+            "--compare",
+            "1",
+            "--from",
+            "tsv",
+        ],
+        Some("001\t01\t1\n007\ta\t11\n8\tc\t20\n"),
+    );
+    assert_eq!(run.code, 1, "stderr={}", run.stderr);
+    let document = run.json();
+    assert_eq!(document["key"], "001");
+    assert_eq!(document["compare"], json!(["1"]));
+    assert_eq!(document["summary"], summary(2, 0, 0, 1, 1));
+    assert_eq!(
+        statuses(&document),
+        [("007", "diff"), ("8", "match")]
+            .map(|(key, status)| (key.to_string(), status.to_string()))
+    );
+    assert_eq!(
+        document["results"][0]["differences"],
+        json!([{"column": "1", "left": "10", "right": "11", "delta": 1, "within_tolerance": false}])
+    );
+}
+
+#[test]
 fn key_transforms_widen_matching_step_by_step() {
     let left = "key,v\n  Acme ,1\nGLOBEX,2\n";
     let right = "key,v\nAcme,1\nglobex,2\n";

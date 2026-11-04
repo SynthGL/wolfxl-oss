@@ -2,16 +2,10 @@
 
 ## [Unreleased]
 
-### Removed
-
-- Drop Python 3.9 and 3.10 support; Python 3.11 is now the minimum supported
-  version. Version 2.0.36 is the last release supporting Python 3.9 and 3.10;
-  pip on those versions continues to resolve compatible 2.0.x releases.
-
-## wolfxl-cli 0.10.0 - Unreleased
-
 ### Added
 
+- `wolfxl-cli` 0.10.0 adds analyst commands backed by `wolfxl-core` 0.9.0
+  and the new MIT `wolfxl-reader`, `wolfxl-formula`, and `wolfxl-rels` crates.
 - `wolfxl peek --where COLUMN<op>VALUE` keeps the data rows that satisfy every
   condition (`=`, `!=`, `<`, `>`, `<=`, `>=`, `~` contains), comparing money
   spellings such as `$1,200.00` and `(500.00)` numerically. `--select A,B`
@@ -70,6 +64,21 @@
 
 - Bumped `wolfxl-cli` to `0.10.0`.
 - Updated the CLI to use `wolfxl-core` 0.9.0 and the MIT reader crates.
+- Preserve exact CSV/TSV header names when resolving pivot fields, matching
+  the existing filters, selectors, keyed diffs, and column profiles.
+- Keep stored formula input cells sparse, including sheets with widely
+  separated cells, rather than allocating their full bounding rectangle.
+- Stream stdin and extension-overriding `--from` copies into atomically
+  owner-only temporary files, with named 512 MiB XLS and 4 GiB other-format
+  spool limits reported as exit-2 input failures.
+- Sanitize and display-width-bound interactive status metadata and load
+  errors while keeping cursor coordinates visible on narrow terminals.
+
+### Removed
+
+- Drop Python 3.9 and 3.10 support; Python 3.11 is now the minimum supported
+  version. Version 2.0.36 is the last release supporting Python 3.9 and 3.10;
+  pip on those versions continues to resolve compatible 2.0.x releases.
 
 ## 2.0.36 - 2026-10-31
 

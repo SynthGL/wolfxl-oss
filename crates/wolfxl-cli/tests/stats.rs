@@ -418,6 +418,50 @@ fn where_and_select_reshape_the_profile_like_peek() {
 }
 
 #[test]
+fn numeric_looking_headers_resolve_by_source_spelling_over_typed_data() {
+    // Typed, the headers `001`, `01`, and `1` all read as 1.
+    let csv = "001,01,1\n007,TRUE,1.5\n7,x,2\n8,FALSE,5\n";
+    let document = piped_json(csv, &["--where", "1<3", "--select", "01,001"]);
+    assert_eq!(document["rows"], 2);
+    assert_eq!(
+        document["columns"],
+        json!([
+            {
+                "header": "01",
+                "non_empty": 2,
+                "blank": 0,
+                "types": {"number": 0, "text": 1, "bool": 1, "date": 0, "error": 0},
+                "distinct": 2,
+                "numeric": {"count": 0, "sum": null, "mean": null, "min": null, "max": null, "stddev": null},
+                "top": [{"value": "TRUE", "count": 1}, {"value": "x", "count": 1}]
+            },
+            {
+                "header": "001",
+                "non_empty": 2,
+                "blank": 0,
+                "types": {"number": 2, "text": 0, "bool": 0, "date": 0, "error": 0},
+                "distinct": 2,
+                "numeric": {"count": 2, "sum": 14, "mean": 7, "min": 7, "max": 7, "stddev": 0},
+                "top": [{"value": "007", "count": 1}, {"value": "7", "count": 1}]
+            }
+        ])
+    );
+
+    // TSV: `1.0` and `1` stay distinct headers.
+    let run = stats(
+        &["-", "--from", "tsv", "-e", "json", "--select", "1.0"],
+        Some("1\t1.0\n5\t6\n7\t8\n"),
+    );
+    assert_eq!(run.code, 0, "stderr={}", run.stderr);
+    let document: Value = serde_json::from_str(&run.stdout).expect("stats JSON parses");
+    assert_eq!(document["columns"][0]["header"], "1.0");
+    assert_eq!(
+        document["columns"][0]["numeric"],
+        json!({"count": 2, "sum": 14, "mean": 7, "min": 6, "max": 8, "stddev": 1})
+    );
+}
+
+#[test]
 fn repeated_where_flags_combine_with_and() {
     let document = piped_json(
         LEDGER,

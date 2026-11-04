@@ -2,7 +2,8 @@
 //! group a sheet's data rows by header-named fields and aggregate.
 //!
 //! Row 0 of the selected sheet is the header row. Fields resolve by exact
-//! header text, then by a unique case-insensitive match. Each `--rows` field
+//! header text in source spelling (`001` and `1` are distinct), then by a
+//! unique case-insensitive match. Each `--rows` field
 //! contributes one key column; `--column` spreads its distinct values across
 //! columns and adds a grand-total column. A grand-total row closes the table.
 //!
@@ -354,8 +355,10 @@ fn build(args: &PivotArgs) -> Result<(Table, Vec<String>)> {
     let mut input = input::open(Some(args.file.as_path()), args.from)?;
     let sheet_name = input.sheet_name(args.sheet.as_deref())?;
     let sheet_names = input.sheet_names().to_vec();
+    // Header names keep their source spelling (`001` stays distinct from
+    // `1`); the data rows below are typed for grouping and aggregation.
+    let headers = input.raw_sheet(&sheet_name)?.headers();
     let sheet = input.sheet(&sheet_name)?;
-    let headers = sheet.headers();
 
     let row_columns = args
         .rows

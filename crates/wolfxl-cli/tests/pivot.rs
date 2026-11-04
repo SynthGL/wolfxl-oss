@@ -318,6 +318,65 @@ fn piped_tsv_and_default_box_output() {
 }
 
 #[test]
+fn numeric_looking_headers_resolve_by_source_spelling_over_typed_data() {
+    // Typed, the headers `001`, `01`, and `1` all read as 1 and `true` as
+    // TRUE. The data stays typed: `007` and `7` group as one key, and the
+    // boolean `TRUE` under `01` is counted but not summed.
+    let csv = "001,01,1,true\n007,2,30,yes\n7,3,40,TRUE\n8,TRUE,50,\n";
+    let out = piped(
+        csv,
+        &[
+            "--rows",
+            "001",
+            "--values",
+            "sum:01,sum:1,count:true,count:01",
+            "-e",
+            "csv",
+        ],
+    );
+    assert_eq!(
+        out,
+        "001,sum:01,sum:1,count:true,count:01\n\
+         7,5,70,2,2\n\
+         8,,50,0,1\n\
+         Total,5,120,2,3\n"
+    );
+}
+
+#[test]
+fn tsv_column_field_resolves_by_source_spelling_over_typed_data() {
+    // `1.0` and `1` would both read as 1; the `1.0` keys `1` and `01` still
+    // group together as the number 1.
+    let tsv = "001\t1.0\t1\nA\t1\t10\nB\t01\t20\nA\t2\t30\n";
+    let run = pivot(
+        &[
+            "-", "--from", "tsv", "--rows", "001", "--column", "1.0", "--values", "sum:1", "-e",
+            "json",
+        ],
+        Some(tsv),
+    );
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(
+        run.stdout,
+        r#"{
+  "contract_version": 1,
+  "sheet": "stdin",
+  "rows": ["001"],
+  "column": "1.0",
+  "values": ["sum:1"],
+  "column_keys": [1, 2],
+  "headers": ["001", "1", "2", "Total"],
+  "data": [
+    ["A", 10, 30, 40],
+    ["B", 20, null, 20]
+  ],
+  "totals": [30, 30, 60]
+}
+"#
+    );
+}
+
+#[test]
 fn unknown_headers_and_aggregations_exit_two() {
     let stderr = refused(
         &[

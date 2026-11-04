@@ -1,9 +1,11 @@
 //! Spreadsheet input for commands that read a file path or standard input.
 //!
 //! `wolfxl_core::Workbook` dispatches on the file extension, so piped bytes
-//! and paths whose extension disagrees with `--from` are spooled into a
+//! and paths whose extension disagrees with `--from` are streamed into a
 //! private temporary directory under a name carrying the requested
-//! extension. The spool lives as long as the [`Input`] and is removed on drop.
+//! extension. The copy is capped at the format's spool limit
+//! ([`InputFormat::spool_limit`]); the spool lives as long as the [`Input`]
+//! and is removed on drop or when spooling fails.
 //!
 //! Delimited sources (CSV, TSV, TXT) arrive from the core reader as text.
 //! [`Input::sheet`] types their fields the way Excel's text import does:
@@ -15,9 +17,10 @@
 //! rounds date-times to whole seconds and shifts 1904-system serials, so
 //! fingerprints and formulas read the native readers' cells instead.
 
-use std::fs;
-use std::io::Read;
+use std::fs::{self, File};
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -28,6 +31,18 @@ use wolfxl_reader::{
     Cell as RawCell, CellValue as RawValue, NativeOdsBook, NativeXlsBook, NativeXlsbBook,
     NativeXlsxBook,
 };
+
+/// Most bytes spooled for `--from xls`: the native XLS reader's source
+/// admission limit, so the copy stops where the reader would refuse the
+/// source anyway.
+const MAX_XLS_SPOOL_BYTES: u64 = 512 * 1024 * 1024;
+
+/// Most bytes spooled for every other format: the reader's default budget
+/// for the uncompressed parts of an OOXML or ODS package
+/// (`wolfxl_rels::package_guard::DEFAULT_MAX_ZIP_TOTAL_BYTES`). Delimited
+/// text has no reader limit, so the same bound keeps an unending pipe from
+/// filling the temporary directory.
+const MAX_SPOOL_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 /// Input format named by `--from`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
@@ -51,6 +66,14 @@ impl InputFormat {
             InputFormat::Xls => "xls",
             InputFormat::Xlsb => "xlsb",
             InputFormat::Ods => "ods",
+        }
+    }
+
+    /// Most bytes of this format copied into a spool.
+    fn spool_limit(self) -> u64 {
+        match self {
+            InputFormat::Xls => MAX_XLS_SPOOL_BYTES,
+            _ => MAX_SPOOL_BYTES,
         }
     }
 
@@ -88,20 +111,25 @@ pub(crate) fn open(file: Option<&Path>, from: Option<InputFormat>) -> Result<Inp
         let format = from.ok_or_else(|| {
             anyhow!("reading standard input requires --from csv|tsv|xlsx|xlsm|xls|xlsb|ods")
         })?;
-        let mut bytes = Vec::new();
-        std::io::stdin()
-            .read_to_end(&mut bytes)
-            .context("reading standard input")?;
-        return spooled(&bytes, format, "stdin");
+        return spooled(std::io::stdin().lock(), "standard input", format, "stdin");
     };
     match from {
         Some(format) if InputFormat::of_path(path) != Some(format) => {
-            let bytes = fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+            let label = path.display().to_string();
+            let file = File::open(path).with_context(|| format!("reading {label}"))?;
+            // A regular file's length is known up front, so an oversized one
+            // fails before any byte is copied.
+            let metadata = file
+                .metadata()
+                .with_context(|| format!("reading {label}"))?;
+            if metadata.is_file() && metadata.len() > format.spool_limit() {
+                return Err(too_large(&label, format, format.spool_limit()));
+            }
             let stem = path
                 .file_stem()
                 .and_then(|stem| stem.to_str())
                 .unwrap_or("Sheet1");
-            spooled(&bytes, format, stem)
+            spooled(file, &label, format, stem)
         }
         _ => {
             let workbook =
@@ -317,29 +345,136 @@ fn is_decimal(text: &str) -> bool {
     index == bytes.len()
 }
 
-fn spooled(bytes: &[u8], format: InputFormat, stem: &str) -> Result<Input> {
-    let spool = Spool::create()?;
-    let path = spool.0.join(format!("{stem}.{}", format.extension()));
-    fs::write(&path, bytes).with_context(|| format!("spooling input to {}", path.display()))?;
+/// Stream `source` (described as `label` in errors) into a fresh spool and
+/// open it as `format`.
+fn spooled(source: impl Read, label: &str, format: InputFormat, stem: &str) -> Result<Input> {
+    let (spool, path) = spool_input(
+        &std::env::temp_dir(),
+        source,
+        label,
+        format,
+        stem,
+        format.spool_limit(),
+    )?;
     let workbook =
         Workbook::open(&path).with_context(|| format!("opening {stem} as {format:?}"))?;
     Ok(Input::new(workbook, Some(spool)))
+}
+
+/// Copy at most `limit` bytes of `source` into `{stem}.{extension}` inside a
+/// new spool under `root`, reading through a fixed-size buffer. More bytes
+/// than `limit` fail, and the spool with its partial copy is removed.
+fn spool_input(
+    root: &Path,
+    source: impl Read,
+    label: &str,
+    format: InputFormat,
+    stem: &str,
+    limit: u64,
+) -> Result<(Spool, PathBuf)> {
+    let spool = Spool::create(root)?;
+    let path = spool.0.join(format!("{stem}.{}", format.extension()));
+    let mut file =
+        private_file(&path).with_context(|| format!("spooling input to {}", path.display()))?;
+    // One byte past the limit tells an oversized source from one that fits.
+    let copied = io::copy(&mut source.take(limit.saturating_add(1)), &mut file)
+        .with_context(|| format!("spooling {label} to {}", path.display()))?;
+    if copied > limit {
+        return Err(too_large(label, format, limit));
+    }
+    Ok((spool, path))
+}
+
+/// Spooled input larger than its format's spool limit. Commands find it with
+/// `anyhow::Error::downcast_ref` to report it as a usage failure.
+#[derive(Debug)]
+pub(crate) struct SpoolLimitExceeded {
+    label: String,
+    format: InputFormat,
+    limit: u64,
+}
+
+impl std::fmt::Display for SpoolLimitExceeded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} exceeds the {} spool limit for --from {} input",
+            self.label,
+            byte_size(self.limit),
+            self.format.extension()
+        )
+    }
+}
+
+impl std::error::Error for SpoolLimitExceeded {}
+
+fn too_large(label: &str, format: InputFormat, limit: u64) -> anyhow::Error {
+    SpoolLimitExceeded {
+        label: label.to_string(),
+        format,
+        limit,
+    }
+    .into()
+}
+
+/// `bytes` in the largest binary unit that divides it evenly.
+fn byte_size(bytes: u64) -> String {
+    const MIB: u64 = 1024 * 1024;
+    const GIB: u64 = 1024 * MIB;
+    if bytes >= GIB && bytes % GIB == 0 {
+        format!("{} GiB", bytes / GIB)
+    } else if bytes >= MIB && bytes % MIB == 0 {
+        format!("{} MiB", bytes / MIB)
+    } else {
+        format!("{bytes} bytes")
+    }
+}
+
+/// Create directory `path`, readable only by its owner from the moment it
+/// exists. Refuses an existing path, symlinks included.
+fn private_dir(path: &Path) -> io::Result<()> {
+    let mut builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(path)
+}
+
+/// Create file `path` for writing, readable only by its owner from the
+/// moment it exists. Refuses an existing path, symlinks included.
+fn private_file(path: &Path) -> io::Result<File> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)
 }
 
 /// A private temporary directory removed on drop.
 struct Spool(PathBuf);
 
 impl Spool {
-    fn create() -> Result<Self> {
+    fn create(root: &Path) -> Result<Self> {
+        // Distinguishes spools created in the same process within one clock tick.
+        static SEQUENCE: AtomicU64 = AtomicU64::new(0);
         let stamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|elapsed| elapsed.as_nanos())
             .unwrap_or_default();
-        let directory =
-            std::env::temp_dir().join(format!("wolfxl-input-{}-{stamp}", std::process::id()));
-        // `create_dir` refuses an existing path, so a pre-planted directory or
-        // symlink is never reused.
-        fs::create_dir(&directory)
+        let sequence = SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let directory = root.join(format!(
+            "wolfxl-input-{}-{stamp}-{sequence}",
+            std::process::id()
+        ));
+        // The mode applies at creation, so the directory is never open to
+        // other users, and a pre-planted directory or symlink is refused
+        // rather than reused.
+        private_dir(&directory)
             .with_context(|| format!("creating spool directory {}", directory.display()))?;
         Ok(Self(directory))
     }
@@ -391,5 +526,158 @@ mod tests {
         assert_eq!(iso_serial("1899-12-31T12:00:00"), None);
         assert_eq!(iso_serial("PT12H30M00S"), None);
         assert_eq!(iso_serial("total"), None);
+    }
+
+    /// Spool `bytes` as CSV under `root` with spool limit `limit`.
+    fn spool_csv(root: &Path, bytes: &[u8], limit: u64) -> Result<(Spool, PathBuf)> {
+        spool_input(
+            root,
+            bytes,
+            "standard input",
+            InputFormat::Csv,
+            "stdin",
+            limit,
+        )
+    }
+
+    #[test]
+    fn spooling_stops_one_byte_past_the_limit_and_removes_the_partial_copy() {
+        let root = Spool::create(&std::env::temp_dir()).unwrap();
+        // An endless source shows the copy is bounded by the limit, not the input.
+        let error = spool_input(
+            &root.0,
+            io::repeat(b'a'),
+            "standard input",
+            InputFormat::Xlsx,
+            "stdin",
+            8,
+        )
+        .err()
+        .expect("an endless source exceeds the limit");
+        assert_eq!(
+            error.to_string(),
+            "standard input exceeds the 8 bytes spool limit for --from xlsx input"
+        );
+        assert!(
+            error
+                .context("reading the input")
+                .downcast_ref::<SpoolLimitExceeded>()
+                .is_some(),
+            "the limit error stays typed through added context"
+        );
+        assert_eq!(fs::read_dir(&root.0).unwrap().count(), 0, "spool removed");
+
+        let (spool, path) = spool_csv(&root.0, b"a,b\n1,2", 7).expect("exactly the limit fits");
+        assert_eq!(path.file_name().unwrap(), "stdin.csv");
+        assert_eq!(fs::read(&path).unwrap(), b"a,b\n1,2");
+        drop(spool);
+        assert!(!path.exists(), "spool removed on drop");
+    }
+
+    #[test]
+    fn spool_limits_name_the_reader_admission_budgets() {
+        assert_eq!(byte_size(InputFormat::Xls.spool_limit()), "512 MiB");
+        for format in [
+            InputFormat::Csv,
+            InputFormat::Tsv,
+            InputFormat::Xlsx,
+            InputFormat::Xlsm,
+            InputFormat::Xlsb,
+            InputFormat::Ods,
+        ] {
+            assert_eq!(byte_size(format.spool_limit()), "4 GiB", "{format:?}");
+        }
+        assert_eq!(byte_size(1536), "1536 bytes");
+    }
+
+    #[test]
+    fn spool_entries_refuse_existing_paths_and_symlinks() {
+        let root = Spool::create(&std::env::temp_dir()).unwrap();
+        let existing = root.0.join("existing.csv");
+        fs::write(&existing, "keep").unwrap();
+        assert_eq!(
+            private_file(&existing).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(
+            private_dir(&existing).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(fs::read_to_string(&existing).unwrap(), "keep");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            let missing = root.0.join("missing.csv");
+            for (link, target) in [("link.csv", &existing), ("dangling.csv", &missing)] {
+                let link = root.0.join(link);
+                symlink(target, &link).unwrap();
+                assert_eq!(
+                    private_file(&link).unwrap_err().kind(),
+                    io::ErrorKind::AlreadyExists
+                );
+                assert_eq!(
+                    private_dir(&link).unwrap_err().kind(),
+                    io::ErrorKind::AlreadyExists
+                );
+            }
+            assert_eq!(fs::read_to_string(&existing).unwrap(), "keep");
+            assert!(!missing.exists(), "a dangling symlink is never followed");
+        }
+    }
+
+    /// Permission bits of `path`.
+    #[cfg(unix)]
+    fn mode(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        fs::symlink_metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn spool_directory_and_file_are_owner_only() {
+        let root = Spool::create(&std::env::temp_dir()).unwrap();
+        let (spool, path) = spool_csv(&root.0, b"a\n1\n", 4).unwrap();
+        assert_eq!(mode(&root.0), 0o700);
+        assert_eq!(mode(&spool.0), 0o700);
+        assert_eq!(mode(&path), 0o600);
+    }
+
+    /// Set in the child process of
+    /// `spool_stays_owner_only_under_a_permissive_umask`.
+    #[cfg(unix)]
+    const UMASK_CHILD: &str = "WOLFXL_TEST_SPOOL_UMASK_CHILD";
+
+    #[cfg(unix)]
+    #[test]
+    fn spool_stays_owner_only_under_a_permissive_umask() {
+        let root = Spool::create(&std::env::temp_dir()).unwrap();
+        if std::env::var_os(UMASK_CHILD).is_some() {
+            // Confirms the child really runs under umask 000.
+            let probe = root.0.join("probe");
+            fs::write(&probe, "").unwrap();
+            assert_eq!(mode(&probe), 0o666, "child umask is 000");
+
+            let (spool, path) = spool_csv(&root.0, b"a\n1\n", 4).unwrap();
+            assert_eq!(mode(&spool.0), 0o700);
+            assert_eq!(mode(&path), 0o600);
+            return;
+        }
+        // The umask is process-wide, so this test reruns itself alone in a
+        // child process started under umask 000.
+        let name = "input::tests::spool_stays_owner_only_under_a_permissive_umask";
+        let output = std::process::Command::new("/bin/sh")
+            .args(["-c", "umask 000 && exec \"$0\" \"$@\""])
+            .arg(std::env::current_exe().unwrap())
+            .args(["--exact", name, "--test-threads=1"])
+            .env(UMASK_CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("1 passed"),
+            "{stdout}{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }

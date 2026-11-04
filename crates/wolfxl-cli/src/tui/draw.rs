@@ -190,25 +190,46 @@ fn put(buffer: &mut Buffer, x: u16, y: u16, text: &str, width: u16, right: bool,
 
 /// `text` when it fits in `width` cells, else its longest prefix that fits
 /// with a trailing `…`.
-fn fit(text: &str, width: usize) -> Cow<'_, str> {
+pub(super) fn fit(text: &str, width: usize) -> Cow<'_, str> {
+    elide(text, width, usize::MAX)
+}
+
+/// `text` when it fits in `width` cells, else at most `head` cells of its
+/// start and as much of its end as still fits around one `…`. A `head` of
+/// zero keeps only the end; `usize::MAX` keeps only the start.
+pub(super) fn elide(text: &str, width: usize, head: usize) -> Cow<'_, str> {
     if text.width() <= width {
         return Cow::Borrowed(text);
     }
     if width == 0 {
         return Cow::Borrowed("");
     }
-    let mut out = String::new();
+    let room = width - 1;
+    let head = head.min(room);
     let mut used = 0;
-    for ch in text.chars() {
+    let mut kept = 0;
+    for (index, ch) in text.char_indices() {
         let ch_width = ch.width().unwrap_or(0);
-        if used + ch_width > width - 1 {
+        if used + ch_width > head {
             break;
         }
-        out.push(ch);
         used += ch_width;
+        kept = index + ch.len_utf8();
     }
-    out.push('…');
-    Cow::Owned(out)
+    let tail_room = room - head;
+    let mut start = text.len();
+    let mut tail = 0;
+    if tail_room > 0 {
+        for (index, ch) in text[kept..].char_indices().rev() {
+            let ch_width = ch.width().unwrap_or(0);
+            if tail + ch_width > tail_room {
+                break;
+            }
+            start = kept + index;
+            tail += ch_width;
+        }
+    }
+    Cow::Owned(format!("{}…{}", &text[..kept], &text[start..]))
 }
 
 #[cfg(test)]
@@ -217,7 +238,7 @@ mod tests {
     use ratatui::crossterm::event::KeyCode;
     use ratatui::Terminal;
 
-    use super::super::app::tests::{app, press};
+    use super::super::app::tests::{app, grid, press};
     use super::*;
 
     fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
@@ -268,7 +289,28 @@ North|Dee|1,200|ok";
         assert_eq!(lines[0], "Id│Text        │    ");
         assert_eq!(lines[1], "18│abcdefghijk…│    ");
         assert_eq!(lines[3], "20│abcdefghijk…│    ");
-        assert!(lines[4].starts_with("data.csv | Sheet1 ["));
+        assert_eq!(
+            lines[4], "data.… | R20/20 C1/2",
+            "the file gives way so the cursor stays whole"
+        );
+    }
+
+    #[test]
+    fn narrow_status_line_keeps_the_cursor() {
+        let mut app = App::new(
+            "/reports/2026/a-very-long-workbook-name.csv".into(),
+            vec!["Sheet1".into()],
+            0,
+            grid("Sheet1", LEDGER),
+        );
+        let lines = screen(&mut app, 24, 4);
+        assert_eq!(lines[3], "a-very-long… | R1/3 C1/4");
+        press(&mut app, KeyCode::Char('/'));
+        for typed in "carry-over".chars() {
+            press(&mut app, KeyCode::Char(typed));
+        }
+        let lines = screen(&mut app, 24, 4);
+        assert_eq!(lines[3], "/carry-over | R1/3 C1/4 ");
     }
 
     #[test]
@@ -302,5 +344,15 @@ North|Dee|1,200|ok";
         assert_eq!(fit("abcd", 3), "ab…");
         assert_eq!(fit("abcd", 0), "");
         assert_eq!(fit("日本語", 4), "日…");
+    }
+
+    #[test]
+    fn elide_keeps_the_start_the_end_or_both() {
+        assert_eq!(elide("abc", 3, 0), "abc");
+        assert_eq!(elide("abcdefgh", 5, 2), "ab…gh");
+        assert_eq!(elide("abcdef", 4, 0), "…def");
+        assert_eq!(elide("abcdef", 4, usize::MAX), "abc…");
+        assert_eq!(elide("abcd", 0, 1), "");
+        assert_eq!(elide("日本語テキスト", 6, 2), "日…ト");
     }
 }

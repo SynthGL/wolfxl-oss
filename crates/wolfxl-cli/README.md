@@ -93,7 +93,20 @@ file is `-`; `calc` also reads it when no file is given. Standard input needs
 extension. A delimited input is one sheet named after the file stem, or
 `stdin` when piped.
 
-Delimited fields arrive as text. `pivot` and `stats` trim surrounding
+Standard input and extension-overriding `--from` copies stream to a private
+temporary file, with a 512 MiB source-byte limit for XLS and 4 GiB for the
+other formats. These named CLI spool limits match the XLS reader's source
+limit and the other readers' default uncompressed-package budget,
+respectively; the 4 GiB limit also applies to CSV/TSV. Exceeding a spool
+limit exits 2 and names the limit. The limits are not changed by
+`WOLFXL_MAX_ZIP_TOTAL_BYTES`, and do not add a source-byte limit to files
+opened directly without an extension override. On Unix, spool directories
+are created owner-only (0700) and files owner-only (0600), and are removed
+after use or a failed copy.
+
+Delimited header names retain their source spelling: `001`, `01`, and `1`
+are distinct fields for `--rows`, `--values`, `--where`, `--select`, and
+`--key`. Data fields arrive as text. `pivot` and `stats` trim surrounding
 whitespace and read `TRUE` and `FALSE` in any letter case as booleans, and
 plain decimals as numbers: an optional sign, digits with an optional decimal
 point (`42`, `-1.5`, `.5`), and an optional exponent (`-1.5e3`). `calc` and

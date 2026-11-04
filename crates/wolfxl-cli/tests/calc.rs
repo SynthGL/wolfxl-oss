@@ -71,19 +71,33 @@ const SERIAL: f64 = 45_000.123_456_789;
 /// An XLSX workbook in the 1904 date system whose sheet `Data` stores
 /// `SERIAL` in B2 under the built-in `m/d/yy h:mm` format and in C2 as General.
 fn xlsx_1904() -> Vec<u8> {
+    xlsx(
+        r#"<workbookPr date1904="1"/>"#,
+        &format!(
+            r#"<row r="2"><c r="B2" s="1"><v>{SERIAL}</v></c><c r="C2"><v>{SERIAL}</v></c></row>"#
+        ),
+    )
+}
+
+/// A one-sheet XLSX workbook, sheet `Data`, whose `workbook.xml` carries
+/// `properties` before its sheet list and whose sheet holds `rows`. Style 1
+/// is the built-in `m/d/yy h:mm` format.
+fn xlsx(properties: &str, rows: &str) -> Vec<u8> {
     let types = r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>"#;
     let root = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#;
-    let workbook = r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><workbookPr date1904="1"/><sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>"#;
+    let workbook = format!(
+        r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">{properties}<sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>"#
+    );
     let rels = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>"#;
     let styles = r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="22" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>"#;
     let sheet = format!(
-        r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="2"><c r="B2" s="1"><v>{SERIAL}</v></c><c r="C2"><v>{SERIAL}</v></c></row></sheetData></worksheet>"#
+        r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{rows}</sheetData></worksheet>"#
     );
     let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
     for (name, text) in [
         ("[Content_Types].xml", types),
         ("_rels/.rels", root),
-        ("xl/workbook.xml", workbook),
+        ("xl/workbook.xml", workbook.as_str()),
         ("xl/_rels/workbook.xml.rels", rels),
         ("xl/styles.xml", styles),
         ("xl/worksheets/sheet1.xml", sheet.as_str()),
@@ -317,4 +331,17 @@ fn xlsb_date_cells_evaluate_their_stored_1904_serials() {
 fn xlsx_date_cells_evaluate_their_stored_1904_serials() {
     assert_eq!(piped("=B2", "xlsx", xlsx_1904()), "45000.123456789\n");
     assert_eq!(piped("=B2=C2", "xlsx", xlsx_1904()), "TRUE\n");
+}
+
+#[test]
+fn far_apart_xlsx_cells_evaluate_without_their_bounding_rectangle() {
+    // A dense grid spanning A1:XFD1048576 would need ~17 billion values.
+    let book = || {
+        xlsx(
+            "",
+            r#"<row r="1"><c r="A1"><v>2</v></c></row><row r="1048576"><c r="XFD1048576"><v>3</v></c></row>"#,
+        )
+    };
+    assert_eq!(piped("=SUM(A:A)", "xlsx", book()), "2\n");
+    assert_eq!(piped("=A1+XFD1048576", "xlsx", book()), "5\n");
 }

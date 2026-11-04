@@ -14,33 +14,13 @@ pub(crate) struct WorkbookData {
     sheets: BTreeMap<String, SheetData>,
 }
 
-/// One sheet's values in a compact grid whose top-left cell sits at the
-/// zero-based `origin`, plus values set after loading.
+/// One sheet's non-blank values keyed by one-based `(row, column)`, plus the
+/// used extent that bounds whole row and column references. Absent cells are
+/// blank, so far-apart cells never allocate the rectangle between them.
+#[derive(Default)]
 struct SheetData {
-    origin: (u32, u32),
-    rows: Vec<Vec<Value>>,
+    cells: HashMap<(u32, u32), Value>,
     extent: Extent,
-    overrides: HashMap<(u32, u32), Value>,
-}
-
-impl SheetData {
-    fn new(origin: (u32, u32), rows: Vec<Vec<Value>>) -> Self {
-        let width = rows.iter().map(Vec::len).max().unwrap_or(0);
-        let extent = if width == 0 {
-            Extent::default()
-        } else {
-            Extent {
-                rows: origin.0 + rows.len() as u32,
-                columns: origin.1 + width as u32,
-            }
-        };
-        Self {
-            origin,
-            rows,
-            extent,
-            overrides: HashMap::new(),
-        }
-    }
 }
 
 impl WorkbookData {
@@ -58,19 +38,24 @@ impl WorkbookData {
                 // text imports as numbers.
                 None => {
                     let sheet = input.raw_sheet(&name)?;
-                    let rows = sheet
-                        .rows()
-                        .iter()
-                        .map(|row| {
-                            row.iter()
-                                .map(|cell| match &cell.value {
-                                    CellValue::String(text) => delimited_field(text),
-                                    _ => Value::Blank,
-                                })
-                                .collect()
-                        })
-                        .collect();
-                    SheetData::new(sheet.origin(), rows)
+                    let (top, left) = sheet.origin();
+                    let rows = sheet.rows();
+                    let width = rows.iter().map(Vec::len).max().unwrap_or(0);
+                    let mut data = SheetData::default();
+                    if width > 0 {
+                        data.extent = Extent {
+                            rows: top + rows.len() as u32,
+                            columns: left + width as u32,
+                        };
+                    }
+                    for (row, fields) in (top + 1..).zip(rows) {
+                        for (column, cell) in (left + 1..).zip(fields) {
+                            if let CellValue::String(text) = &cell.value {
+                                data.cells.insert((row, column), delimited_field(text));
+                            }
+                        }
+                    }
+                    data
                 }
             };
             sheets.insert(name, data);
@@ -78,30 +63,29 @@ impl WorkbookData {
         Ok(Self { sheets })
     }
 
-    /// Coordinates are one-based, like the evaluator's references.
+    /// Coordinates are one-based, like the evaluator's references. The value
+    /// replaces any stored one, a blank included.
     pub(crate) fn set_value(&mut self, sheet: &str, row: u32, column: u32, value: Value) {
         let data = self.sheets.get_mut(sheet).expect("loaded target sheet");
         data.extent.rows = data.extent.rows.max(row);
         data.extent.columns = data.extent.columns.max(column);
-        data.overrides.insert((row, column), value);
+        data.cells.insert((row, column), value);
     }
 }
 
-/// The compact grid of a spreadsheet's row-major stored cells.
+/// A spreadsheet's stored cells; the extent covers every cell the reader kept,
+/// formulas without a cached value included.
 fn stored_sheet(cells: Vec<RawCell>) -> SheetData {
-    let (Some(first), Some(last)) = (cells.first(), cells.last()) else {
-        return SheetData::new((0, 0), Vec::new());
-    };
-    let (top, bottom) = (first.row, last.row);
-    let left = cells.iter().map(|cell| cell.col).min().unwrap_or(first.col);
-    let right = cells.iter().map(|cell| cell.col).max().unwrap_or(first.col);
-    let mut rows =
-        vec![vec![Value::Blank; (right - left + 1) as usize]; (bottom - top + 1) as usize];
+    let mut data = SheetData::default();
     for cell in cells {
-        rows[(cell.row - top) as usize][(cell.col - left) as usize] =
-            stored_value(cell.value, cell.data_type);
+        data.extent.rows = data.extent.rows.max(cell.row);
+        data.extent.columns = data.extent.columns.max(cell.col);
+        let value = stored_value(cell.value, cell.data_type);
+        if !matches!(value, Value::Blank) {
+            data.cells.insert((cell.row, cell.col), value);
+        }
     }
-    SheetData::new((top - 1, left - 1), rows)
+    data
 }
 
 /// A spreadsheet cell's stored value. ISO 8601 text that a reader typed as a
@@ -147,22 +131,9 @@ impl DataSource for WorkbookData {
     }
 
     fn cell_value(&self, sheet: &str, row: u32, column: u32) -> Value {
-        let Some(data) = self.sheets.get(sheet) else {
-            return Value::Blank;
-        };
-        if let Some(value) = data.overrides.get(&(row, column)) {
-            return value.clone();
-        }
-        let (origin_row, origin_column) = data.origin;
-        let Some(row) = row.checked_sub(origin_row + 1) else {
-            return Value::Blank;
-        };
-        let Some(column) = column.checked_sub(origin_column + 1) else {
-            return Value::Blank;
-        };
-        data.rows
-            .get(row as usize)
-            .and_then(|row| row.get(column as usize))
+        self.sheets
+            .get(sheet)
+            .and_then(|data| data.cells.get(&(row, column)))
             .cloned()
             .unwrap_or(Value::Blank)
     }
@@ -230,5 +201,72 @@ mod tests {
         assert_eq!(text_value(&Value::Number(0.1 + 0.2)), "0.3");
         assert_eq!(text_value(&Value::Number(1_377_000.0)), "1377000");
         assert_eq!(text_value(&Value::Number(-0.0)), "0");
+    }
+
+    fn raw_cell(row: u32, col: u32, value: RawValue) -> RawCell {
+        RawCell {
+            row,
+            col,
+            coordinate: String::new(),
+            style_id: None,
+            data_type: CellDataType::Number,
+            value,
+            formula: None,
+            formula_kind: None,
+            formula_shared_index: None,
+            array_formula: None,
+            rich_text: None,
+        }
+    }
+
+    fn book(cells: Vec<RawCell>) -> WorkbookData {
+        WorkbookData {
+            sheets: BTreeMap::from([("Data".to_owned(), stored_sheet(cells))]),
+        }
+    }
+
+    fn evaluated(data: &WorkbookData, formula: &str) -> Value {
+        eval::evaluate(formula, data, "Data").expect("formula parses")
+    }
+
+    #[test]
+    fn far_apart_stored_cells_keep_only_their_values() {
+        let data = book(vec![
+            raw_cell(1, 1, RawValue::Number(2.0)),
+            RawCell {
+                formula: Some("A1".to_owned()),
+                ..raw_cell(5, 3, RawValue::Empty)
+            },
+            raw_cell(1_048_576, 16_384, RawValue::Number(3.0)),
+        ]);
+        let sheet = &data.sheets["Data"];
+        assert_eq!(sheet.cells.len(), 2);
+        assert_eq!(
+            sheet.extent,
+            Extent {
+                rows: 1_048_576,
+                columns: 16_384
+            }
+        );
+        assert_eq!(evaluated(&data, "=SUM(A:A)"), Value::Number(2.0));
+        assert_eq!(evaluated(&data, "=A1+XFD1048576"), Value::Number(5.0));
+        assert_eq!(evaluated(&data, "=C5"), Value::Blank);
+        assert_eq!(evaluated(&data, "=COUNT(C:C)"), Value::Number(0.0));
+    }
+
+    #[test]
+    fn set_values_replace_stored_cells_and_grow_the_extent() {
+        let mut data = book(vec![raw_cell(1, 1, RawValue::Number(2.0))]);
+        data.set_value("Data", 1, 1, Value::Blank);
+        data.set_value("Data", 4, 2, Value::Number(7.0));
+        assert_eq!(data.cell_value("Data", 1, 1), Value::Blank);
+        assert_eq!(
+            data.used_extent("Data"),
+            Extent {
+                rows: 4,
+                columns: 2
+            }
+        );
+        assert_eq!(evaluated(&data, "=SUM(A:B)"), Value::Number(7.0));
     }
 }

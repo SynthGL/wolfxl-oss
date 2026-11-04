@@ -323,6 +323,26 @@ fn exact_header_match_wins_over_case_insensitive_ambiguity() {
 }
 
 #[test]
+fn numeric_looking_headers_resolve_by_source_spelling() {
+    // Typed, the headers `001`, `01`, and `1` would all read as 1.
+    let csv = "001,01,1\n007,TRUE,1.5\n7,x,2\n8,FALSE,5\n";
+    assert_eq!(
+        piped(csv, &["-e", "csv", "--where", "1<3", "--select", "01,001"]),
+        "01,001\nTRUE,007\nx,7\n"
+    );
+
+    // TSV: `1.0` and `1` stay distinct headers.
+    let run = peek(
+        &[
+            "-", "--from", "tsv", "-e", "csv", "--where", "1=7", "--select", "1.0",
+        ],
+        Some("1\t1.0\n5\t6\n7\t8\n"),
+    );
+    assert_eq!(run.code, 0, "stderr={}", run.stderr);
+    assert_eq!(run.stdout, "1.0\n8\n");
+}
+
+#[test]
 fn unknown_where_column_exits_2_naming_the_headers() {
     let stderr = refused(LEDGER, &["--where", "Regin=West"]);
     assert!(stderr.contains("unknown column \"Regin\""), "{stderr}");

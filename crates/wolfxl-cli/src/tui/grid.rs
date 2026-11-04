@@ -111,7 +111,7 @@ impl Grid {
 }
 
 /// `text` with every control character replaced by a space.
-fn one_line(text: &str) -> String {
+pub(super) fn one_line(text: &str) -> String {
     if text.contains(char::is_control) {
         text.replace(char::is_control, " ")
     } else {
