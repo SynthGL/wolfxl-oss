@@ -4,7 +4,9 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Structural worksheet operations (insert/delete rows + cols) — pure-Rust XML rewrites for the wolfxl patcher. Shared between RFC-030 (rows) and RFC-031 (cols)."
+description = "Pure Rust XML rewrites for worksheet row and column insertion and deletion"
+keywords = ["excel", "xlsx", "spreadsheet", "ooxml", "editing"]
+categories = ["encoding", "parser-implementations"]
 
 [dependencies]
 wolfxl-formula = { path = "../wolfxl-formula", version = "0.1" }

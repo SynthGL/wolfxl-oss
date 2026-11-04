@@ -1,14 +1,14 @@
 ---
 name: wolfxl-cli
-description: Read, filter, pivot, profile, reconcile, or fingerprint spreadsheets and CSV/TSV exports from the terminal with the wolfxl CLI. Use when you need to understand a workbook or delimited file without opening Excel or writing Python, such as getting a token-budgeted briefing, filtering rows, building a pivot, profiling columns, comparing two files by key with a tolerance, checking a file against a fingerprint, or evaluating a simple formula over piped data. To change an existing workbook, use the wolfxl-xlsx skill instead.
+description: Read, filter, pivot, profile, reconcile, or fingerprint spreadsheets and CSV/TSV exports from the terminal with the wolfxl CLI. Use when you need to understand a workbook or delimited file without opening Excel or writing Python, such as getting a token-budgeted briefing, filtering rows, building a pivot, profiling columns, comparing two files by key with a tolerance, checking a file against a fingerprint, or evaluating a simple formula over piped data. Connected wolfxl MCP tools can also edit existing XLSX/XLSM files; otherwise use the wolfxl-xlsx skill for workbook changes.
 license: MIT
 ---
 
 # Reading and checking spreadsheets with the wolfxl CLI
 
 `wolfxl` reads `.xlsx`, `.xlsm`, `.xls`, `.xlsb`, `.ods`, `.csv`, `.tsv`, and
-`.txt` files and never writes to them. Every command can print JSON for you to
-parse and plain text to show the user.
+`.txt` files, and the commands below never write to them. Every command can
+print JSON for you to parse and plain text to show the user.
 
 ## Setup
 
@@ -18,6 +18,19 @@ wolfxl --version
 ```
 
 If `wolfxl` is already on `PATH`, use it instead of installing.
+
+## MCP alternative
+
+When the wolfxl MCP server (`wolfxl mcp`) is connected, its tools return the
+same JSON without a shell: `get_workbook` (sheets, headers, and a `revision`),
+`read_range` (values and formula text, at most 10,000 cells per call),
+`calc`, `stats`, `pivot`, `diff`, and `fingerprint`. It also offers edits to
+existing `.xlsx`/`.xlsm` files (`write_cells`, `set_number_format`, row and
+column inserts and deletes, `add_sheet`, `rename_sheet`, `undo`, `redo`).
+Edit only when the user asks for a change: pass the `revision` from your last
+read as `expected_revision`, preview with `dry_run: true` when unsure, and
+tell the user that written formulas recalculate when Excel opens the file.
+With `--read-only` the server offers only the reading tools.
 
 ## Pick the command
 
@@ -50,8 +63,12 @@ If `wolfxl` is already on `PATH`, use it instead of installing.
    for a computed column. Write the `--add` formula for the first data row
    (row 2); each later row gets it filled down the way Excel fills formulas.
    The built-in engine covers arithmetic, comparison, `&`, references, and
-   `SUM`, `AVERAGE`, `COUNT`, `MIN`, `MAX`, and `IF`. Run
-   `list-functions --check` before using any other function.
+   67 functions: math and rounding, `SUMIF(S)`, `COUNTIF(S)`,
+   `AVERAGEIF(S)`, `MAXIFS`, `MINIFS`, `IF`, `IFERROR`, `AND`, `OR`,
+   `VLOOKUP`, `HLOOKUP`, `XLOOKUP`, `INDEX`, `MATCH`, `OFFSET`, `CHOOSE`,
+   text functions including `TEXT`, date functions including `EOMONTH`, and
+   `PMT`, `PV`, `FV`, `NPV`, `IRR`, `SLN`, and `DB`. Run
+   `list-functions --check` before relying on any function.
 5. **Check.** Use `diff` to reconcile two files and `verify` to confirm a
    file still matches a recorded fingerprint. Report the exit code along with
    the output.

@@ -25,7 +25,10 @@ enum TokenKind<'a> {
     GreaterEqual,
     Open,
     Close,
+    BraceOpen,
+    BraceClose,
     Comma,
+    Semicolon,
     Colon,
     Bang,
     End,
@@ -78,7 +81,10 @@ impl<'a> Lexer<'a> {
             '=' => TokenKind::Equal,
             '(' => TokenKind::Open,
             ')' => TokenKind::Close,
+            '{' => TokenKind::BraceOpen,
+            '}' => TokenKind::BraceClose,
             ',' => TokenKind::Comma,
+            ';' => TokenKind::Semicolon,
             ':' => TokenKind::Colon,
             '!' => TokenKind::Bang,
             '<' => {
@@ -121,22 +127,14 @@ impl<'a> Lexer<'a> {
                 }
             }
             '#' => {
-                let error = [
-                    ExcelError::Div0,
-                    ExcelError::Value,
-                    ExcelError::Ref,
-                    ExcelError::Name,
-                    ExcelError::Na,
-                    ExcelError::Num,
-                    ExcelError::Null,
-                ]
-                .into_iter()
-                .find(|error| {
-                    remaining
-                        .get(..error.as_str().len())
-                        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(error.as_str()))
-                })
-                .ok_or_else(|| syntax(start, "unknown error literal"))?;
+                let error = ExcelError::ALL
+                    .into_iter()
+                    .find(|error| {
+                        remaining
+                            .get(..error.as_str().len())
+                            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(error.as_str()))
+                    })
+                    .ok_or_else(|| syntax(start, "unknown error literal"))?;
                 self.position = start + error.as_str().len();
                 TokenKind::Error(error)
             }
@@ -322,6 +320,7 @@ impl<'a> Parser<'a> {
             }
             TokenKind::Text(text) => Ok(Expr::Literal(Value::Text(text))),
             TokenKind::Error(error) => Ok(Expr::Literal(Value::Error(error))),
+            TokenKind::BraceOpen => self.array(token.start),
             TokenKind::Open => {
                 let expression = self.expression(0)?;
                 if self.token.kind != TokenKind::Close {
@@ -408,6 +407,57 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// An array constant after its `{`: rows separated by `;`, elements by
+    /// `,`, each a number with an optional sign, text, a boolean, or an error.
+    fn array(&mut self, position: usize) -> Result<Expr, ParseError> {
+        let mut rows: Vec<Vec<Value>> = vec![Vec::new()];
+        loop {
+            let element = self.advance()?;
+            let value = match element.kind {
+                TokenKind::Plus | TokenKind::Minus => {
+                    let negative = element.kind == TokenKind::Minus;
+                    let number = self.advance()?;
+                    let TokenKind::Number(number) = number.kind else {
+                        return Err(syntax(number.start, "expected a number after the sign"));
+                    };
+                    Value::Number(if negative { -number } else { number })
+                }
+                TokenKind::Number(number) => Value::Number(number),
+                TokenKind::Text(text) => Value::Text(text),
+                TokenKind::Error(error) => Value::Error(error),
+                TokenKind::Word(word) if word.eq_ignore_ascii_case("TRUE") => Value::Boolean(true),
+                TokenKind::Word(word) if word.eq_ignore_ascii_case("FALSE") => {
+                    Value::Boolean(false)
+                }
+                _ => {
+                    return Err(syntax(
+                        element.start,
+                        "array constants hold only numbers, text, booleans, and errors",
+                    ))
+                }
+            };
+            let value = match value {
+                Value::Number(number) if !number.is_finite() => Value::Error(ExcelError::Num),
+                value => value,
+            };
+            rows.last_mut().expect("a current row").push(value);
+            let separator = self.advance()?;
+            match separator.kind {
+                TokenKind::Comma => {}
+                TokenKind::Semicolon => rows.push(Vec::new()),
+                TokenKind::BraceClose => break,
+                _ => return Err(syntax(separator.start, "expected ',', ';', or '}'")),
+            }
+        }
+        if rows.iter().any(|row| row.len() != rows[0].len()) {
+            return Err(syntax(
+                position,
+                "array constant rows must have the same number of values",
+            ));
+        }
+        Ok(Expr::Literal(Value::Array(rows)))
+    }
+
     fn call(&mut self, name: &str, position: usize) -> Result<Expr, ParseError> {
         let function = Function::from_name(name).ok_or_else(|| ParseError::Unsupported {
             function: name.to_owned(),
@@ -416,7 +466,15 @@ impl<'a> Parser<'a> {
         let mut arguments = Vec::new();
         if self.token.kind != TokenKind::Close {
             loop {
-                arguments.push(self.expression(0)?);
+                // An empty slot, as in `XLOOKUP(x,a,b,,1)` or `IF(c,1,)`, is
+                // an omitted argument.
+                arguments.push(
+                    if matches!(self.token.kind, TokenKind::Comma | TokenKind::Close) {
+                        Expr::Missing
+                    } else {
+                        self.expression(0)?
+                    },
+                );
                 if self.token.kind != TokenKind::Comma {
                     break;
                 }
@@ -427,8 +485,8 @@ impl<'a> Parser<'a> {
             return Err(syntax(self.token.start, "expected ',' or ')'"));
         }
         self.advance()?;
-        if matches!(function, Function::If) && !(2..=3).contains(&arguments.len()) {
-            return Err(syntax(position, "IF expects two or three arguments"));
+        if let Some(message) = function.arity_error(arguments.len()) {
+            return Err(syntax(position, message));
         }
         Ok(Expr::Call {
             function,

@@ -6,6 +6,8 @@
 
 - `wolfxl-cli` 0.10.0 adds analyst commands backed by `wolfxl-core` 0.9.0
   and the new MIT `wolfxl-reader`, `wolfxl-formula`, and `wolfxl-rels` crates.
+  `wolfxl-cli` 0.11.0 adds the full formula function set, the `wolfxl mcp`
+  server with workbook editing, and prebuilt binaries.
 - `wolfxl peek --where COLUMN<op>VALUE` keeps the data rows that satisfy every
   condition (`=`, `!=`, `<`, `>`, `<=`, `>=`, `~` contains), comparing money
   spellings such as `$1,200.00` and `(500.00)` numerically. `--select A,B`
@@ -34,9 +36,8 @@
   unsupported-function failures.
 - A built-in formula evaluator behind `calc` and `peek --add` covers
   arithmetic, comparison, `&` concatenation, cell and sheet-qualified
-  references, and ranges, with the functions `SUM`, `AVERAGE`, `COUNT`,
-  `MIN`, `MAX`, and `IF`. A formula naming any other function is rejected
-  with a pointer to `wolfxl list-functions`.
+  references, and ranges. A formula naming a function it does not implement
+  is rejected with a pointer to `wolfxl list-functions`.
 - Formula references import delimited money spellings such as `$1,200.00`
   and `(75.00)` as numbers, using the same parser as `--where`. Arithmetic
   text coercion accepts those spellings too. Stored Excel text cells stay
@@ -56,13 +57,36 @@
   category, with `--category` and `--search` filters, and `--check NAME,...`
   reports each name as supported or unsupported, exiting 1 when any is
   unsupported.
+- The built-in evaluator behind `calc` and `peek --add` now implements the
+  same 67 functions as the Python formula evaluator, in the `math`,
+  `statistical`, `logical`, `lookup`, `text`, `date`, and `financial`
+  categories, including `SUMIFS`, `COUNTIFS`, `XLOOKUP`, `INDEX`/`MATCH`,
+  `OFFSET`, `TEXT`, `EOMONTH`, `NPV`, `IRR`, and `PMT`. Formulas accept
+  array constants such as `{1,2;3,4}` and empty arguments such as
+  `XLOOKUP(x,A:A,B:B,,1)`, report wrong argument counts as parse failures,
+  and date functions follow the workbook's 1904 date system.
 - `peek`, `pivot`, `stats`, `diff`, and `calc` read standard input when the
   file is `-`, with `--from csv|tsv|xlsx|xlsm|xls|xlsb|ods` naming the format;
   `calc` also reads it when no file is given.
+- `wolfxl mcp` runs a stdio MCP server for AI agents. Its tools read
+  workbooks (`get_workbook`, `read_range`, `calc`, `stats`, `pivot`, `diff`,
+  `fingerprint`) and edit `.xlsx`/`.xlsm` files in place (`write_cells`,
+  `set_number_format`, `insert_rows`, `delete_rows`, `insert_columns`,
+  `delete_columns`, `add_sheet`, `rename_sheet`, `undo`, `redo`). Mutating
+  tools accept `dry_run` and `expected_revision`; `--root DIR` confines paths
+  and `--read-only` hides the editing tools.
+- New `wolfxl-edit` crate: byte-preserving edit sessions for existing
+  workbooks. Parts an edit does not touch keep their exact bytes; formula
+  writes mark the workbook for recalculation on open. The Python package's
+  modify mode now shares its sheet patcher.
+- Prebuilt `wolfxl` binaries for Linux (x86_64, arm64, static musl), macOS
+  (x86_64, arm64), and Windows (x86_64) on GitHub Releases under
+  `wolfxl-cli-v*` tags, with checksummed `install.sh` and `install.ps1`
+  installers and `cargo binstall` metadata.
 
 ### Changed
 
-- Bumped `wolfxl-cli` to `0.10.0`.
+- Bumped `wolfxl-cli` to `0.11.0`.
 - Updated the CLI to use `wolfxl-core` 0.9.0 and the MIT reader crates.
 - Preserve exact CSV/TSV header names when resolving pivot fields, matching
   the existing filters, selectors, keyed diffs, and column profiles.

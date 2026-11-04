@@ -237,6 +237,16 @@ impl RawBook {
         }))
     }
 
+    /// Whether the workbook numbers its date serials in the 1904 date system.
+    pub(crate) fn date1904(&self) -> bool {
+        match self {
+            Self::Xlsx(book) => book.date1904(),
+            Self::Xls(book) => book.date1904(),
+            Self::Xlsb(book) => book.date1904(),
+            Self::Ods(book) => book.date1904(),
+        }
+    }
+
     /// Sheet `name`'s cells that hold a value or a formula, row-major.
     pub(crate) fn cells(&self, name: &str) -> Result<Vec<RawCell>> {
         let loading = |error: &dyn std::fmt::Display| anyhow!("loading sheet {name:?}: {error}");

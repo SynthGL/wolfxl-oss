@@ -176,6 +176,16 @@ Install the current Community release:
 python -m pip install wolfxl==2.0.36
 ```
 
+For the standalone spreadsheet inspection and analysis CLI, install a prebuilt
+`wolfxl` binary on Linux or macOS:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/install.sh | sh
+```
+
+See the [CLI installation guide](crates/wolfxl-cli/README.md#install) for Windows,
+version pinning, prerequisites, `cargo binstall`, and source installation.
+
 WolfXL Community supports Python 3.11 and newer CPython versions for which a
 wheel is published. Version 2.0.36 is the last release supporting Python 3.9
 and 3.10; pip on those versions continues to resolve compatible 2.0.x releases.

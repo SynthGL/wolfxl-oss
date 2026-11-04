@@ -23,11 +23,7 @@ pub(crate) fn run(args: CalcArgs) -> ExitCode {
         }
     };
     let document = if args.json {
-        let document = json!({
-            "formula": formula, "sheet": sheet,
-            "type": type_name(&value), "value": json_value(&value),
-        });
-        format!("{document}\n")
+        format!("{}\n", report(&formula, &sheet, &value))
     } else {
         match &value {
             Value::Array(rows) => rows
@@ -60,6 +56,15 @@ pub(crate) fn run(args: CalcArgs) -> ExitCode {
     }
 }
 
+/// The `--json` report for one formula: evaluates exactly as `run` does and
+/// returns the same document without writing anything. A scalar Excel error
+/// is a successful report whose `type` is `"error"`.
+pub(crate) fn structured(args: &CalcArgs) -> Result<JsonValue> {
+    let formula = normalize_formula(&args.formula);
+    let (sheet, value) = evaluate(args, &formula)?;
+    Ok(report(&formula, &sheet, &value))
+}
+
 fn evaluate(args: &CalcArgs, formula: &str) -> Result<(String, Value)> {
     let mut input = input::open(args.file.as_deref(), args.from)?;
     let current = input.sheet_name(args.sheet.as_deref())?;
@@ -67,6 +72,13 @@ fn evaluate(args: &CalcArgs, formula: &str) -> Result<(String, Value)> {
     let value =
         eval::evaluate(formula, &data, &current).map_err(|error| parse_error(formula, error))?;
     Ok((current, value))
+}
+
+fn report(formula: &str, sheet: &str, value: &Value) -> JsonValue {
+    json!({
+        "formula": formula, "sheet": sheet,
+        "type": type_name(value), "value": json_value(value),
+    })
 }
 
 fn type_name(value: &Value) -> &'static str {

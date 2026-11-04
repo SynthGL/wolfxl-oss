@@ -234,7 +234,7 @@ fn unsupported_functions_exit_two_and_point_to_registry() {
     for formula in [
         "=SUMPRODUCT(B2:B3,C2:C3)",
         "=SEQUENCE(2,3)",
-        "=XLOOKUP(1,A:A,B:B)",
+        "=LOOKUP(1,A:A,B:B)",
     ] {
         let run = calc(&[formula, "--from", "csv"], Some("a,b,c\n1,2,3\n"));
         assert_eq!(run.code, 2, "{formula}: {}", run.stderr);
@@ -262,6 +262,12 @@ fn supported_functions_and_operators_use_typed_fields() {
         ("\"row\"&A3", "row3\n"),
         ("A2<A3", "TRUE\n"),
         ("(A2+A3)^2/4", "4\n"),
+        ("SUMIF(A:A,\">1\")", "3\n"),
+        ("VLOOKUP(3,A2:B3,2,FALSE)", "FALSE\n"),
+        ("XLOOKUP(1,A:A,B:B)", "TRUE\n"),
+        ("ROUND(A3/7,2)", "0.43\n"),
+        ("TEXT(A3,\"0.00\")", "3.00\n"),
+        ("DATE(2024,1,1)", "45292\n"),
     ] {
         assert_eq!(
             value(&[formula, "--from", "csv"], Some(csv)),
@@ -325,12 +331,18 @@ fn xlsb_date_cells_evaluate_their_stored_1904_serials() {
     assert_eq!(piped("=B2", "xlsb", book()), "45000.123456789\n");
     assert_eq!(piped("=B2=C2", "xlsb", book()), "TRUE\n");
     assert_eq!(piped("=SUM(B:C)-2*C2", "xlsb", book()), "0\n");
+    assert_eq!(
+        piped("=TEXT(B2,\"yyyy-mm-dd\")", "xlsb", book()),
+        "2027-03-16\n"
+    );
 }
 
 #[test]
 fn xlsx_date_cells_evaluate_their_stored_1904_serials() {
     assert_eq!(piped("=B2", "xlsx", xlsx_1904()), "45000.123456789\n");
     assert_eq!(piped("=B2=C2", "xlsx", xlsx_1904()), "TRUE\n");
+    assert_eq!(piped("=YEAR(B2)", "xlsx", xlsx_1904()), "2027\n");
+    assert_eq!(piped("=DATE(1904,1,2)", "xlsx", xlsx_1904()), "1\n");
 }
 
 #[test]

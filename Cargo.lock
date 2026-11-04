@@ -2604,6 +2604,7 @@ dependencies = [
  "wolfxl-autofilter",
  "wolfxl-classify",
  "wolfxl-core",
+ "wolfxl-edit",
  "wolfxl-formula",
  "wolfxl-merger",
  "wolfxl-pivot",
@@ -2630,7 +2631,7 @@ dependencies = [
 
 [[package]]
 name = "wolfxl-cli"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2644,6 +2645,7 @@ dependencies = [
  "tiktoken-rs",
  "unicode-width",
  "wolfxl-core",
+ "wolfxl-edit",
  "wolfxl-formula",
  "wolfxl-reader",
  "zip",
@@ -2656,6 +2658,20 @@ dependencies = [
  "chrono",
  "quick-xml",
  "wolfxl-reader",
+ "zip",
+]
+
+[[package]]
+name = "wolfxl-edit"
+version = "0.1.0"
+dependencies = [
+ "quick-xml",
+ "sha2 0.11.1",
+ "tempfile",
+ "wolfxl-formula",
+ "wolfxl-reader",
+ "wolfxl-rels",
+ "wolfxl-structural",
  "zip",
 ]
 
@@ -2724,6 +2740,7 @@ dependencies = [
  "indexmap",
  "quick-xml",
  "tempfile",
+ "wolfxl-edit",
  "wolfxl-merger",
  "wolfxl-pivot",
  "wolfxl-rels",

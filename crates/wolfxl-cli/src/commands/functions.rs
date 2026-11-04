@@ -258,10 +258,14 @@ mod tests {
                 classify(function.name),
                 Status::Supported(function.category)
             );
-            let formula = format!("={}(1,1)", function.name);
-            assert!(parse(&formula).is_ok(), "{formula} parses");
+            // Some argument count from zero to six is valid for every function.
+            let parses = (0..=6).any(|count| {
+                let arguments = vec!["1"; count].join(",");
+                parse(&format!("={}({arguments})", function.name)).is_ok()
+            });
+            assert!(parses, "{} parses", function.name);
         }
-        for name in ["XLOOKUP", "STDEV.S", "NOTAFUNCTION"] {
+        for name in ["LOOKUP", "STDEV.S", "NOTAFUNCTION"] {
             assert_eq!(classify(name), Status::Unsupported);
             assert!(
                 matches!(

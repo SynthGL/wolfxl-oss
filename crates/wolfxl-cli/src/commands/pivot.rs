@@ -24,7 +24,7 @@ use std::io::Write;
 use std::process::ExitCode;
 
 use anyhow::{anyhow, bail, Result};
-use serde_json::Value;
+use serde_json::{json, Value};
 use wolfxl_core::{Cell, CellValue, Sheet};
 
 use crate::render::{self, RenderOptions};
@@ -35,6 +35,18 @@ const BLANK_KEY: &str = "(blank)";
 const TOTAL: &str = "Total";
 /// 2^53: integral values below it are exact and print without a fraction.
 const MAX_EXACT_INTEGER: f64 = 9_007_199_254_740_992.0;
+/// Top-level `--export json` keys, in output order.
+const JSON_KEYS: [&str; 9] = [
+    "contract_version",
+    "sheet",
+    "rows",
+    "column",
+    "values",
+    "column_keys",
+    "headers",
+    "data",
+    "totals",
+];
 
 pub(crate) fn run(args: PivotArgs) -> ExitCode {
     let (table, sheet_names) = match build(&args) {
@@ -68,6 +80,11 @@ pub(crate) fn run(args: PivotArgs) -> ExitCode {
         }
     }
     ExitCode::SUCCESS
+}
+
+/// The `--export json` table, built without writing anything.
+pub(crate) fn structured(args: &PivotArgs) -> Result<Value> {
+    Ok(build(args)?.0.json())
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -287,59 +304,72 @@ impl Table {
         Sheet::from_rows(format!("{} (pivot)", self.sheet), grid)
     }
 
-    /// Pretty top-level object with one inline array per line, like `peek -e json`.
-    fn write_json<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        let column = self
-            .column_field
-            .as_ref()
-            .map_or(Value::Null, |field| Value::String(field.clone()));
-        writeln!(w, "{{")?;
-        writeln!(w, "  \"contract_version\": {CONTRACT_VERSION},")?;
-        writeln!(w, "  \"sheet\": {},", Value::String(self.sheet.clone()))?;
-        writeln!(w, "  \"rows\": {},", json_strings(&self.row_fields))?;
-        writeln!(w, "  \"column\": {column},")?;
-        writeln!(w, "  \"values\": {},", json_strings(&self.value_labels))?;
-        writeln!(
-            w,
-            "  \"column_keys\": {},",
-            inline(self.column_keys.iter().map(Key::json))
-        )?;
-        writeln!(w, "  \"headers\": {},", json_strings(&self.headers))?;
-        if self.rows.is_empty() {
-            writeln!(w, "  \"data\": [],")?;
-        } else {
-            writeln!(w, "  \"data\": [")?;
-            for (index, (keys, cells)) in self.rows.iter().enumerate() {
-                let row = inline(
+    /// The JSON table object.
+    fn json(&self) -> Value {
+        let column_keys: Vec<Value> = self.column_keys.iter().map(Key::json).collect();
+        let data: Vec<Value> = self
+            .rows
+            .iter()
+            .map(|(keys, cells)| {
+                Value::Array(
                     keys.iter()
                         .map(Key::json)
-                        .chain(cells.iter().map(json_cell)),
-                );
-                let comma = if index + 1 == self.rows.len() {
-                    ""
-                } else {
-                    ","
-                };
-                writeln!(w, "    {row}{comma}")?;
+                        .chain(cells.iter().map(json_cell))
+                        .collect(),
+                )
+            })
+            .collect();
+        let totals: Vec<Value> = self.totals.iter().map(json_cell).collect();
+        json!({
+            "contract_version": CONTRACT_VERSION,
+            "sheet": self.sheet,
+            "rows": self.row_fields,
+            "column": self.column_field,
+            "values": self.value_labels,
+            "column_keys": column_keys,
+            "headers": self.headers,
+            "data": data,
+            "totals": totals,
+        })
+    }
+
+    /// Pretty top-level object with one inline array per line, like `peek -e json`.
+    fn write_json<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        let document = self.json();
+        writeln!(w, "{{")?;
+        for (index, key) in JSON_KEYS.iter().enumerate() {
+            let comma = if index + 1 == JSON_KEYS.len() {
+                ""
+            } else {
+                ","
+            };
+            let name = Value::from(*key);
+            match &document[*key] {
+                Value::Array(rows) if *key == "data" && !rows.is_empty() => {
+                    writeln!(w, "  {name}: [")?;
+                    for (index, row) in rows.iter().enumerate() {
+                        let separator = if index + 1 == rows.len() { "" } else { "," };
+                        writeln!(w, "    {}{separator}", inline(row))?;
+                    }
+                    writeln!(w, "  ]{comma}")?;
+                }
+                value => writeln!(w, "  {name}: {}{comma}", inline(value))?,
             }
-            writeln!(w, "  ],")?;
         }
-        writeln!(
-            w,
-            "  \"totals\": {}",
-            inline(self.totals.iter().map(json_cell))
-        )?;
         writeln!(w, "}}")
     }
 }
 
-fn inline(items: impl Iterator<Item = Value>) -> String {
-    let parts: Vec<String> = items.map(|item| item.to_string()).collect();
-    format!("[{}]", parts.join(", "))
-}
-
-fn json_strings(items: &[String]) -> String {
-    inline(items.iter().map(|item| Value::String(item.clone())))
+/// Inline JSON text with `", "` between array items. Pivot documents hold no
+/// nested objects.
+fn inline(value: &Value) -> String {
+    match value {
+        Value::Array(items) => {
+            let items: Vec<String> = items.iter().map(inline).collect();
+            format!("[{}]", items.join(", "))
+        }
+        scalar => scalar.to_string(),
+    }
 }
 
 fn json_cell(value: &Option<f64>) -> Value {

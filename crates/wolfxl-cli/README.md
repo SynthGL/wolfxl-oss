@@ -8,10 +8,50 @@ Command-line previewer and analyst toolkit for spreadsheets. Installs the
 `schema` workflow, plus `calc`, `pivot`, `stats`, `diff`, `fingerprint`, and
 `verify` for analysis and reconciliation. A built-in formula evaluator powers
 `calc` and `peek --add` formula columns, and `list-functions` lists the
-functions it implements.
+functions it implements. `wolfxl mcp` serves the same reads, plus edits to
+existing `.xlsx`/`.xlsm` workbooks, to Model Context Protocol clients.
 
-```bash
-cargo install wolfxl-cli
+## Install
+
+Prebuilt binaries are available for Linux (x86_64 and ARM64, statically linked
+with musl), macOS (Intel and Apple silicon), and Windows (x86_64).
+
+Linux and macOS:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/install.sh | sh
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/install.ps1 | iex
+```
+
+The installers verify the archive against the release's `SHA256SUMS` before
+installing `wolfxl` to `$HOME/.local/bin` (or `$HOME\.local\bin` on Windows).
+Add that directory to your `PATH` if prompted. The Unix installer requires
+`curl`, `tar`, and `sha256sum` or `shasum`; automatic version discovery also
+requires `jq`. Windows requires PowerShell 5.1 or newer.
+
+Set `WOLFXL_VERSION` to a CLI version, such as `0.11.0`, to pin the download
+and skip version discovery. Set `WOLFXL_INSTALL_DIR` to choose a different
+destination. For a release mirror, `WOLFXL_RELEASE_BASE_URL` overrides
+`https://github.com/SynthGL/wolfxl-oss/releases/download`; the mirror must serve
+`wolfxl-cli-v<version>/SHA256SUMS` and the matching archive. Without a pinned
+version, discovery still queries the official GitHub releases API. CLI releases
+are separate from the repository's Python package releases.
+
+With [cargo-binstall](https://github.com/cargo-bins/cargo-binstall):
+
+```sh
+cargo binstall wolfxl-cli
+```
+
+Or compile from source with a Rust toolchain:
+
+```sh
+cargo install --locked wolfxl-cli
 ```
 
 ## Subcommands
@@ -27,6 +67,7 @@ cargo install wolfxl-cli
 - `wolfxl diff <left> <right> --key K` - reconcile two tables row by row on a key column, with numeric tolerance
 - `wolfxl fingerprint <file>` - style-independent content fingerprint (`wxf1:<sha256 hex>`)
 - `wolfxl verify <file> --fingerprint <F>` - check a file against a content fingerprint
+- `wolfxl mcp [--root DIR] [--read-only]` - serve workbook reads, analysis, and edits as MCP tools over standard input/output
 
 ## Usage
 
@@ -57,7 +98,7 @@ cat export.csv | wolfxl calc 'SUM(B:B)' --from csv
 wolfxl calc "=SUM('P&L'!B3:B5)" workbook.xlsx --sheet "Balance Sheet" --json
 wolfxl list-functions                      # NAME  category lines plus a count
 wolfxl list-functions --category math --json
-wolfxl list-functions --check SUM,IF,XLOOKUP  # exit 1: XLOOKUP is not built in
+wolfxl list-functions --check SUM,IF,LOOKUP  # exit 1: LOOKUP is not built in
 wolfxl pivot sales.csv --rows Region --values sum:Amount,count:Amount
 wolfxl pivot sales.csv --rows Region --column Year --values avg:Amount -e csv
 cat sales.csv | wolfxl pivot - --from csv --rows Region,Product --values max:Amount -e json
@@ -70,6 +111,7 @@ wolfxl diff old.csv new.csv --key SKU --compare Price,Qty --strict-exit --quiet
 wolfxl fingerprint workbook.xlsx           # wxf1:<64 hex digits>
 wolfxl fingerprint export.csv --json       # {fingerprint, version, sheets, cells, formulas}
 wolfxl verify workbook.xlsx --fingerprint wxf1:3f0c...
+wolfxl mcp --root ~/workbooks --read-only   # MCP server confined to one directory
 ```
 
 The `text`, `csv`, `json`, and `markdown` exporters are tuned for piping into
@@ -135,19 +177,41 @@ input, which needs `--from` as described above.
   as described in
   [Standard input and delimited fields](#standard-input-and-delimited-fields),
   and date-formatted numbers retain their stored numeric serials without
-  converting between date systems or rounding to whole seconds. References
-  use the sheet's own addresses, so a table that starts at `C3` is read at `C3`.
+  converting between date systems or rounding to whole seconds. Date
+  functions read and build serials in the workbook's own date system, 1904
+  included. References use the sheet's own addresses, so a table that starts
+  at `C3` is read at `C3`.
 - **Built-in engine.** The evaluator covers arithmetic (`+`, `-`, `*`, `/`,
   `^`, unary minus, and postfix `%`), comparison (`=`, `<>`, `<`, `>`, `<=`,
   `>=`), and `&` concatenation over numbers, strings, `TRUE`/`FALSE`, and
   error literals such as `#N/A`. It reads A1 references with or without `$`,
   sheet-qualified references such as `'P&L'!B3`, and ranges such as `B2:D10`,
   `B:B`, and `2:2`; whole columns and rows stop at the sheet's used extent.
-- **Functions.** The only functions are `SUM`, `AVERAGE`, `COUNT`, `MIN`,
-  `MAX`, and `IF`, which evaluates only the branch it returns. `COUNT`
-  ignores errors, including computed errors; the other aggregates propagate
-  errors. A formula naming any other function exits 2, naming it and pointing
-  to [`wolfxl list-functions`](#function-registry).
+- **Functions.** 67 functions in seven categories:
+  - `math`: `ABS`, `INT`, `MOD`, `POWER`, `ROUND`, `ROUNDDOWN`, `ROUNDUP`,
+    `SIGN`, `SQRT`, `SUM`, `SUMIF`, `SUMIFS`
+  - `statistical`: `AVERAGE`, `AVERAGEIF`, `AVERAGEIFS`, `COUNT`, `COUNTA`,
+    `COUNTIF`, `COUNTIFS`, `MAX`, `MAXIFS`, `MIN`, `MINIFS`
+  - `logical`: `AND`, `IF`, `IFERROR`, `NOT`, `OR`
+  - `lookup`: `CHOOSE`, `HLOOKUP`, `INDEX`, `MATCH`, `OFFSET`, `VLOOKUP`,
+    `XLOOKUP`
+  - `text`: `CONCATENATE`, `EXACT`, `FIND`, `LEFT`, `LEN`, `LOWER`, `MID`,
+    `REPT`, `RIGHT`, `SUBSTITUTE`, `TEXT`, `TRIM`, `UPPER`
+  - `date`: `DATE`, `DAY`, `DAYS`, `EDATE`, `EOMONTH`, `HOUR`, `MINUTE`,
+    `MONTH`, `NOW`, `SECOND`, `TODAY`, `YEAR`
+  - `financial`: `DB`, `FV`, `IRR`, `NPV`, `PMT`, `PV`, `SLN`
+
+  `IF`, `IFERROR`, and `CHOOSE` evaluate only the argument they return.
+  `COUNT` ignores errors, including computed errors; the other aggregates
+  propagate errors. Criteria in `COUNTIF`, `SUMIF`, and the other `*IF` and
+  `*IFS` functions take an optional comparison prefix (`">100"`, `"<>West"`)
+  and the `*`, `?`, and `~` wildcards. `MATCH`, `VLOOKUP`, `HLOOKUP`, and
+  `XLOOKUP` take Excel's match modes. `TEXT` covers number, percent,
+  scientific, and date and time format codes. `TODAY` and `NOW` read the
+  local clock. An empty argument counts as a blank, so `MATCH(x,A:A,)` is an
+  exact match, while `XLOOKUP` and `OFFSET` give empty optional arguments
+  their defaults. A formula naming any other function exits 2, naming it and
+  pointing to [`wolfxl list-functions`](#function-registry).
 - **Semantics.** Arithmetic uses `f64`. Arithmetic text-to-number coercion
   accepts the same decimal, exponent, and money spellings as `--where`.
   Text comparisons ignore case by Unicode lowercase ordering rather than
@@ -174,6 +238,10 @@ array of those.
 ```bash
 wolfxl calc '=SUM(B:B)/COUNT(B:B)' sales.tsv || echo "exit $?"
 wolfxl calc '=IF(MAX(C2:C20)>1000,"review","ok")' ledger.csv
+wolfxl calc '=SUMIFS(C:C,A:A,"North",B:B,"<>Apple")' sales.csv
+wolfxl calc '=XLOOKUP("ACME",A:A,D:D,"missing")' deals.csv
+wolfxl calc '=PMT(B2/12,B3,B4)' loan.csv
+wolfxl calc '=TEXT(EOMONTH(A2,1),"yyyy-mm-dd")' invoices.xlsx
 ```
 
 ## Function registry
@@ -189,22 +257,22 @@ wolfxl list-functions --check NAME[,NAME...] [--json]
 
 ```text
 $ wolfxl list-functions
-AVERAGE  statistical
-COUNT    statistical
-IF       logical
-MAX      math
-MIN      math
-SUM      math
-6 functions
+ABS          math
+AND          logical
+AVERAGE      statistical
+...
+XLOOKUP      lookup
+YEAR         date
+67 functions
 ```
 
-- **Categories.** The registry's categories are `logical`, `math`, and
-  `statistical`. `--category` keeps one of them, ignoring case and
-  surrounding spaces, so `Math` works. Any other category exits 2 and lists
-  the valid ones.
+- **Categories.** The registry's categories are `date`, `financial`,
+  `logical`, `lookup`, `math`, `statistical`, and `text`. `--category` keeps
+  one of them, ignoring case and surrounding spaces, so `Math` works. Any
+  other category exits 2 and lists the valid ones.
 - **Search.** `--search TEXT` keeps the functions whose name contains
-  `TEXT`, ignoring case: `--search m` finds `MAX`, `MIN`, and `SUM`. With
-  both flags, a function must pass both.
+  `TEXT`, ignoring case: `--search look` finds `HLOOKUP`, `VLOOKUP`, and
+  `XLOOKUP`. With both flags, a function must pass both.
 - **Text output.** Each line is the name padded to the longest listed name,
   two spaces, and the category. The last line is the count: `N functions`
   for the full list, or `M of N functions` when a filter is active. A filter
@@ -215,23 +283,23 @@ SUM      math
 filters (`null` when absent), with `category` in its registry spelling.
 
 ```json
-{"contract_version": 1, "total": 6, "count": 3, "category": "math", "search": null,
- "functions": [{"name": "MAX", "category": "math"}, {"name": "MIN", "category": "math"},
-               {"name": "SUM", "category": "math"}]}
+{"contract_version": 1, "total": 67, "count": 3, "category": "lookup", "search": "look",
+ "functions": [{"name": "HLOOKUP", "category": "lookup"}, {"name": "VLOOKUP", "category": "lookup"},
+               {"name": "XLOOKUP", "category": "lookup"}]}
 ```
 
 `--check` takes function names, comma-separated or repeated, and reports
 each in the order given. Names ignore case and surrounding whitespace and
 print in upper case. A name is `supported` when the registry lists it, and
 `unsupported` otherwise, which includes spreadsheet functions the built-in
-engine does not implement, such as `XLOOKUP`. `--check` cannot be combined
+engine does not implement, such as `LOOKUP`. `--check` cannot be combined
 with `--category` or `--search`.
 
 ```text
-$ wolfxl list-functions --check sum,xlookup,nope
-SUM      supported (math)
-XLOOKUP  unsupported
-NOPE     unsupported
+$ wolfxl list-functions --check sum,lookup,nope
+SUM     supported (math)
+LOOKUP  unsupported
+NOPE    unsupported
 1 of 3 supported
 ```
 
@@ -239,9 +307,9 @@ With `--json`, `total` is the size of the registry, `checked` counts the names,
 `supported` the supported ones, and `category` is `null` for an unsupported name:
 
 ```json
-{"contract_version": 1, "total": 6, "checked": 2, "supported": 1, "results": [
+{"contract_version": 1, "total": 67, "checked": 2, "supported": 1, "results": [
   {"name": "SUM", "status": "supported", "category": "math"},
-  {"name": "XLOOKUP", "status": "unsupported", "category": null}
+  {"name": "LOOKUP", "status": "unsupported", "category": null}
 ]}
 ```
 
@@ -663,6 +731,85 @@ empty sheet gives an empty `columns` list.
 |---|---|
 | 0 | The profile was printed |
 | 2 | Usage or input failure, a malformed `--where`, or an unknown or ambiguous column in `--where` or `--select` (stderr lists the headers) |
+
+## MCP server
+
+```text
+wolfxl mcp [--root DIR] [--read-only]
+```
+
+`wolfxl mcp` is a Model Context Protocol server on standard input and output:
+JSON-RPC 2.0, one message per line, with logs on stderr only. It negotiates
+protocol version `2025-06-18` and also accepts `2025-03-26` and `2024-11-05`.
+The server is file based: every tool takes a `path` to a workbook on disk and
+reads it fresh on each call.
+
+Register it with Claude Code:
+
+```bash
+claude mcp add wolfxl -- wolfxl mcp
+```
+
+Any client that reads an `mcpServers` configuration can start it the same way:
+
+```json
+{
+  "mcpServers": {
+    "wolfxl": {
+      "command": "wolfxl",
+      "args": ["mcp", "--root", "/path/to/workbooks"]
+    }
+  }
+}
+```
+
+| Tool | Purpose |
+|---|---|
+| `get_workbook` | Sheets with dimensions and headers, named ranges, format, and `revision` |
+| `read_range` | Stored values and formula text for an inclusive A1 range, at most 10,000 cells per call |
+| `calc` | Evaluate one formula against a sheet, as `wolfxl calc --json` does |
+| `stats`, `pivot`, `diff`, `fingerprint` | The JSON documents of the matching commands |
+| `write_cells` | Batch numbers, text, booleans, formulas, and clears (`null`) |
+| `set_number_format` | Apply an Excel number format code such as `$#,##0.00` to a range |
+| `insert_rows`, `delete_rows`, `insert_columns`, `delete_columns` | Structural edits at a 1-based index |
+| `add_sheet`, `rename_sheet` | Add a blank sheet (optionally at a 0-based position) or rename one |
+| `undo`, `redo` | Restore the exact prior bytes of a file this server edited |
+
+Reads accept every format the CLI reads. Edits require an existing `.xlsx` or
+`.xlsm` file and never create one. Each tool returns its result as structured
+content plus a text block holding the same JSON; a failed call returns
+`isError: true` with an `error` message, and malformed arguments or unknown
+tools are JSON-RPC invalid-params errors.
+
+**Paths and `--root`.** With `--root DIR`, relative paths resolve under `DIR`
+and any path whose canonical form lies outside it is refused, including paths
+that leave through `..` or a symbolic link. Without `--root`, relative paths
+resolve against the server's working directory.
+
+**`--read-only`.** Lists only `get_workbook`, `read_range`, `calc`, `stats`,
+`pivot`, `diff`, and `fingerprint`; calls to any editing tool are rejected.
+
+**Revisions.** `revision` is the lowercase hex SHA-256 of the file's bytes.
+Every editing tool accepts `expected_revision` and refuses to write when the
+file no longer matches it, so pass the revision from your last read to avoid
+overwriting a change made in the meantime. A successful edit returns the new
+`revision`, `dry_run: false`, and the `change` it applied.
+
+**Dry runs.** `dry_run: true` validates the edit and returns the planned
+`change` and the revision the file would have, without writing the file or
+recording history. Applying the same edit afterwards produces that revision.
+
+**Undo and redo.** The server keeps, per path, the bytes each of its edits
+replaced, in memory for the life of the process. `undo` and `redo` restore
+those exact bytes, a new edit clears the redo history, and both refuse when
+the file has changed on disk since the server last wrote it.
+
+**What an edit changes.** Edits rewrite only the package parts they touch;
+every other part of the file, such as images, embedded objects, and VBA
+projects, is carried over byte for byte. Written formulas are stored without a
+cached result, and the workbook is marked for a full recalculation, so Excel
+computes them when it opens the file. Until then, `read_range` reports their
+values as `null` and `calc` reads those cells as blank.
 
 ## Format Support
 

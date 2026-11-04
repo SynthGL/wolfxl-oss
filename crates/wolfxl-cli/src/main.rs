@@ -9,6 +9,7 @@ mod eval;
 mod filter;
 mod formula_data;
 mod input;
+mod mcp;
 mod render;
 mod tui;
 
@@ -53,6 +54,19 @@ enum Command {
     Diff(DiffArgs),
     /// Profile every column: types, distinct values, numeric summary, top values.
     Stats(StatsArgs),
+    /// Serve file-based spreadsheet tools over MCP on standard input/output.
+    Mcp(McpArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub(crate) struct McpArgs {
+    /// Confine all workbook paths to this directory; relative paths resolve here.
+    #[arg(long)]
+    root: Option<PathBuf>,
+
+    /// Expose only inspection, calculation, and analysis tools.
+    #[arg(long)]
+    read_only: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -380,6 +394,7 @@ fn main() -> ExitCode {
         Command::Verify(args) => commands::fingerprint::verify(args),
         Command::Diff(args) => commands::diff::run(args),
         Command::Stats(args) => commands::stats::run(args),
+        Command::Mcp(args) => finish_legacy(mcp::run(args)),
     }
 }
 
