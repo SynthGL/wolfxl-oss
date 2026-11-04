@@ -52,7 +52,7 @@ crc32fast.workspace = true
 quick-xml.workspace = true
 memchr.workspace = true
 chrono.workspace = true
-wolfxl-core = { path = "crates/wolfxl-core", version = "0.8" }
+wolfxl-core = { path = "crates/wolfxl-core", version = "0.9" }
 wolfxl-writer = { path = "crates/wolfxl-writer", version = "0.1" }
 wolfxl-rels = { path = "crates/wolfxl-rels", version = "0.1" }
 wolfxl-reader = { path = "crates/wolfxl-reader", version = "0.1" }

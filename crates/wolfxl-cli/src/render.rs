@@ -323,7 +323,7 @@ fn markdown_escape(s: &str) -> String {
         .replace('\n', "\\n")
 }
 
-fn display_sheet_cell(sheet: &Sheet, cell: &Cell, group_ints: bool) -> String {
+pub(crate) fn display_sheet_cell(sheet: &Sheet, cell: &Cell, group_ints: bool) -> String {
     if let CellValue::Error(error) = &cell.value {
         format!("ERROR: {}", sheet.error_text(error))
     } else {

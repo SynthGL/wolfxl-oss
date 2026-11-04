@@ -4,7 +4,10 @@ use std::process::ExitCode;
 use clap::{Parser, ValueEnum};
 
 mod commands;
+mod filter;
+mod input;
 mod render;
+mod tui;
 
 /// Fast, agent-friendly spreadsheet previews.
 ///
@@ -31,6 +34,16 @@ enum Command {
     Agent(AgentArgs),
     /// Per-column schema: type, cardinality, null count, format category.
     Schema(SchemaArgs),
+    /// Group rows by header fields and aggregate value fields, with grand totals.
+    Pivot(PivotArgs),
+    /// Print a style-independent content fingerprint (`wxf1:<sha256 hex>`).
+    Fingerprint(FingerprintArgs),
+    /// Check a file against a content fingerprint (0 match, 1 mismatch, 2 input failure).
+    Verify(VerifyArgs),
+    /// Reconcile two tables by a key column, with numeric tolerance.
+    Diff(DiffArgs),
+    /// Profile every column: types, distinct values, numeric summary, top values.
+    Stats(StatsArgs),
 }
 
 #[derive(clap::Args, Debug)]
@@ -85,7 +98,7 @@ pub enum SchemaFormat {
 
 #[derive(clap::Args, Debug)]
 struct PeekArgs {
-    /// Path to a spreadsheet (.xlsx/.xlsm/.xls/.xlsb/.ods/.csv/.tsv/.txt).
+    /// Spreadsheet path, or - for standard input with --from.
     file: PathBuf,
 
     /// Sheet name (default: first sheet).
@@ -107,6 +120,25 @@ struct PeekArgs {
     /// Export format. Omit for the boxed terminal preview.
     #[arg(short = 'e', long = "export")]
     export: Option<ExportFormat>,
+
+    /// Input format. Required for standard input; overrides a path's extension.
+    #[arg(long, value_enum)]
+    from: Option<input::InputFormat>,
+
+    /// Keep data rows where COLUMN<op>VALUE holds; op is one of = != < > <= >= ~
+    /// (contains). Repeat to combine with AND.
+    #[arg(long = "where", value_name = "EXPR")]
+    filters: Vec<String>,
+
+    /// Comma-separated headers to show, in the order given.
+    #[arg(long, value_delimiter = ',', value_name = "HEADERS")]
+    select: Vec<String>,
+
+    /// Browse the (filtered and selected) sheet in a full-screen terminal grid:
+    /// arrows/PageUp/PageDown/Home/End/g/G move, / n N search, s S sort,
+    /// f value counts, Tab next sheet, q or Esc quit.
+    #[arg(short = 'i', long, conflicts_with = "export")]
+    interactive: bool,
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -118,18 +150,188 @@ enum ExportFormat {
     Box,
 }
 
+#[derive(clap::Args, Debug)]
+pub(crate) struct PivotArgs {
+    /// Spreadsheet path, or - for standard input.
+    file: PathBuf,
+
+    /// Header(s) to group rows by, comma-separated or repeated.
+    #[arg(long, value_delimiter = ',', required = true)]
+    rows: Vec<String>,
+
+    /// Header whose distinct values become columns.
+    #[arg(long)]
+    column: Option<String>,
+
+    /// Aggregations as AGG:FIELD (sum, count, avg, min, max), comma-separated or repeated.
+    #[arg(long, value_delimiter = ',', required = true)]
+    values: Vec<String>,
+
+    /// Sheet to pivot (default: first sheet).
+    #[arg(short = 's', long)]
+    sheet: Option<String>,
+
+    /// Input format. Required for standard input; overrides a path's extension.
+    #[arg(long, value_enum)]
+    from: Option<input::InputFormat>,
+
+    /// Output format.
+    #[arg(short = 'e', long = "export", value_enum, default_value = "box")]
+    export: PivotFormat,
+}
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub(crate) enum PivotFormat {
+    Box,
+    Csv,
+    Json,
+}
+
+#[derive(clap::Args, Debug)]
+pub(crate) struct FingerprintArgs {
+    /// Path to a spreadsheet (.xlsx/.xlsm/.xlam/.xls/.xlsb/.ods/.csv/.tsv/.txt).
+    file: PathBuf,
+
+    /// Print {fingerprint, version, sheets, cells, formulas} as JSON.
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub(crate) struct VerifyArgs {
+    /// Path to a spreadsheet (.xlsx/.xlsm/.xlam/.xls/.xlsb/.ods/.csv/.tsv/.txt).
+    file: PathBuf,
+
+    /// Expected fingerprint: `wxf1:` followed by 64 hex digits.
+    #[arg(long)]
+    fingerprint: String,
+}
+
+#[derive(clap::Args, Debug)]
+pub(crate) struct DiffArgs {
+    /// Left spreadsheet path, or - for standard input.
+    left: PathBuf,
+
+    /// Right spreadsheet path, or - for standard input.
+    right: PathBuf,
+
+    /// Header of the column that identifies a row on both sides.
+    #[arg(long)]
+    key: String,
+
+    /// Columns to compare, comma-separated (default: every shared non-key column).
+    #[arg(long, value_delimiter = ',')]
+    compare: Vec<String>,
+
+    /// Largest absolute numeric difference that still counts as within tolerance.
+    #[arg(long, default_value_t = 0.0, allow_negative_numbers = true)]
+    tolerance: f64,
+
+    /// Key normalization applied on both sides before matching.
+    #[arg(long, value_enum, default_value = "none")]
+    key_transform: KeyTransform,
+
+    /// Sheet compared on both sides (default: each side's first sheet).
+    #[arg(short = 's', long)]
+    sheet: Option<String>,
+
+    /// Format of the standard-input side; with two paths, overrides both extensions.
+    #[arg(long, value_enum)]
+    from: Option<input::InputFormat>,
+
+    /// Output format.
+    #[arg(short = 'f', long = "format", value_enum, default_value = "json")]
+    format: DiffFormat,
+
+    /// Also exit 1 when differences fall within tolerance.
+    #[arg(long)]
+    strict_exit: bool,
+
+    /// Print nothing; report through the exit code only.
+    #[arg(short = 'q', long)]
+    quiet: bool,
+}
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub(crate) enum KeyTransform {
+    /// Match keys exactly as spelled.
+    None,
+    /// Strip surrounding whitespace.
+    Trim,
+    /// Strip surrounding whitespace and lowercase.
+    Lower,
+    /// Keep only ASCII digits.
+    Digits,
+}
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub(crate) enum DiffFormat {
+    Json,
+    Text,
+}
+
+#[derive(clap::Args, Debug)]
+pub(crate) struct StatsArgs {
+    /// Spreadsheet path, or - for standard input.
+    file: PathBuf,
+
+    /// Sheet to profile (default: first sheet).
+    #[arg(short = 's', long)]
+    sheet: Option<String>,
+
+    /// Input format. Required for standard input; overrides a path's extension.
+    #[arg(long, value_enum)]
+    from: Option<input::InputFormat>,
+
+    /// Keep data rows where COLUMN<op>VALUE holds; op is one of = != < > <= >= ~
+    /// (contains). Repeat to combine with AND.
+    #[arg(long = "where", value_name = "EXPR")]
+    filters: Vec<String>,
+
+    /// Comma-separated headers to profile, in the order given.
+    #[arg(long, value_delimiter = ',', value_name = "HEADERS")]
+    select: Vec<String>,
+
+    /// Most frequent values listed per column (0 = every distinct value).
+    #[arg(long, default_value_t = 5)]
+    top: usize,
+
+    /// Output format.
+    #[arg(short = 'e', long = "export", value_enum, default_value = "box")]
+    export: StatsFormat,
+}
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub(crate) enum StatsFormat {
+    Box,
+    Csv,
+    Json,
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let result = match cli.command {
+    match cli.command {
         Command::Peek(args) => commands::peek::run(args),
-        Command::Map(args) => commands::map::run(args.file, args.format),
-        Command::Agent(args) => commands::agent::run(args.file, args.max_tokens, args.sheet),
-        Command::Schema(args) => commands::schema::run(args.file, args.format, args.sheet),
-    };
+        Command::Map(args) => finish_legacy(commands::map::run(args.file, args.format)),
+        Command::Agent(args) => {
+            finish_legacy(commands::agent::run(args.file, args.max_tokens, args.sheet))
+        }
+        Command::Schema(args) => {
+            finish_legacy(commands::schema::run(args.file, args.format, args.sheet))
+        }
+        Command::Pivot(args) => commands::pivot::run(args),
+        Command::Fingerprint(args) => commands::fingerprint::fingerprint(args),
+        Command::Verify(args) => commands::fingerprint::verify(args),
+        Command::Diff(args) => commands::diff::run(args),
+        Command::Stats(args) => commands::stats::run(args),
+    }
+}
+
+fn finish_legacy(result: anyhow::Result<()>) -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("error: {e:#}");
+        Err(error) => {
+            eprintln!("error: {error:#}");
             ExitCode::from(1)
         }
     }
