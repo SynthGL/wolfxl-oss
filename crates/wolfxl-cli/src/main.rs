@@ -98,7 +98,7 @@ pub enum SchemaFormat {
 
 #[derive(clap::Args, Debug)]
 struct PeekArgs {
-    /// Spreadsheet path, or - for standard input with --from.
+    /// Spreadsheet path (.xlsx/.xlsm/.xls/.xlsb/.ods/.csv/.tsv/.txt), or - for standard input with --from.
     file: PathBuf,
 
     /// Sheet name (default: first sheet).
