@@ -1,6 +1,6 @@
 //! Cached workbook values shared by one-shot formulas and appended columns.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::{anyhow, Result};
 use wolfxl_core::CellValue;
@@ -22,6 +22,11 @@ pub(crate) struct WorkbookData {
 #[derive(Default)]
 struct SheetData {
     cells: HashMap<(u32, u32), Value>,
+    /// Rows the sheet marks hidden. Only the XLSX and XLSB readers report
+    /// them, and neither tells a manually hidden row from a filtered one.
+    hidden_rows: HashSet<u32>,
+    /// Cells whose stored formula calls `SUBTOTAL`.
+    subtotals: HashSet<(u32, u32)>,
     extent: Extent,
     /// The worksheet tables on this sheet, which structured references in
     /// any sheet's formulas address by name.
@@ -105,13 +110,19 @@ impl WorkbookData {
 /// A spreadsheet's stored cells; the extent covers every cell the reader kept
 /// with a value or a formula, formulas without a cached value included.
 fn stored_sheet(sheet: WorksheetData) -> SheetData {
-    let mut data = SheetData::default();
+    let mut data = SheetData {
+        hidden_rows: sheet.hidden_rows.into_iter().collect(),
+        ..SheetData::default()
+    };
     for cell in sheet.cells {
         if cell.formula.is_none() && matches!(cell.value, RawValue::Empty) {
             continue;
         }
         data.extent.rows = data.extent.rows.max(cell.row);
         data.extent.columns = data.extent.columns.max(cell.col);
+        if cell.formula.as_deref().is_some_and(calls_subtotal) {
+            data.subtotals.insert((cell.row, cell.col));
+        }
         let value = stored_value(cell.value, cell.data_type);
         if !matches!(value, Value::Blank) {
             data.cells.insert((cell.row, cell.col), value);
@@ -123,6 +134,42 @@ fn stored_sheet(sheet: WorksheetData) -> SheetData {
         .filter_map(SheetTable::new)
         .collect();
     data
+}
+
+/// Whether formula text calls `SUBTOTAL` anywhere outside string literals and
+/// quoted sheet names, as Excel checks to keep subtotals from double counting.
+fn calls_subtotal(formula: &str) -> bool {
+    const NAME: &[u8] = b"SUBTOTAL";
+    let bytes = formula.as_bytes();
+    let mut quote = None;
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        match quote {
+            // A doubled quote inside a quoted run is an escaped quote and
+            // reopens the run on the next byte.
+            Some(open) if byte == open => quote = None,
+            Some(_) => {}
+            None if byte == b'"' || byte == b'\'' => quote = Some(byte),
+            None => {
+                let boundary = index == 0 || {
+                    let before = bytes[index - 1];
+                    !(before.is_ascii_alphanumeric() || matches!(before, b'_' | b'.'))
+                };
+                let named = bytes
+                    .get(index..index + NAME.len())
+                    .is_some_and(|candidate| candidate.eq_ignore_ascii_case(NAME));
+                if boundary && named {
+                    let rest = &formula[index + NAME.len()..];
+                    if rest.trim_start().starts_with('(') {
+                        return true;
+                    }
+                }
+            }
+        }
+        index += 1;
+    }
+    false
 }
 
 /// A spreadsheet cell's stored value. ISO 8601 text that a reader typed as a
@@ -183,6 +230,18 @@ impl DataSource for WorkbookData {
 
     fn date1904(&self) -> bool {
         self.date1904
+    }
+
+    fn row_hidden(&self, sheet: &str, row: u32) -> bool {
+        self.sheets
+            .get(sheet)
+            .is_some_and(|data| data.hidden_rows.contains(&row))
+    }
+
+    fn is_subtotal(&self, sheet: &str, row: u32, column: u32) -> bool {
+        self.sheets
+            .get(sheet)
+            .is_some_and(|data| data.subtotals.contains(&(row, column)))
     }
 
     fn table(&self, name: &str) -> Option<eval::TableInfo<'_>> {
@@ -373,5 +432,50 @@ mod tests {
             }
         );
         assert_eq!(evaluated(&data, "=SUM(A:B)"), Value::Number(7.0));
+    }
+
+    #[test]
+    fn subtotal_formulas_are_recognized_outside_quotes() {
+        for formula in [
+            "SUBTOTAL(109,BigCity[Population])",
+            "=subtotal (9,A1:A3)*2",
+            "ROUND(SUBTOTAL(1,A:A),2)",
+            "\"x\"&SUBTOTAL(9,A1)",
+        ] {
+            assert!(calls_subtotal(formula), "{formula}");
+        }
+        for formula in [
+            "SUM(A1:A3)",
+            "\"SUBTOTAL(9,A1)\"",
+            "'SUBTOTAL(1'!A1",
+            "MYSUBTOTAL(1,A1)",
+            "SUBTOTALS",
+        ] {
+            assert!(!calls_subtotal(formula), "{formula}");
+        }
+    }
+
+    #[test]
+    fn subtotal_skips_hidden_rows_and_nested_subtotals() {
+        let data = sheet_book(WorksheetData {
+            cells: vec![
+                raw_cell(1, 1, RawValue::Number(10.0)),
+                raw_cell(2, 1, RawValue::Number(20.0)),
+                raw_cell(3, 1, RawValue::Number(30.0)),
+                RawCell {
+                    formula: Some("SUBTOTAL(9,A1:A3)".to_owned()),
+                    ..raw_cell(4, 1, RawValue::Number(60.0))
+                },
+            ],
+            hidden_rows: vec![2],
+            ..WorksheetData::default()
+        });
+        assert!(data.row_hidden("Data", 2));
+        assert!(!data.row_hidden("Data", 1));
+        assert!(data.is_subtotal("Data", 4, 1));
+        assert_eq!(evaluated(&data, "=SUM(A1:A4)"), Value::Number(120.0));
+        assert_eq!(evaluated(&data, "=SUBTOTAL(9,A1:A4)"), Value::Number(60.0));
+        assert_eq!(evaluated(&data, "=SUBTOTAL(109,A:A)"), Value::Number(40.0));
+        assert_eq!(evaluated(&data, "=SUBTOTAL(102,A1:A4)"), Value::Number(2.0));
     }
 }

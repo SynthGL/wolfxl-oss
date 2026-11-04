@@ -265,7 +265,7 @@ mod tests {
             });
             assert!(parses, "{} parses", function.name);
         }
-        for name in ["LOOKUP", "STDEV.S", "NOTAFUNCTION"] {
+        for name in ["LOOKUP", "PROPER", "NOTAFUNCTION"] {
             assert_eq!(classify(name), Status::Unsupported);
             assert!(
                 matches!(

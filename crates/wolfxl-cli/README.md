@@ -187,38 +187,58 @@ input, which needs `--from` as described above.
   error literals such as `#N/A`. It reads A1 references with or without `$`,
   sheet-qualified references such as `'P&L'!B3`, and ranges such as `B2:D10`,
   `B:B`, and `2:2`; whole columns and rows stop at the sheet's used extent.
-- **Functions.** 67 functions in seven categories:
+- **Functions.** 107 functions in seven categories:
   - `math`: `ABS`, `INT`, `MOD`, `POWER`, `ROUND`, `ROUNDDOWN`, `ROUNDUP`,
-    `SIGN`, `SQRT`, `SUM`, `SUMIF`, `SUMIFS`
+    `SIGN`, `SQRT`, `SUBTOTAL`, `SUM`, `SUMIF`, `SUMIFS`, `SUMPRODUCT`
   - `statistical`: `AVERAGE`, `AVERAGEIF`, `AVERAGEIFS`, `COUNT`, `COUNTA`,
-    `COUNTIF`, `COUNTIFS`, `MAX`, `MAXIFS`, `MIN`, `MINIFS`
-  - `logical`: `AND`, `IF`, `IFERROR`, `NOT`, `OR`
-  - `lookup`: `CHOOSE`, `HLOOKUP`, `INDEX`, `MATCH`, `OFFSET`, `VLOOKUP`,
-    `XLOOKUP`
-  - `text`: `CONCATENATE`, `EXACT`, `FIND`, `LEFT`, `LEN`, `LOWER`, `MID`,
-    `REPT`, `RIGHT`, `SUBSTITUTE`, `TEXT`, `TRIM`, `UPPER`
+    `COUNTBLANK`, `COUNTIF`, `COUNTIFS`, `LARGE`, `MAX`, `MAXIFS`, `MEDIAN`,
+    `MIN`, `MINIFS`, `MODE`, `MODE.SNGL`, `PERCENTILE`, `PERCENTILE.EXC`,
+    `PERCENTILE.INC`, `QUARTILE`, `QUARTILE.EXC`, `QUARTILE.INC`, `RANK`,
+    `RANK.AVG`, `RANK.EQ`, `SMALL`, `STDEV`, `STDEV.P`, `STDEV.S`, `STDEVP`,
+    `VAR`, `VAR.P`, `VAR.S`, `VARP`
+  - `logical`: `AND`, `IF`, `IFERROR`, `IFNA`, `IFS`, `NOT`, `OR`, `SWITCH`
+  - `lookup`: `CHOOSE`, `FILTER`, `HLOOKUP`, `INDEX`, `MATCH`, `OFFSET`,
+    `SORT`, `UNIQUE`, `VLOOKUP`, `XLOOKUP`
+  - `text`: `CONCAT`, `CONCATENATE`, `EXACT`, `FIND`, `LEFT`, `LEN`, `LOWER`,
+    `MID`, `REPT`, `RIGHT`, `SUBSTITUTE`, `TEXT`, `TEXTJOIN`, `TRIM`, `UPPER`,
+    `VALUE`
   - `date`: `DATE`, `DAY`, `DAYS`, `EDATE`, `EOMONTH`, `HOUR`, `MINUTE`,
-    `MONTH`, `NOW`, `SECOND`, `TODAY`, `YEAR`
-  - `financial`: `DB`, `FV`, `IRR`, `NPV`, `PMT`, `PV`, `SLN`
+    `MONTH`, `NETWORKDAYS`, `NOW`, `SECOND`, `TODAY`, `WORKDAY`, `YEAR`
+  - `financial`: `DB`, `FV`, `IRR`, `NPER`, `NPV`, `PMT`, `PV`, `RATE`,
+    `SLN`, `XIRR`, `XNPV`
 
-  `IF`, `IFERROR`, and `CHOOSE` evaluate only the argument they return.
-  `COUNT` ignores errors, including computed errors; the other aggregates
-  propagate errors. Criteria in `COUNTIF`, `SUMIF`, and the other `*IF` and
-  `*IFS` functions take an optional comparison prefix (`">100"`, `"<>West"`)
+  `IF`, `IFERROR`, `IFNA`, `IFS`, `SWITCH`, and `CHOOSE` evaluate only the
+  argument they return. `COUNT` ignores errors, including computed errors;
+  the other aggregates propagate errors. The statistical functions read
+  numbers the way `SUM` does: ranges skip text, booleans, and blanks.
+  Criteria in `COUNTIF`, `SUMIF`, and the other `*IF` and `*IFS` functions
+  take an optional comparison prefix (`">100"`, `"<>West"`)
   and the `*`, `?`, and `~` wildcards. `MATCH`, `VLOOKUP`, `HLOOKUP`, and
   `XLOOKUP` take Excel's match modes. `TEXT` covers number, percent,
   scientific, and date and time format codes. `TODAY` and `NOW` read the
   local clock. An empty argument counts as a blank, so `MATCH(x,A:A,)` is an
   exact match, while `XLOOKUP` and `OFFSET` give empty optional arguments
-  their defaults. A formula naming any other function exits 2, naming it and
-  pointing to [`wolfxl list-functions`](#function-registry).
+  their defaults. Names stored with the `_xlfn.` or `_xlws.` prefix, such as
+  `_xlfn.STDEV.S`, resolve to the same functions. A formula naming any other
+  function exits 2, naming it and pointing to
+  [`wolfxl list-functions`](#function-registry).
+- **Arrays.** Operators work element by element when an operand is a range
+  or array, as in Excel: `=B2:B10*C2:C10` is an array of products,
+  `=SUMPRODUCT((A2:A10="North")*C2:C10)` and `=SUMPRODUCT(--(C2:C10>100))`
+  count and sum by condition, and `=FILTER(A2:A10,C2:C10>100)` keeps the
+  matching rows. A scalar pairs with every element, and a single row or column
+  repeats to match the other operand; positions outside both shapes are
+  `#N/A`. Ranges are not implicitly intersected, and results never spill.
+- **`SUBTOTAL`.** Function numbers 1 to 11 and 101 to 111 select `AVERAGE`,
+  `COUNT`, `COUNTA`, `MAX`, `MIN`, `PRODUCT`, `STDEV`, `STDEVP`, `SUM`,
+  `VAR`, and `VARP`. Cells that themselves hold a `SUBTOTAL` formula, such as
+  a table's totals row, are skipped, so `=SUBTOTAL(109,F3:F15)` over a column
+  ending in its own total does not count it twice.
 - **Semantics.** Arithmetic uses `f64`. Arithmetic text-to-number coercion
   accepts the same decimal, exponent, and money spellings as `--where`.
   Text comparisons ignore case by Unicode lowercase ordering rather than
   locale-specific collation, and `&` joins numbers in plain decimal form
   with up to 15 significant digits rather than with cell number formats.
-  A range is an array: operators do not intersect or broadcast it, and
-  results never spill.
 - **Structured references.** Formulas can name a workbook table from any
   sheet: `Sales[Amount]` is the column's data rows, without the header or
   totals row; `Sales[]` and `Sales[#Data]` are every data row;
@@ -237,6 +257,23 @@ input, which needs `--from` as described above.
   `#VALUE!`, because a formula evaluated here has no row of its own. A
   bracketed column without a table name, such as `[Amount]`, and item
   combinations Excel rejects, such as `[#Headers],[#Totals]`, exit 2.
+- **Differences from Excel.**
+  - `FILTER` with no match and no `if_empty` argument, and `UNIQUE` with
+    nothing to return, give `#VALUE!` where Excel gives `#CALC!`.
+  - Blank cells stay blank inside array results (`FILTER`, `UNIQUE`, `SORT`,
+    and bare ranges) instead of becoming 0.
+  - `SUBTOTAL` 101 to 111 skip hidden rows only in `.xlsx`, `.xlsm`, and
+    `.xlsb` workbooks; other formats record no hidden rows. Rows hidden by a
+    filter and rows hidden by hand are not told apart, so 1 to 11 include
+    both and 101 to 111 skip both, where Excel's 1 to 11 skip filtered rows.
+  - `VALUE` reads numbers, percentages, `m/d/y`, `y-m-d`, `d-Mon-y`,
+    `Mon d, y`, and `Mon y` dates, and `h:mm[:ss]` times with optional
+    `AM`/`PM`, in US order only. A date without a year, such as `"3/14"`, is
+    `#VALUE!` rather than a date in the current year.
+  - `RATE` and `XIRR` start from the guess with Newton's method and, when
+    that does not converge, search rates from -0.99 to 10 for the sign
+    change nearest the guess, so they can return a root where Excel returns
+    `#NUM!`.
 
 Scalars print as text with up to 15 significant digits, `TRUE` or `FALSE`
 for booleans, an empty line for a blank, and the literal for an Excel error.
@@ -275,13 +312,13 @@ wolfxl list-functions --check NAME[,NAME...] [--json]
 
 ```text
 $ wolfxl list-functions
-ABS          math
-AND          logical
-AVERAGE      statistical
+ABS             math
+AND             logical
+AVERAGE         statistical
 ...
-XLOOKUP      lookup
-YEAR         date
-67 functions
+XNPV            financial
+YEAR            date
+107 functions
 ```
 
 - **Categories.** The registry's categories are `date`, `financial`,
@@ -301,7 +338,7 @@ YEAR         date
 filters (`null` when absent), with `category` in its registry spelling.
 
 ```json
-{"contract_version": 1, "total": 67, "count": 3, "category": "lookup", "search": "look",
+{"contract_version": 1, "total": 107, "count": 3, "category": "lookup", "search": "look",
  "functions": [{"name": "HLOOKUP", "category": "lookup"}, {"name": "VLOOKUP", "category": "lookup"},
                {"name": "XLOOKUP", "category": "lookup"}]}
 ```
@@ -325,7 +362,7 @@ With `--json`, `total` is the size of the registry, `checked` counts the names,
 `supported` the supported ones, and `category` is `null` for an unsupported name:
 
 ```json
-{"contract_version": 1, "total": 67, "checked": 2, "supported": 1, "results": [
+{"contract_version": 1, "total": 107, "checked": 2, "supported": 1, "results": [
   {"name": "SUM", "status": "supported", "category": "math"},
   {"name": "LOOKUP", "status": "unsupported", "category": null}
 ]}
@@ -424,10 +461,12 @@ rows below in its own column read as blank.
 
 Results print the way `wolfxl calc` prints a scalar: text with up to 15
 significant digits, also in JSON, and `TRUE`/`FALSE` for booleans. A blank
-result leaves the cell empty, and a range result such as `B2:C2` is
-`#VALUE!`, since ranges are not intersected with the row. An Excel error
-such as `#DIV/0!` stays in its cell, shown as `ERROR: #DIV/0!` in the text
-views and as `"#DIV/0!"` in JSON, and `--where 'Unit=#DIV/0!'` finds it.
+result leaves the cell empty, and an array result, such as the range
+`B2:C2` or a `FILTER`, `UNIQUE`, or `SORT` call, is `#VALUE!`, since
+ranges are not intersected with the row and results do not spill. An
+Excel error such as `#DIV/0!` stays in its cell, shown as `ERROR: #DIV/0!`
+in the text views and as `"#DIV/0!"` in JSON, and `--where 'Unit=#DIV/0!'`
+finds it.
 
 Formula columns are computed over the whole sheet before `--where` and
 `--select`, so filters can test added columns, `--select` can show them,

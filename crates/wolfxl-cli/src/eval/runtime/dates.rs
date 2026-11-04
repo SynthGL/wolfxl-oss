@@ -4,8 +4,25 @@
 //! fictional 1900-02-29 that Excel keeps for compatibility; serial 0 reads as
 //! 1900-01-00. In the 1904 date system serial 0 is 1904-01-01.
 
-use super::{finite, Context, Outcome};
+use std::collections::HashSet;
+
+use super::{finite, lenient_number, supplied, Context, Outcome};
 use crate::eval::{DataSource, ExcelError, Expr, Function, Value};
+
+const MONTHS: [&str; 12] = [
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+];
 
 /// Days from 1970-01-01 to a proleptic Gregorian date.
 fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
@@ -93,6 +110,149 @@ fn days_in_month(year: i64, month: u32, date1904: bool) -> u32 {
     }
 }
 
+/// The month a name or its three-letter prefix stands for.
+fn month_name(word: &str) -> Option<u32> {
+    let word = word.to_lowercase();
+    if word.chars().count() < 3 {
+        return None;
+    }
+    MONTHS
+        .iter()
+        .position(|month| month.starts_with(&word))
+        .map(|index| index as u32 + 1)
+}
+
+/// A whole number written only with ASCII digits.
+fn digits(word: &str) -> Option<i64> {
+    if word.is_empty() || word.len() > 5 || !word.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    word.parse().ok()
+}
+
+/// A written year: two digits read as 1930 through 2029, as in Excel.
+fn year(word: &str) -> Option<i64> {
+    let year = digits(word)?;
+    match word.len() {
+        1 | 2 if year < 30 => Some(2000 + year),
+        1 | 2 => Some(1900 + year),
+        4 => Some(year),
+        _ => None,
+    }
+}
+
+/// The serial of a valid calendar date in the workbook's date system.
+fn date_serial(year: i64, month: u32, day: i64, date1904: bool) -> Option<i64> {
+    let first = if date1904 { 1904 } else { 1900 };
+    if !(first..10_000).contains(&year)
+        || !(1..=12).contains(&month)
+        || day < 1
+        || day > i64::from(days_in_month(year, month, date1904))
+    {
+        return None;
+    }
+    Some(month_start(year, i64::from(month), date1904) + day - 1)
+}
+
+/// A date written as `m/d/y`, `y-m-d`, `d-Mon-y`, `d Mon y`, `Mon d, y`,
+/// or `Mon y` (the first of the month). A date without a year is not read.
+fn parse_date(text: &str, date1904: bool) -> Option<i64> {
+    let words: Vec<&str> = text
+        .split(['/', '-', ' ', ','])
+        .filter(|word| !word.is_empty())
+        .collect();
+    match words.as_slice() {
+        [first, second, third] => {
+            if let Some(month) = month_name(second) {
+                return date_serial(year(third)?, month, digits(first)?, date1904);
+            }
+            if let Some(month) = month_name(first) {
+                return date_serial(year(third)?, month, digits(second)?, date1904);
+            }
+            let month = u32::try_from(digits(second)?).ok()?;
+            if first.len() == 4 {
+                return date_serial(digits(first)?, month, digits(third)?, date1904);
+            }
+            let month = u32::try_from(digits(first)?).ok()?;
+            date_serial(year(third)?, month, digits(second)?, date1904)
+        }
+        [first, second] if second.len() == 4 => {
+            date_serial(digits(second)?, month_name(first)?, 1, date1904)
+        }
+        _ => None,
+    }
+}
+
+/// A time of day as a fraction of a day: `h:mm`, `h:mm:ss`, or either with
+/// `AM` or `PM`, or a bare hour with `AM` or `PM`. Without `AM` or `PM` the
+/// hour may pass 24, so the result may exceed one day.
+fn parse_time(text: &str) -> Option<f64> {
+    let lower = text.trim().to_lowercase();
+    let (clock, meridiem) = match lower
+        .strip_suffix("am")
+        .map(|clock| (clock, Some(false)))
+        .or_else(|| lower.strip_suffix("pm").map(|clock| (clock, Some(true))))
+    {
+        Some((clock, meridiem)) => (clock.trim_end(), meridiem),
+        None => (lower.as_str(), None),
+    };
+    let parts: Vec<&str> = clock.split(':').collect();
+    if parts.len() == 1 && meridiem.is_none() || parts.len() > 3 {
+        return None;
+    }
+    let hour = digits(parts[0])?;
+    let minute = parts.get(1).map_or(Some(0), |part| digits(part))?;
+    let second: f64 = match parts.get(2) {
+        Some(part) if !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit() || b == b'.') => {
+            part.parse().ok()?
+        }
+        Some(_) => return None,
+        None => 0.0,
+    };
+    if minute >= 60 || second >= 60.0 {
+        return None;
+    }
+    let hour = match meridiem {
+        Some(_) if hour > 12 => return None,
+        Some(false) => hour % 12,
+        Some(true) => hour % 12 + 12,
+        None => hour,
+    };
+    Some((hour as f64 * 3600.0 + minute as f64 * 60.0 + second) / 86_400.0)
+}
+
+/// A date, a time, or a date followed by a time, as `VALUE` reads them.
+pub(super) fn parse_date_time(text: &str, date1904: bool) -> Option<f64> {
+    let text = text.trim();
+    if let Some(time) = parse_time(text) {
+        return Some(time);
+    }
+    if let Some(date) = parse_date(text, date1904) {
+        return Some(date as f64);
+    }
+    // A date, then a time after one of the spaces.
+    text.match_indices(' ').find_map(|(offset, _)| {
+        let date = parse_date(&text[..offset], date1904)?;
+        Some(date as f64 + parse_time(&text[offset + 1..])?)
+    })
+}
+
+/// Monday through Friday.
+fn is_weekday(serial: i64, date1904: bool) -> bool {
+    (1..=5).contains(&weekday(serial, date1904))
+}
+
+/// Weekdays from `first` through `last`, both included, when `first` is not
+/// after `last`.
+fn weekdays_between(first: i64, last: i64, date1904: bool) -> i64 {
+    let days = last - first + 1;
+    let weeks = days / 7;
+    let rest = (weeks * 7..days)
+        .filter(|offset| is_weekday(first + offset, date1904))
+        .count() as i64;
+    weeks * 5 + rest
+}
+
 impl<'a, S: DataSource> Context<'a, S> {
     /// A computed serial, or `#NUM!` when it falls outside the date system.
     fn in_range(&self, serial: i64) -> Outcome {
@@ -110,6 +270,73 @@ impl<'a, S: DataSource> Context<'a, S> {
             return Err(ExcelError::Num);
         }
         Ok(value.floor() as i64)
+    }
+
+    /// Whole-day serials of the optional holiday list at `index`. Blanks
+    /// are skipped; text that is not a date is `#VALUE!`.
+    fn holidays(&self, arguments: &[Expr], index: usize) -> Result<HashSet<i64>, ExcelError> {
+        let mut holidays = HashSet::new();
+        let Some(argument) = supplied(arguments, index) else {
+            return Ok(holidays);
+        };
+        let date1904 = self.source.date1904();
+        let grid = self.grid(argument)?;
+        self.values(&grid, |value| {
+            let serial = match value {
+                Value::Blank => return Ok(()),
+                Value::Number(number) => number,
+                Value::Text(text) => lenient_number(&text)
+                    .or_else(|| parse_date_time(&text, date1904))
+                    .ok_or(ExcelError::Value)?,
+                Value::Error(error) => return Err(error),
+                Value::Boolean(_) | Value::Array(_) => return Err(ExcelError::Value),
+            };
+            if serial < 0.0 || serial >= (max_serial(date1904) + 1) as f64 {
+                return Err(ExcelError::Num);
+            }
+            holidays.insert(serial.floor() as i64);
+            Ok(())
+        })?;
+        Ok(holidays)
+    }
+
+    /// Weekdays from the start date through the end date that are not
+    /// holidays, negative when the end comes first.
+    pub(super) fn network_days(&self, arguments: &[Expr]) -> Outcome {
+        let date1904 = self.source.date1904();
+        let start = self.serial(&arguments[0])?;
+        let end = self.serial(&arguments[1])?;
+        let holidays = self.holidays(arguments, 2)?;
+        let (first, last) = (start.min(end), start.max(end));
+        let off = holidays
+            .iter()
+            .filter(|&&day| (first..=last).contains(&day) && is_weekday(day, date1904))
+            .count() as i64;
+        let count = weekdays_between(first, last, date1904) - off;
+        Ok(Value::Number(
+            if start > end { -count } else { count } as f64
+        ))
+    }
+
+    /// The weekday that is the given number of working days after the start
+    /// date, or before it for a negative count, skipping holidays.
+    pub(super) fn work_day(&self, arguments: &[Expr]) -> Outcome {
+        let date1904 = self.source.date1904();
+        let start = self.serial(&arguments[0])?;
+        let days = self.number(&arguments[1])?.trunc().clamp(-1e7, 1e7) as i64;
+        let holidays = self.holidays(arguments, 2)?;
+        let step = days.signum();
+        let (mut day, mut remaining) = (start, days.abs());
+        while remaining > 0 {
+            day += step;
+            if !(0..=max_serial(date1904)).contains(&day) {
+                return Err(ExcelError::Num);
+            }
+            if is_weekday(day, date1904) && !holidays.contains(&day) {
+                remaining -= 1;
+            }
+        }
+        self.in_range(day)
     }
 
     pub(super) fn date(&self, arguments: &[Expr]) -> Outcome {

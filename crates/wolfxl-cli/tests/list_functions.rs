@@ -5,16 +5,18 @@ use assert_cmd::Command;
 use serde_json::{json, Value};
 
 /// The built-in evaluator's registry, sorted by name.
-const REGISTRY: [(&str, &str); 67] = [
+const REGISTRY: [(&str, &str); 107] = [
     ("ABS", "math"),
     ("AND", "logical"),
     ("AVERAGE", "statistical"),
     ("AVERAGEIF", "statistical"),
     ("AVERAGEIFS", "statistical"),
     ("CHOOSE", "lookup"),
+    ("CONCAT", "text"),
     ("CONCATENATE", "text"),
     ("COUNT", "statistical"),
     ("COUNTA", "statistical"),
+    ("COUNTBLANK", "statistical"),
     ("COUNTIF", "statistical"),
     ("COUNTIFS", "statistical"),
     ("DATE", "date"),
@@ -24,35 +26,54 @@ const REGISTRY: [(&str, &str); 67] = [
     ("EDATE", "date"),
     ("EOMONTH", "date"),
     ("EXACT", "text"),
+    ("FILTER", "lookup"),
     ("FIND", "text"),
     ("FV", "financial"),
     ("HLOOKUP", "lookup"),
     ("HOUR", "date"),
     ("IF", "logical"),
     ("IFERROR", "logical"),
+    ("IFNA", "logical"),
+    ("IFS", "logical"),
     ("INDEX", "lookup"),
     ("INT", "math"),
     ("IRR", "financial"),
+    ("LARGE", "statistical"),
     ("LEFT", "text"),
     ("LEN", "text"),
     ("LOWER", "text"),
     ("MATCH", "lookup"),
     ("MAX", "statistical"),
     ("MAXIFS", "statistical"),
+    ("MEDIAN", "statistical"),
     ("MID", "text"),
     ("MIN", "statistical"),
     ("MINIFS", "statistical"),
     ("MINUTE", "date"),
     ("MOD", "math"),
+    ("MODE", "statistical"),
+    ("MODE.SNGL", "statistical"),
     ("MONTH", "date"),
+    ("NETWORKDAYS", "date"),
     ("NOT", "logical"),
     ("NOW", "date"),
+    ("NPER", "financial"),
     ("NPV", "financial"),
     ("OFFSET", "lookup"),
     ("OR", "logical"),
+    ("PERCENTILE", "statistical"),
+    ("PERCENTILE.EXC", "statistical"),
+    ("PERCENTILE.INC", "statistical"),
     ("PMT", "financial"),
     ("POWER", "math"),
     ("PV", "financial"),
+    ("QUARTILE", "statistical"),
+    ("QUARTILE.EXC", "statistical"),
+    ("QUARTILE.INC", "statistical"),
+    ("RANK", "statistical"),
+    ("RANK.AVG", "statistical"),
+    ("RANK.EQ", "statistical"),
+    ("RATE", "financial"),
     ("REPT", "text"),
     ("RIGHT", "text"),
     ("ROUND", "math"),
@@ -61,17 +82,36 @@ const REGISTRY: [(&str, &str); 67] = [
     ("SECOND", "date"),
     ("SIGN", "math"),
     ("SLN", "financial"),
+    ("SMALL", "statistical"),
+    ("SORT", "lookup"),
     ("SQRT", "math"),
+    ("STDEV", "statistical"),
+    ("STDEV.P", "statistical"),
+    ("STDEV.S", "statistical"),
+    ("STDEVP", "statistical"),
     ("SUBSTITUTE", "text"),
+    ("SUBTOTAL", "math"),
     ("SUM", "math"),
     ("SUMIF", "math"),
     ("SUMIFS", "math"),
+    ("SUMPRODUCT", "math"),
+    ("SWITCH", "logical"),
     ("TEXT", "text"),
+    ("TEXTJOIN", "text"),
     ("TODAY", "date"),
     ("TRIM", "text"),
+    ("UNIQUE", "lookup"),
     ("UPPER", "text"),
+    ("VALUE", "text"),
+    ("VAR", "statistical"),
+    ("VAR.P", "statistical"),
+    ("VAR.S", "statistical"),
+    ("VARP", "statistical"),
     ("VLOOKUP", "lookup"),
+    ("WORKDAY", "date"),
+    ("XIRR", "financial"),
     ("XLOOKUP", "lookup"),
+    ("XNPV", "financial"),
     ("YEAR", "date"),
 ];
 
@@ -187,14 +227,14 @@ fn text_listing_aligns_names_and_ends_with_the_count() {
     assert_eq!(run.code, 0, "stderr={}", run.stderr);
     let mut expected: String = REGISTRY
         .iter()
-        .map(|(name, category)| format!("{name:<11}  {category}\n"))
+        .map(|(name, category)| format!("{name:<14}  {category}\n"))
         .collect();
-    expected.push_str("67 functions\n");
+    expected.push_str("107 functions\n");
     assert_eq!(run.stdout, expected);
     assert!(run.stdout.starts_with(
-        "ABS          math\n\
-         AND          logical\n\
-         AVERAGE      statistical\n"
+        "ABS             math\n\
+         AND             logical\n\
+         AVERAGE         statistical\n"
     ));
     assert!(run.stderr.is_empty(), "stderr={}", run.stderr);
 }
@@ -222,12 +262,14 @@ fn category_filter_ignores_case() {
             "ROUNDUP",
             "SIGN",
             "SQRT",
+            "SUBTOTAL",
             "SUM",
             "SUMIF",
-            "SUMIFS"
+            "SUMIFS",
+            "SUMPRODUCT"
         ]
     );
-    assert_eq!(lower["count"], 12);
+    assert_eq!(lower["count"], 14);
     assert_eq!(total(&lower), REGISTRY.len());
     assert_eq!(lower["search"], Value::Null);
 
@@ -247,7 +289,10 @@ fn category_filter_ignores_case() {
         );
     }
     let logical = json(&["--category", "LOGICAL"]);
-    assert_eq!(names(&logical), ["AND", "IF", "IFERROR", "NOT", "OR"]);
+    assert_eq!(
+        names(&logical),
+        ["AND", "IF", "IFERROR", "IFNA", "IFS", "NOT", "OR", "SWITCH"]
+    );
 }
 
 #[test]
@@ -287,6 +332,7 @@ fn search_matches_a_case_insensitive_substring() {
         [
             "COUNT",
             "COUNTA",
+            "COUNTBLANK",
             "COUNTIF",
             "COUNTIFS",
             "HOUR",
@@ -301,21 +347,45 @@ fn search_matches_a_case_insensitive_substring() {
     );
     assert_eq!(
         names(&json(&["--search", "IFS"])),
-        ["AVERAGEIFS", "COUNTIFS", "MAXIFS", "MINIFS", "SUMIFS"]
+        [
+            "AVERAGEIFS",
+            "COUNTIFS",
+            "IFS",
+            "MAXIFS",
+            "MINIFS",
+            "SUMIFS"
+        ]
     );
 }
 
 #[test]
 fn category_and_search_combine() {
     let document = json(&["--category", "math", "--search", "a"]);
-    assert_eq!(names(&document), ["ABS"]);
+    assert_eq!(names(&document), ["ABS", "SUBTOTAL"]);
     assert_eq!(document["category"], "math");
     assert_eq!(document["search"], "a");
 
     let document = json(&["--category", "statistical", "--search", "N"]);
     assert_eq!(
         names(&document),
-        ["COUNT", "COUNTA", "COUNTIF", "COUNTIFS", "MIN", "MINIFS"]
+        [
+            "COUNT",
+            "COUNTA",
+            "COUNTBLANK",
+            "COUNTIF",
+            "COUNTIFS",
+            "MEDIAN",
+            "MIN",
+            "MINIFS",
+            "MODE.SNGL",
+            "PERCENTILE",
+            "PERCENTILE.EXC",
+            "PERCENTILE.INC",
+            "QUARTILE.INC",
+            "RANK",
+            "RANK.AVG",
+            "RANK.EQ"
+        ]
     );
 
     let document = json(&["--category", "logical", "--search", "sum"]);
@@ -338,7 +408,9 @@ fn filtered_text_listing_reports_matches_out_of_total() {
     assert_eq!(run.code, 0);
     assert_eq!(
         run.stdout,
-        format!("SUM     math\nSUMIF   math\nSUMIFS  math\n3 of {all} functions\n")
+        format!(
+            "SUM         math\nSUMIF       math\nSUMIFS      math\nSUMPRODUCT  math\n4 of {all} functions\n"
+        )
     );
 
     let run = list_functions(&["--category", "logical"]);
@@ -346,7 +418,7 @@ fn filtered_text_listing_reports_matches_out_of_total() {
     assert_eq!(
         run.stdout,
         format!(
-            "AND      logical\nIF       logical\nIFERROR  logical\nNOT      logical\nOR       logical\n5 of {all} functions\n"
+            "AND      logical\nIF       logical\nIFERROR  logical\nIFNA     logical\nIFS      logical\nNOT      logical\nOR       logical\nSWITCH   logical\n8 of {all} functions\n"
         )
     );
 }
@@ -400,7 +472,7 @@ fn every_listed_function_checks_as_supported() {
 
 #[test]
 fn check_reports_unsupported_with_exit_1() {
-    let document = json_with_code(&["--check", "if,lookup,Stdev.S,NOTAFUNCTION"], 1);
+    let document = json_with_code(&["--check", "if,lookup,Proper,NOTAFUNCTION"], 1);
     assert_eq!(document["contract_version"], 1);
     assert_eq!(document["checked"], 4);
     assert_eq!(document["supported"], 1);
@@ -409,14 +481,14 @@ fn check_reports_unsupported_with_exit_1() {
         json!([
             {"name": "IF", "status": "supported", "category": "logical"},
             {"name": "LOOKUP", "status": "unsupported", "category": null},
-            {"name": "STDEV.S", "status": "unsupported", "category": null},
+            {"name": "PROPER", "status": "unsupported", "category": null},
             {"name": "NOTAFUNCTION", "status": "unsupported", "category": null},
         ])
     );
 
     let unsupported_only = list_functions(&["--check", "NOTAFUNCTION"]);
     assert_eq!(unsupported_only.code, 1);
-    let unsupported_only = list_functions(&["--check", "sumproduct", "--json"]);
+    let unsupported_only = list_functions(&["--check", "sequence", "--json"]);
     assert_eq!(unsupported_only.code, 1);
     assert!(unsupported_only.stderr.is_empty());
 }

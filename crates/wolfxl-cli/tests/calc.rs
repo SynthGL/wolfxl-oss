@@ -231,11 +231,7 @@ fn array_results_print_csv_rows_or_a_json_matrix() {
 
 #[test]
 fn unsupported_functions_exit_two_and_point_to_registry() {
-    for formula in [
-        "=SUMPRODUCT(B2:B3,C2:C3)",
-        "=SEQUENCE(2,3)",
-        "=LOOKUP(1,A:A,B:B)",
-    ] {
+    for formula in ["=PROPER(A2)", "=SEQUENCE(2,3)", "=LOOKUP(1,A:A,B:B)"] {
         let run = calc(&[formula, "--from", "csv"], Some("a,b,c\n1,2,3\n"));
         assert_eq!(run.code, 2, "{formula}: {}", run.stderr);
         assert!(run.stdout.is_empty());
@@ -356,4 +352,108 @@ fn far_apart_xlsx_cells_evaluate_without_their_bounding_rectangle() {
     };
     assert_eq!(piped("=SUM(A:A)", "xlsx", book()), "2\n");
     assert_eq!(piped("=A1+XFD1048576", "xlsx", book()), "5\n");
+}
+
+/// The analyst workbook: tables `BigCity` (Table!C2:F15) and `SmallCity`
+/// (Table!I2:L15), each ending in a `SUBTOTAL` totals row.
+fn cities(formula: &str) -> Run {
+    let path = fixture("data-table-cities.xlsx");
+    calc(&[formula, path.to_str().unwrap()], None)
+}
+
+fn cities_value(formula: &str) -> String {
+    let run = cities(formula);
+    assert_eq!(run.code, 0, "{formula}: stderr={}", run.stderr);
+    run.stdout
+}
+
+#[test]
+fn statistics_over_the_city_table_match_excel() {
+    for (formula, expected) in [
+        ("=SUM(Table!F3:F14)", "198905700\n"),
+        ("=MEDIAN(Table!F3:F14)", "15358500\n"),
+        ("=LARGE(Table!F3:F14,2)", "23500000\n"),
+        ("=SMALL(Table!F3:F14,1)", "10780000\n"),
+        ("=RANK.EQ(Table!F7,Table!F3:F14)", "5\n"),
+        ("=COUNTBLANK(Table!G1:H15)", "30\n"),
+        ("=SORT(Table!F3:F5,1,-1)", "24256800\n23500000\n21516000\n"),
+        (
+            "=TEXTJOIN(\"; \",TRUE,Table!C3:C5)",
+            "Shanghai, China; Karachi, Pakistan; Beijing, China\n",
+        ),
+    ] {
+        assert_eq!(cities_value(formula), expected, "{formula}");
+    }
+}
+
+#[test]
+fn subtotal_skips_the_tables_own_totals_row() {
+    for (formula, expected) in [
+        ("=SUBTOTAL(109,Table!F3:F14)", "198905700\n"),
+        // F15 holds SUBTOTAL(109,...) itself, so it is not counted twice.
+        ("=SUBTOTAL(109,Table!F3:F15)", "198905700\n"),
+        ("=SUBTOTAL(9,Table!F3:F15)", "198905700\n"),
+        ("=SUBTOTAL(101,Table!D3:D14)", "25.3966666666667\n"),
+        ("=SUBTOTAL(101,Table!D3:D15)", "25.3966666666667\n"),
+        ("=SUBTOTAL(2,Table!F3:F15)", "12\n"),
+        // SUM has no such rule and adds the cached total.
+        ("=SUM(Table!F3:F15)", "397811400\n"),
+    ] {
+        assert_eq!(cities_value(formula), expected, "{formula}");
+    }
+}
+
+#[test]
+fn subtotal_100_codes_skip_hidden_xlsx_rows() {
+    let book = || {
+        xlsx(
+            "",
+            r#"<row r="1"><c r="A1"><v>1</v></c></row><row r="2" hidden="1"><c r="A2"><v>2</v></c></row><row r="3"><c r="A3"><v>4</v></c></row><row r="4"><c r="A4"><f>SUBTOTAL(9,A1:A3)</f><v>7</v></c></row>"#,
+        )
+    };
+    assert_eq!(piped("=SUBTOTAL(109,A1:A4)", "xlsx", book()), "5\n");
+    assert_eq!(piped("=SUBTOTAL(9,A1:A4)", "xlsx", book()), "7\n");
+    assert_eq!(piped("=SUBTOTAL(102,A:A)", "xlsx", book()), "2\n");
+    assert_eq!(piped("=SUM(A1:A4)", "xlsx", book()), "14\n");
+}
+
+#[test]
+fn element_wise_operators_feed_filter_and_sumproduct() {
+    assert_eq!(
+        cities_value("=FILTER(Table!C3:C14,Table!F3:F14>20000000)"),
+        "\"Shanghai, China\"\n\"Karachi, Pakistan\"\n\"Beijing, China\"\n\"São Paulo, Brazil\"\n"
+    );
+    assert_eq!(
+        cities_value("=SUMPRODUCT(--(Table!F3:F14>20000000))"),
+        "4\n"
+    );
+    assert_eq!(
+        cities_value("=SUMPRODUCT((Table!C3:C14=\"Tokyo, Japan\")*Table!F3:F14)"),
+        "13298000\n"
+    );
+    assert_eq!(
+        cities_value("=SUM(FILTER(Table!F3:F14,Table!D3:D14<0))"),
+        "21292900\n"
+    );
+    assert_eq!(
+        cities_value("=FILTER(Table!C3:C14,Table!F3:F14>1E9,\"none\")"),
+        "none\n"
+    );
+    // A scalar operator result is unchanged.
+    assert_eq!(cities_value("=Table!F3+1"), "24256801\n");
+}
+
+#[test]
+fn mismatched_operand_shapes_fill_with_na() {
+    assert_eq!(
+        cities_value("=Table!F3:F4+Table!F3:F5"),
+        "48513600\n47000000\n#N/A\n"
+    );
+    let run = cities("=SUMPRODUCT(Table!F3:F4*Table!F3:F5)");
+    assert_eq!(run.code, 1, "stderr={}", run.stderr);
+    assert!(run.stdout.contains("#N/A"), "{}", run.stdout);
+    // FILTER needs an include as tall as the array.
+    let run = cities("=FILTER(Table!C3:C14,Table!F3:F5>0)");
+    assert_eq!(run.code, 1, "stderr={}", run.stderr);
+    assert!(run.stdout.contains("#VALUE!"), "{}", run.stdout);
 }

@@ -1,4 +1,5 @@
-//! `PMT`, `PV`, `FV`, `NPV`, `IRR`, `SLN`, and `DB`.
+//! `PMT`, `PV`, `FV`, `NPV`, `IRR`, `XNPV`, `XIRR`, `RATE`, `NPER`, `SLN`,
+//! and `DB`.
 
 use super::{finite, number, round_decimal, Context, Grid, Operand, Outcome, Rounding};
 use crate::eval::{DataSource, ExcelError, Expr, Value};
@@ -20,6 +21,68 @@ fn discounted(rate: f64, values: &[f64], first: i32) -> f64 {
         .zip(first..)
         .map(|(value, period)| value / (1.0 + rate).powi(period))
         .sum()
+}
+
+/// The present value of flows `years` after the first date at `rate`.
+fn dated_value(rate: f64, values: &[f64], years: &[f64]) -> f64 {
+    values
+        .iter()
+        .zip(years)
+        .map(|(value, years)| value / (1.0 + rate).powf(*years))
+        .sum()
+}
+
+/// A root of `function` above -1: Newton's method from the guess, and when
+/// that does not settle, bisection on the sign change between -0.99 and 10
+/// nearest the guess.
+fn rate_root(function: impl Fn(f64) -> f64, guess: f64) -> Option<f64> {
+    let mut rate = guess;
+    for _ in 0..100 {
+        let value = function(rate);
+        if !value.is_finite() {
+            break;
+        }
+        if value.abs() < 1e-10 {
+            return Some(rate);
+        }
+        let step = 1e-7 * rate.abs().max(1.0);
+        let slope = (function(rate + step) - function(rate - step)) / (2.0 * step);
+        if slope.abs() < 1e-14 || !slope.is_finite() {
+            break;
+        }
+        let next = rate - value / slope;
+        if next <= -1.0 || !next.is_finite() {
+            break;
+        }
+        if (next - rate).abs() < 1e-12 {
+            return Some(next);
+        }
+        rate = next;
+    }
+    // Sample the range and bisect the sign change closest to the guess.
+    let points: Vec<f64> = (0..=1099)
+        .map(|step| -0.99 + f64::from(step) / 100.0)
+        .collect();
+    let (mut low, mut high) = points
+        .windows(2)
+        .filter(|pair| {
+            let (left, right) = (function(pair[0]), function(pair[1]));
+            left.is_finite() && right.is_finite() && left * right <= 0.0
+        })
+        .map(|pair| (pair[0], pair[1]))
+        .min_by(|left, right| (left.0 - guess).abs().total_cmp(&(right.0 - guess).abs()))?;
+    for _ in 0..200 {
+        let middle = (low + high) / 2.0;
+        if function(middle).abs() < 1e-10 || high - low < 1e-14 {
+            return Some(middle);
+        }
+        if function(low) * function(middle) <= 0.0 {
+            high = middle;
+        } else {
+            low = middle;
+        }
+    }
+    Some((low + high) / 2.0)
 }
 
 impl<'a, S: DataSource> Context<'a, S> {
@@ -45,6 +108,112 @@ impl<'a, S: DataSource> Context<'a, S> {
             }
         }
         Ok(values)
+    }
+
+    /// Every value of an argument as a number for `XNPV` and `XIRR`: any
+    /// value that is not a number is `#VALUE!`.
+    fn dated_numbers(&self, expression: &Expr) -> Result<Vec<f64>, ExcelError> {
+        let value = match self.operand(expression) {
+            Operand::Range(range) => self.read(Operand::Range(range)),
+            Operand::Value(value) => value,
+        };
+        let values = match value {
+            Value::Array(rows) => rows.into_iter().flatten().collect(),
+            value => vec![value],
+        };
+        values
+            .into_iter()
+            .map(|value| match value {
+                Value::Number(number) => Ok(number),
+                Value::Error(error) => Err(error),
+                _ => Err(ExcelError::Value),
+            })
+            .collect()
+    }
+
+    /// Cash flows and their dates as years since the first date: the same
+    /// count of each, else `#NUM!`, and no date before the first.
+    fn dated_flows(&self, arguments: &[Expr]) -> Result<(Vec<f64>, Vec<f64>), ExcelError> {
+        let values = self.dated_numbers(&arguments[0])?;
+        let dates = self.dated_numbers(&arguments[1])?;
+        if values.len() != dates.len() || values.is_empty() {
+            return Err(ExcelError::Num);
+        }
+        let first = dates[0].trunc();
+        let mut years = Vec::with_capacity(dates.len());
+        for date in dates {
+            let date = date.trunc();
+            if date < 0.0 || date < first {
+                return Err(ExcelError::Num);
+            }
+            years.push((date - first) / 365.0);
+        }
+        Ok((values, years))
+    }
+
+    /// Present value of cash flows on the given dates, discounted over
+    /// 365-day years from the first date.
+    pub(super) fn xnpv(&self, arguments: &[Expr]) -> Outcome {
+        let rate = self.number(&arguments[0])?;
+        if rate <= -1.0 {
+            return Err(ExcelError::Num);
+        }
+        let (values, years) = self.dated_flows(&arguments[1..])?;
+        Ok(finite(dated_value(rate, &values, &years)))
+    }
+
+    /// The rate at which `XNPV` of the flows is zero; at least one flow must
+    /// be positive and one negative.
+    pub(super) fn xirr(&self, arguments: &[Expr]) -> Outcome {
+        let (values, years) = self.dated_flows(arguments)?;
+        let guess = self.number_or_default(arguments, 2, 0.1)?;
+        if guess <= -1.0
+            || !values.iter().any(|&value| value > 0.0)
+            || !values.iter().any(|&value| value < 0.0)
+        {
+            return Err(ExcelError::Num);
+        }
+        rate_root(|rate| dated_value(rate, &values, &years), guess)
+            .map(finite)
+            .ok_or(ExcelError::Num)
+    }
+
+    /// The periodic rate at which the annuity balances: periods, payment,
+    /// present value, then optional future value, timing, and guess.
+    pub(super) fn rate(&self, arguments: &[Expr]) -> Outcome {
+        let (periods, payment, present, future, timing) = self.annuity(arguments)?;
+        let guess = self.number_or_default(arguments, 5, 0.1)?;
+        if periods <= 0.0 || guess <= -1.0 {
+            return Err(ExcelError::Num);
+        }
+        let balance = |rate: f64| {
+            if rate == 0.0 {
+                return present + payment * periods + future;
+            }
+            let growth = (1.0 + rate).powf(periods);
+            present * growth + payment * (1.0 + rate * timing) * (growth - 1.0) / rate + future
+        };
+        rate_root(balance, guess).map(finite).ok_or(ExcelError::Num)
+    }
+
+    /// The number of periods for the annuity to reach the future value.
+    pub(super) fn nper(&self, arguments: &[Expr]) -> Outcome {
+        let (rate, payment, present, future, timing) = self.annuity(arguments)?;
+        if rate == 0.0 {
+            if payment == 0.0 {
+                return Err(ExcelError::Num);
+            }
+            return Ok(finite(-(present + future) / payment));
+        }
+        if rate <= -1.0 {
+            return Err(ExcelError::Num);
+        }
+        let flow = payment * (1.0 + rate * timing);
+        let ratio = (flow - future * rate) / (flow + present * rate);
+        if ratio.is_nan() || ratio <= 0.0 || ratio.is_infinite() {
+            return Err(ExcelError::Num);
+        }
+        Ok(finite(ratio.ln() / rate.ln_1p()))
     }
 
     /// Rate, periods, and the payment or present value, then the optional

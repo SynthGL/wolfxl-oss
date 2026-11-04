@@ -2,9 +2,12 @@
 //!
 //! Coordinates are one-based. Explicit ranges retain their shape, while whole
 //! row and column references are intersected with the sheet's used extent.
-//! Range operands are not implicitly intersected or broadcast by operators.
-//! Array constants such as `{1,2;3,4}` evaluate to arrays, and functions that
-//! take ranges (aggregates, criteria, lookups, `NPV`, `IRR`) accept them too.
+//! Operators work element by element when an operand is a range or array: a
+//! scalar pairs with every element, a single row or column repeats to match
+//! the other side, and positions outside both shapes are `#N/A`. Ranges are
+//! not implicitly intersected. Array constants such as `{1,2;3,4}` evaluate
+//! to arrays, and functions that take ranges (aggregates, criteria, lookups,
+//! `NPV`, `IRR`) accept them too.
 //! Structured references such as `Sales[Amount]` or `Sales[[#Totals],[Amount]]`
 //! resolve through [`DataSource::table`] to the rectangle they select when the
 //! formula is evaluated, so they work wherever a range does.
@@ -103,6 +106,19 @@ pub trait DataSource {
         false
     }
 
+    /// Whether `row` is hidden. `SUBTOTAL` with a function number from 101
+    /// to 111 skips hidden rows; sources that cannot tell report none.
+    fn row_hidden(&self, _sheet: &str, _row: u32) -> bool {
+        false
+    }
+
+    /// Whether the cell holds a formula that calls `SUBTOTAL`, which
+    /// `SUBTOTAL` skips so nested subtotals are not counted twice. Sources
+    /// without formula text report none.
+    fn is_subtotal(&self, _sheet: &str, _row: u32, _column: u32) -> bool {
+        false
+    }
+
     /// The worksheet table named `name`, ignoring case as [`names_match`]
     /// does. Sources without tables have none.
     fn table(&self, _name: &str) -> Option<TableInfo<'_>> {
@@ -174,11 +190,15 @@ macro_rules! functions {
 
         impl Function {
             fn from_name(name: &str) -> Option<Self> {
-                // Files store functions newer than Excel 2007 with this prefix.
-                let name = match name.get(..6) {
-                    Some(prefix) if prefix.eq_ignore_ascii_case("_xlfn.") => &name[6..],
-                    _ => name,
-                };
+                // Files store functions newer than Excel 2007 with `_xlfn.`,
+                // and worksheet-only ones such as SORT also with `_xlws.`.
+                let mut name = name;
+                for marker in ["_xlfn.", "_xlws."] {
+                    name = match name.get(..marker.len()) {
+                        Some(prefix) if prefix.eq_ignore_ascii_case(marker) => &name[marker.len()..],
+                        _ => name,
+                    };
+                }
                 $(if name.eq_ignore_ascii_case($name) {
                     return Some(Self::$variant);
                 })*
@@ -208,9 +228,11 @@ functions! {
     AverageIf "AVERAGEIF" "statistical" 2..=3;
     AverageIfs "AVERAGEIFS" "statistical" 3..=MAX_ARGUMENTS;
     Choose "CHOOSE" "lookup" 2..=MAX_ARGUMENTS;
+    Concat "CONCAT" "text" 1..=MAX_ARGUMENTS;
     Concatenate "CONCATENATE" "text" 1..=MAX_ARGUMENTS;
     Count "COUNT" "statistical" 0..=MAX_ARGUMENTS;
     CountA "COUNTA" "statistical" 1..=MAX_ARGUMENTS;
+    CountBlank "COUNTBLANK" "statistical" 1..=1;
     CountIf "COUNTIF" "statistical" 2..=2;
     CountIfs "COUNTIFS" "statistical" 2..=MAX_ARGUMENTS;
     Date "DATE" "date" 3..=3;
@@ -220,35 +242,54 @@ functions! {
     EDate "EDATE" "date" 2..=2;
     EoMonth "EOMONTH" "date" 2..=2;
     Exact "EXACT" "text" 2..=2;
+    Filter "FILTER" "lookup" 2..=3;
     Find "FIND" "text" 2..=3;
     Fv "FV" "financial" 3..=5;
     HLookup "HLOOKUP" "lookup" 3..=4;
     Hour "HOUR" "date" 1..=1;
     If "IF" "logical" 2..=3;
     IfError "IFERROR" "logical" 2..=2;
+    IfNa "IFNA" "logical" 2..=2;
+    Ifs "IFS" "logical" 2..=254;
     Index "INDEX" "lookup" 2..=3;
     Int "INT" "math" 1..=1;
     Irr "IRR" "financial" 1..=2;
+    Large "LARGE" "statistical" 2..=2;
     Left "LEFT" "text" 1..=2;
     Len "LEN" "text" 1..=1;
     Lower "LOWER" "text" 1..=1;
     Match "MATCH" "lookup" 2..=3;
     Max "MAX" "statistical" 0..=MAX_ARGUMENTS;
     MaxIfs "MAXIFS" "statistical" 3..=MAX_ARGUMENTS;
+    Median "MEDIAN" "statistical" 1..=MAX_ARGUMENTS;
     Mid "MID" "text" 3..=3;
     Min "MIN" "statistical" 0..=MAX_ARGUMENTS;
     MinIfs "MINIFS" "statistical" 3..=MAX_ARGUMENTS;
     Minute "MINUTE" "date" 1..=1;
     Mod "MOD" "math" 2..=2;
+    Mode "MODE" "statistical" 1..=MAX_ARGUMENTS;
+    ModeSngl "MODE.SNGL" "statistical" 1..=MAX_ARGUMENTS;
     Month "MONTH" "date" 1..=1;
+    NetworkDays "NETWORKDAYS" "date" 2..=3;
     Not "NOT" "logical" 1..=1;
     Now "NOW" "date" 0..=0;
+    Nper "NPER" "financial" 3..=5;
     Npv "NPV" "financial" 2..=MAX_ARGUMENTS;
     Offset "OFFSET" "lookup" 3..=5;
     Or "OR" "logical" 1..=MAX_ARGUMENTS;
+    Percentile "PERCENTILE" "statistical" 2..=2;
+    PercentileExc "PERCENTILE.EXC" "statistical" 2..=2;
+    PercentileInc "PERCENTILE.INC" "statistical" 2..=2;
     Pmt "PMT" "financial" 3..=5;
     Power "POWER" "math" 2..=2;
     Pv "PV" "financial" 3..=5;
+    Quartile "QUARTILE" "statistical" 2..=2;
+    QuartileExc "QUARTILE.EXC" "statistical" 2..=2;
+    QuartileInc "QUARTILE.INC" "statistical" 2..=2;
+    Rank "RANK" "statistical" 2..=3;
+    RankAvg "RANK.AVG" "statistical" 2..=3;
+    RankEq "RANK.EQ" "statistical" 2..=3;
+    Rate "RATE" "financial" 3..=6;
     Rept "REPT" "text" 2..=2;
     Right "RIGHT" "text" 1..=2;
     Round "ROUND" "math" 2..=2;
@@ -257,17 +298,36 @@ functions! {
     Second "SECOND" "date" 1..=1;
     Sign "SIGN" "math" 1..=1;
     Sln "SLN" "financial" 3..=3;
+    Small "SMALL" "statistical" 2..=2;
+    Sort "SORT" "lookup" 1..=4;
     Sqrt "SQRT" "math" 1..=1;
+    StDev "STDEV" "statistical" 1..=MAX_ARGUMENTS;
+    StDevDotP "STDEV.P" "statistical" 1..=MAX_ARGUMENTS;
+    StDevDotS "STDEV.S" "statistical" 1..=MAX_ARGUMENTS;
+    StDevP "STDEVP" "statistical" 1..=MAX_ARGUMENTS;
     Substitute "SUBSTITUTE" "text" 3..=4;
+    Subtotal "SUBTOTAL" "math" 2..=MAX_ARGUMENTS;
     Sum "SUM" "math" 0..=MAX_ARGUMENTS;
     SumIf "SUMIF" "math" 2..=3;
     SumIfs "SUMIFS" "math" 3..=MAX_ARGUMENTS;
+    SumProduct "SUMPRODUCT" "math" 1..=MAX_ARGUMENTS;
+    Switch "SWITCH" "logical" 3..=MAX_ARGUMENTS;
     Text "TEXT" "text" 2..=2;
+    TextJoin "TEXTJOIN" "text" 3..=MAX_ARGUMENTS;
     Today "TODAY" "date" 0..=0;
     Trim "TRIM" "text" 1..=1;
+    Unique "UNIQUE" "lookup" 1..=3;
     Upper "UPPER" "text" 1..=1;
+    NumberValue "VALUE" "text" 1..=1;
+    Var "VAR" "statistical" 1..=MAX_ARGUMENTS;
+    VarDotP "VAR.P" "statistical" 1..=MAX_ARGUMENTS;
+    VarDotS "VAR.S" "statistical" 1..=MAX_ARGUMENTS;
+    VarP "VARP" "statistical" 1..=MAX_ARGUMENTS;
     VLookup "VLOOKUP" "lookup" 3..=4;
+    WorkDay "WORKDAY" "date" 2..=3;
+    Xirr "XIRR" "financial" 2..=3;
     XLookup "XLOOKUP" "lookup" 3..=6;
+    Xnpv "XNPV" "financial" 3..=3;
     Year "YEAR" "date" 1..=1;
 }
 
@@ -284,18 +344,17 @@ impl Function {
             });
         }
         // Criteria come in (range, criteria) pairs, after the target range
-        // for every conditional function but COUNTIFS.
-        let paired = match self {
-            Self::CountIfs => Some(count),
-            Self::SumIfs | Self::AverageIfs | Self::MinIfs | Self::MaxIfs => Some(count - 1),
-            _ => None,
+        // for every conditional function but COUNTIFS; IFS takes
+        // (condition, value) pairs.
+        let (pairs, what) = match self {
+            Self::CountIfs => (count, "criteria ranges and criteria"),
+            Self::SumIfs | Self::AverageIfs | Self::MinIfs | Self::MaxIfs => {
+                (count - 1, "criteria ranges and criteria")
+            }
+            Self::Ifs => (count, "conditions and values"),
+            _ => return None,
         };
-        match paired {
-            Some(pairs) if pairs % 2 != 0 => Some(format!(
-                "{name} expects criteria ranges and criteria in pairs"
-            )),
-            _ => None,
-        }
+        (pairs % 2 != 0).then(|| format!("{name} expects {what} in pairs"))
     }
 }
 

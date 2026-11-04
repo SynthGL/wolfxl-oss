@@ -8,11 +8,14 @@ use super::{
     TableRows, Value, MAX_COLUMN, MAX_ROW,
 };
 
+mod arrays;
 mod criteria;
 mod dates;
 mod financial;
 mod format;
+mod logic;
 mod lookup;
+mod statistics;
 mod text;
 
 /// A computed worksheet value or the error it evaluates to.
@@ -249,14 +252,19 @@ impl<'a, S: DataSource> Context<'a, S> {
                     Err(error) => Operand::Value(Value::Error(error)),
                 }
             }
-            Expr::Unary { negative, operand } => match self.number(operand) {
-                Ok(value) => finite(if *negative { -value } else { value }),
-                Err(error) => Value::Error(error),
-            },
-            Expr::Percent(operand) => match self.number(operand) {
-                Ok(value) => finite(value / 100.0),
-                Err(error) => Value::Error(error),
-            },
+            Expr::Unary { negative, operand } => {
+                let negative = *negative;
+                elementwise(self.value(operand), |value| match number(value) {
+                    Ok(value) => finite(if negative { -value } else { value }),
+                    Err(error) => Value::Error(error),
+                })
+            }
+            Expr::Percent(operand) => {
+                elementwise(self.value(operand), |value| match number(value) {
+                    Ok(value) => finite(value / 100.0),
+                    Err(error) => Value::Error(error),
+                })
+            }
             Expr::Binary {
                 operator,
                 left,
@@ -270,7 +278,7 @@ impl<'a, S: DataSource> Context<'a, S> {
                 if matches!(right, Value::Error(_)) {
                     return Operand::Value(right);
                 }
-                binary(*operator, left, right)
+                combine(*operator, left, right)
             }
             Expr::Call {
                 function,
@@ -290,12 +298,34 @@ impl<'a, S: DataSource> Context<'a, S> {
             Index => return self.index(arguments),
             Offset => return self.offset(arguments),
             XLookup => return self.xlookup(arguments),
+            IfNa => return self.if_na(arguments),
+            Ifs => return self.ifs(arguments),
+            Switch => return self.switch(arguments),
+            Filter => return self.filter(arguments),
             Sum => self.aggregate(Statistic::Sum, arguments),
             Average => self.aggregate(Statistic::Average, arguments),
             Count => self.aggregate(Statistic::Count, arguments),
             CountA => self.aggregate(Statistic::CountA, arguments),
             Min => self.aggregate(Statistic::Min, arguments),
             Max => self.aggregate(Statistic::Max, arguments),
+            Median => self.median(arguments),
+            Mode | ModeSngl => self.mode(arguments),
+            StDev | StDevDotS | StDevP | StDevDotP | Var | VarDotS | VarP | VarDotP => {
+                self.dispersion(function, arguments)
+            }
+            Percentile | PercentileInc => self.percentile(arguments, false),
+            PercentileExc => self.percentile(arguments, true),
+            Quartile | QuartileInc => self.quartile(arguments, false),
+            QuartileExc => self.quartile(arguments, true),
+            Rank | RankEq => self.rank(arguments, false),
+            RankAvg => self.rank(arguments, true),
+            Large => self.kth(arguments, true),
+            Small => self.kth(arguments, false),
+            CountBlank => self.count_blank(arguments),
+            SumProduct => self.sum_product(arguments),
+            Subtotal => self.subtotal(arguments),
+            Unique => self.unique(arguments),
+            Sort => self.sort(arguments),
             And | Or => self.logical(function == And, arguments),
             Not => condition(self.scalar(&arguments[0])).map(|value| Value::Boolean(!value)),
             Abs => self.number(&arguments[0]).map(|value| finite(value.abs())),
@@ -345,6 +375,13 @@ impl<'a, S: DataSource> Context<'a, S> {
             Irr => self.irr(arguments),
             Sln => self.sln(arguments),
             Db => self.db(arguments),
+            Xnpv => self.xnpv(arguments),
+            Xirr => self.xirr(arguments),
+            Rate => self.rate(arguments),
+            Nper => self.nper(arguments),
+            Concat => self.concat(arguments),
+            TextJoin => self.text_join(arguments),
+            NumberValue => self.number_value(arguments),
             Concatenate => self.concatenate(arguments),
             Exact => self.exact(arguments),
             Find => self.find(arguments),
@@ -368,6 +405,8 @@ impl<'a, S: DataSource> Context<'a, S> {
             Days => self.days(arguments),
             EDate => self.edate(arguments, false),
             EoMonth => self.edate(arguments, true),
+            NetworkDays => self.network_days(arguments),
+            WorkDay => self.work_day(arguments),
             Today => Ok(self.today(false)),
             Now => Ok(self.today(true)),
         };
@@ -657,6 +696,66 @@ fn general(number: f64) -> String {
     } else {
         number.to_string()
     }
+}
+
+/// Apply a unary operator to a value, or to each element of an array.
+fn elementwise(value: Value, apply: impl Fn(Value) -> Value) -> Value {
+    match value {
+        Value::Array(rows) => elementwise_rows(rows, apply),
+        value => apply(value),
+    }
+}
+
+/// A binary operator over scalars, or element by element when either side
+/// is an array. A scalar pairs with every element, and a single row or
+/// column repeats to match the other side; positions outside both shapes
+/// are `#N/A`, as in Excel.
+fn combine(operator: Operator, left: Value, right: Value) -> Value {
+    let (left, right) = match (left, right) {
+        (Value::Array(left), Value::Array(right)) => (left, right),
+        (Value::Array(left), right) => {
+            return elementwise_rows(left, |value| binary(operator, value, right.clone()))
+        }
+        (left, Value::Array(right)) => {
+            return elementwise_rows(right, |value| binary(operator, left.clone(), value))
+        }
+        (left, right) => return binary(operator, left, right),
+    };
+    let size = |rows: &[Vec<Value>]| (rows.len(), rows.first().map_or(0, Vec::len));
+    let ((left_rows, left_columns), (right_rows, right_columns)) = (size(&left), size(&right));
+    // The element at a result position: a single row or column repeats.
+    let pick = |rows: &[Vec<Value>], count: usize, width: usize, row: usize, column: usize| {
+        let row = if count == 1 { 0 } else { row };
+        let column = if width == 1 { 0 } else { column };
+        rows.get(row).and_then(|values| values.get(column)).cloned()
+    };
+    let rows = left_rows.max(right_rows);
+    let columns = left_columns.max(right_columns);
+    Value::Array(
+        (0..rows)
+            .map(|row| {
+                (0..columns)
+                    .map(|column| {
+                        match (
+                            pick(&left, left_rows, left_columns, row, column),
+                            pick(&right, right_rows, right_columns, row, column),
+                        ) {
+                            (Some(left), Some(right)) => binary(operator, left, right),
+                            _ => Value::Error(ExcelError::Na),
+                        }
+                    })
+                    .collect()
+            })
+            .collect(),
+    )
+}
+
+fn elementwise_rows(rows: Vec<Vec<Value>>, apply: impl Fn(Value) -> Value) -> Value {
+    Value::Array(
+        rows.into_iter()
+            .map(|row| row.into_iter().map(&apply).collect())
+            .collect(),
+    )
 }
 
 fn binary(operator: Operator, left: Value, right: Value) -> Value {
