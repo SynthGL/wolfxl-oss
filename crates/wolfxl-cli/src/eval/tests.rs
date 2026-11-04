@@ -1117,6 +1117,9 @@ fn financial_functions_match_published_examples() {
             0.086_63,
             1e-5,
         ),
+        ("=IRR({-70000,12000,15000},-0.1)", -0.443_507, 1e-6),
+        // Convergence does not depend on the size of the cash flows.
+        ("=IRR({-1E-12,2E-12})", 1.0, 1e-9),
         ("=SLN(30000,7500,10)", 2250.0, 0.0),
         ("=DB(1000000,100000,6,1,7)", 186_083.33, 0.01),
         ("=DB(1000000,100000,6,2,7)", 259_639.42, 0.01),

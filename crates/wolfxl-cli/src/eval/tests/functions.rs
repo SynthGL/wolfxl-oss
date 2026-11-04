@@ -359,6 +359,9 @@ fn dated_cash_flows_rate_and_periods() {
         ("=RATE(48,-200,8000)", 0.007_701_472_4, 1e-9),
         ("=RATE(48,-200,8000)*12", 0.092_417_669, 1e-8),
         ("=RATE(10,0,-100,200)", 2f64.powf(0.1) - 1.0, 1e-10),
+        // Convergence does not depend on the size of the cash flows.
+        ("=RATE(1,0,1E-12,-2E-12)", 1.0, 1e-9),
+        ("=XIRR({-1E-12,1.1E-12},{39448,39813})", 0.1, 1e-9),
         ("=NPER(0.01,-100,-1000,10000,1)", 59.673_865_7, 1e-6),
         ("=NPER(0.01,-100,-1000,10000)", 60.082_122_9, 1e-6),
         ("=NPER(0.01,-100,-1000)", -9.578_594_04, 1e-7),
@@ -379,6 +382,8 @@ fn dated_cash_flows_rate_and_periods() {
         ),
         ("=XIRR({100,200},{39448,39508})", error(ExcelError::Num)),
         ("=RATE(0,-200,8000)", error(ExcelError::Num)),
+        // The balance 100*(1+rate)^360 approaches zero but never reaches it.
+        ("=RATE(360,0,100)", error(ExcelError::Num)),
         ("=NPER(0,0,100)", error(ExcelError::Num)),
         ("=NPER(0.1,-5,100)", error(ExcelError::Num)),
     ]);

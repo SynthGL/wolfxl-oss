@@ -132,6 +132,15 @@
 - Sanitize and display-width-bound interactive status metadata and load
   errors while keeping cursor coordinates visible on narrow terminals.
 
+### Fixed
+
+- `RATE`, `IRR`, and `XIRR` converge on the rate itself rather than on a
+  near-zero balance, so tiny cash flows find their true rate
+  (`RATE(1,0,1E-12,-2E-12)` is 1) and balances that only approach zero are
+  `#NUM!` (`RATE(360,0,100)`).
+- `wolfxl-formula` 0.1.1 tokenizes escaped brackets in structured references
+  (`Sales[Cost '[USD']]`) as one reference, so `wolfxl peek --add` accepts them.
+
 ### Removed
 
 - Drop Python 3.9 and 3.10 support; Python 3.11 is now the minimum supported

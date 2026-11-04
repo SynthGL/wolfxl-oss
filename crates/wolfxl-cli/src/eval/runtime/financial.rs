@@ -32,9 +32,19 @@ fn dated_value(rate: f64, values: &[f64], years: &[f64]) -> f64 {
         .sum()
 }
 
+/// Whether `left` and `right` lie on opposite sides of zero. Signs are
+/// compared rather than multiplied, because the product of two tiny values
+/// underflows to zero, and a value that underflowed to `0.0` counts as
+/// positive so it is not mistaken for a root.
+fn opposite_signs(left: f64, right: f64) -> bool {
+    left.is_sign_negative() != right.is_sign_negative()
+}
+
 /// A root of `function` above -1: Newton's method from the guess, and when
 /// that does not settle, bisection on the sign change between -0.99 and 10
-/// nearest the guess.
+/// nearest the guess. Convergence never compares the balance with a fixed
+/// tolerance, so tiny cash flows do not pass for a root and a balance that
+/// only approaches zero, such as `100*(1+rate)^360`, has none.
 fn rate_root(function: impl Fn(f64) -> f64, guess: f64) -> Option<f64> {
     let mut rate = guess;
     for _ in 0..100 {
@@ -42,19 +52,23 @@ fn rate_root(function: impl Fn(f64) -> f64, guess: f64) -> Option<f64> {
         if !value.is_finite() {
             break;
         }
-        if value.abs() < 1e-10 {
-            return Some(rate);
-        }
         let step = 1e-7 * rate.abs().max(1.0);
+        if value == 0.0 {
+            // An exact zero is a root only where the balance changes sign.
+            if opposite_signs(function(rate - step), function(rate + step)) {
+                return Some(rate);
+            }
+            break;
+        }
         let slope = (function(rate + step) - function(rate - step)) / (2.0 * step);
-        if slope.abs() < 1e-14 || !slope.is_finite() {
+        if slope == 0.0 || !slope.is_finite() {
             break;
         }
         let next = rate - value / slope;
         if next <= -1.0 || !next.is_finite() {
             break;
         }
-        if (next - rate).abs() < 1e-12 {
+        if (next - rate).abs() < 1e-12 * rate.abs().max(1.0) {
             return Some(next);
         }
         rate = next;
@@ -67,19 +81,20 @@ fn rate_root(function: impl Fn(f64) -> f64, guess: f64) -> Option<f64> {
         .windows(2)
         .filter(|pair| {
             let (left, right) = (function(pair[0]), function(pair[1]));
-            left.is_finite() && right.is_finite() && left * right <= 0.0
+            left.is_finite() && right.is_finite() && opposite_signs(left, right)
         })
         .map(|pair| (pair[0], pair[1]))
         .min_by(|left, right| (left.0 - guess).abs().total_cmp(&(right.0 - guess).abs()))?;
-    for _ in 0..200 {
+    let low_negative = function(low).is_sign_negative();
+    while high - low > 1e-15 * low.abs().max(1.0) {
         let middle = (low + high) / 2.0;
-        if function(middle).abs() < 1e-10 || high - low < 1e-14 {
-            return Some(middle);
+        if middle <= low || middle >= high {
+            break;
         }
-        if function(low) * function(middle) <= 0.0 {
-            high = middle;
-        } else {
+        if function(middle).is_sign_negative() == low_negative {
             low = middle;
+        } else {
+            high = middle;
         }
     }
     Some((low + high) / 2.0)
@@ -273,7 +288,7 @@ impl<'a, S: DataSource> Context<'a, S> {
         Ok(finite(discounted(rate, &values, 1)))
     }
 
-    /// Newton's method from the guess, then bisection on [-0.999, 10].
+    /// The rate at which the cash flows' net present value is zero.
     pub(super) fn irr(&self, arguments: &[Expr]) -> Outcome {
         let values = self.cash_flows(&arguments[..1])?;
         let guess = self.number_or(arguments, 1, 0.1)?;
@@ -283,46 +298,9 @@ impl<'a, S: DataSource> Context<'a, S> {
         {
             return Err(ExcelError::Num);
         }
-        let npv = |rate: f64| discounted(rate, &values, 0);
-        let slope = |rate: f64| -> f64 {
-            values
-                .iter()
-                .zip(0..)
-                .map(|(value, period)| -f64::from(period) * value / (1.0 + rate).powi(period + 1))
-                .sum()
-        };
-        let mut rate = guess;
-        for _ in 0..100 {
-            let value = npv(rate);
-            if value.abs() < 1e-10 {
-                return Ok(finite(rate));
-            }
-            let derivative = slope(rate);
-            if derivative.abs() < 1e-14 || !derivative.is_finite() {
-                break;
-            }
-            let next = rate - value / derivative;
-            if (next - rate).abs() < 1e-10 {
-                return Ok(finite(next));
-            }
-            rate = next;
-        }
-        let (mut low, mut high) = (-0.999, 10.0);
-        if npv(low) * npv(high) > 0.0 {
-            return Err(ExcelError::Num);
-        }
-        for _ in 0..200 {
-            let middle = (low + high) / 2.0;
-            if npv(middle).abs() < 1e-10 || high - low < 1e-12 {
-                return Ok(finite(middle));
-            }
-            if npv(low) * npv(middle) < 0.0 {
-                high = middle;
-            } else {
-                low = middle;
-            }
-        }
-        Err(ExcelError::Num)
+        rate_root(|rate| discounted(rate, &values, 0), guess)
+            .map(finite)
+            .ok_or(ExcelError::Num)
     }
 
     pub(super) fn sln(&self, arguments: &[Expr]) -> Outcome {

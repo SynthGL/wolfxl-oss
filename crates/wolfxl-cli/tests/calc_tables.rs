@@ -250,3 +250,31 @@ fn added_peek_columns_resolve_table_references() {
         assert_eq!(row[row.len() - 1], "198905700", "{row:?}");
     }
 }
+
+#[test]
+fn added_peek_columns_accept_escaped_brackets_in_column_names() {
+    // `'[` is a literal `[`, so the formula parses; BigCity has no such
+    // column, so each added cell is #REF! rather than an exit-2 parse error.
+    let file = cities();
+    let run = wolfxl(
+        &[
+            "peek",
+            &file,
+            "--sheet",
+            "Table",
+            "-e",
+            "json",
+            "--add",
+            "Cost=SUM(BigCity[Cost '[USD])",
+        ],
+        None,
+    );
+    assert_eq!(run.code, 0, "stderr={}", run.stderr);
+    let document: serde_json::Value = serde_json::from_str(&run.stdout).expect("peek JSON");
+    let rows = document["data"].as_array().expect("data rows");
+    assert!(!rows.is_empty());
+    for row in rows {
+        let row = row.as_array().expect("row");
+        assert_eq!(row[row.len() - 1], "#REF!", "{row:?}");
+    }
+}
