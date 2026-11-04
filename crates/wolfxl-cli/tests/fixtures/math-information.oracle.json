@@ -2,9 +2,9 @@
   "source": {
     "application": "Microsoft Excel",
     "version": "16.113",
-    "captured_at": "2026-11-04T11:53:26Z",
-    "input_sha256": "de097ae8b879bd1752a0853e1799d2728c26b760b303afd69c78563aa735ac84",
-    "saved_sha256": "cac9b21b177678cd5e8d3d4c0c3acd4da8929733bd608df06b69860982835dda",
+    "captured_at": "2026-11-04T12:24:10Z",
+    "input_sha256": "e66d70843b7734b0161b40b902cf94dbd1608c19416469b2ba695873502e9ef6",
+    "saved_sha256": "0c6d277ba53266c4bbd03a7ce78da63602e2ae2a9d77b0341707225e7afdd186",
     "runner_sha256": "d82281c289dfd8756665db742c3b80cdfc9ab0c47b7b1913d92f1bfeced3a094"
   },
   "cases": [
@@ -246,6 +246,23 @@
       "expected": {
         "type": "error",
         "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(-1,-0)",
+      "native_formula": "=ATAN2(-1,0)",
+      "expected": {
+        "type": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(-1,-1E-300)",
+      "expected": {
+        "type": "number",
+        "value": -3.141592653589793
       }
     },
     {
@@ -1050,6 +1067,60 @@
     },
     {
       "function": "CEILING",
+      "formula": "=CEILING(1E300,1E-100)",
+      "native_formula": "=CEILING(1E+300,1E-100)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(-1E300,1E-100)",
+      "native_formula": "=CEILING(-1E+300,1E-100)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(-1E300,-1E-100)",
+      "native_formula": "=CEILING(-1E+300,-1E-100)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(1E-300,1E100)",
+      "native_formula": "=CEILING(1E-300,1E+100)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(-1E-300,1E100)",
+      "native_formula": "=CEILING(-1E-300,1E+100)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(-1E-300,-1E100)",
+      "native_formula": "=CEILING(-1E-300,-1E+100)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "CEILING",
       "formula": "=CEILING(\"x\",2)",
       "expected": {
         "type": "error",
@@ -1150,6 +1221,60 @@
       "expected": {
         "type": "number",
         "value": 0.30000000000000004
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(1E300,1E-100)",
+      "native_formula": "=FLOOR(1E+300,1E-100)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(-1E300,1E-100)",
+      "native_formula": "=FLOOR(-1E+300,1E-100)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(-1E300,-1E-100)",
+      "native_formula": "=FLOOR(-1E+300,-1E-100)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(1E-300,1E100)",
+      "native_formula": "=FLOOR(1E-300,1E+100)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(-1E-300,1E100)",
+      "native_formula": "=FLOOR(-1E-300,1E+100)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(-1E-300,-1E100)",
+      "native_formula": "=FLOOR(-1E-300,-1E+100)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
       }
     },
     {
@@ -1347,6 +1472,7 @@
     {
       "function": "PRODUCT",
       "formula": "=PRODUCT(9E307,2)",
+      "native_formula": "=PRODUCT(9E+307,2)",
       "expected": {
         "type": "error",
         "value": "#NUM!"

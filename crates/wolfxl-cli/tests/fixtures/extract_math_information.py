@@ -7,10 +7,17 @@ Only portable provenance and formula results enter OUT.json.
 
 import hashlib
 import json
+import re
 import sys
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
+
+
+def canonical_formula(formula):
+    # Excel saves a literal negative-zero argument as zero. Preserve the input
+    # formula for evaluator coverage, and retain the native spelling separately.
+    return re.sub(r"(?<=[(,])-0(?=[,)])", "0", formula.replace("E+", "E"))
 
 
 def main():
@@ -34,8 +41,10 @@ def main():
         cached = cell.find("s:v", namespace)
         if formula is None or cached is None or cached.text is None:
             raise ValueError(f"Missing native formula/cache for B{index}")
-        if formula.text.replace("E+", "E") != case["formula"][1:].replace("E+", "E"):
+        if canonical_formula(formula.text) != canonical_formula(case["formula"][1:]):
             raise ValueError(f"Native formula changed for B{index}: {formula.text}")
+        if formula.text != case["formula"][1:]:
+            case["native_formula"] = "=" + formula.text
         kind = cell.get("t", "n")
         if kind == "n":
             expected = {"type": "number", "value": float(cached.text)}

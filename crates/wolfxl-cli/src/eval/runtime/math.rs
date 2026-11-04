@@ -105,7 +105,9 @@ impl<S: DataSource> Context<'_, S> {
         if x == 0.0 && y == 0.0 {
             return Err(ExcelError::Div0);
         }
-        Ok(finite(y.atan2(x)))
+        // Excel normalizes a literal -0 to 0. A nonzero negative y may
+        // still round to -PI, so preserve that native boundary result.
+        Ok(finite(unsigned_zero(y).atan2(x)))
     }
 
     /// `LOG(number, [base])`, base 10 when omitted. A number or base that
