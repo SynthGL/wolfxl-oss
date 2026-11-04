@@ -1,9 +1,10 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-use super::{evaluate, parse, DataSource, ExcelError, Extent, ParseError, Value, FUNCTIONS};
+use super::{evaluate, parse, DataSource, ExcelError, Extent, ParseError, Value};
 
 mod functions;
+mod math_information;
 
 #[derive(Default)]
 struct Sheet {
@@ -662,138 +663,6 @@ fn unsupported_calls_are_parse_errors_even_in_unchosen_branches() {
         ("=unknown_name", Value::Error(ExcelError::Name)),
         ("=LOOKUP", Value::Error(ExcelError::Name)),
     ]);
-}
-
-#[test]
-fn function_registry_lists_exact_supported_surface() {
-    let expected = [
-        ("ABS", "math"),
-        ("AND", "logical"),
-        ("AVERAGE", "statistical"),
-        ("AVERAGEIF", "statistical"),
-        ("AVERAGEIFS", "statistical"),
-        ("CHOOSE", "lookup"),
-        ("CONCAT", "text"),
-        ("CONCATENATE", "text"),
-        ("COUNT", "statistical"),
-        ("COUNTA", "statistical"),
-        ("COUNTBLANK", "statistical"),
-        ("COUNTIF", "statistical"),
-        ("COUNTIFS", "statistical"),
-        ("DATE", "date"),
-        ("DAY", "date"),
-        ("DAYS", "date"),
-        ("DB", "financial"),
-        ("EDATE", "date"),
-        ("EOMONTH", "date"),
-        ("EXACT", "text"),
-        ("FILTER", "lookup"),
-        ("FIND", "text"),
-        ("FV", "financial"),
-        ("HLOOKUP", "lookup"),
-        ("HOUR", "date"),
-        ("IF", "logical"),
-        ("IFERROR", "logical"),
-        ("IFNA", "logical"),
-        ("IFS", "logical"),
-        ("INDEX", "lookup"),
-        ("INT", "math"),
-        ("IRR", "financial"),
-        ("LARGE", "statistical"),
-        ("LEFT", "text"),
-        ("LEN", "text"),
-        ("LOWER", "text"),
-        ("MATCH", "lookup"),
-        ("MAX", "statistical"),
-        ("MAXIFS", "statistical"),
-        ("MEDIAN", "statistical"),
-        ("MID", "text"),
-        ("MIN", "statistical"),
-        ("MINIFS", "statistical"),
-        ("MINUTE", "date"),
-        ("MOD", "math"),
-        ("MODE", "statistical"),
-        ("MODE.SNGL", "statistical"),
-        ("MONTH", "date"),
-        ("NETWORKDAYS", "date"),
-        ("NOT", "logical"),
-        ("NOW", "date"),
-        ("NPER", "financial"),
-        ("NPV", "financial"),
-        ("OFFSET", "lookup"),
-        ("OR", "logical"),
-        ("PERCENTILE", "statistical"),
-        ("PERCENTILE.EXC", "statistical"),
-        ("PERCENTILE.INC", "statistical"),
-        ("PMT", "financial"),
-        ("POWER", "math"),
-        ("PV", "financial"),
-        ("QUARTILE", "statistical"),
-        ("QUARTILE.EXC", "statistical"),
-        ("QUARTILE.INC", "statistical"),
-        ("RANK", "statistical"),
-        ("RANK.AVG", "statistical"),
-        ("RANK.EQ", "statistical"),
-        ("RATE", "financial"),
-        ("REPT", "text"),
-        ("RIGHT", "text"),
-        ("ROUND", "math"),
-        ("ROUNDDOWN", "math"),
-        ("ROUNDUP", "math"),
-        ("SECOND", "date"),
-        ("SIGN", "math"),
-        ("SLN", "financial"),
-        ("SMALL", "statistical"),
-        ("SORT", "lookup"),
-        ("SQRT", "math"),
-        ("STDEV", "statistical"),
-        ("STDEV.P", "statistical"),
-        ("STDEV.S", "statistical"),
-        ("STDEVP", "statistical"),
-        ("SUBSTITUTE", "text"),
-        ("SUBTOTAL", "math"),
-        ("SUM", "math"),
-        ("SUMIF", "math"),
-        ("SUMIFS", "math"),
-        ("SUMPRODUCT", "math"),
-        ("SWITCH", "logical"),
-        ("TEXT", "text"),
-        ("TEXTJOIN", "text"),
-        ("TODAY", "date"),
-        ("TRIM", "text"),
-        ("UNIQUE", "lookup"),
-        ("UPPER", "text"),
-        ("VALUE", "text"),
-        ("VAR", "statistical"),
-        ("VAR.P", "statistical"),
-        ("VAR.S", "statistical"),
-        ("VARP", "statistical"),
-        ("VLOOKUP", "lookup"),
-        ("WORKDAY", "date"),
-        ("XIRR", "financial"),
-        ("XLOOKUP", "lookup"),
-        ("XNPV", "financial"),
-        ("YEAR", "date"),
-    ];
-    assert_eq!(
-        FUNCTIONS
-            .iter()
-            .map(|info| (info.name, info.category))
-            .collect::<Vec<_>>(),
-        expected
-    );
-    for function in FUNCTIONS {
-        let parses = (0..=6).any(|count| {
-            let arguments = vec!["1"; count].join(",");
-            parse(&format!("{}({arguments})", function.name)).is_ok()
-        });
-        assert!(parses, "{}", function.name);
-        assert!(
-            parse(&format!("{}({})", function.name, vec!["1"; 256].join(","))).is_err(),
-            "{} rejects 256 arguments",
-            function.name
-        );
-    }
 }
 
 #[test]
