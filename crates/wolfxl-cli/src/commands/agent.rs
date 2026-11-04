@@ -357,11 +357,10 @@ fn display_cell(cell: &Cell) -> String {
 /// (body + footer) honors the user's limit.
 ///
 /// We re-encode the whole accumulated buffer rather than incrementing
-/// per-add because BPE is *not* additive — `tokens(a + b) <= tokens(a)
-/// + tokens(b)` since adjacent pieces can merge into a single token
-/// across the boundary. Recomputing on the final buffer is the only
-/// way to get a count that matches what `tiktoken.cl100k_base.encode(
-/// full_output)` produces in Python.
+/// per-add because BPE is *not* additive:
+/// `tokens(a + b) <= tokens(a) + tokens(b)`. Adjacent pieces can merge into a
+/// single token across the boundary. Recomputing on the final buffer is the
+/// only way to match `tiktoken.cl100k_base.encode(full_output)` in Python.
 struct Budget<'a> {
     bpe: &'a CoreBPE,
     limit: usize,

@@ -319,8 +319,7 @@ fn markdown_escape(s: &str) -> String {
         .replace('\\', "\\\\")
         .replace('|', "\\|")
         .replace('\t', "\\t")
-        .replace('\r', "\\n")
-        .replace('\n', "\\n")
+        .replace(['\r', '\n'], "\\n")
 }
 
 pub(crate) fn display_sheet_cell(sheet: &Sheet, cell: &Cell, group_ints: bool) -> String {
@@ -480,8 +479,8 @@ mod tests {
         // Integer-valued -> {:.0}, otherwise -> {:.2}, then thousand-separate
         // the integer part. Locked in by golden CSV/text fixtures.
         assert_eq!(trim_float(3.0), "3");
-        assert_eq!(trim_float(3.14), "3.14");
-        assert_eq!(trim_float(3.14159), "3.14");
+        assert_eq!(trim_float(12.34), "12.34");
+        assert_eq!(trim_float(12.34567), "12.35");
         assert_eq!(trim_float(-2.0), "-2");
         assert_eq!(trim_float(2505.15), "2,505.15");
         assert_eq!(trim_float(1234567.5), "1,234,567.50");
