@@ -319,11 +319,10 @@ fn markdown_escape(s: &str) -> String {
         .replace('\\', "\\\\")
         .replace('|', "\\|")
         .replace('\t', "\\t")
-        .replace('\r', "\\n")
-        .replace('\n', "\\n")
+        .replace(['\r', '\n'], "\\n")
 }
 
-fn display_sheet_cell(sheet: &Sheet, cell: &Cell, group_ints: bool) -> String {
+pub(crate) fn display_sheet_cell(sheet: &Sheet, cell: &Cell, group_ints: bool) -> String {
     if let CellValue::Error(error) = &cell.value {
         format!("ERROR: {}", sheet.error_text(error))
     } else {
@@ -476,6 +475,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::approx_constant)] // These are decimal formatting inputs, not mathematical constants.
     fn trim_float_matches_format_contract() {
         // Integer-valued -> {:.0}, otherwise -> {:.2}, then thousand-separate
         // the integer part. Locked in by golden CSV/text fixtures.

@@ -239,11 +239,7 @@ impl RelsGraph {
                             "Id" => id_str = Some(value),
                             "Type" => rel_type = Some(value),
                             "Target" => target = Some(value),
-                            "TargetMode" => {
-                                if value == "External" {
-                                    mode = TargetMode::External;
-                                }
-                            }
+                            "TargetMode" if value == "External" => mode = TargetMode::External,
                             _ => {}
                         }
                     }

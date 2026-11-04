@@ -277,8 +277,17 @@ before closing them.
 editing existing workbooks without losing the parts the edit did not touch.
 It tells the agent to edit in modify mode, recalculate with WolfXL instead of
 a LibreOffice round trip, and run `verify` to confirm that every package part
-and sheet feature from the source is still present. Copy the directory into
-your agent's skills folder, for example `~/.claude/skills/wolfxl-xlsx`.
+and sheet feature from the source is still present.
+
+[`skills/wolfxl-cli`](skills/wolfxl-cli/SKILL.md) is a read-only companion
+that teaches the agent the `wolfxl` command-line tool: orient with `map` and
+`agent`, narrow rows with `peek --where`, summarize with `stats` and `pivot`,
+compute with `calc`, and check files with `diff` and `verify`, reading exit
+codes as results.
+
+Copy either directory into your agent's skills folder, for example
+`~/.claude/skills/wolfxl-cli` for Claude Code or `~/.omp/agent/skills/wolfxl-cli`
+for Oh My Pi.
 
 ## Performance
 

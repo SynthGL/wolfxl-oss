@@ -2,6 +2,78 @@
 
 ## [Unreleased]
 
+### Added
+
+- `wolfxl-cli` 0.10.0 adds analyst commands backed by `wolfxl-core` 0.9.0
+  and the new MIT `wolfxl-reader`, `wolfxl-formula`, and `wolfxl-rels` crates.
+- `wolfxl peek --where COLUMN<op>VALUE` keeps the data rows that satisfy every
+  condition (`=`, `!=`, `<`, `>`, `<=`, `>=`, `~` contains), comparing money
+  spellings such as `$1,200.00` and `(500.00)` numerically. `--select A,B`
+  prints the named columns in the order given.
+- `wolfxl peek --interactive` (`-i`) browses the sheet in a full-screen
+  terminal grid with a frozen header row, search, column sort, value
+  frequencies, and sheet switching.
+- `wolfxl peek --max-columns N` bounds the columns in JSON output, alongside
+  `--max-rows`.
+- `wolfxl pivot` groups rows by header fields and aggregates value fields with
+  `sum`, `count`, `avg`, `min`, and `max`, with an optional `--column` field
+  and grand totals, as a box table, CSV, or JSON.
+- `wolfxl stats` profiles each column: blank and non-empty counts, counts by
+  type, distinct values, a numeric summary, and the most frequent values, with
+  the same `--where` and `--select` options as `peek`.
+- `wolfxl diff LEFT RIGHT --key K` reconciles two tables row by row on a key
+  column, with numeric tolerance, key normalization, JSON or text reports, and
+  exit codes for scripted checks.
+- `wolfxl fingerprint` prints a style-independent content fingerprint
+  (`wxf1:<sha256 hex>`), and `wolfxl verify --fingerprint F` checks a file
+  against one.
+- `wolfxl calc FORMULA [FILE|-]` evaluates one formula against a sheet's
+  stored values, using cached results for formula cells, and prints the
+  result as text, CSV rows for an array, or JSON. It exits 0 for a value, 1
+  for an Excel error value, and 2 for usage, input, parse, or
+  unsupported-function failures.
+- A built-in formula evaluator behind `calc` and `peek --add` covers
+  arithmetic, comparison, `&` concatenation, cell and sheet-qualified
+  references, and ranges, with the functions `SUM`, `AVERAGE`, `COUNT`,
+  `MIN`, `MAX`, and `IF`. A formula naming any other function is rejected
+  with a pointer to `wolfxl list-functions`.
+- Formula references import delimited money spellings such as `$1,200.00`
+  and `(75.00)` as numbers, using the same parser as `--where`. Arithmetic
+  text coercion accepts those spellings too. Stored Excel text cells stay
+  text, and range aggregations continue to ignore them.
+- `COUNT` skips error values in references and direct arguments, while the
+  other aggregate functions propagate them. Formula concatenation formats
+  numbers with the same 15-significant-digit rounding as scalar output.
+- Formula references and fingerprints read raw stored numbers in XLS, XLSB,
+  and ODS books, preserving fractional serials and the stored date system
+  independently of number formats.
+- `wolfxl peek --add NAME=FORMULA` appends formula columns filled down from
+  the first data row with `$` anchoring, computed before `--where` and
+  `--select` and available in `--interactive`. A name that collides with a
+  header or an earlier `--add`, or a formula that fails to parse, exits 2
+  naming the argument.
+- `wolfxl list-functions` lists the evaluator's functions by name and
+  category, with `--category` and `--search` filters, and `--check NAME,...`
+  reports each name as supported or unsupported, exiting 1 when any is
+  unsupported.
+- `peek`, `pivot`, `stats`, `diff`, and `calc` read standard input when the
+  file is `-`, with `--from csv|tsv|xlsx|xlsm|xls|xlsb|ods` naming the format;
+  `calc` also reads it when no file is given.
+
+### Changed
+
+- Bumped `wolfxl-cli` to `0.10.0`.
+- Updated the CLI to use `wolfxl-core` 0.9.0 and the MIT reader crates.
+- Preserve exact CSV/TSV header names when resolving pivot fields, matching
+  the existing filters, selectors, keyed diffs, and column profiles.
+- Keep stored formula input cells sparse, including sheets with widely
+  separated cells, rather than allocating their full bounding rectangle.
+- Stream stdin and extension-overriding `--from` copies into atomically
+  owner-only temporary files, with named 512 MiB XLS and 4 GiB other-format
+  spool limits reported as exit-2 input failures.
+- Sanitize and display-width-bound interactive status metadata and load
+  errors while keeping cursor coordinates visible on narrow terminals.
+
 ### Removed
 
 - Drop Python 3.9 and 3.10 support; Python 3.11 is now the minimum supported

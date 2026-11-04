@@ -4,7 +4,7 @@ version = "0.10.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Spreadsheet previewer for AI agents covering xlsx/xls/xlsb/ods/csv. Installs the `wolfxl` binary with `peek` (styled previews), `map` (workbook overview), `agent` (token-budgeted briefing), and `schema` (per-column type/cardinality/format inference) subcommands."
+description = "Spreadsheet inspection and analysis for xlsx/xls/xlsb/ods/csv. Installs `wolfxl` with formula evaluation, styled previews, an interactive grid, column profiles, pivot tables, keyed diffs, and content fingerprints."
 readme = "README.md"
 keywords = ["xlsx", "excel", "cli", "preview", "spreadsheet"]
 categories = ["command-line-utilities", "visualization"]
@@ -14,10 +14,17 @@ name = "wolfxl"
 path = "src/main.rs"
 
 [dependencies]
-wolfxl-core = { path = "../wolfxl-core", version = "0.8" }
+wolfxl-core = { path = "../wolfxl-core", version = "0.9" }
+wolfxl-reader = { path = "../wolfxl-reader", version = "0.1" }
+wolfxl-formula = { path = "../wolfxl-formula", version = "0.1" }
 clap = { version = "4", features = ["derive"] }
 anyhow.workspace = true
 serde_json.workspace = true
+chrono.workspace = true
+sha2.workspace = true
+base16ct.workspace = true
+zip.workspace = true
+ratatui = "0.30.2"
 unicode-width = "0.2"
 tiktoken-rs = "0.11.0"
 

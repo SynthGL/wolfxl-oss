@@ -555,7 +555,7 @@ impl<'a> Tokenizer<'a> {
             let inside_paren = self
                 .token_stack
                 .last()
-                .map_or(true, |&idx| self.items[idx].kind == TokenKind::Paren);
+                .is_none_or(|&idx| self.items[idx].kind == TokenKind::Paren);
             if inside_paren {
                 Token::new(",", TokenKind::OpIn, TokenSubKind::None)
             } else {

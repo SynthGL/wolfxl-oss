@@ -309,12 +309,7 @@ fn is_error_literal(s: &str) -> Option<&str> {
         "#N/A",
         "#GETTING_DATA",
     ];
-    for e in ERRS {
-        if s == *e {
-            return Some(e);
-        }
-    }
-    None
+    ERRS.iter().copied().find(|&error| s == error)
 }
 
 fn is_valid_table_name(s: &str) -> bool {

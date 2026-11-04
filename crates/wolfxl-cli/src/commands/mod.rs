@@ -1,4 +1,10 @@
 pub mod agent;
+pub mod calc;
+pub mod diff;
+pub mod fingerprint;
+pub mod functions;
 pub mod map;
 pub mod peek;
+pub mod pivot;
 pub mod schema;
+pub mod stats;
