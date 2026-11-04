@@ -93,15 +93,18 @@ file is `-`; `calc` also reads it when no file is given. Standard input needs
 extension. A delimited input is one sheet named after the file stem, or
 `stdin` when piped.
 
-Delimited fields arrive as text. `pivot`, `stats`, `calc`, and the formulas
-of `peek --add` type them the way a spreadsheet text import does. After
-surrounding whitespace is trimmed, `TRUE` and `FALSE` in any letter case
-become booleans, and a plain decimal number becomes a number: an optional
-sign, digits with an optional decimal point (`42`, `-1.5`, `.5`), and an
-optional exponent (`-1.5e3`). Every other field stays text, including
-thousands separators (`1,234`), currency symbols (`$1,200`), hex (`0x10`),
-`inf`, and `NaN`. `peek` output and filters, `diff`, and `fingerprint` work
-from the source text, so `007` and `1,200` print and match as written.
+Delimited fields arrive as text. `pivot` and `stats` trim surrounding
+whitespace and read `TRUE` and `FALSE` in any letter case as booleans, and
+plain decimals as numbers: an optional sign, digits with an optional decimal
+point (`42`, `-1.5`, `.5`), and an optional exponent (`-1.5e3`). `calc` and
+the formulas of `peek --add` also read whole-field money spellings as
+numbers, using the same parser as `--where`: leading signs and currency
+symbols, grouped thousands commas (`$1,200.00`), and accounting negatives
+(`(75.00)`). Other text, including hex (`0x10`), `inf`, and `NaN`, stays text.
+Text cells stored in an Excel workbook stay text, even when they look like
+money; range functions such as `SUM` ignore them. `peek` output and filters,
+`diff`, and `fingerprint` work from the source text, so `007` and `1,200`
+print and match as written.
 
 ## Formula evaluation
 
@@ -130,8 +133,9 @@ input, which needs `--from` as described above.
   `MAX`, and `IF`, which evaluates only the branch it returns. A formula
   that names any other function exits 2, naming it and pointing to
   [`wolfxl list-functions`](#function-registry).
-- **Semantics.** Arithmetic uses `f64`. Text converts to a number with
-  locale-neutral decimal and exponent rules. Text comparisons ignore case by
+- **Semantics.** Arithmetic uses `f64`. Arithmetic text-to-number coercion
+  accepts the same decimal, exponent, and money spellings as `--where`.
+  Text comparisons ignore case by
   Unicode lowercase ordering rather than locale-specific collation, and `&`
   joins numbers in plain decimal form rather than with cell number formats.
   A range is an array: operators do not intersect or broadcast it, and

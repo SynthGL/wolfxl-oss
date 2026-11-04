@@ -7,6 +7,7 @@ use wolfxl_core::{CellValue, Sheet};
 
 use crate::commands::fingerprint::{date_serial, day_fraction};
 use crate::eval::{self, DataSource, ExcelError, Extent, Value};
+use crate::filter::lenient_number;
 use crate::input::Input;
 
 pub(crate) struct WorkbookData {
@@ -16,13 +17,14 @@ pub(crate) struct WorkbookData {
 struct SheetData {
     sheet: Sheet,
     extent: Extent,
-    added: HashMap<(u32, u32), Value>,
+    overrides: HashMap<(u32, u32), Value>,
 }
 
 impl WorkbookData {
     /// Load stored values only; existing formula cells retain their caches.
     pub(crate) fn load(input: &mut Input) -> Result<Self> {
         let names = input.sheet_names().to_vec();
+        let delimited = input.is_delimited();
         let mut sheets = BTreeMap::new();
         for name in names {
             let sheet = input.sheet(&name)?;
@@ -36,7 +38,22 @@ impl WorkbookData {
                     columns: column + width as u32,
                 }
             };
-            sheets.insert(name, SheetData { sheet, extent, added: HashMap::new() });
+            let mut overrides = HashMap::new();
+            if delimited {
+                // Import money text once, without changing raw display fields
+                // or the types of text cells stored in spreadsheet files.
+                for (r, cells) in sheet.rows().iter().enumerate() {
+                    for (c, cell) in cells.iter().enumerate() {
+                        let CellValue::String(text) = &cell.value else { continue };
+                        let Some(number) = lenient_number(text) else { continue };
+                        overrides.insert(
+                            (row + r as u32 + 1, column + c as u32 + 1),
+                            Value::Number(number),
+                        );
+                    }
+                }
+            }
+            sheets.insert(name, SheetData { sheet, extent, overrides });
         }
         Ok(Self { sheets })
     }
@@ -46,7 +63,7 @@ impl WorkbookData {
         let data = self.sheets.get_mut(sheet).expect("loaded target sheet");
         data.extent.rows = data.extent.rows.max(row);
         data.extent.columns = data.extent.columns.max(column);
-        data.added.insert((row, column), value);
+        data.overrides.insert((row, column), value);
     }
 }
 
@@ -57,7 +74,7 @@ impl DataSource for WorkbookData {
 
     fn cell_value(&self, sheet: &str, row: u32, column: u32) -> Value {
         let Some(data) = self.sheets.get(sheet) else { return Value::Blank };
-        if let Some(value) = data.added.get(&(row, column)) {
+        if let Some(value) = data.overrides.get(&(row, column)) {
             return value.clone();
         }
         let (origin_row, origin_column) = data.sheet.origin();

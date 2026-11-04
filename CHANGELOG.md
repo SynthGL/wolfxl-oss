@@ -43,6 +43,10 @@
   references, and ranges, with the functions `SUM`, `AVERAGE`, `COUNT`,
   `MIN`, `MAX`, and `IF`. A formula naming any other function is rejected
   with a pointer to `wolfxl list-functions`.
+- Formula references import delimited money spellings such as `$1,200.00`
+  and `(75.00)` as numbers, using the same parser as `--where`. Arithmetic
+  text coercion accepts those spellings too. Stored Excel text cells stay
+  text, and range aggregations continue to ignore them.
 - `wolfxl peek --add NAME=FORMULA` appends formula columns filled down from
   the first data row with `$` anchoring, computed before `--where` and
   `--select` and available in `--interactive`. A name that collides with a

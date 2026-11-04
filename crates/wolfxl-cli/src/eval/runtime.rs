@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
 
+use crate::filter::lenient_number;
+
 use super::{
     Area, DataSource, ExcelError, Expr, Function, Operator, Reference, Value, MAX_COLUMN, MAX_ROW,
 };
@@ -187,20 +189,12 @@ fn finite(number: f64) -> Value {
     }
 }
 
-fn numeric_text(text: &str) -> Option<f64> {
-    // Formula coercion is locale-neutral and accepts decimal/exponent notation.
-    text.trim()
-        .parse::<f64>()
-        .ok()
-        .filter(|number| number.is_finite())
-}
-
 fn number(value: Value) -> Result<f64, ExcelError> {
     match value {
         Value::Number(number) => Ok(number),
         Value::Boolean(value) => Ok(if value { 1.0 } else { 0.0 }),
         Value::Blank => Ok(0.0),
-        Value::Text(text) => numeric_text(&text).ok_or(ExcelError::Value),
+        Value::Text(text) => lenient_number(&text).ok_or(ExcelError::Value),
         Value::Error(error) => Err(error),
         Value::Array(_) => Err(ExcelError::Value),
     }
@@ -327,7 +321,7 @@ impl Aggregate {
             Value::Blank => return Ok(()),
             Value::Text(_) | Value::Boolean(_) if referenced => return Ok(()),
             Value::Text(text) if matches!(self.function, Function::Count) => {
-                let Some(value) = numeric_text(&text) else {
+                let Some(value) = lenient_number(&text) else {
                     return Ok(());
                 };
                 value

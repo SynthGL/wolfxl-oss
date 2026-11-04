@@ -111,6 +111,10 @@ impl Input {
         }
     }
 
+    pub(crate) fn is_delimited(&self) -> bool {
+        self.delimited
+    }
+
     pub(crate) fn sheet_names(&self) -> &[String] {
         self.workbook.sheet_names()
     }
