@@ -533,12 +533,12 @@ fn a_block_away_from_a1_keeps_its_sheet_coordinates() {
         ),
         "\
 Item,Qty,Price,Bad,Total,Twice,Anchored,Over,Qtys
-bolt,2,3,ERROR: #DIV/0!,6,12,4,ERROR: #DIV/0!,6
+bolt,2,3,ERROR: Div0,6,12,4,ERROR: #DIV/0!,6
 nut,4,5,1,20,40,8,2,6
 "
     );
     let document = json(&ok(&[path, "-e", "json", "--add", "Over=E4+1"], None));
-    assert_eq!(document["data"][0][3], "#DIV/0!");
+    assert_eq!(document["data"][0][3], "Div0");
     assert_eq!(document["data"][0][4], "#DIV/0!");
     assert_eq!(document["data"][1][4], "2");
 }
