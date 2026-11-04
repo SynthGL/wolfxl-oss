@@ -1049,6 +1049,13 @@ fn lookups_find_exact_approximate_and_wildcard_matches() {
         ("=XLOOKUP(\"Ch*\",B2:B6,C2:C6)", error(ExcelError::Na)),
         ("=SUM(XLOOKUP(\"South\",A2:A6,C2:D6))", number(203.0)),
         ("=XLOOKUP(\"East\",A2:A6,C2:C5)", error(ExcelError::Value)),
+        // An omitted lookup value matches blank cells, including those past
+        // the used area.
+        ("=XLOOKUP(,D2:D6,B2:B6)", text("Cherry")),
+        ("=XLOOKUP(,D2:D6,B2:B6,,0,-1)", text("Cherry")),
+        ("=XLOOKUP(,C2:C8,{1;2;3;4;5;6;7})", number(6.0)),
+        ("=XLOOKUP(,C2:C8,{1;2;3;4;5;6;7},,0,-1)", number(7.0)),
+        ("=XLOOKUP(,F2:F6,G2:G6)", error(ExcelError::Na)),
     ]);
 }
 

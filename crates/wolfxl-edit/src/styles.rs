@@ -27,6 +27,8 @@ use crate::EditError;
 
 const MAX_ROW: u32 = 1_048_576;
 const MAX_COL: u32 = 16_384;
+/// Most cells one number-format edit may cover; each can become a patched cell.
+pub(crate) const MAX_FORMAT_CELLS: u64 = 1_000_000;
 
 /// Ids 0-163 are reserved for built-in number formats.
 const FIRST_CUSTOM_NUM_FMT_ID: u32 = 164;
@@ -62,6 +64,13 @@ pub(crate) fn set_number_format(
 ) -> Result<(String, String), EditError> {
     validate_bounds(bounds)?;
     let (min_row, min_col, max_row, max_col) = bounds;
+    let cells = u64::from(max_row - min_row + 1) * u64::from(max_col - min_col + 1);
+    if cells > MAX_FORMAT_CELLS {
+        return Err(EditError::Invalid(format!(
+            "number format range covers {cells} cells; at most {MAX_FORMAT_CELLS} are allowed \
+             per edit, so split the range"
+        )));
+    }
     let grid = scan_worksheet(sheet, bounds)?;
 
     let mut source = styles.unwrap_or(MINIMAL_STYLES);
@@ -1268,6 +1277,18 @@ mod tests {
             let err = set_number_format(Some(STYLES), SHEET, bounds, "0.0").unwrap_err();
             assert!(
                 matches!(err, EditError::BadReference(_)),
+                "{bounds:?}: {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_ranges_over_the_cell_limit() {
+        // 1,001 rows by 1,000 columns is just past the limit; a whole sheet is far past it.
+        for bounds in [(1, 1, 1_001, 1_000), (1, 1, MAX_ROW, MAX_COL)] {
+            let err = set_number_format(Some(STYLES), SHEET, bounds, "0.0").unwrap_err();
+            assert!(
+                matches!(&err, EditError::Invalid(message) if message.contains("1000000")),
                 "{bounds:?}: {err:?}"
             );
         }

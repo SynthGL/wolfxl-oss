@@ -14,12 +14,31 @@ use serde_json::{json, Value};
 use crate::McpArgs;
 
 const PROTOCOL: &str = "2025-06-18";
+/// Undo snapshots kept per workbook; the oldest are dropped first.
+const HISTORY_ENTRIES: usize = 32;
+/// Snapshot bytes kept per workbook; the newest snapshot is kept even when larger.
+const HISTORY_BYTES: usize = 256 << 20;
 
 #[derive(Default)]
 struct History {
     undo: Vec<Vec<u8>>,
     redo: Vec<Vec<u8>>,
     revision: String,
+}
+
+impl History {
+    /// Drop the oldest undo snapshots beyond the entry and byte budgets.
+    fn trim(&mut self) {
+        let mut bytes: usize = self.undo.iter().map(Vec::len).sum();
+        let mut dropped = 0;
+        while self.undo.len() - dropped > 1
+            && (self.undo.len() - dropped > HISTORY_ENTRIES || bytes > HISTORY_BYTES)
+        {
+            bytes -= self.undo[dropped].len();
+            dropped += 1;
+        }
+        self.undo.drain(..dropped);
+    }
 }
 
 struct Server {

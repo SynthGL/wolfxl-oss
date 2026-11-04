@@ -1231,6 +1231,29 @@ fn undo_and_redo_restore_exact_bytes() {
 }
 
 #[test]
+fn undo_history_keeps_the_newest_32_edits() {
+    let directory = TempDir::new("undo-limit");
+    let path = workbook(&directory, "book.xlsx");
+    let mut session = Session::start(&[]);
+    let file = text(&path);
+    let mut snapshots = Vec::new();
+    for value in 0..34 {
+        snapshots.push(fs::read(&path).unwrap());
+        session.ok(
+            "write_cells",
+            json!({"path": file, "sheet": "Data", "cells": [{"cell": "C2", "value": value}]}),
+        );
+    }
+    for _ in 0..32 {
+        session.ok("undo", json!({"path": file}));
+    }
+    // The two oldest snapshots were dropped, so history stops after edit two.
+    assert_eq!(fs::read(&path).unwrap(), snapshots[2]);
+    let message = session.fail("undo", json!({"path": file}));
+    assert!(message.contains("nothing to undo"), "{message}");
+}
+
+#[test]
 fn undo_and_redo_refuse_after_an_outside_change() {
     let directory = TempDir::new("undo-outside");
     let path = workbook(&directory, "book.xlsx");

@@ -92,6 +92,9 @@ impl Server {
         let dry_run = arguments["dry_run"].as_bool().unwrap_or(false);
         Self::check_revision(arguments, &before_revision)?;
         if !dry_run {
+            // Best effort: this catches changes made while the edit was
+            // prepared, but a writer that replaces the file between this read
+            // and the rename below is not detected.
             if revision(&fs::read(path).context("checking workbook before write")?)
                 != before_revision
             {
@@ -103,6 +106,7 @@ impl Server {
                 *history = History::default();
             }
             history.undo.push(before);
+            history.trim();
             history.redo.clear();
             history.revision.clone_from(&after_revision);
         }

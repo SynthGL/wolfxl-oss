@@ -3,11 +3,17 @@ name: Release CLI binaries
 on:
   push:
     tags: ['wolfxl-cli-v*']
+  # Pull requests that can change the released binary build the full target
+  # matrix without publishing anything.
   pull_request:
     paths:
       - '.github/workflows/release-cli.yml'
       - 'install.sh'
       - 'install.ps1'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain*'
 
 permissions:
   contents: read

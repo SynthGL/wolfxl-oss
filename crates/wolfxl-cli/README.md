@@ -793,7 +793,10 @@ resolve against the server's working directory.
 Every editing tool accepts `expected_revision` and refuses to write when the
 file no longer matches it, so pass the revision from your last read to avoid
 overwriting a change made in the meantime. A successful edit returns the new
-`revision`, `dry_run: false`, and the `change` it applied.
+`revision`, `dry_run: false`, and the `change` it applied. The check is best
+effort: the server rereads the file just before replacing it, but a process
+that replaces the file in the instant between that read and the rename is not
+detected. Do not rely on it as a lock between concurrent writers.
 
 **Dry runs.** `dry_run: true` validates the edit and returns the planned
 `change` and the revision the file would have, without writing the file or
@@ -802,7 +805,10 @@ recording history. Applying the same edit afterwards produces that revision.
 **Undo and redo.** The server keeps, per path, the bytes each of its edits
 replaced, in memory for the life of the process. `undo` and `redo` restore
 those exact bytes, a new edit clears the redo history, and both refuse when
-the file has changed on disk since the server last wrote it.
+the file has changed on disk since the server last wrote it. Each path keeps
+at most the 32 newest snapshots and at most 256 MiB of them; older snapshots
+are dropped, so `undo` reports nothing to undo once it reaches them. The newest
+snapshot is always kept, even when it alone exceeds 256 MiB.
 
 **What an edit changes.** Edits rewrite only the package parts they touch;
 every other part of the file, such as images, embedded objects, and VBA

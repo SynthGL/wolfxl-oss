@@ -388,12 +388,24 @@ impl EditSession {
     }
 
     /// Write and fsync a sibling temporary file, then atomically replace the destination.
+    /// An existing destination keeps its permissions; a new one gets the usual
+    /// mode for a created file rather than the temporary file's owner-only mode.
     pub fn save(&self, path: &Path) -> Result<(), EditError> {
         let parent = path
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
             .unwrap_or_else(|| Path::new("."));
-        let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+        let existing = std::fs::metadata(path).ok().map(|m| m.permissions());
+        let mut builder = tempfile::Builder::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            builder.permissions(std::fs::Permissions::from_mode(0o666));
+        }
+        let mut temporary = builder.tempfile_in(parent)?;
+        if let Some(permissions) = existing {
+            temporary.as_file().set_permissions(permissions)?;
+        }
         temporary.write_all(&self.to_bytes()?)?;
         temporary.as_file().sync_all()?;
         temporary

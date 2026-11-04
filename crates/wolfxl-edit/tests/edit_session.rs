@@ -157,6 +157,25 @@ fn noop_and_deterministic_atomic_save() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn save_in_place_keeps_the_destination_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("book.xlsx");
+    for mode in [0o644, 0o664] {
+        std::fs::write(&path, package()).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        let mut session = EditSession::open(&path).unwrap();
+        session
+            .write_cells("Data", &[edit("A1", EditValue::Number(1.0))])
+            .unwrap();
+        session.save(&path).unwrap();
+        let saved = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(saved, mode, "{mode:o}");
+    }
+}
+
 #[test]
 fn values_clear_formula_and_part_hashes() {
     let original = package();

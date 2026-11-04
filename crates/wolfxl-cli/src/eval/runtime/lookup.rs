@@ -29,6 +29,7 @@ struct Line<'g, 'a> {
 }
 
 /// Compares values of the same kind; values of different kinds never match.
+/// Blank only reaches here from XLOOKUP, where it matches blank cells.
 fn same_kind(candidate: &Value, lookup: &Value) -> Option<Ordering> {
     match (candidate, lookup) {
         (Value::Number(candidate), Value::Number(lookup)) => candidate.partial_cmp(lookup),
@@ -36,6 +37,7 @@ fn same_kind(candidate: &Value, lookup: &Value) -> Option<Ordering> {
             Some(candidate.to_lowercase().cmp(&lookup.to_lowercase()))
         }
         (Value::Boolean(candidate), Value::Boolean(lookup)) => Some(candidate.cmp(lookup)),
+        (Value::Blank, Value::Blank) => Some(Ordering::Equal),
         _ => None,
     }
 }
@@ -355,13 +357,27 @@ impl<'a, S: DataSource> Context<'a, S> {
         {
             return Err(ExcelError::Value);
         }
-        let Some(position) = self.search(
-            &lookup,
-            line.live,
-            |position| self.line_at(&line, position),
-            &mode,
-            reverse,
-        ) else {
+        // Cells past the used area are blank, so a blank lookup value also
+        // matches the first of them in search order.
+        let total = if line.vertical {
+            lookup_rows
+        } else {
+            lookup_columns
+        };
+        let trailing_blank = matches!(lookup, Value::Blank) && total > line.live;
+        let found = if trailing_blank && reverse {
+            Some(total - 1)
+        } else {
+            self.search(
+                &lookup,
+                line.live,
+                |position| self.line_at(&line, position),
+                &mode,
+                reverse,
+            )
+            .or(trailing_blank.then_some(line.live))
+        };
+        let Some(position) = found else {
             return Ok(None);
         };
         Ok(Some(match returned {
