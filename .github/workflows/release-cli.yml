@@ -3,12 +3,6 @@ name: Release CLI binaries
 on:
   push:
     tags: ['wolfxl-cli-v*']
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Existing tag to release (wolfxl-cli-v<version>)'
-        required: true
-        type: string
   pull_request:
     paths:
       - '.github/workflows/release-cli.yml'
@@ -30,7 +24,7 @@ jobs:
       - name: Validate requested tag
         if: github.event_name != 'pull_request'
         env:
-          TAG: ${{ inputs.tag || github.ref_name }}
+          TAG: ${{ github.ref_name }}
         run: |
           if [[ ! "$TAG" =~ ^wolfxl-cli-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid CLI tag: $TAG" >&2
@@ -38,12 +32,12 @@ jobs:
           fi
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          ref: ${{ github.ref }}
           persist-credentials: false
       - name: Verify tag matches package version
         id: package
         env:
-          TAG: ${{ inputs.tag || github.ref_name }}
+          TAG: ${{ github.ref_name }}
         run: |
           python3 - <<'PY'
           import os
