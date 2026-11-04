@@ -8,6 +8,39 @@
   version. Version 2.0.36 is the last release supporting Python 3.9 and 3.10;
   pip on those versions continues to resolve compatible 2.0.x releases.
 
+## wolfxl-cli 0.10.0 - Unreleased
+
+### Added
+
+- `wolfxl peek --where COLUMN<op>VALUE` keeps the data rows that satisfy every
+  condition (`=`, `!=`, `<`, `>`, `<=`, `>=`, `~` contains), comparing money
+  spellings such as `$1,200.00` and `(500.00)` numerically. `--select A,B`
+  prints the named columns in the order given.
+- `wolfxl peek --interactive` (`-i`) browses the sheet in a full-screen
+  terminal grid with a frozen header row, search, column sort, value
+  frequencies, and sheet switching.
+- `wolfxl peek --max-columns N` bounds the columns in JSON output, alongside
+  `--max-rows`.
+- `wolfxl pivot` groups rows by header fields and aggregates value fields with
+  `sum`, `count`, `avg`, `min`, and `max`, with an optional `--column` field
+  and grand totals, as a box table, CSV, or JSON.
+- `wolfxl stats` profiles each column: blank and non-empty counts, counts by
+  type, distinct values, a numeric summary, and the most frequent values, with
+  the same `--where` and `--select` options as `peek`.
+- `wolfxl diff LEFT RIGHT --key K` reconciles two tables row by row on a key
+  column, with numeric tolerance, key normalization, JSON or text reports, and
+  exit codes for scripted checks.
+- `wolfxl fingerprint` prints a style-independent content fingerprint
+  (`wxf1:<sha256 hex>`), and `wolfxl verify --fingerprint F` checks a file
+  against one.
+- `peek`, `pivot`, `stats`, and `diff` read standard input when the file is
+  `-`, with `--from csv|tsv|xlsx|xlsm|xls|xlsb|ods` naming the format.
+
+### Changed
+
+- Bumped `wolfxl-cli` to `0.10.0`.
+- Updated the CLI to use `wolfxl-core` 0.9.0 and the MIT reader crates.
+
 ## 2.0.36 - 2026-10-31
 
 ### Added
