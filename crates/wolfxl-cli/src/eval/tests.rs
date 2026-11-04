@@ -211,6 +211,21 @@ fn arithmetic_coercions() {
 }
 
 #[test]
+fn money_text_coerces_with_the_row_filter_parser() {
+    assert_cases(&[
+        ("=\"$1,200\"+0", Value::Number(1200.0)),
+        ("=\"+$1,200.50\"*2", Value::Number(2401.0)),
+        ("=\"-$1,200.50\"/2", Value::Number(-600.25)),
+        ("=\"(75.00)\"+100", Value::Number(25.0)),
+        ("=\" ($1,200.50) \"+0", Value::Number(-1200.5)),
+        ("=\"1,234.5e2\"+0", Value::Number(123450.0)),
+        ("=\"$1,20\"+0", Value::Error(ExcelError::Value)),
+        ("=\"$1,200 trailing\"+0", Value::Error(ExcelError::Value)),
+        ("=\"25%\"+0", Value::Error(ExcelError::Value)),
+    ]);
+}
+
+#[test]
 fn concatenation_coerces_scalars() {
     assert_cases(&[
         ("=A4&\"x\"", Value::Text("x".into())),

@@ -148,3 +148,18 @@ fn array_csv_quotes_fields_and_json_keeps_types_and_blanks() {
     assert_eq!(json(&["A2:C3", "--from", "csv"], Some(csv))["value"],
         serde_json::json!([["a,b", "a\"b", true], [0, 0.3, null]]));
 }
+
+#[test]
+fn money_deals_csv_fields_are_numbers_in_formula_ranges() {
+    let deals = "Rep,Cost,Revenue\nana,9000,\"$12,500.00\"\nbea,8000,\"$6,500.00\"\n";
+    assert_eq!(value(&["SUM(C:C)", "--from", "csv"], Some(deals)), "19000\n");
+    assert_eq!(value(&["COUNT(C:C)", "--from", "csv"], Some(deals)), "2\n");
+    assert_eq!(value(&["C2-B2", "--from", "csv"], Some(deals)), "3500\n");
+}
+
+#[test]
+fn money_ledger_csv_accounting_negatives_participate_in_sums() {
+    let ledger = "Amount\n100.00\n250.50\n(75.00)\n";
+    assert_eq!(value(&["SUM(A:A)", "--from", "csv"], Some(ledger)), "275.5\n");
+    assert_eq!(value(&["COUNT(A:A)", "--from", "csv"], Some(ledger)), "3\n");
+}

@@ -633,3 +633,43 @@ fn interactive_refusal_precedes_add_validation() {
         );
     }
 }
+
+#[test]
+fn money_deals_csv_columns_and_filters_use_the_same_numbers() {
+    let deals = "Rep,Cost,Revenue\nana,9000,\"$12,500.00\"\nbea,8000,\"$6,500.00\"\n";
+    assert_eq!(
+        piped_csv(deals, &["--add", "Margin=C2-B2", "--select", "Rep,Margin"]),
+        "Rep,Margin\nana,3500\nbea,-1500\n"
+    );
+    assert_eq!(
+        piped_csv(deals, &["--add", "Margin=C2-B2", "--where", "Revenue>=$10,000", "--select", "Rep,Margin"]),
+        "Rep,Margin\nana,3500\n"
+    );
+}
+
+#[test]
+fn money_ledger_csv_running_totals_include_accounting_negatives() {
+    let ledger = "Rep,Amount\nana,100.00\nbea,250.50\ncam,(75.00)\n";
+    assert_eq!(
+        piped_csv(ledger, &["--add", "Running=SUM($B$2:B2)"]),
+        "Rep,Amount,Running\nana,100.00,100\nbea,250.50,350.5\ncam,(75.00),275.5\n"
+    );
+}
+
+#[test]
+fn money_text_in_xlsx_stays_text_in_ranges_but_coerces_in_arithmetic() {
+    let directory = TempDir::new("money-text");
+    let data = r#"<row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>$1,200</t></is></c></row><row r="3"><c r="A3" t="inlineStr"><is><t>(75.00)</t></is></c></row>"#;
+    let path = workbook(&directory, &[("Money", data)]);
+    let output = ok(&[
+        path.to_str().unwrap(), "-e", "json",
+        "--add", "Total=SUM(A:A)", "--add", "Numeric=A2+0",
+    ], None);
+    let document = json(&output);
+    assert_eq!(document["data"][0][0], "$1,200");
+    assert_eq!(document["data"][1][0], "(75.00)");
+    assert_eq!(document["data"][0][1], "0");
+    assert_eq!(document["data"][1][1], "0");
+    assert_eq!(document["data"][0][2], "1200");
+    assert_eq!(document["data"][1][2], "-75");
+}
