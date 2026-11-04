@@ -228,7 +228,7 @@ fn typed(value: &CellValue) -> Option<(&'static str, Cow<'_, str>)> {
 /// Whole-day 1900-system Excel serial of a date, or `None` outside Excel's
 /// 1900-01-01 through 9999-12-31 range. Serial 1 is 1900-01-01, and serials
 /// from 61 on count the nonexistent 1900-02-29 that Excel keeps as serial 60.
-fn date_serial(date: NaiveDate) -> Option<f64> {
+pub(crate) fn date_serial(date: NaiveDate) -> Option<f64> {
     let first = NaiveDate::from_ymd_opt(1900, 1, 1)?;
     let last = NaiveDate::from_ymd_opt(9999, 12, 31)?;
     if date < first || date > last {
@@ -240,7 +240,7 @@ fn date_serial(date: NaiveDate) -> Option<f64> {
 
 /// Fraction of a day elapsed at `time`: whole seconds since midnight plus the
 /// fractional second, over 86,400.
-fn day_fraction(time: NaiveTime) -> f64 {
+pub(crate) fn day_fraction(time: NaiveTime) -> f64 {
     let seconds = f64::from(time.num_seconds_from_midnight());
     let fraction = f64::from(time.nanosecond()) / 1_000_000_000.0;
     (seconds + fraction) / 86_400.0

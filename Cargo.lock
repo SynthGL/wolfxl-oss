@@ -2644,6 +2644,7 @@ dependencies = [
  "tiktoken-rs",
  "unicode-width",
  "wolfxl-core",
+ "wolfxl-formula",
  "wolfxl-reader",
  "zip",
 ]

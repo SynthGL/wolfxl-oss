@@ -33,8 +33,28 @@
 - `wolfxl fingerprint` prints a style-independent content fingerprint
   (`wxf1:<sha256 hex>`), and `wolfxl verify --fingerprint F` checks a file
   against one.
-- `peek`, `pivot`, `stats`, and `diff` read standard input when the file is
-  `-`, with `--from csv|tsv|xlsx|xlsm|xls|xlsb|ods` naming the format.
+- `wolfxl calc FORMULA [FILE|-]` evaluates one formula against a sheet's
+  stored values, using cached results for formula cells, and prints the
+  result as text, CSV rows for an array, or JSON. It exits 0 for a value, 1
+  for an Excel error value, and 2 for usage, input, parse, or
+  unsupported-function failures.
+- A built-in formula evaluator behind `calc` and `peek --add` covers
+  arithmetic, comparison, `&` concatenation, cell and sheet-qualified
+  references, and ranges, with the functions `SUM`, `AVERAGE`, `COUNT`,
+  `MIN`, `MAX`, and `IF`. A formula naming any other function is rejected
+  with a pointer to `wolfxl list-functions`.
+- `wolfxl peek --add NAME=FORMULA` appends formula columns filled down from
+  the first data row with `$` anchoring, computed before `--where` and
+  `--select` and available in `--interactive`. A name that collides with a
+  header or an earlier `--add`, or a formula that fails to parse, exits 2
+  naming the argument.
+- `wolfxl list-functions` lists the evaluator's functions by name and
+  category, with `--category` and `--search` filters, and `--check NAME,...`
+  reports each name as supported or unsupported, exiting 1 when any is
+  unsupported.
+- `peek`, `pivot`, `stats`, `diff`, and `calc` read standard input when the
+  file is `-`, with `--from csv|tsv|xlsx|xlsm|xls|xlsb|ods` naming the format;
+  `calc` also reads it when no file is given.
 
 ### Changed
 

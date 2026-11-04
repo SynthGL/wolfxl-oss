@@ -5,8 +5,10 @@
 Command-line previewer and analyst toolkit for spreadsheets. Installs the
 `wolfxl` binary and opens `.xlsx`, `.xlsm`, `.xls`, `.xlsb`, `.ods`, `.csv`,
 `.tsv`, and `.txt` inputs through the same `peek` / `map` / `agent` /
-`schema` workflow, plus `pivot`, `stats`, `diff`, `fingerprint`, and `verify`
-for analysis and reconciliation.
+`schema` workflow, plus `calc`, `pivot`, `stats`, `diff`, `fingerprint`, and
+`verify` for analysis and reconciliation. A built-in formula evaluator powers
+`calc` and `peek --add` formula columns, and `list-functions` lists the
+functions it implements.
 
 ```bash
 cargo install wolfxl-cli
@@ -14,10 +16,12 @@ cargo install wolfxl-cli
 
 ## Subcommands
 
-- `wolfxl peek <file|->` - styled preview or text/csv/json/markdown export, with `--where` row filters and `--select` columns; `--interactive` browses it in a terminal grid
+- `wolfxl peek <file|->` - styled preview or text/csv/json/markdown export, with `--add` formula columns, `--where` row filters and `--select` columns; `--interactive` browses it in a terminal grid
 - `wolfxl map <file>` - one-page workbook overview (sheets, dims, headers)
 - `wolfxl agent <file> --max-tokens N` - token-budgeted workbook briefing
 - `wolfxl schema <file>` - per-column type, cardinality, and format inference
+- `wolfxl calc <formula> [file|-]` - evaluate one formula against a sheet's stored values or piped input
+- `wolfxl list-functions [--check NAME,...]` - list the formula functions `calc` implements, or check names against them
 - `wolfxl pivot <file|-> --rows R --values AGG:FIELD` - group rows by header fields and aggregate with grand totals
 - `wolfxl stats <file|->` - per-column profile: counts by type, distinct values, numeric summary, and most frequent values
 - `wolfxl diff <left> <right> --key K` - reconcile two tables row by row on a key column, with numeric tolerance
@@ -38,6 +42,8 @@ wolfxl peek workbook.xlsx -s "Balance Sheet"
 wolfxl peek workbook.xlsb                   # binary Excel workbook
 wolfxl peek ledger.csv --where 'Amount>=1,000' --where 'Status~open' -e csv
 wolfxl peek workbook.xlsx --select Account,Q1  # chosen columns, in this order
+wolfxl peek ledger.csv --add 'Margin=C2-B2' --where 'Margin<0' -e csv
+wolfxl peek sales.xlsx --add 'Running=SUM($D$2:D2)'  # running total column
 cat ledger.csv | wolfxl peek - --from csv --where 'Region=west'
 wolfxl peek workbook.xlsx --interactive     # full-screen grid: search, sort, value counts
 wolfxl map export.csv --format text         # delimited file as one sheet
@@ -46,6 +52,12 @@ wolfxl map workbook.xlsx --format text      # terminal-friendly summary
 wolfxl agent workbook.xlsx --max-tokens 400 # fit a briefing to a token budget
 wolfxl schema workbook.xlsx                 # JSON schema-style column summary
 wolfxl schema workbook.xlsx -s "P&L" -f text
+wolfxl calc '=SUM(B:B)' export.csv         # formula over a delimited file
+cat export.csv | wolfxl calc 'SUM(B:B)' --from csv
+wolfxl calc "=SUM('P&L'!B3:B5)" workbook.xlsx --sheet "Balance Sheet" --json
+wolfxl list-functions                      # NAME  category lines plus a count
+wolfxl list-functions --category math --json
+wolfxl list-functions --check SUM,IF,XLOOKUP  # exit 1: XLOOKUP is not built in
 wolfxl pivot sales.csv --rows Region --values sum:Amount,count:Amount
 wolfxl pivot sales.csv --rows Region --column Year --values avg:Amount -e csv
 cat sales.csv | wolfxl pivot - --from csv --rows Region,Product --values max:Amount -e json
@@ -75,20 +87,152 @@ table borders.
 
 ## Standard input and delimited fields
 
-`peek`, `pivot`, `stats`, and `diff` read standard input when the file is
-`-`. Standard input needs `--from csv|tsv|xlsx|xlsm|xls|xlsb|ods`; for a
-path, `--from` overrides the extension. A delimited input is one sheet named
-after the file stem, or `stdin` when piped.
+`peek`, `pivot`, `stats`, `diff`, and `calc` read standard input when the
+file is `-`; `calc` also reads it when no file is given. Standard input needs
+`--from csv|tsv|xlsx|xlsm|xls|xlsb|ods`; for a path, `--from` overrides the
+extension. A delimited input is one sheet named after the file stem, or
+`stdin` when piped.
 
-Delimited fields arrive as text. `pivot` and `stats` type them the way a
-spreadsheet text import does. After surrounding whitespace is trimmed,
-`TRUE` and `FALSE` in any letter case become booleans, and a plain decimal
-number becomes a number: an optional sign, digits with an optional decimal
-point (`42`, `-1.5`, `.5`), and an optional exponent (`-1.5e3`). Every other
-field stays text, including thousands separators (`1,234`), currency
-symbols (`$1,200`), hex (`0x10`), `inf`, and `NaN`. `peek`, `diff`, and
-`fingerprint` work from the source text, so `007` and `1,200` print and
-match as written.
+Delimited fields arrive as text. `pivot`, `stats`, `calc`, and the formulas
+of `peek --add` type them the way a spreadsheet text import does. After
+surrounding whitespace is trimmed, `TRUE` and `FALSE` in any letter case
+become booleans, and a plain decimal number becomes a number: an optional
+sign, digits with an optional decimal point (`42`, `-1.5`, `.5`), and an
+optional exponent (`-1.5e3`). Every other field stays text, including
+thousands separators (`1,234`), currency symbols (`$1,200`), hex (`0x10`),
+`inf`, and `NaN`. `peek` output and filters, `diff`, and `fingerprint` work
+from the source text, so `007` and `1,200` print and match as written.
+
+## Formula evaluation
+
+```text
+wolfxl calc FORMULA [FILE|-] [--sheet S] [--from FMT] [--json]
+```
+
+`wolfxl calc` loads the stored values of every sheet and evaluates FORMULA
+on the selected sheet, the first one unless `--sheet` names another. The
+leading `=` is optional. Without `FILE`, or with `-`, it reads standard
+input, which needs `--from` as described above.
+
+- **Values.** References read stored values: a formula cell contributes its
+  cached result, and `calc` never recalculates it. Delimited fields are typed
+  as described in
+  [Standard input and delimited fields](#standard-input-and-delimited-fields),
+  and dates and times read as 1900-system serial numbers. References use the
+  sheet's own addresses, so a table that starts at `C3` is read at `C3`.
+- **Built-in engine.** The evaluator covers arithmetic (`+`, `-`, `*`, `/`,
+  `^`, unary minus, and postfix `%`), comparison (`=`, `<>`, `<`, `>`, `<=`,
+  `>=`), and `&` concatenation over numbers, strings, `TRUE`/`FALSE`, and
+  error literals such as `#N/A`. It reads A1 references with or without `$`,
+  sheet-qualified references such as `'P&L'!B3`, and ranges such as `B2:D10`,
+  `B:B`, and `2:2`; whole columns and rows stop at the sheet's used extent.
+- **Functions.** The only functions are `SUM`, `AVERAGE`, `COUNT`, `MIN`,
+  `MAX`, and `IF`, which evaluates only the branch it returns. A formula
+  that names any other function exits 2, naming it and pointing to
+  [`wolfxl list-functions`](#function-registry).
+- **Semantics.** Arithmetic uses `f64`. Text converts to a number with
+  locale-neutral decimal and exponent rules. Text comparisons ignore case by
+  Unicode lowercase ordering rather than locale-specific collation, and `&`
+  joins numbers in plain decimal form rather than with cell number formats.
+  A range is an array: operators do not intersect or broadcast it, and
+  results never spill.
+
+Scalars print as text with up to 15 significant digits, `TRUE` or `FALSE`
+for booleans, an empty line for a blank, and the literal for an Excel error.
+An array result, such as the bare range `=B2:C4`, prints as CSV rows.
+`--json` prints `{formula, sheet, type, value}` on one line: `formula` with
+its leading `=`, the evaluated `sheet`, a `type` of `number`, `text`,
+`boolean`, `blank`, `error`, or `array`, and a `value` that is a number,
+string, boolean, `null` for a blank, the error literal as a string, or a 2-D
+array of those.
+
+| Exit | Meaning |
+|---|---|
+| 0 | The formula produced a value, an array included |
+| 1 | The formula produced an Excel error value, printed as `#DIV/0!` and so on |
+| 2 | Usage or input failure, a formula that cannot be parsed, or an unsupported function, described on stderr |
+
+```bash
+wolfxl calc '=SUM(B:B)/COUNT(B:B)' sales.tsv || echo "exit $?"
+wolfxl calc '=IF(MAX(C2:C20)>1000,"review","ok")' ledger.csv
+```
+
+## Function registry
+
+`wolfxl list-functions` prints the functions of the built-in evaluator
+behind `wolfxl calc` and `wolfxl peek --add`, one per line, sorted by name,
+with the category of each.
+
+```text
+wolfxl list-functions [--category C] [--search TEXT] [--json]
+wolfxl list-functions --check NAME[,NAME...] [--json]
+```
+
+```text
+$ wolfxl list-functions
+AVERAGE  statistical
+COUNT    statistical
+IF       logical
+MAX      math
+MIN      math
+SUM      math
+6 functions
+```
+
+- **Categories.** The registry's categories are `logical`, `math`, and
+  `statistical`. `--category` keeps one of them, ignoring case and
+  surrounding spaces, so `Math` works. Any other category exits 2 and lists
+  the valid ones.
+- **Search.** `--search TEXT` keeps the functions whose name contains
+  `TEXT`, ignoring case: `--search m` finds `MAX`, `MIN`, and `SUM`. With
+  both flags, a function must pass both.
+- **Text output.** Each line is the name padded to the longest listed name,
+  two spaces, and the category. The last line is the count: `N functions`
+  for the full list, or `M of N functions` when a filter is active. A filter
+  that matches nothing prints only the count line and still exits 0.
+
+`--json` prints one document. `total` is the size of the whole registry and
+`count` the number of listed entries; `category` and `search` echo the
+filters (`null` when absent), with `category` in its registry spelling.
+
+```json
+{"contract_version": 1, "total": 6, "count": 3, "category": "math", "search": null,
+ "functions": [{"name": "MAX", "category": "math"}, {"name": "MIN", "category": "math"},
+               {"name": "SUM", "category": "math"}]}
+```
+
+`--check` takes function names, comma-separated or repeated, and reports
+each in the order given. Names ignore case and surrounding whitespace and
+print in upper case. A name is `supported` when the registry lists it, and
+`unsupported` otherwise, which includes spreadsheet functions the built-in
+engine does not implement, such as `XLOOKUP`. `--check` cannot be combined
+with `--category` or `--search`.
+
+```text
+$ wolfxl list-functions --check sum,xlookup,nope
+SUM      supported (math)
+XLOOKUP  unsupported
+NOPE     unsupported
+1 of 3 supported
+```
+
+With `--json`, `total` is the size of the registry, `checked` counts the names,
+`supported` the supported ones, and `category` is `null` for an unsupported name:
+
+```json
+{"contract_version": 1, "total": 6, "checked": 2, "supported": 1, "results": [
+  {"name": "SUM", "status": "supported", "category": "math"},
+  {"name": "XLOOKUP", "status": "unsupported", "category": null}
+]}
+```
+
+JSON is printed on one line; it is wrapped above for reading.
+
+| Exit | Meaning |
+|---|---|
+| 0 | Listed, or every checked name is supported |
+| 1 | A checked name is unsupported |
+| 2 | Usage failure: an unknown category, an empty `--check` name, or `--check` with `--category` or `--search` |
 
 ## Row filters and column selection
 
@@ -128,6 +272,52 @@ to every export format. Without `--where` or `--select`, output is unchanged.
 wolfxl peek ledger.csv --where 'Amount<(100)' --select Rep,Amount -e json
 ```
 
+## Formula columns
+
+`wolfxl peek --add NAME=FORMULA` appends a column named NAME whose cells
+are FORMULA evaluated on every data row. Repeat `--add` for more columns.
+The argument splits at its first `=`, so `Margin=C2-B2` and `Margin==C2-B2`
+are the same formula.
+
+Write the formula for the first data row, the row under the header (row 2
+for a sheet that starts in A1). Each later row gets it filled down the way a
+spreadsheet fills a formula: relative row references move with the row,
+`$`-anchored rows stay put, and columns never move. `C2-B2` on row 5 reads
+`C5-B5`, and `SUM($B$2:B2)` is a running total. References to other sheets
+move like local ones, so `Rates!B2` reads `Rates!B3` one row down. Whole
+columns such as `B:B`, string literals, and function names are never
+rewritten. Rows after the last non-blank row get no formula.
+
+Formulas use the evaluator of `wolfxl calc`, described in
+[Formula evaluation](#formula-evaluation), against the stored values of
+every sheet, with delimited fields typed as for `calc`. Added columns take
+the free column letters after the sheet's last column, in `--add` order, so
+a later formula can use an earlier added column: with headers in A:D,
+`--add 'Revenue=B2*C2' --add 'Double=E2*2'` doubles Revenue. A formula also
+sees the rows above it in its own column, while later added columns and the
+rows below in its own column read as blank.
+
+Results print the way `wolfxl calc` prints a scalar: text with up to 15
+significant digits, also in JSON, and `TRUE`/`FALSE` for booleans. A blank
+result leaves the cell empty, and a range result such as `B2:C2` is
+`#VALUE!`, since ranges are not intersected with the row. An Excel error
+such as `#DIV/0!` stays in its cell, shown as `ERROR: #DIV/0!` in the text
+views and as `"#DIV/0!"` in JSON, and `--where 'Unit=#DIV/0!'` finds it.
+
+Formula columns are computed over the whole sheet before `--where` and
+`--select`, so filters can test added columns, `--select` can show them,
+and a filter never changes what a formula sees.
+
+| Exit | Meaning |
+|---|---|
+| 0 | The sheet was printed with its added columns, error cells included |
+| 1 | The file, sheet, or output could not be read or written |
+| 2 | A `--add` without `NAME=` or a formula, a formula that cannot be parsed or names an unsupported function (stderr points to `wolfxl list-functions`), or a NAME already used by a header or an earlier `--add`, ignoring case; stderr names the `--add` argument |
+
+```bash
+wolfxl peek orders.csv --add 'Unit=D2/B2' --where 'Unit=#DIV/0!' --select Order,Unit
+```
+
 ## Interactive grid
 
 `wolfxl peek FILE --interactive` (or `-i`) opens the sheet in a full-screen
@@ -156,12 +346,13 @@ sorts as text, ignoring case. Blank cells stay last in both directions, and
 rows with equal values keep their source order. Frequencies count each
 displayed value of the column over the rows shown, most frequent first.
 
-`--where` and `--select` shape the sheet named by `--sheet` (or the first
-sheet) before the grid opens. Tab loads each other sheet the first time it is
-reached, and applies the same filters and selection when that sheet has
-every column they name; a sheet without them opens unfiltered, with a note on
-the status line. Each sheet keeps its cursor, scroll, and sort while you move
-between sheets.
+`--add`, `--where`, and `--select` shape the sheet named by `--sheet` (or
+the first sheet) before the grid opens. Tab loads each other sheet the first
+time it is reached and applies the same `--add` columns, filters, and
+selection to it. A sheet where an added NAME matches a header opens without
+added columns, and a sheet that lacks a column the filters or selection name
+opens unfiltered; the status line notes either case. Each sheet keeps its
+cursor, scroll, and sort while you move between sheets.
 
 Columns are as wide as their header or widest value among the first 1,000
 rows, capped at `--max-width`, and longer values end in `…`. Numbers are
@@ -472,22 +663,6 @@ within a `cl100k_base` token budget. To protect that budget, `agent` keeps
 compact raw numeric rendering instead of spending tokens on display symbols.
 `schema` emits per-column type, cardinality, null-count, format-category, and
 sample-value inference for one sheet or the whole workbook.
-
-## Formula evaluation module
-
-The CLI contains a private, workbook-independent formula evaluator with `SUM`,
-`AVERAGE`, `COUNT`, `MIN`, `MAX`, and short-circuiting `IF`. It accepts scalar
-operators, Excel error values, A1 references, sheet-qualified references, and
-two-dimensional ranges. Whole row and column references are limited to the
-sheet's used extent. This module is not yet exposed as a subcommand.
-
-The evaluator reads cached cell values through a small data-source interface;
-it does not calculate formulas stored in referenced cells. It uses `f64`
-arithmetic and locale-neutral decimal/exponent text coercion. Text comparisons
-use Unicode lowercase ordering rather than locale-specific collation. Numeric
-concatenation uses plain decimal formatting rather than cell number formats.
-Range values are returned as arrays, without implicit intersection, operator
-broadcasting, or spill behavior.
 
 ## Built on
 

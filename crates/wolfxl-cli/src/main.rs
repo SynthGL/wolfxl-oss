@@ -4,8 +4,10 @@ use std::process::ExitCode;
 use clap::{Parser, ValueEnum};
 
 mod commands;
+mod derive;
 mod eval;
 mod filter;
+mod formula_data;
 mod input;
 mod render;
 mod tui;
@@ -18,6 +20,8 @@ mod tui;
 /// `wolfxl map <file>` prints a one-page summary of every sheet.
 /// `wolfxl agent <file> --max-tokens N` composes a token-budgeted briefing.
 /// `wolfxl schema <file>` emits per-column type, cardinality, and format.
+/// `wolfxl calc <formula> [file]` evaluates a formula over stored cell values.
+/// `wolfxl list-functions` lists supported formula functions or checks names.
 #[derive(Parser, Debug)]
 #[command(name = "wolfxl", version, about, long_about = None)]
 struct Cli {
@@ -35,6 +39,10 @@ enum Command {
     Agent(AgentArgs),
     /// Per-column schema: type, cardinality, null count, format category.
     Schema(SchemaArgs),
+    /// Evaluate one formula against stored values (0 value, 1 Excel error, 2 invalid request).
+    Calc(CalcArgs),
+    /// List supported formula functions, or check names (exit 1 if any are unsupported).
+    ListFunctions(ListFunctionsArgs),
     /// Group rows by header fields and aggregate value fields, with grand totals.
     Pivot(PivotArgs),
     /// Print a style-independent content fingerprint (`wxf1:<sha256 hex>`).
@@ -45,6 +53,46 @@ enum Command {
     Diff(DiffArgs),
     /// Profile every column: types, distinct values, numeric summary, top values.
     Stats(StatsArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub(crate) struct CalcArgs {
+    /// Formula to evaluate, with or without a leading `=`.
+    formula: String,
+
+    /// Spreadsheet path, or - for standard input (the default).
+    file: Option<PathBuf>,
+
+    /// Sheet the formula evaluates on (default: first sheet).
+    #[arg(short = 's', long)]
+    sheet: Option<String>,
+
+    /// Input format. Required for standard input; overrides a path's extension.
+    #[arg(long, value_enum)]
+    from: Option<input::InputFormat>,
+
+    /// Print {formula, sheet, type, value} as JSON.
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub(crate) struct ListFunctionsArgs {
+    /// Only functions in this category, ignoring case (for example `math`).
+    #[arg(long, conflicts_with = "check")]
+    category: Option<String>,
+
+    /// Only functions whose name contains this text, ignoring case.
+    #[arg(long, conflicts_with = "check")]
+    search: Option<String>,
+
+    /// Report names as supported or unsupported; comma-separated or repeated.
+    #[arg(long, value_delimiter = ',', value_name = "NAME")]
+    check: Option<Vec<String>>,
+
+    /// Print JSON instead of aligned text.
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -125,6 +173,11 @@ struct PeekArgs {
     /// Input format. Required for standard input; overrides a path's extension.
     #[arg(long, value_enum)]
     from: Option<input::InputFormat>,
+
+    /// Append NAME=FORMULA as a column, filled down from the first data row.
+    /// Repeat to add columns in order, before filtering and selection.
+    #[arg(long, value_name = "NAME=FORMULA")]
+    add: Vec<String>,
 
     /// Keep data rows where COLUMN<op>VALUE holds; op is one of = != < > <= >= ~
     /// (contains). Repeat to combine with AND.
@@ -320,6 +373,8 @@ fn main() -> ExitCode {
         Command::Schema(args) => {
             finish_legacy(commands::schema::run(args.file, args.format, args.sheet))
         }
+        Command::Calc(args) => commands::calc::run(args),
+        Command::ListFunctions(args) => commands::functions::run(args),
         Command::Pivot(args) => commands::pivot::run(args),
         Command::Fingerprint(args) => commands::fingerprint::fingerprint(args),
         Command::Verify(args) => commands::fingerprint::verify(args),
