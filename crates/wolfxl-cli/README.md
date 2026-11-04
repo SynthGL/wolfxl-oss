@@ -151,11 +151,15 @@ are distinct fields for `--rows`, `--values`, `--where`, `--select`, and
 `--key`. Data fields arrive as text. `pivot` and `stats` trim surrounding
 whitespace and read `TRUE` and `FALSE` in any letter case as booleans, and
 plain decimals as numbers: an optional sign, digits with an optional decimal
-point (`42`, `-1.5`, `.5`), and an optional exponent (`-1.5e3`). `calc` and
-the formulas of `peek --add` also read whole-field money spellings as
-numbers, using the same parser as `--where`: leading signs and currency
-symbols, grouped thousands commas (`$1,200.00`), and accounting negatives
-(`(75.00)`). Other text, including hex (`0x10`), `inf`, and `NaN`, stays text.
+point (`42`, `-1.5`, `.5`), and an optional exponent (`-1.5e3`). `calc`, the
+formulas of `peek --add`, and the aggregates of `pivot` and `stats` also read
+whole-field money spellings as numbers, using the same parser as `--where`:
+leading signs and currency symbols, grouped thousands commas (`$1,200.00`),
+and accounting negatives (`(75.00)`). For `calc` and `peek --add`, a field in
+ISO date form (`2008-01-01`, `2008-01-01T12:00:00`) is the date's serial
+number, as Excel's text import reads it, so `XIRR` and the date functions take
+a column of ISO dates. Other text, including hex (`0x10`), `inf`, and `NaN`,
+stays text.
 Text cells stored in an Excel workbook stay text, even when they look like
 money; range functions such as `SUM` ignore them. `peek` output and filters,
 `diff`, and `fingerprint` work from the source text, so `007` and `1,200`
@@ -563,7 +567,9 @@ table total to exclude automatically.
 | `min` | Smallest numeric cell |
 | `max` | Largest numeric cell |
 
-Numeric cells are stored numbers. Text, booleans, dates, and errors are
+Numeric cells are stored numbers and text in the money spellings that
+`--where` and `stats` read, such as `$1,200.00`, `1,200`, and `(500.00)`.
+Other text, booleans, dates, and errors are
 skipped by `sum`, `avg`, `min`, and `max`, and a group without numeric cells
 leaves those aggregates blank (`null` in JSON). Each `--rows` field becomes a
 key column; an empty key prints as `(blank)`. Keys of a field sort

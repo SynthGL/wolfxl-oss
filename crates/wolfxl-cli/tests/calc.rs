@@ -314,6 +314,24 @@ fn money_ledger_csv_accounting_negatives_participate_in_sums() {
 }
 
 #[test]
+fn iso_date_csv_fields_are_date_serials_in_formulas() {
+    // Microsoft's XIRR example with its dates in ISO form.
+    let flows = "Date,Amount\n2008-01-01,-10000\n2008-03-01,2750\n2008-10-30,4250\n\
+                 2009-02-15,3250\n2009-04-01,2750\n";
+    assert_eq!(value(&["A2", "--from", "csv"], Some(flows)), "39448\n");
+    let rate: f64 = value(&["XIRR(B2:B6,A2:A6)", "--from", "csv"], Some(flows))
+        .trim()
+        .parse()
+        .expect("XIRR is a number");
+    assert!((rate - 0.373_362_535).abs() < 1e-8, "{rate}");
+    // Text that only resembles a date stays text.
+    assert_eq!(
+        value(&["A2", "--from", "csv"], Some("Date\n2008-13-01\n")),
+        "2008-13-01\n"
+    );
+}
+
+#[test]
 fn xlsb_date_cells_evaluate_their_stored_1904_serials() {
     let book = || {
         xlsb::book(

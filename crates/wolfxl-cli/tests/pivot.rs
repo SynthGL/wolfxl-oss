@@ -285,6 +285,30 @@ fn file_input_reads_a_csv_path_and_groups_thousands() {
 }
 
 #[test]
+fn money_spelled_values_aggregate_as_numbers() {
+    // `n/a` is counted but not summed; accounting negatives subtract.
+    let csv = "Rep,Revenue\nAna,\"$12,500.00\"\nAna,(500.00)\nBen,\"1,200\"\nBen,n/a\n";
+    let out = piped(
+        csv,
+        &[
+            "--rows",
+            "Rep",
+            "--values",
+            "sum:Revenue,count:Revenue,min:Revenue",
+            "-e",
+            "csv",
+        ],
+    );
+    assert_eq!(
+        out,
+        "Rep,sum:Revenue,count:Revenue,min:Revenue\n\
+         Ana,\"12,000\",2,-500\n\
+         Ben,\"1,200\",2,\"1,200\"\n\
+         Total,\"13,200\",4,-500\n"
+    );
+}
+
+#[test]
 fn piped_tsv_and_default_box_output() {
     let tsv = "Region\tAmount\nEast\t3\nWest\t4\nEast\t5\n";
     let run = pivot(

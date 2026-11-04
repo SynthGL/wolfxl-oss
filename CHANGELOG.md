@@ -140,6 +140,12 @@
   `#NUM!` (`RATE(360,0,100)`).
 - `wolfxl-formula` 0.1.1 tokenizes escaped brackets in structured references
   (`Sales[Cost '[USD']]`) as one reference, so `wolfxl peek --add` accepts them.
+- `wolfxl pivot` aggregates money-spelled text (`$12,500.00`, `(500.00)`)
+  as numbers, the same reading `stats` and `--where` use, instead of leaving
+  `sum`, `avg`, `min`, and `max` blank.
+- `calc` and `peek --add` read ISO date fields of delimited input
+  (`2008-01-01`) as date serials, as Excel's text import does, so
+  `XIRR(B2:B6,A2:A6)` works on a CSV of dated cash flows.
 
 ### Removed
 

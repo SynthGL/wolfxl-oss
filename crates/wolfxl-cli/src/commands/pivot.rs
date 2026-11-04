@@ -7,9 +7,10 @@
 //! contributes one key column; `--column` spreads its distinct values across
 //! columns and adds a grand-total column. A grand-total row closes the table.
 //!
-//! Aggregation follows the stored cell types: `Int` and `Float` cells are
-//! numeric, everything else (text, booleans, dates, errors) is skipped by
-//! `sum`, `avg`, `min`, and `max`, and every non-empty cell is counted by
+//! Aggregation reads numbers the way `--where` and `stats` do: `Int` and
+//! `Float` cells and text in money spellings (`$1,200.00`, `(500.00)`) are
+//! numeric; everything else (other text, booleans, dates, errors) is skipped
+//! by `sum`, `avg`, `min`, and `max`, and every non-empty cell is counted by
 //! `count`. Totals recompute the aggregation over all contributing rows.
 //!
 //! Keys sort numerically when every non-blank key of a field is numeric,
@@ -27,7 +28,7 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use wolfxl_core::{Cell, CellValue, Sheet};
 
-use crate::filter::resolve_column;
+use crate::filter::{cell_number, resolve_column};
 use crate::render::{self, RenderOptions};
 use crate::{input, PivotArgs, PivotFormat};
 
@@ -139,10 +140,8 @@ impl Acc {
             return;
         }
         self.count += 1;
-        let number = match value {
-            CellValue::Int(integer) => *integer as f64,
-            CellValue::Float(float) => *float,
-            _ => return,
+        let Some(number) = cell_number(value) else {
+            return;
         };
         if self.numbers == 0 {
             self.min = number;

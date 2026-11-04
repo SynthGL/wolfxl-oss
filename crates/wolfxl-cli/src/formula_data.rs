@@ -198,14 +198,16 @@ fn stored_value(value: RawValue, data_type: CellDataType) -> Value {
 }
 
 /// A delimited field typed the way Excel's text import types it; text that
-/// reads as money becomes a number once here, while display paths keep the
-/// source spelling.
+/// reads as money or as an ISO date becomes a number once here, while display
+/// paths keep the source spelling.
 fn delimited_field(text: &str) -> Value {
     match delimited_value(text) {
         CellValue::Bool(flag) => Value::Boolean(flag),
         CellValue::Int(number) => Value::Number(number as f64),
         CellValue::Float(number) => Value::Number(number),
-        _ => lenient_number(text).map_or_else(|| Value::Text(text.to_owned()), Value::Number),
+        _ => lenient_number(text)
+            .or_else(|| iso_serial(text.trim()))
+            .map_or_else(|| Value::Text(text.to_owned()), Value::Number),
     }
 }
 
