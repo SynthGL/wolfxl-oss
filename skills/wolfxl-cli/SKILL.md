@@ -53,21 +53,29 @@ With `--read-only` the server offers only the reading tools.
    left. Use `schema` when column types matter. Pick the sheet with `-s` or
    `--sheet`; commands default to the first sheet.
 2. **Narrow.** Use `peek --where` and `--select` instead of dumping a whole
-   sheet. Row 1 holds the headers. Repeat `--where` to require every
-   condition. Operators are `=`, `!=`, `<`, `>`, `<=`, `>=`, and `~`
-   (contains, ignoring case). Numeric comparisons accept money spellings such
-   as `$1,200.00`, `1,200`, and `(500.00)`.
+   sheet. Row 1 holds the headers unless you pass `--header-row N` (also on
+   `stats` and `pivot`), which a sheet with a title above its table needs.
+   Columns can be named by header or by sheet letter (`--select C,F`); when
+   two headers share a name, use the letter. Repeat `--where` to require
+   every condition. Operators are `=`, `!=`, `<`, `>`, `<=`, `>=`, and `~`
+   (contains, ignoring case). Numeric comparisons accept money and percent
+   spellings such as `$1,200.00`, `1,200`, `(500.00)`, and `12%`.
 3. **Summarize.** Use `stats` for distributions and `pivot` for grouped
-   totals (`sum`, `count`, `avg`, `min`, `max`).
+   totals (`sum`, `count`, `avg`, `min`, `max`). Both count a stored totals
+   row as data, so filter it out with `--where` when the sheet has one.
 4. **Compute.** Use `calc` for a single answer and `peek --add NAME=FORMULA`
    for a computed column. Write the `--add` formula for the first data row
    (row 2); each later row gets it filled down the way Excel fills formulas.
-   The built-in engine covers arithmetic, comparison, `&`, references, and
-   67 functions: math and rounding, `SUMIF(S)`, `COUNTIF(S)`,
-   `AVERAGEIF(S)`, `MAXIFS`, `MINIFS`, `IF`, `IFERROR`, `AND`, `OR`,
-   `VLOOKUP`, `HLOOKUP`, `XLOOKUP`, `INDEX`, `MATCH`, `OFFSET`, `CHOOSE`,
-   text functions including `TEXT`, date functions including `EOMONTH`, and
-   `PMT`, `PV`, `FV`, `NPV`, `IRR`, `SLN`, and `DB`. Run
+   The built-in engine covers arithmetic, comparison, `&`, references,
+   structured table references such as `SUM(Sales[Amount])`, element-wise
+   array operators, and 107 functions: math and rounding, `SUMPRODUCT`,
+   `SUBTOTAL`, `SUMIF(S)`, `COUNTIF(S)`, `AVERAGEIF(S)`, `MAXIFS`, `MINIFS`,
+   `MEDIAN`, `STDEV`, `VAR`, `PERCENTILE`, `QUARTILE`, `RANK`, `LARGE`,
+   `SMALL`, `IF`, `IFS`, `SWITCH`, `IFERROR`, `AND`, `OR`, `VLOOKUP`,
+   `HLOOKUP`, `XLOOKUP`, `INDEX`, `MATCH`, `OFFSET`, `CHOOSE`, `FILTER`,
+   `UNIQUE`, `SORT`, text functions including `TEXT` and `TEXTJOIN`, date
+   functions including `EOMONTH` and `NETWORKDAYS`, and `PMT`, `PV`, `FV`,
+   `NPV`, `IRR`, `XNPV`, `XIRR`, `RATE`, `SLN`, and `DB`. Run
    `list-functions --check` before relying on any function.
 5. **Check.** Use `diff` to reconcile two files and `verify` to confirm a
    file still matches a recorded fingerprint. Report the exit code along with
