@@ -6,6 +6,7 @@ use unicode_width::UnicodeWidthStr;
 use wolfxl_core::Sheet;
 
 use crate::filter::cell_number;
+use crate::input::Provenance;
 use crate::render::display_sheet_cell;
 
 /// Data rows measured when sizing columns, so a long sheet opens without a
@@ -48,12 +49,24 @@ pub(crate) struct Grid {
     pub(crate) widths: Vec<usize>,
     /// Shown on the status line, for example why filters do not apply.
     pub(crate) note: Option<String>,
+    /// Original sheet coordinates, including the header at row index zero.
+    pub(crate) provenance: Provenance,
 }
 
 impl Grid {
-    /// Row 0 of `sheet` is the header row. Columns are capped at `max_width`
-    /// terminal cells.
+    /// A source-order sheet, used by grid tests.
+    #[cfg(test)]
     pub(crate) fn new(sheet: &Sheet, max_width: usize, note: Option<String>) -> Self {
+        Self::with_provenance(sheet, max_width, note, &Provenance::of(sheet))
+    }
+
+    /// Row 0 is the chosen header; provenance survives shaping and sorting.
+    pub(crate) fn with_provenance(
+        sheet: &Sheet,
+        max_width: usize,
+        note: Option<String>,
+        provenance: &Provenance,
+    ) -> Self {
         let columns = sheet.rows().iter().map(Vec::len).max().unwrap_or(0);
         let mut headers: Vec<String> = sheet
             .headers()
@@ -95,6 +108,7 @@ impl Grid {
             rows,
             widths,
             note,
+            provenance: provenance.clone(),
         }
     }
 
@@ -106,6 +120,10 @@ impl Grid {
             rows: Vec::new(),
             widths: Vec::new(),
             note: Some(note),
+            provenance: Provenance {
+                rows: Vec::new(),
+                columns: Vec::new(),
+            },
         }
     }
 }

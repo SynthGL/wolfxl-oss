@@ -25,7 +25,7 @@ use wolfxl_core::{Cell, CellValue, Sheet};
 
 use crate::derive;
 use crate::filter::{resolve_column, Condition};
-use crate::input;
+use crate::input::{self, Provenance};
 use crate::render::{self, RenderOptions};
 use crate::tui::{self, App, Grid};
 use crate::{ExportFormat, PeekArgs};
@@ -69,6 +69,11 @@ pub fn run(args: PeekArgs) -> ExitCode {
 }
 
 fn peek(args: &PeekArgs) -> Result<(), Failure> {
+    if args.addresses && matches!(args.export, Some(ExportFormat::Csv | ExportFormat::Json)) {
+        return Err(Failure::Usage(anyhow!(
+            "--addresses is available for box, text and markdown previews, not CSV or JSON"
+        )));
+    }
     if args.interactive {
         tui::preflight(&args.file).map_err(Failure::Usage)?;
     }
@@ -101,23 +106,36 @@ fn peek(args: &PeekArgs) -> Result<(), Failure> {
             .ok_or_else(|| anyhow!("workbook has no sheets"))?,
     };
 
-    let sheet = input.raw_sheet(&target)?;
+    let (sheet, mut provenance) =
+        input::header_sheet(input.raw_sheet(&target)?, args.header_row).map_err(Failure::Usage)?;
     let columns = if args.add.is_empty() {
         None
     } else {
         Some(derive::Columns::parse(&args.add).map_err(Failure::Usage)?)
     };
     let sheet = match &columns {
-        Some(columns) => columns.append(&mut input, &target, &sheet)?,
+        Some(columns) => columns.append(&mut input, &target, &sheet, &provenance)?,
         None => sheet,
     };
+    provenance.columns.resize(sheet.headers().len(), None);
     let sheet = if args.filters.is_empty() && args.select.is_empty() {
         sheet
     } else {
-        reshape(&sheet, &args.filters, &args.select).map_err(Failure::Usage)?
+        let (sheet, shaped_provenance) =
+            reshape(&sheet, &provenance, &args.filters, &args.select).map_err(Failure::Usage)?;
+        provenance = shaped_provenance;
+        sheet
     };
     if args.interactive {
-        return interactive(args, input, sheet_names, &target, &sheet, columns.as_ref());
+        return interactive(
+            args,
+            input,
+            sheet_names,
+            &target,
+            &sheet,
+            &provenance,
+            columns.as_ref(),
+        );
     }
 
     let opts = RenderOptions {
@@ -129,6 +147,7 @@ fn peek(args: &PeekArgs) -> Result<(), Failure> {
         max_columns: (args.max_columns != 0).then_some(args.max_columns),
         max_width: args.max_width.max(3),
         all_sheets: &sheet_names,
+        addresses: args.addresses.then_some(&provenance),
     };
 
     let mut out = std::io::stdout().lock();
@@ -145,13 +164,18 @@ fn peek(args: &PeekArgs) -> Result<(), Failure> {
 /// The header row plus the data rows every `--where` condition accepts,
 /// narrowed to the `--select` columns in the order named. Conditions may
 /// name columns the selection drops.
-fn reshape(sheet: &Sheet, filters: &[String], select: &[String]) -> Result<Sheet> {
+fn reshape(
+    sheet: &Sheet,
+    provenance: &Provenance,
+    filters: &[String],
+    select: &[String],
+) -> Result<(Sheet, Provenance)> {
     let headers = sheet.headers();
     let conditions = filters
         .iter()
         .map(|expression| {
             let condition = Condition::parse(expression)?;
-            let column = resolve_column(&headers, condition.column())
+            let column = resolve_column(&headers, provenance, condition.column())
                 .with_context(|| format!("--where {expression:?}"))?;
             Ok((column, condition))
         })
@@ -163,17 +187,35 @@ fn reshape(sheet: &Sheet, filters: &[String], select: &[String]) -> Result<Sheet
             if name.is_empty() {
                 bail!("--select: empty column name; expected HEADER[,HEADER...]");
             }
-            resolve_column(&headers, name).context("--select")
+            resolve_column(&headers, provenance, name).context("--select")
         })
         .collect::<Result<Vec<_>>>()?;
+    let mut source_rows = Vec::new();
     let rows = sheet
         .rows()
         .iter()
         .enumerate()
         .filter(|(index, row)| *index == 0 || accepts(row, &conditions))
-        .map(|(_, row)| project(sheet, row, &columns))
+        .map(|(index, row)| {
+            source_rows.push(provenance.rows[index]);
+            project(sheet, row, &columns)
+        })
         .collect();
-    Ok(Sheet::from_rows(sheet.name.clone(), rows))
+    let source_columns = if columns.is_empty() {
+        provenance.columns.clone()
+    } else {
+        columns
+            .iter()
+            .map(|&column| provenance.columns[column])
+            .collect()
+    };
+    Ok((
+        Sheet::from_rows(sheet.name.clone(), rows),
+        Provenance {
+            rows: source_rows,
+            columns: source_columns,
+        },
+    ))
 }
 
 fn accepts(row: &[Cell], conditions: &[(usize, Condition)]) -> bool {
@@ -223,6 +265,7 @@ fn interactive(
     names: Vec<String>,
     target: &str,
     sheet: &Sheet,
+    provenance: &Provenance,
     columns: Option<&derive::Columns>,
 ) -> Result<(), Failure> {
     let width = args.max_width.max(3);
@@ -231,11 +274,20 @@ fn interactive(
         args.file.display().to_string(),
         names,
         current,
-        Grid::new(sheet, width, None),
+        Grid::with_provenance(sheet, width, None, provenance),
     );
     tui::run(app, |name| {
-        match tab_sheet(&mut input, name, columns, &args.filters, &args.select) {
-            Ok((sheet, note)) => Grid::new(&sheet, width, note),
+        match tab_sheet(
+            &mut input,
+            name,
+            columns,
+            args.header_row,
+            &args.filters,
+            &args.select,
+        ) {
+            Ok((sheet, provenance, note)) => {
+                Grid::with_provenance(&sheet, width, note, &provenance)
+            }
             Err(error) => Grid::unavailable(name, format!("not loaded: {error:#}")),
         }
     })
@@ -251,14 +303,15 @@ fn tab_sheet(
     input: &mut input::Input,
     name: &str,
     columns: Option<&derive::Columns>,
+    header_row: Option<u32>,
     filters: &[String],
     select: &[String],
-) -> Result<(Sheet, Option<String>)> {
-    let raw = input.raw_sheet(name)?;
+) -> Result<(Sheet, Provenance, Option<String>)> {
+    let (raw, mut provenance) = input::header_sheet(input.raw_sheet(name)?, header_row)?;
     let mut notes = Vec::new();
     let sheet = match columns {
         None => raw,
-        Some(columns) => match columns.append(input, name, &raw) {
+        Some(columns) => match columns.append(input, name, &raw, &provenance) {
             Ok(derived) => derived,
             Err(derive::Failure::Usage(error)) => {
                 notes.push(format!("no added columns: {error:#}"));
@@ -267,11 +320,15 @@ fn tab_sheet(
             Err(derive::Failure::Input(error)) => return Err(error),
         },
     };
+    provenance.columns.resize(sheet.headers().len(), None);
     let sheet = if filters.is_empty() && select.is_empty() {
         sheet
     } else {
-        match reshape(&sheet, filters, select) {
-            Ok(shaped) => shaped,
+        match reshape(&sheet, &provenance, filters, select) {
+            Ok((shaped, shaped_provenance)) => {
+                provenance = shaped_provenance;
+                shaped
+            }
             Err(_) => {
                 notes.push("unfiltered: this sheet lacks a --where/--select column".to_owned());
                 sheet
@@ -279,7 +336,7 @@ fn tab_sheet(
         }
     };
     let note = (!notes.is_empty()).then(|| notes.join("; "));
-    Ok((sheet, note))
+    Ok((sheet, provenance, note))
 }
 
 #[cfg(test)]
@@ -320,10 +377,11 @@ mod tests {
     fn tab_appends_then_filters_a_sheet_that_takes_both() {
         let (mut input, name) = minimal();
         let columns = derive::Columns::parse(&strings(&["Growth=C2-B2"])).expect("parses");
-        let (sheet, note) = tab_sheet(
+        let (sheet, _, note) = tab_sheet(
             &mut input,
             &name,
             Some(&columns),
+            None,
             &strings(&["Growth>10000"]),
             &strings(&["Account", "Growth"]),
         )
@@ -341,7 +399,8 @@ mod tests {
     fn tab_notes_an_added_name_the_sheet_already_has() {
         let (mut input, name) = minimal();
         let columns = derive::Columns::parse(&strings(&["jan=B2*2"])).expect("parses");
-        let (sheet, note) = tab_sheet(&mut input, &name, Some(&columns), &[], &[]).expect("loads");
+        let (sheet, _, note) =
+            tab_sheet(&mut input, &name, Some(&columns), None, &[], &[]).expect("loads");
         let note = note.expect("a note");
         assert!(note.starts_with("no added columns: "), "{note}");
         assert!(note.contains("already exists"), "{note}");
@@ -353,8 +412,8 @@ mod tests {
         let (mut input, name) = minimal();
         let columns = derive::Columns::parse(&strings(&["Growth=C2-B2"])).expect("parses");
         let filters = strings(&["Profit>0"]);
-        let (sheet, note) =
-            tab_sheet(&mut input, &name, Some(&columns), &filters, &[]).expect("loads");
+        let (sheet, _, note) =
+            tab_sheet(&mut input, &name, Some(&columns), None, &filters, &[]).expect("loads");
         assert_eq!(
             note.as_deref(),
             Some("unfiltered: this sheet lacks a --where/--select column")
@@ -370,10 +429,11 @@ mod tests {
     fn tab_notes_both_when_neither_fits() {
         let (mut input, name) = minimal();
         let columns = derive::Columns::parse(&strings(&["Q1=B2"])).expect("parses");
-        let (_, note) = tab_sheet(
+        let (_, _, note) = tab_sheet(
             &mut input,
             &name,
             Some(&columns),
+            None,
             &strings(&["Q1>0"]),
             &strings(&["Q1", "Missing"]),
         )

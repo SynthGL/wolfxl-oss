@@ -54,6 +54,7 @@ impl Server {
             "stats" => commands::stats::structured(&StatsArgs {
                 file: path,
                 sheet,
+                header_row: None,
                 from: None,
                 filters: strings(arguments, "filters"),
                 select: strings(arguments, "select"),
@@ -63,6 +64,7 @@ impl Server {
             "pivot" => commands::pivot::structured(&PivotArgs {
                 file: path,
                 sheet,
+                header_row: None,
                 from: None,
                 rows: strings(arguments, "rows"),
                 column: optional_text(arguments, "column"),

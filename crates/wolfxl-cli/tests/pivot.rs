@@ -390,7 +390,7 @@ fn unknown_headers_and_aggregations_exit_two() {
         ],
         Some(SALES),
     );
-    assert!(stderr.contains("unknown header \"Nope\""), "{stderr}");
+    assert!(stderr.contains("unknown column \"Nope\""), "{stderr}");
     assert!(stderr.contains("Region, Year, Amount"), "{stderr}");
 
     let stderr = refused(
@@ -407,7 +407,7 @@ fn unknown_headers_and_aggregations_exit_two() {
         ],
         Some(SALES),
     );
-    assert!(stderr.contains("unknown header \"Month\""), "{stderr}");
+    assert!(stderr.contains("unknown column \"Month\""), "{stderr}");
 
     let stderr = refused(
         &[
@@ -421,7 +421,7 @@ fn unknown_headers_and_aggregations_exit_two() {
         ],
         Some(SALES),
     );
-    assert!(stderr.contains("unknown header \"Price\""), "{stderr}");
+    assert!(stderr.contains("unknown column \"Price\""), "{stderr}");
 
     let stderr = refused(
         &[
@@ -463,7 +463,10 @@ fn malformed_and_ambiguous_requests_exit_two() {
         ],
         Some("Region,REGION,Amount\na,b,1\n"),
     );
-    assert!(stderr.contains("use the exact header"), "{stderr}");
+    assert!(
+        stderr.contains("A1 and B1") && stderr.contains("column letter"),
+        "{stderr}"
+    );
 
     let stderr = refused(
         &["-", "--rows", "Region", "--values", "sum:Amount"],

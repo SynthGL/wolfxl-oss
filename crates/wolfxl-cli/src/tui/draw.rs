@@ -238,7 +238,7 @@ mod tests {
     use ratatui::crossterm::event::KeyCode;
     use ratatui::Terminal;
 
-    use super::super::app::tests::{app, grid, press};
+    use super::super::app::tests::{app, cities, grid, press, to_population};
     use super::*;
 
     fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
@@ -271,7 +271,7 @@ North|Dee|1,200|ok";
                 "East  │Bob│      950│            │              ",
                 "North │Dee│    1,200│ok          │              ",
                 "      │   │         │            │              ",
-                "data.csv | Sheet1 [1/1] | R1/3 C1/4 Region      ",
+                "data.csv | Sheet1 [1/1] | R1/3 C1/4 A2 Region   ",
             ]
         );
     }
@@ -290,8 +290,8 @@ North|Dee|1,200|ok";
         assert_eq!(lines[1], "18│abcdefghijk…│    ");
         assert_eq!(lines[3], "20│abcdefghijk…│    ");
         assert_eq!(
-            lines[4], "data.… | R20/20 C1/2",
-            "the file gives way so the cursor stays whole"
+            lines[4], "d… | R20/20 C1/2 A21",
+            "the file gives way so the cursor and its address stay whole"
         );
     }
 
@@ -304,13 +304,81 @@ North|Dee|1,200|ok";
             grid("Sheet1", LEDGER),
         );
         let lines = screen(&mut app, 24, 4);
-        assert_eq!(lines[3], "a-very-long… | R1/3 C1/4");
+        assert_eq!(lines[3], "a-ve….csv | R1/3 C1/4 A2");
         press(&mut app, KeyCode::Char('/'));
         for typed in "carry-over".chars() {
             press(&mut app, KeyCode::Char(typed));
         }
         let lines = screen(&mut app, 24, 4);
-        assert_eq!(lines[3], "/carry-over | R1/3 C1/4 ");
+        assert_eq!(lines[3], "/…ry-over | R1/3 C1/4 A2");
+    }
+
+    const CITIES_PATH: &str =
+        "engines/wolfxl/bindings/dotnet-facade/Checkers/Tables/TestData/DataTableCities.xlsx";
+
+    /// The cities fixture under a long path, cursor on the total population
+    /// after searching for it, then sorted by population: the total stays
+    /// last, so the cursor stays on the search hit. Returns the screens
+    /// before and after the sort, the searched total, and the sheet label.
+    fn sorted_on_the_total(width: u16) -> (Vec<String>, Vec<String>, String, String) {
+        let mut app = cities(CITIES_PATH);
+        let population = to_population(&mut app);
+        let total = app.view.grid.rows[12][population].text.clone();
+        let sheet = format!(
+            "{} [{}/{}]",
+            app.view.grid.name,
+            app.current + 1,
+            app.names.len()
+        );
+        press(&mut app, KeyCode::Char('/'));
+        for typed in total.chars() {
+            press(&mut app, KeyCode::Char(typed));
+        }
+        press(&mut app, KeyCode::Enter);
+        let searched = screen(&mut app, width, 8);
+        press(&mut app, KeyCode::Char('s'));
+        (searched, screen(&mut app, width, 8), total, sheet)
+    }
+
+    #[test]
+    fn status_keeps_the_notice_cursor_and_file_name_at_common_widths() {
+        let (searched, sorted, total, _) = sorted_on_the_total(60);
+        assert_eq!(
+            searched[7],
+            format!("…/DataTableCities.xlsx | R13/13 C4/10 F15 | /{total} 1/1"),
+            "without a notice the file name, cursor, and search hit all fit"
+        );
+        assert_eq!(
+            sorted[7], "Dat…lsx | R13/13 C4/10 F15 | sorted by Population, ascending",
+            "the whole notice and cursor come first"
+        );
+
+        let (_, sorted, _, _) = sorted_on_the_total(80);
+        assert_eq!(
+            sorted[7],
+            "DataTableCities.xlsx | Tab… | R13/13 C4/10 F15 | sorted by Population, ascending"
+        );
+
+        let (_, sorted, total, sheet) = sorted_on_the_total(120);
+        assert_eq!(
+            sorted[7],
+            format!(
+                "…/TestData/DataTableCities.xlsx | {sheet} | R13/13 C4/10 F15 P… \
+                 | /{total} 1/1 | sorted by Population, ascending"
+            )
+        );
+        for (width, line) in [(60, &searched[7]), (120, &sorted[7])] {
+            assert_eq!(line.width(), width, "{line}");
+        }
+    }
+
+    #[test]
+    fn long_notices_end_with_an_ellipsis() {
+        let mut app = cities(CITIES_PATH);
+        to_population(&mut app);
+        press(&mut app, KeyCode::Char('s'));
+        let lines = screen(&mut app, 40, 6);
+        assert_eq!(lines[5], "R1/13 C4/10 F14 | sorted by Population,…");
     }
 
     #[test]

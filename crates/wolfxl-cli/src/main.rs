@@ -168,6 +168,14 @@ struct PeekArgs {
     #[arg(short = 's', long)]
     sheet: Option<String>,
 
+    /// One-based sheet row containing headers; discard rows above it.
+    #[arg(long, value_name = "N")]
+    header_row: Option<u32>,
+
+    /// Label previews with sheet column letters and source row numbers (not CSV/JSON).
+    #[arg(long)]
+    addresses: bool,
+
     /// Maximum number of rows to display (0 = all).
     #[arg(short = 'n', long = "max-rows", default_value_t = 50)]
     max_rows: usize,
@@ -238,6 +246,10 @@ pub(crate) struct PivotArgs {
     /// Sheet to pivot (default: first sheet).
     #[arg(short = 's', long)]
     sheet: Option<String>,
+
+    /// One-based sheet row containing headers; discard rows above it.
+    #[arg(long, value_name = "N")]
+    header_row: Option<u32>,
 
     /// Input format. Required for standard input; overrides a path's extension.
     #[arg(long, value_enum)]
@@ -346,6 +358,10 @@ pub(crate) struct StatsArgs {
     /// Sheet to profile (default: first sheet).
     #[arg(short = 's', long)]
     sheet: Option<String>,
+
+    /// One-based sheet row containing headers; discard rows above it.
+    #[arg(long, value_name = "N")]
+    header_row: Option<u32>,
 
     /// Input format. Required for standard input; overrides a path's extension.
     #[arg(long, value_enum)]

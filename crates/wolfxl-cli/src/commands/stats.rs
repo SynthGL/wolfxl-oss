@@ -106,6 +106,7 @@ pub(crate) fn run(args: StatsArgs) -> ExitCode {
         max_columns: None,
         max_width: usize::MAX,
         all_sheets: &report.sheet_names,
+        addresses: None,
     };
     let mut document = Vec::new();
     let rendered = match args.export {
@@ -425,8 +426,8 @@ fn build(args: &StatsArgs) -> Result<Report> {
     let mut input = input::open(Some(args.file.as_path()), args.from)?;
     let sheet_name = input.sheet_name(args.sheet.as_deref())?;
     let sheet_names = input.sheet_names().to_vec();
-    let raw = input.raw_sheet(&sheet_name)?;
-    let typed = input.sheet(&sheet_name)?;
+    let (raw, provenance) = input::header_sheet(input.raw_sheet(&sheet_name)?, args.header_row)?;
+    let (typed, _) = input::header_sheet(input.sheet(&sheet_name)?, args.header_row)?;
     let headers = raw.headers();
 
     let conditions = args
@@ -434,7 +435,7 @@ fn build(args: &StatsArgs) -> Result<Report> {
         .iter()
         .map(|expression| {
             let condition = Condition::parse(expression)?;
-            let column = resolve_column(&headers, condition.column())
+            let column = resolve_column(&headers, &provenance, condition.column())
                 .with_context(|| format!("--where {expression:?}"))?;
             Ok((column, condition))
         })
@@ -449,7 +450,7 @@ fn build(args: &StatsArgs) -> Result<Report> {
                 if name.is_empty() {
                     bail!("--select: empty column name; expected HEADER[,HEADER...]");
                 }
-                resolve_column(&headers, name).context("--select")
+                resolve_column(&headers, &provenance, name).context("--select")
             })
             .collect::<Result<Vec<usize>>>()?
     };

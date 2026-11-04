@@ -101,6 +101,102 @@ pub(crate) struct Input {
     _spool: Option<Spool>,
 }
 
+/// Source coordinates carried through header selection, filtering and projection.
+/// Rows and columns are one-based; computed columns have no source coordinate.
+#[derive(Clone, Debug)]
+pub(crate) struct Provenance {
+    pub(crate) rows: Vec<u32>,
+    pub(crate) columns: Vec<Option<u32>>,
+}
+
+impl Provenance {
+    /// Coordinates of the reader's compact used rectangle, including its header.
+    pub(crate) fn of(sheet: &Sheet) -> Self {
+        let (top, left) = sheet.origin();
+        let width = sheet.rows().iter().map(Vec::len).max().unwrap_or(0);
+        Self {
+            rows: (0..sheet.rows().len())
+                .map(|row| top + row as u32 + 1)
+                .collect(),
+            columns: (0..width)
+                .map(|column| Some(left + column as u32 + 1))
+                .collect(),
+        }
+    }
+
+    /// Sheet letters for a source column, or `+` for a computed column.
+    pub(crate) fn column_label(&self, index: usize) -> String {
+        self.columns
+            .get(index)
+            .copied()
+            .flatten()
+            .map_or_else(|| "+".to_owned(), column_letters)
+    }
+
+    /// Sheet address of a displayed cell, or none for a computed column.
+    pub(crate) fn address(&self, row: usize, column: usize) -> Option<String> {
+        let row = self.rows.get(row)?;
+        self.columns.get(column).copied().flatten()?;
+        Some(format!("{}{row}", self.column_label(column)))
+    }
+}
+
+/// Letters of a one-based sheet column.
+fn column_letters(mut column: u32) -> String {
+    let mut letters = Vec::new();
+    while column > 0 {
+        letters.push(b'A' + ((column - 1) % 26) as u8);
+        column = (column - 1) / 26;
+    }
+    letters.reverse();
+    String::from_utf8(letters).expect("column letters are ASCII")
+}
+
+/// Choose a one-based sheet header row, removing only the preceding rows.
+/// Explicit source coordinates survive the detached compact sheet.
+pub(crate) fn header_sheet(sheet: Sheet, header_row: Option<u32>) -> Result<(Sheet, Provenance)> {
+    let mut provenance = Provenance::of(&sheet);
+    let Some(header_row) = header_row else {
+        return Ok((sheet, provenance));
+    };
+    let first = sheet.origin().0 + 1;
+    let last = sheet.origin().0 + sheet.rows().len() as u32;
+    if header_row < first || header_row > last || sheet.rows().is_empty() {
+        if sheet.rows().is_empty() {
+            bail!(
+                "--header-row {header_row}: sheet {:?} has an empty used range",
+                sheet.name
+            );
+        }
+        bail!(
+            "--header-row {header_row}: outside the used range of sheet {:?} (rows {first}-{last})",
+            sheet.name
+        );
+    }
+    let skip = (header_row - first) as usize;
+    if skip == 0 {
+        return Ok((sheet, provenance));
+    }
+    let rows = sheet
+        .rows()
+        .iter()
+        .skip(skip)
+        .map(|row| {
+            row.iter()
+                .map(|cell| {
+                    let mut cell = cell.clone();
+                    if let CellValue::Error(literal) = &cell.value {
+                        cell.value = CellValue::Error(sheet.error_text(literal).to_owned());
+                    }
+                    cell
+                })
+                .collect()
+        })
+        .collect();
+    provenance.rows.drain(..skip);
+    Ok((Sheet::from_rows(sheet.name, rows), provenance))
+}
+
 /// Open `file`, or standard input when `file` is `None` or `-`.
 ///
 /// Standard input requires `from`. For a path, `from` overrides the

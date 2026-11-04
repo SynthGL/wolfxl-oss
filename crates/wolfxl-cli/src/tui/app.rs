@@ -432,74 +432,154 @@ impl App {
         });
     }
 
-    /// The status line: file, sheet, cursor, sort and search state, notes.
-    /// Every name and note is shown on one line and cut to a bound, and the
-    /// line fits the screen with the cursor position whole whenever the
-    /// screen can hold it: the file and sheet before it give way first.
-    pub(super) fn status(&self) -> String {
+    /// The cursor: display row and column, then the cell's sheet address
+    /// (none for a computed column). Sorting moves rows, not addresses, so the
+    /// address comes from the data row now at the cursor.
+    fn cursor(&self) -> (String, Option<String>) {
         let view = &self.view;
-        let grid = &view.grid;
         let rows = view.order.len();
-        let columns = grid.headers.len();
-        let cursor = format!(
+        let columns = view.grid.headers.len();
+        let position = format!(
             "R{}/{rows} C{}/{columns}",
             if rows == 0 { 0 } else { view.row + 1 },
             if columns == 0 { 0 } else { view.col + 1 },
         );
-        let room = self.width.saturating_sub(cursor.width() + SEPARATOR.len());
+        let address = view
+            .order
+            .get(view.row)
+            .and_then(|&source| view.grid.provenance.address(source + 1, view.col));
+        (position, address)
+    }
+
+    /// The status line, on one screen line in this order: file, sheet,
+    /// cursor with the column header, sort, search, note, and the notice
+    /// (the last key's message, or the frequency popup's title). Every name
+    /// and note is cut to a bound.
+    ///
+    /// A narrow screen cannot hold every part, so parts claim the width in
+    /// priority order: the cursor and its address, whole; the notice, cut
+    /// with a trailing `…` only when the cursor leaves too little; the file
+    /// name; the search position, whole or not at all; the sheet; the note;
+    /// the file's directories, dropped from the front; the header; the sort.
+    /// The address gives way only when the cursor alone overflows.
+    pub(super) fn status(&self) -> String {
+        let view = &self.view;
+        let grid = &view.grid;
+        let (position, address) = self.cursor();
+        let full = match &address {
+            Some(address) => format!("{position} {address}"),
+            None => position.clone(),
+        };
         if let Mode::Search(query) = &self.mode {
             // Typing happens at the end, so a long query shows its end.
+            let cursor = if full.width() + 1 + SEPARATOR.len() <= self.width {
+                full
+            } else {
+                position
+            };
+            let room = self.width.saturating_sub(cursor.width() + SEPARATOR.len());
             let query = one_line(query);
             let query = elide(&query, room.saturating_sub(1), 0);
             return fit(&format!("/{query}{SEPARATOR}{cursor}"), self.width).into_owned();
         }
-        let file = Path::new(&self.file)
+        let cursor = if full.width() <= self.width {
+            full
+        } else {
+            position
+        };
+        if cursor.width() >= self.width {
+            return fit(&cursor, self.width).into_owned();
+        }
+        let mut room = Room(self.width - cursor.width());
+
+        let notice = match &self.mode {
+            Mode::Frequency(frequency) => Some(format!(
+                "{}: {} distinct in {} rows",
+                field(&frequency.header, FIELD_WIDTH),
+                frequency.counts.len(),
+                frequency.rows,
+            )),
+            _ => self
+                .message
+                .as_deref()
+                .map(|message| field(message, NOTE_WIDTH)),
+        };
+        let notice = notice.and_then(|notice| room.take(SEPARATOR, |cells| fit(&notice, cells)));
+
+        let file = one_line(&self.file);
+        let name = Path::new(&self.file)
             .file_name()
             .map_or(Cow::Borrowed(self.file.as_str()), |name| {
                 name.to_string_lossy()
             });
-        let file = one_line(&file);
-        let lead = format!(
-            "{} | {} [{}/{}]",
-            elide(&file, FIELD_WIDTH, FIELD_WIDTH / 2),
+        let name = one_line(&name);
+        let shown_name = room.take(SEPARATOR, |cells| {
+            let cells = cells.min(FIELD_WIDTH);
+            elide(&name, cells, cells / 2)
+        });
+
+        let search = self.query.as_ref().and_then(|query| {
+            let query = field(query, FIELD_WIDTH);
+            let search = match self.matches.binary_search(&(view.row, view.col)) {
+                Ok(index) => format!("/{query} {}/{}", index + 1, self.matches.len()),
+                Err(_) => format!("/{query} {} hits", self.matches.len()),
+            };
+            room.take_whole(SEPARATOR, search)
+        });
+
+        let sheet = format!(
+            "{} [{}/{}]",
             field(&grid.name, FIELD_WIDTH),
             self.current + 1,
             self.names.len().max(1),
         );
-        let mut status = match fit(&lead, room) {
-            lead if lead.is_empty() => cursor,
-            lead => format!("{lead}{SEPARATOR}{cursor}"),
-        };
-        let mut rest = String::new();
-        if let Some(header) = grid.headers.get(view.col) {
-            rest.push(' ');
-            rest.push_str(&field(header, FIELD_WIDTH));
-        }
-        if let Some(sort) = view.sort {
+        let sheet = room.take(SEPARATOR, |cells| fit(&sheet, cells));
+        let note = grid.note.as_deref().and_then(|note| {
+            let note = field(note, NOTE_WIDTH);
+            room.take(SEPARATOR, |cells| fit(&note, cells))
+        });
+
+        // Directories only grow a file name shown whole.
+        let path = shown_name.map(|shown| {
+            if shown != name {
+                return shown;
+            }
+            let limit = (shown.width() + room.0).min(FIELD_WIDTH.max(shown.width()));
+            let path = shrink_path(&file, &name, limit);
+            room.0 -= path.width() - shown.width();
+            path
+        });
+
+        let header = grid.headers.get(view.col).and_then(|header| {
+            let header = field(header, FIELD_WIDTH);
+            room.take(" ", |cells| fit(&header, cells))
+        });
+        let sort = view.sort.and_then(|sort| {
             let header = grid.headers.get(sort.column).map_or("", String::as_str);
-            rest.push_str(&format!(
-                " | sort {} {} {}",
+            let sort = format!(
+                "sort {} {} {}",
                 field(header, FIELD_WIDTH),
                 if sort.descending { "desc" } else { "asc" },
                 if sort.numeric { "numeric" } else { "text" }
-            ));
+            );
+            room.take(SEPARATOR, |cells| fit(&sort, cells))
+        });
+
+        let mut status = String::new();
+        for lead in [path, sheet].into_iter().flatten() {
+            status.push_str(&lead);
+            status.push_str(SEPARATOR);
         }
-        if let Some(query) = &self.query {
-            let query = field(query, FIELD_WIDTH);
-            match self.matches.binary_search(&(view.row, view.col)) {
-                Ok(index) => {
-                    rest.push_str(&format!(" | /{query} {}/{}", index + 1, self.matches.len()))
-                }
-                Err(_) => rest.push_str(&format!(" | /{query} {} hits", self.matches.len())),
-            }
+        status.push_str(&cursor);
+        if let Some(header) = header {
+            status.push(' ');
+            status.push_str(&header);
         }
-        for extra in [&grid.note, &self.message].into_iter().flatten() {
-            rest.push_str(SEPARATOR);
-            rest.push_str(&field(extra, NOTE_WIDTH));
+        for part in [sort, search, note, notice].into_iter().flatten() {
+            status.push_str(SEPARATOR);
+            status.push_str(&part);
         }
-        // What follows the cursor takes only the cells left after it.
-        status.push_str(&fit(&rest, self.width.saturating_sub(status.width())));
-        fit(&status, self.width).into_owned()
+        status
     }
 }
 
@@ -511,6 +591,58 @@ const FIELD_WIDTH: usize = 40;
 
 /// Widest note or message on the status line, in cells.
 const NOTE_WIDTH: usize = 80;
+
+/// Status line cells not yet claimed by a part.
+struct Room(usize);
+
+impl Room {
+    /// Claim `separator` and the text `cut` makes for the cells left after
+    /// it; `None`, claiming nothing, when no character of the text fits.
+    fn take<'a>(
+        &mut self,
+        separator: &str,
+        cut: impl FnOnce(usize) -> Cow<'a, str>,
+    ) -> Option<String> {
+        let cells = self.0.checked_sub(separator.width())?;
+        let text = cut(cells);
+        if text.is_empty() || text == "…" {
+            return None;
+        }
+        self.0 -= separator.width() + text.width();
+        Some(text.into_owned())
+    }
+
+    /// Claim `separator` and all of `text`, or nothing when it does not fit.
+    fn take_whole(&mut self, separator: &str, text: String) -> Option<String> {
+        let needed = separator.width() + text.width();
+        if needed > self.0 {
+            return None;
+        }
+        self.0 -= needed;
+        Some(text)
+    }
+}
+
+/// `path` in at most `width` cells, which must hold `name`, its last part:
+/// whole when it fits, else `…` and the trailing directories that fit,
+/// else `name` alone.
+fn shrink_path(path: &str, name: &str, width: usize) -> String {
+    if path.width() <= width {
+        return path.to_owned();
+    }
+    let mut shown = Cow::Borrowed(name);
+    for (index, ch) in path.char_indices().rev() {
+        if !std::path::is_separator(ch) {
+            continue;
+        }
+        let tail = &path[index..];
+        if tail.width() + 1 > width {
+            break;
+        }
+        shown = Cow::Owned(format!("…{tail}"));
+    }
+    shown.into_owned()
+}
 
 /// `text` with control characters shown as spaces, cut to `width` cells.
 fn field(text: &str, width: usize) -> String {
@@ -584,6 +716,41 @@ pub(super) mod tests {
         )
     }
 
+    /// The `Table` sheet of the cities fixture as `--header-row 2` shows it:
+    /// the header on sheet row 2 below a title row, the first data row on
+    /// row 3, opened as `file`.
+    pub(in crate::tui) fn cities(file: &str) -> App {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join("data-table-cities.xlsx");
+        let mut input =
+            crate::input::open(Some(path.as_path()), None).expect("open data-table-cities.xlsx");
+        let names = input.sheet_names().to_vec();
+        let current = names
+            .iter()
+            .position(|name| name == "Table")
+            .expect("a Table sheet");
+        let sheet = input.raw_sheet("Table").expect("load the Table sheet");
+        let (sheet, provenance) = crate::input::header_sheet(sheet, Some(2)).expect("header row 2");
+        let grid = Grid::with_provenance(&sheet, 12, None, &provenance);
+        App::new(file.to_owned(), names, current, grid)
+    }
+
+    /// Move the cursor to the first `Population` column; returns its index.
+    pub(in crate::tui) fn to_population(app: &mut App) -> usize {
+        let column = app
+            .view
+            .grid
+            .headers
+            .iter()
+            .position(|header| header == "Population")
+            .expect("a Population column");
+        for _ in 0..column {
+            press(app, KeyCode::Right);
+        }
+        column
+    }
+
     pub(in crate::tui) fn press(app: &mut App, code: KeyCode) -> Action {
         app.handle_key(KeyEvent::new(code, KeyModifiers::NONE))
     }
@@ -592,6 +759,70 @@ pub(super) mod tests {
         for typed in typed.chars() {
             press(app, KeyCode::Char(typed));
         }
+    }
+
+    /// City at the cursor row of the view.
+    fn city(app: &App) -> &str {
+        &app.view.grid.rows[app.view.order[app.view.row]][0].text
+    }
+
+    fn address(app: &App) -> Option<String> {
+        app.cursor().1
+    }
+
+    #[test]
+    fn cursor_address_follows_sorted_rows_below_a_title_row() {
+        let mut app = cities("data-table-cities.xlsx");
+        assert_eq!(app.view.grid.headers[0], "City");
+        assert_eq!(app.view.grid.rows.len(), 13, "twelve cities and a total");
+        assert_eq!(city(&app), "Shanghai, China");
+        assert_eq!(
+            address(&app).as_deref(),
+            Some("C3"),
+            "below the header row 2"
+        );
+        let population = to_population(&mut app);
+        assert_eq!(address(&app).as_deref(), Some("F3"));
+
+        press(&mut app, KeyCode::Char('s'));
+        assert_eq!(
+            app.view.sort,
+            Some(Sort {
+                column: population,
+                descending: false,
+                numeric: true
+            })
+        );
+        assert_eq!(
+            app.message.as_deref(),
+            Some("sorted by Population, ascending")
+        );
+        assert_eq!(city(&app), "Shenzhen, China", "the smallest city first");
+        assert_eq!(address(&app).as_deref(), Some("F14"), "its own sheet row");
+        press(&mut app, KeyCode::Char('G'));
+        assert_eq!(
+            (city(&app), address(&app).as_deref()),
+            ("Total", Some("F15"))
+        );
+
+        press(&mut app, KeyCode::Char('s'));
+        assert!(app.view.sort.is_some_and(|sort| sort.descending));
+        assert_eq!(city(&app), "Shenzhen, China", "now the last row");
+        assert_eq!(address(&app).as_deref(), Some("F14"));
+        press(&mut app, KeyCode::Up);
+        assert_eq!(city(&app), "Guangzhou, China");
+        assert_eq!(address(&app).as_deref(), Some("F13"));
+        let position = format!("R12/13 C{}/", population + 1);
+        assert!(app.status().contains(&position), "{}", app.status());
+
+        press(&mut app, KeyCode::Char('S'));
+        assert_eq!(city(&app), "Shenzhen, China", "source order again");
+        assert_eq!(address(&app).as_deref(), Some("F14"));
+        press(&mut app, KeyCode::Char('g'));
+        assert_eq!(
+            (city(&app), address(&app).as_deref()),
+            ("Shanghai, China", Some("F3"))
+        );
     }
 
     /// Column `column` of the view, top to bottom.
@@ -695,7 +926,7 @@ eve|7|oslo";
         press(&mut app, KeyCode::Char('/'));
         keys(&mut app, "OSLx");
         press(&mut app, KeyCode::Backspace);
-        assert_eq!(app.status(), "/OSL | R1/5 C1/3");
+        assert_eq!(app.status(), "/OSL | R1/5 C1/3 A2");
         press(&mut app, KeyCode::Enter);
         assert_eq!(app.matches, [(0, 2), (2, 2), (4, 2)]);
         assert_eq!(cursor(&app), (0, 2));
@@ -868,7 +1099,7 @@ eve|7|oslo";
         assert_eq!(app.view.grid.name, "One");
         assert!(app
             .status()
-            .starts_with("book.xlsx | One [1/3] | R1/1 C1/1 A"));
+            .starts_with("book.xlsx | One [1/3] | R1/1 C1/1 A2 A"));
     }
 
     #[test]
@@ -941,11 +1172,17 @@ eve|7|oslo";
             app.set_viewport(width, 6);
             let status = app.status();
             assert!(status.starts_with('/'), "{width}: {status}");
-            assert!(status.ends_with(" | R2/5 C3/3"), "{width}: {status}");
+            assert!(status.contains(" | R2/5 C3/3"), "{width}: {status}");
             assert!(status.width() <= usize::from(width), "{width}: {status}");
         }
         app.set_viewport(20, 6);
-        assert_eq!(app.status(), "/…-query | R2/5 C3/3", "typing shows the end");
+        assert_eq!(app.status(), "/…ery | R2/5 C3/3 C3", "typing shows the end");
+        app.set_viewport(14, 6);
+        assert_eq!(
+            app.status(),
+            "/… | R2/5 C3/3",
+            "the address gives way before the position"
+        );
         press(&mut app, KeyCode::Enter);
         assert_eq!(
             app.query.as_deref(),
@@ -958,14 +1195,14 @@ eve|7|oslo";
         let mut app = app("Note\na\tb\nab");
         press(&mut app, KeyCode::Char('/'));
         keys(&mut app, "a\tb");
-        assert_eq!(app.status(), "/a b | R1/2 C1/1");
+        assert_eq!(app.status(), "/a b | R1/2 C1/1 A2");
         press(&mut app, KeyCode::Enter);
         assert_eq!(app.query.as_deref(), Some("a\tb"));
         assert_eq!(app.message.as_deref(), Some("no match for /a\tb"));
         let status = app.status();
         assert!(!status.contains(char::is_control), "{status:?}");
         assert!(
-            status.ends_with("| R1/2 C1/1 Note | /a b 0 hits | no match for /a b"),
+            status.ends_with("| R1/2 C1/1 A2 Note | /a b 0 hits | no match for /a b"),
             "{status}"
         );
     }

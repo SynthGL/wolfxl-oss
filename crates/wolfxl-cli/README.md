@@ -342,7 +342,10 @@ JSON is printed on one line; it is wrapped above for reading.
 ## Row filters and column selection
 
 `wolfxl peek` reads a path, or standard input when the file is `-` (see
-above). The first row of the sheet is the header row.
+above). By default the first used row supplies the headers. `--header-row N`
+instead uses sheet row N and discards preceding rows. N is an absolute,
+one-based sheet row, not an offset into the used range; an out-of-range N
+exits 2 and reports the used rows. This also applies to `stats` and `pivot`.
 
 `--where COLUMN<op>VALUE` keeps the data rows that satisfy the condition;
 the header row is always kept. Repeat `--where` to require every condition
@@ -353,16 +356,31 @@ column name are ignored; the value is used as written.
 
 - When the value reads as a number, the comparison is numeric. Money
   spellings count on both sides: `$1,200.00`, `1,200`, and the accounting
-  negative `(500.00)`. A cell that holds no number fails every numeric
-  comparison except `!=`.
+  negative `(500.00)`. A trailing percent divides by 100: `12%` is `0.12`,
+  `-3.5%` is `-0.035`, `(12%)` is `-0.12`, and `1,200%` is `12`.
+  This same rule types delimited fields for `calc` and `--add`; malformed
+  grouping (`1,23,4`), mixed text, and leading-zero identifiers remain text.
+  A cell that holds no number fails every numeric comparison except `!=`.
 - Any other value compares as text, ignoring case, against the cell's
   displayed value: strings as stored, numbers in plain notation, booleans as
   `TRUE` or `FALSE`. `<` and `>` order text lexically.
 - `~` always tests text: the cell contains the value, ignoring case.
 
 `--select A,B` prints only the named columns, in the order given. A filter
-may test a column that `--select` leaves out. Column names match a header
-exactly first, then by a unique case-insensitive match.
+may test a column that `--select` leaves out. Column resolution first accepts
+a unique exact header, then a sheet column letter inside the original used
+range (`C`, `F`, `AA`), then a unique case-insensitive header. Duplicate
+header names are refused with their header-cell addresses: use a letter to
+disambiguate, such as `--header-row 2 --select C,F` when both C2 and I2
+contain `City`. Letters always refer to the original sheet, even after
+selection reorders columns; computed columns are selected by their names.
+
+`--addresses` labels box, text, and markdown previews with sheet column
+letters above the headers and sheet row numbers on the left. Filtering
+retains original row numbers and selection retains original letters, so
+these labels are valid `wolfxl calc` coordinates. Computed `--add` columns
+are marked `+`: they have no stored sheet address. CSV and JSON reject
+`--addresses` with exit 2 rather than changing their machine-readable shape.
 
 Filtering and selection run before `--max-rows` and `--max-columns` and apply
 to every export format. Without `--where` or `--select`, output is unchanged.
@@ -384,8 +402,9 @@ are FORMULA evaluated on every data row. Repeat `--add` for more columns.
 The argument splits at its first `=`, so `Margin=C2-B2` and `Margin==C2-B2`
 are the same formula.
 
-Write the formula for the first data row, the row under the header (row 2
-for a sheet that starts in A1). Each later row gets it filled down the way a
+Write the formula for the first data row, the row under the chosen header
+(row 2 for a sheet that starts in A1, or row N+1 with `--header-row N`).
+Each later row gets it filled down the way a
 spreadsheet fills a formula: relative row references move with the row,
 `$`-anchored rows stay put, and columns never move. `C2-B2` on row 5 reads
 `C5-B5`, and `SUM($B$2:B2)` is a running total. References to other sheets
@@ -430,6 +449,11 @@ terminal grid instead of printing it. The header row stays frozen at the
 top, and the last line is a status line showing the file, the sheet and its
 position among the workbook's sheets, the cursor's row and column, the
 current sort, the search and its match count, and notes.
+The cursor also shows its original sheet address (for example `F3`), retained
+through filtering, selection, and sorting; computed columns have no address.
+Status notices and cursor position take priority over the path and sheet
+description. Long paths elide leading directories first, and notices that
+cannot fit end with `…`.
 
 | Key | Action |
 |---|---|
@@ -474,17 +498,22 @@ panic.
 
 ```text
 wolfxl pivot FILE --rows R[,R2] [--column C] --values AGG:FIELD[,AGG:FIELD]
-             [--sheet S] [--from FMT] [-e box|csv|json]
+             [--sheet S] [--header-row N] [--from FMT] [-e box|csv|json]
 ```
 
 `wolfxl pivot` groups the data rows of one sheet (the first unless `--sheet`
-names another) and aggregates value fields per group. Row 1 holds the
-headers. `FILE` of `-` reads standard input, which needs `--from`;
+names another) and aggregates value fields per group. The first used row
+holds headers unless `--header-row N` selects another absolute sheet row
+and discards rows above it. Out-of-range N exits 2 with the used row range.
+`FILE` of `-` reads standard input, which needs `--from`;
 delimited fields are typed as described in
 [Standard input and delimited fields](#standard-input-and-delimited-fields).
-Fields are header names, matched exactly and then case-insensitively when
-exactly one header matches. `--rows` and `--values` take comma-separated
-lists or repeat. Fully blank rows are skipped.
+Fields in `--rows`, `--column`, and `--values` accept unique exact headers,
+then original sheet column letters, then unique case-insensitive headers.
+Duplicate names are refused with their header-cell addresses; use a letter.
+`--rows` and `--values` take comma-separated lists or repeat. Fully blank
+rows are skipped. A stored totals row is ordinary input data, not an Excel
+table total to exclude automatically.
 
 | Aggregation | Result |
 |---|---|
@@ -686,18 +715,24 @@ still go to stderr.
 ## Column profiles
 
 ```text
-wolfxl stats FILE [--sheet S] [--from FMT] [--where EXPR]... [--select A,B]
+wolfxl stats FILE [--sheet S] [--header-row N] [--from FMT] [--where EXPR]... [--select A,B]
              [--top N] [-e box|csv|json]
 ```
 
 `wolfxl stats` profiles each column of one sheet, the first unless
-`--sheet` names another. Row 1 holds the headers, and every header cell is
-one column. `FILE` of `-` reads standard input, which needs `--from`; for a
+`--sheet` names another. The first used row holds headers, or `--header-row N`
+selects absolute sheet row N and discards preceding rows. An N outside the
+used range exits 2 naming the used rows. Every header cell is one column.
+`FILE` of `-` reads standard input, which needs `--from`; for a
 path, `--from` overrides the extension. `--where` and `--select` work as in
 `wolfxl peek`: conditions keep the data rows they accept, `--select`
 profiles the named columns in the order given, and a condition may test a
 column the selection leaves out. Without `--select`, columns appear in
 sheet order. Every data row counts, including fully blank ones.
+Column names resolve as for `peek`: unique exact header, original sheet
+letter, then unique case-insensitive header; duplicate names report their
+header-cell addresses. Stored totals rows count as data, so profiling a
+table including its total can count those values twice.
 
 Each profile reports:
 
