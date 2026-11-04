@@ -146,5 +146,5 @@ fn array_csv_quotes_fields_and_json_keeps_types_and_blanks() {
     let csv = "a,b,c\n\"a,b\",\"a\"\"b\",TRUE\n-0,0.3,\n";
     assert_eq!(value(&["A2:C3", "--from", "csv"], Some(csv)), "\"a,b\",\"a\"\"b\",TRUE\n0,0.3,\n");
     assert_eq!(json(&["A2:C3", "--from", "csv"], Some(csv))["value"],
-        serde_json::json!([["a,b", "a\"b", true], [0, 0.3, ""]]));
+        serde_json::json!([["a,b", "a\"b", true], [0, 0.3, null]]));
 }
