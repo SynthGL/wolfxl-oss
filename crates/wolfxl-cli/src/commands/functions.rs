@@ -113,7 +113,7 @@ fn list(category: Option<&str>, search: Option<&str>, json: bool) -> Result<Stri
     if json {
         let entries: Vec<Value> = functions
             .iter()
-            .map(|function| json!({"name": function.name, "category": function.category}))
+            .map(|function| json!({"name": function.name, "category": function.category, "volatile": function.volatile}))
             .collect();
         let document = json!({
             "contract_version": CONTRACT_VERSION,
