@@ -14,7 +14,7 @@ require() {
 }
 fetch() {
     context_url=$1
-    curl --fail --show-error --location --retry 3 --output "$2" "$1" || fail "Download failed"
+    curl --fail --silent --show-error --location --retry 3 --output "$2" "$1" || fail "Download failed"
 }
 
 require curl
@@ -48,23 +48,21 @@ trap 'exit 1' HUP INT TERM
 
 version=${WOLFXL_VERSION:-}
 if [ -z "$version" ]; then
-    # The repository's /latest endpoint belongs to the Python package.
-    require jq
+    # The repository's /latest endpoint belongs to the Python package, so pick
+    # the highest stable wolfxl-cli-v* tag from the release list.
     page=1
     : > "$tmp/candidates"
     while :; do
         api_url="https://api.github.com/repos/SynthGL/wolfxl-oss/releases?per_page=100&page=$page"
         fetch "$api_url" "$tmp/releases.json"
-        count=$(jq -er 'if type == "array" then length else error("Expected release array") end' "$tmp/releases.json") || fail "Invalid release API response"
-        [ "$count" -ne 0 ] || break
-        jq -r '.[] | select(.draft == false and .prerelease == false) | select(.tag_name | test("^wolfxl-cli-v[0-9]+\\.[0-9]+\\.[0-9]+$")) | [.published_at, .tag_name] | @tsv' "$tmp/releases.json" >> "$tmp/candidates" || fail "Cannot parse release API response"
+        count=$(grep -o '"tag_name": *"' "$tmp/releases.json" | wc -l | tr -d ' ')
+        grep -o '"tag_name": *"wolfxl-cli-v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"' "$tmp/releases.json" \
+            | sed 's/.*"wolfxl-cli-v\([^"]*\)"$/\1/' >> "$tmp/candidates" || :
         [ "$count" -eq 100 ] || break
         page=$((page + 1))
     done
-    sort -r "$tmp/candidates" > "$tmp/sorted" || fail "Cannot sort release versions"
-    IFS=' 	' read -r published tag < "$tmp/sorted" || fail "No stable wolfxl-cli release found"
-    [ -n "$published" ] && [ -n "$tag" ] || fail "No stable wolfxl-cli release found"
-    version=${tag#wolfxl-cli-v}
+    version=$(sort -t . -k1,1n -k2,2n -k3,3n "$tmp/candidates" | tail -n 1)
+    [ -n "$version" ] || fail "No stable wolfxl-cli release found"
 fi
 version=${version#wolfxl-cli-v}
 version=${version#v}

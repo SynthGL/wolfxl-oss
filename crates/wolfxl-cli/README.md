@@ -31,8 +31,8 @@ irm https://raw.githubusercontent.com/SynthGL/wolfxl-oss/main/install.ps1 | iex
 The installers verify the archive against the release's `SHA256SUMS` before
 installing `wolfxl` to `$HOME/.local/bin` (or `$HOME\.local\bin` on Windows).
 Add that directory to your `PATH` if prompted. The Unix installer requires
-`curl`, `tar`, and `sha256sum` or `shasum`; automatic version discovery also
-requires `jq`. Windows requires PowerShell 5.1 or newer.
+`curl`, `tar`, and `sha256sum` or `shasum`. Windows requires PowerShell 5.1 or
+newer.
 
 Set `WOLFXL_VERSION` to a CLI version, such as `0.11.0`, to pin the download
 and skip version discovery. Set `WOLFXL_INSTALL_DIR` to choose a different
