@@ -101,12 +101,6 @@ impl<'a, S: DataSource> Context<'a, S> {
             Value::Text(text) => {
                 let trimmed = text.trim();
                 lenient_number(trimmed)
-                    .or_else(|| {
-                        trimmed
-                            .strip_suffix('%')
-                            .and_then(lenient_number)
-                            .map(|number| number / 100.0)
-                    })
                     .or_else(|| parse_date_time(trimmed, self.source.date1904()))
                     .map(Value::Number)
                     .ok_or(ExcelError::Value)

@@ -40,11 +40,16 @@ fn opposite_signs(left: f64, right: f64) -> bool {
     left.is_sign_negative() != right.is_sign_negative()
 }
 
+/// Lowest and highest rates the bracket search in [`rate_root`] samples.
+const BRACKET: (f64, f64) = (-0.99, 10.0);
+
 /// A root of `function` above -1: Newton's method from the guess, and when
-/// that does not settle, bisection on the sign change between -0.99 and 10
-/// nearest the guess. Convergence never compares the balance with a fixed
-/// tolerance, so tiny cash flows do not pass for a root and a balance that
-/// only approaches zero, such as `100*(1+rate)^360`, has none.
+/// that does not settle, bisection on the sign change nearest the guess.
+/// Convergence never compares the balance with a fixed tolerance, so the
+/// result does not change when every cash flow is scaled by a constant, and
+/// a balance that only approaches zero, such as `100*(1+rate)^360`, has no
+/// root. `function` runs at most about 420 times: 300 for Newton, 23 to find
+/// a sign change, and 100 to bisect it.
 fn rate_root(function: impl Fn(f64) -> f64, guess: f64) -> Option<f64> {
     let mut rate = guess;
     for _ in 0..100 {
@@ -73,20 +78,9 @@ fn rate_root(function: impl Fn(f64) -> f64, guess: f64) -> Option<f64> {
         }
         rate = next;
     }
-    // Sample the range and bisect the sign change closest to the guess.
-    let points: Vec<f64> = (0..=1099)
-        .map(|step| -0.99 + f64::from(step) / 100.0)
-        .collect();
-    let (mut low, mut high) = points
-        .windows(2)
-        .filter(|pair| {
-            let (left, right) = (function(pair[0]), function(pair[1]));
-            left.is_finite() && right.is_finite() && opposite_signs(left, right)
-        })
-        .map(|pair| (pair[0], pair[1]))
-        .min_by(|left, right| (left.0 - guess).abs().total_cmp(&(right.0 - guess).abs()))?;
+    let (mut low, mut high) = bracket(&function, guess)?;
     let low_negative = function(low).is_sign_negative();
-    while high - low > 1e-15 * low.abs().max(1.0) {
+    for _ in 0..100 {
         let middle = (low + high) / 2.0;
         if middle <= low || middle >= high {
             break;
@@ -98,6 +92,44 @@ fn rate_root(function: impl Fn(f64) -> f64, guess: f64) -> Option<f64> {
         }
     }
     Some((low + high) / 2.0)
+}
+
+/// The interval nearest the guess, within [`BRACKET`], whose ends lie on
+/// opposite sides of zero. The search steps outward on both sides,
+/// doubling the step from 0.01, so it samples finely near the guess and
+/// reaches either end of the range within 11 steps. Each point is sampled
+/// once.
+fn bracket(function: &impl Fn(f64) -> f64, guess: f64) -> Option<(f64, f64)> {
+    let (bottom, top) = BRACKET;
+    let start = guess.clamp(bottom, top);
+    let first = function(start);
+    let (mut left, mut right) = ((start, first), (start, first));
+    let mut step = 0.01;
+    while left.0 > bottom || right.0 < top {
+        if right.0 < top {
+            let rate = (right.0 + step).min(top);
+            let value = function(rate);
+            if changes_sign(right.1, value) {
+                return Some((right.0, rate));
+            }
+            right = (rate, value);
+        }
+        if left.0 > bottom {
+            let rate = (left.0 - step).max(bottom);
+            let value = function(rate);
+            if changes_sign(value, left.1) {
+                return Some((rate, left.0));
+            }
+            left = (rate, value);
+        }
+        step *= 2.0;
+    }
+    None
+}
+
+/// Whether two finite sampled values straddle zero.
+fn changes_sign(left: f64, right: f64) -> bool {
+    left.is_finite() && right.is_finite() && opposite_signs(left, right)
 }
 
 impl<'a, S: DataSource> Context<'a, S> {
@@ -356,5 +388,32 @@ impl<'a, S: DataSource> Context<'a, S> {
             total += depreciation;
             current += 1.0;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use super::rate_root;
+
+    #[test]
+    fn bisection_finds_a_root_newton_cannot_reach() {
+        // Each Newton step on a cube root doubles the distance to the root.
+        let root = rate_root(|rate: f64| (rate - 3.0).cbrt(), 0.1).expect("a root");
+        assert!((root - 3.0).abs() < 1e-12, "{root}");
+    }
+
+    #[test]
+    fn rootless_balances_stop_within_the_evaluation_bound() {
+        // Workbook-sized cash flows make every evaluation expensive, so the
+        // count stays bounded whatever the balance looks like.
+        let calls = Cell::new(0_u32);
+        let balance = |rate: f64| {
+            calls.set(calls.get() + 1);
+            1.0 + (rate - 5.0).powi(2)
+        };
+        assert_eq!(rate_root(balance, 0.1), None);
+        assert!(calls.get() <= 430, "{} evaluations", calls.get());
     }
 }

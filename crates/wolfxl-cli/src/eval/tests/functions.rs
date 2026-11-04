@@ -297,6 +297,8 @@ fn concat_textjoin_and_value() {
         ("=VALUE(\"1,234.5\")", number(1234.5)),
         ("=VALUE(\" 42 \")", number(42.0)),
         ("=VALUE(\"25%\")", number(0.25)),
+        ("=VALUE(\"(12%)\")", number(-0.12)),
+        ("=VALUE(\"12%%\")", error(ExcelError::Value)),
         ("=VALUE(D4)", number(0.0)),
         ("=VALUE(\"abc\")", error(ExcelError::Value)),
         ("=VALUE(TRUE)", error(ExcelError::Value)),
@@ -362,6 +364,13 @@ fn dated_cash_flows_rate_and_periods() {
         // Convergence does not depend on the size of the cash flows.
         ("=RATE(1,0,1E-12,-2E-12)", 1.0, 1e-9),
         ("=XIRR({-1E-12,1.1E-12},{39448,39813})", 0.1, 1e-9),
+        ("=XIRR({-1E-12,2E-12},{1,366})", 1.0, 1e-9),
+        // The published flows scaled by 1E-9 keep their rate.
+        (
+            &format!("=XIRR({{-1E-5,2.75E-6,4.25E-6,3.25E-6,2.75E-6}},{dates})"),
+            0.373_362_535,
+            1e-7,
+        ),
         ("=NPER(0.01,-100,-1000,10000,1)", 59.673_865_7, 1e-6),
         ("=NPER(0.01,-100,-1000,10000)", 60.082_122_9, 1e-6),
         ("=NPER(0.01,-100,-1000)", -9.578_594_04, 1e-7),

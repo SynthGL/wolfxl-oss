@@ -135,9 +135,11 @@
 ### Fixed
 
 - `RATE`, `IRR`, and `XIRR` converge on the rate itself rather than on a
-  near-zero balance, so tiny cash flows find their true rate
+  near-zero balance, so scaling every cash flow by a constant keeps the rate
   (`RATE(1,0,1E-12,-2E-12)` is 1) and balances that only approach zero are
-  `#NUM!` (`RATE(360,0,100)`).
+  `#NUM!` (`RATE(360,0,100)`). When Newton's method does not settle, the
+  fallback searches outward from the guess, so a column of cash flows with no
+  rate is `#NUM!` after a few hundred passes over the flows.
 - `wolfxl-formula` 0.1.1 tokenizes escaped brackets in structured references
   (`Sales[Cost '[USD']]`) as one reference, so `wolfxl peek --add` accepts them.
 - `wolfxl pivot` aggregates money-spelled text (`$12,500.00`, `(500.00)`)
