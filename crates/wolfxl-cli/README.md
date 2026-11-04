@@ -473,6 +473,22 @@ compact raw numeric rendering instead of spending tokens on display symbols.
 `schema` emits per-column type, cardinality, null-count, format-category, and
 sample-value inference for one sheet or the whole workbook.
 
+## Formula evaluation module
+
+The CLI contains a private, workbook-independent formula evaluator with `SUM`,
+`AVERAGE`, `COUNT`, `MIN`, `MAX`, and short-circuiting `IF`. It accepts scalar
+operators, Excel error values, A1 references, sheet-qualified references, and
+two-dimensional ranges. Whole row and column references are limited to the
+sheet's used extent. This module is not yet exposed as a subcommand.
+
+The evaluator reads cached cell values through a small data-source interface;
+it does not calculate formulas stored in referenced cells. It uses `f64`
+arithmetic and locale-neutral decimal/exponent text coercion. Text comparisons
+use Unicode lowercase ordering rather than locale-specific collation. Numeric
+concatenation uses plain decimal formatting rather than cell number formats.
+Range values are returned as arrays, without implicit intersection, operator
+broadcasting, or spill behavior.
+
 ## Built on
 
 - [`wolfxl-core`](https://crates.io/crates/wolfxl-core): pure-Rust

@@ -4,6 +4,7 @@ use std::process::ExitCode;
 use clap::{Parser, ValueEnum};
 
 mod commands;
+mod eval;
 mod filter;
 mod input;
 mod render;
