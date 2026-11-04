@@ -4,7 +4,8 @@ use crate::filter::lenient_number;
 use crate::formula_data::rounded;
 
 use super::{
-    Area, DataSource, ExcelError, Expr, Function, Operator, Reference, Value, MAX_COLUMN, MAX_ROW,
+    names_match, Area, DataSource, ExcelError, Expr, Function, Operator, Reference, TableReference,
+    TableRows, Value, MAX_COLUMN, MAX_ROW,
 };
 
 mod criteria;
@@ -238,6 +239,12 @@ impl<'a, S: DataSource> Context<'a, S> {
             Expr::Literal(value) => value.clone(),
             Expr::Reference(reference) => {
                 return match self.resolve(reference) {
+                    Ok(range) => Operand::Range(range),
+                    Err(error) => Operand::Value(Value::Error(error)),
+                }
+            }
+            Expr::Table(reference) => {
+                return match self.resolve_table(reference) {
                     Ok(range) => Operand::Range(range),
                     Err(error) => Operand::Value(Value::Error(error)),
                 }
@@ -533,6 +540,64 @@ impl<'a, S: DataSource> Context<'a, S> {
             columns,
             single: matches!(reference.area, Area::Cell { .. }),
             whole: matches!(reference.area, Area::Columns { .. } | Area::Rows { .. }),
+        })
+    }
+
+    /// The rectangle a structured reference selects. Names match ignoring
+    /// case. An unknown table or column, or a header or totals row the table
+    /// lacks, is `#REF!`; `@` and `[#This Row]` are `#VALUE!`, since a
+    /// formula evaluated here has no row of its own.
+    fn resolve_table(&self, reference: &TableReference) -> Result<Range<'a>, ExcelError> {
+        if reference.rows == TableRows::ThisRow {
+            return Err(ExcelError::Value);
+        }
+        let table = self.source.table(&reference.table).ok_or(ExcelError::Ref)?;
+        let area = table.area;
+        // Row bounds as half-open intervals: headers, data, then totals.
+        let data_first = area.first_row + table.header_rows;
+        let totals_first = area.last_row + 1 - table.totals_rows;
+        let end = area.last_row + 1;
+        let (first_row, end_row) = match reference.rows {
+            TableRows::All => (area.first_row, end),
+            TableRows::Data => (data_first, totals_first),
+            TableRows::Headers if table.header_rows > 0 => (area.first_row, data_first),
+            TableRows::Totals if table.totals_rows > 0 => (totals_first, end),
+            TableRows::HeadersData if table.header_rows > 0 => (area.first_row, totals_first),
+            TableRows::DataTotals if table.totals_rows > 0 => (data_first, end),
+            _ => return Err(ExcelError::Ref),
+        };
+        if first_row >= end_row {
+            return Err(ExcelError::Ref);
+        }
+        let width = area.last_column - area.first_column + 1;
+        let (first_column, columns) = match &reference.columns {
+            None => (area.first_column, width),
+            Some((first, last)) => {
+                let index = |name: &str| {
+                    table
+                        .columns
+                        .iter()
+                        .take(width as usize)
+                        .position(|column| names_match(column, name))
+                        .map(|index| index as u32)
+                        .ok_or(ExcelError::Ref)
+                };
+                let (first, last) = (index(first)?, index(last)?);
+                (
+                    area.first_column + first.min(last),
+                    first.abs_diff(last) + 1,
+                )
+            }
+        };
+        let rows = end_row - first_row;
+        Ok(Range {
+            sheet: table.sheet,
+            first_row,
+            first_column,
+            rows,
+            columns,
+            single: rows == 1 && columns == 1,
+            whole: false,
         })
     }
 }

@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use anyhow::{anyhow, Result};
 use wolfxl_core::CellValue;
-use wolfxl_reader::{Cell as RawCell, CellDataType, CellValue as RawValue};
+use wolfxl_reader::{CellDataType, CellValue as RawValue, WorksheetData};
 
 use crate::eval::{self, DataSource, ExcelError, Extent, Value};
 use crate::filter::lenient_number;
@@ -23,6 +23,32 @@ pub(crate) struct WorkbookData {
 struct SheetData {
     cells: HashMap<(u32, u32), Value>,
     extent: Extent,
+    /// The worksheet tables on this sheet, which structured references in
+    /// any sheet's formulas address by name.
+    tables: Vec<SheetTable>,
+}
+
+/// A worksheet table as its table part describes it.
+struct SheetTable {
+    name: String,
+    area: eval::CellArea,
+    header_rows: u32,
+    totals_rows: u32,
+    columns: Vec<String>,
+}
+
+impl SheetTable {
+    /// `None` when the table part's `ref` is not a cell range, so references
+    /// to the table evaluate to `#REF!`.
+    fn new(table: wolfxl_reader::Table) -> Option<Self> {
+        Some(Self {
+            area: eval::cell_area(&table.ref_range)?,
+            header_rows: u32::from(table.header_row),
+            totals_rows: u32::from(table.totals_row),
+            name: table.name,
+            columns: table.columns,
+        })
+    }
 }
 
 impl WorkbookData {
@@ -35,7 +61,7 @@ impl WorkbookData {
             let data = match &book {
                 // Spreadsheet numbers stay as stored, whatever their number
                 // format or the workbook's date system.
-                Some(book) => stored_sheet(book.cells(&name)?),
+                Some(book) => stored_sheet(book.worksheet(&name)?),
                 // Delimited fields take Excel's text-import types, and money
                 // text imports as numbers.
                 None => {
@@ -76,11 +102,14 @@ impl WorkbookData {
     }
 }
 
-/// A spreadsheet's stored cells; the extent covers every cell the reader kept,
-/// formulas without a cached value included.
-fn stored_sheet(cells: Vec<RawCell>) -> SheetData {
+/// A spreadsheet's stored cells; the extent covers every cell the reader kept
+/// with a value or a formula, formulas without a cached value included.
+fn stored_sheet(sheet: WorksheetData) -> SheetData {
     let mut data = SheetData::default();
-    for cell in cells {
+    for cell in sheet.cells {
+        if cell.formula.is_none() && matches!(cell.value, RawValue::Empty) {
+            continue;
+        }
         data.extent.rows = data.extent.rows.max(cell.row);
         data.extent.columns = data.extent.columns.max(cell.col);
         let value = stored_value(cell.value, cell.data_type);
@@ -88,6 +117,11 @@ fn stored_sheet(cells: Vec<RawCell>) -> SheetData {
             data.cells.insert((cell.row, cell.col), value);
         }
     }
+    data.tables = sheet
+        .tables
+        .into_iter()
+        .filter_map(SheetTable::new)
+        .collect();
     data
 }
 
@@ -150,6 +184,22 @@ impl DataSource for WorkbookData {
     fn date1904(&self) -> bool {
         self.date1904
     }
+
+    fn table(&self, name: &str) -> Option<eval::TableInfo<'_>> {
+        self.sheets.iter().find_map(|(sheet, data)| {
+            let table = data
+                .tables
+                .iter()
+                .find(|table| eval::names_match(&table.name, name))?;
+            Some(eval::TableInfo {
+                sheet,
+                area: table.area,
+                header_rows: table.header_rows,
+                totals_rows: table.totals_rows,
+                columns: &table.columns,
+            })
+        })
+    }
 }
 
 pub(crate) fn normalize_formula(formula: &str) -> String {
@@ -202,6 +252,7 @@ pub(crate) fn text_value(value: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wolfxl_reader::Cell as RawCell;
 
     #[test]
     fn results_use_fifteen_significant_digits_without_negative_zero() {
@@ -227,14 +278,60 @@ mod tests {
     }
 
     fn book(cells: Vec<RawCell>) -> WorkbookData {
+        sheet_book(WorksheetData {
+            cells,
+            ..WorksheetData::default()
+        })
+    }
+
+    fn sheet_book(sheet: WorksheetData) -> WorkbookData {
         WorkbookData {
-            sheets: BTreeMap::from([("Data".to_owned(), stored_sheet(cells))]),
+            sheets: BTreeMap::from([("Data".to_owned(), stored_sheet(sheet))]),
             date1904: false,
         }
     }
 
     fn evaluated(data: &WorkbookData, formula: &str) -> Value {
         eval::evaluate(formula, data, "Data").expect("formula parses")
+    }
+
+    fn reader_table(name: &str, ref_range: &str, columns: &[&str]) -> wolfxl_reader::Table {
+        wolfxl_reader::Table {
+            name: name.to_owned(),
+            ref_range: ref_range.to_owned(),
+            header_row: true,
+            totals_row: false,
+            comment: None,
+            table_type: None,
+            totals_row_shown: None,
+            style: None,
+            show_first_column: false,
+            show_last_column: false,
+            show_row_stripes: false,
+            show_column_stripes: false,
+            columns: columns.iter().map(|column| (*column).to_owned()).collect(),
+            auto_filter: None,
+        }
+    }
+
+    #[test]
+    fn table_parts_register_structured_reference_targets() {
+        let data = sheet_book(WorksheetData {
+            cells: vec![
+                raw_cell(3, 3, RawValue::Number(5.0)),
+                raw_cell(4, 3, RawValue::Number(7.0)),
+            ],
+            tables: vec![
+                reader_table("Sales", "$B$2:$C$4", &["Item", "Amount"]),
+                reader_table("Broken", "not a range", &["Amount"]),
+            ],
+            ..WorksheetData::default()
+        });
+        assert_eq!(evaluated(&data, "=SUM(sales[AMOUNT])"), Value::Number(12.0));
+        assert_eq!(
+            evaluated(&data, "=SUM(Broken[Amount])"),
+            Value::Error(ExcelError::Ref)
+        );
     }
 
     #[test]

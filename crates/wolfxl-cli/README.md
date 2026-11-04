@@ -219,6 +219,24 @@ input, which needs `--from` as described above.
   with up to 15 significant digits rather than with cell number formats.
   A range is an array: operators do not intersect or broadcast it, and
   results never spill.
+- **Structured references.** Formulas can name a workbook table from any
+  sheet: `Sales[Amount]` is the column's data rows, without the header or
+  totals row; `Sales[]` and `Sales[#Data]` are every data row;
+  `Sales[#All]`, `Sales[#Headers]`, and `Sales[#Totals]` select those rows;
+  `Sales[[#Headers],[#Data],[Amount]]` and `Sales[[#Data],[#Totals],[Amount]]`
+  combine them; and `Sales[[#Data],[Q1]:[Q4]]` spans a column range. Each
+  resolves to the cells it covers when the formula is evaluated, so it works
+  wherever a range does: `SUM(Sales[Amount])`, `Sales[[#Totals],[Amount]]`,
+  `INDEX(Sales[Amount],2)`. Table, column, and item names ignore case, and
+  within a column name `'` escapes `[`, `]`, `#`, and `'`, as in
+  `Sales[Q1 '[est']]`. Tables come from the table parts of `.xlsx`, `.xlsm`,
+  and `.xlsb` workbooks and resolve by the name stored in the table part;
+  other inputs have none. A table missing from the workbook's table parts,
+  an unknown column, and `#Headers` or `#Totals` of a table without that row
+  are `#REF!`. Unlike Excel, `Sales[@Amount]` and `[#This Row]` are
+  `#VALUE!`, because a formula evaluated here has no row of its own. A
+  bracketed column without a table name, such as `[Amount]`, and item
+  combinations Excel rejects, such as `[#Headers],[#Totals]`, exit 2.
 
 Scalars print as text with up to 15 significant digits, `TRUE` or `FALSE`
 for booleans, an empty line for a blank, and the literal for an Excel error.

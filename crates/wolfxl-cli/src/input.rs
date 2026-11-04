@@ -29,7 +29,7 @@ use clap::ValueEnum;
 use wolfxl_core::{Cell, CellValue, Sheet, SourceFormat, Workbook};
 use wolfxl_reader::{
     Cell as RawCell, CellValue as RawValue, NativeOdsBook, NativeXlsBook, NativeXlsbBook,
-    NativeXlsxBook,
+    NativeXlsxBook, WorksheetData,
 };
 
 /// Most bytes spooled for `--from xls`: the native XLS reader's source
@@ -244,6 +244,17 @@ impl RawBook {
             Self::Xls(book) => book.date1904(),
             Self::Xlsb(book) => book.date1904(),
             Self::Ods(book) => book.date1904(),
+        }
+    }
+
+    /// Sheet `name` as its native reader parses it, metadata included.
+    pub(crate) fn worksheet(&self, name: &str) -> Result<WorksheetData> {
+        let loading = |error: &dyn std::fmt::Display| anyhow!("loading sheet {name:?}: {error}");
+        match self {
+            Self::Xlsx(book) => book.worksheet(name).map_err(|e| loading(&e)),
+            Self::Xls(book) => book.worksheet(name).map_err(|e| loading(&e)),
+            Self::Xlsb(book) => book.worksheet(name).map_err(|e| loading(&e)),
+            Self::Ods(book) => book.worksheet(name).map_err(|e| loading(&e)),
         }
     }
 

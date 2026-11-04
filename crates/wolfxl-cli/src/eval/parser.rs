@@ -1,6 +1,6 @@
 use super::{
-    Area, ExcelError, Expr, Formula, Function, Operator, ParseError, Reference, Value, MAX_COLUMN,
-    MAX_ROW,
+    Area, CellArea, ExcelError, Expr, Formula, Function, Operator, ParseError, Reference,
+    TableReference, TableRows, Value, MAX_COLUMN, MAX_ROW,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -10,6 +10,7 @@ enum TokenKind<'a> {
     Text(String),
     Sheet(String),
     Error(ExcelError),
+    Table(TableReference),
     Plus,
     Minus,
     Star,
@@ -189,7 +190,19 @@ impl<'a> Lexer<'a> {
                     }
                     self.position += next.len_utf8();
                 }
-                TokenKind::Word(&self.input[start..self.position])
+                let word = &self.input[start..self.position];
+                if self.input[self.position..].starts_with('[') {
+                    TokenKind::Table(self.table_reference(word)?)
+                } else {
+                    TokenKind::Word(word)
+                }
+            }
+            '[' => {
+                return Err(syntax(
+                    start,
+                    "a structured reference needs a table name, as in Table[Column]; \
+                     external workbook references are not supported",
+                ))
             }
             _ => return Err(syntax(start, format!("unexpected character {ch:?}"))),
         };
@@ -206,6 +219,175 @@ impl<'a> Lexer<'a> {
             true
         } else {
             false
+        }
+    }
+
+    fn peek(&self) -> Option<char> {
+        self.input[self.position..].chars().next()
+    }
+
+    fn skip_spaces(&mut self) {
+        while self.peek() == Some(' ') {
+            self.position += 1;
+        }
+    }
+
+    /// The bracketed part of a structured reference after `table`, with the
+    /// position at its opening `[`. Excel's forms are `Table[]`,
+    /// `Table[Column]`, `Table[#Item]`, `Table[@Column]`, and a list of
+    /// bracketed special items followed by one column or column range, as in
+    /// `Table[[#Headers],[#Data],[First]:[Last]]`. Spaces may separate the
+    /// list's parts.
+    fn table_reference(&mut self, table: &str) -> Result<TableReference, ParseError> {
+        let open = self.position;
+        self.position += 1;
+        let after_open = self.position;
+        self.skip_spaces();
+        let mut specials = Vec::new();
+        let mut columns = None;
+        match self.peek() {
+            Some(']') => self.position += 1,
+            Some('@') => {
+                self.position += 1;
+                specials.push(TableRows::ThisRow);
+                self.skip_spaces();
+                match self.peek() {
+                    Some(']') => self.position += 1,
+                    Some('[') => {
+                        columns = Some(self.column_item()?);
+                        self.skip_spaces();
+                        if !self.consume(']') {
+                            return Err(syntax(self.position, "expected ']'"));
+                        }
+                    }
+                    _ => {
+                        let name = self.table_name_part(open)?;
+                        columns = Some((name.clone(), name));
+                    }
+                }
+            }
+            Some('#') => {
+                self.position += 1;
+                specials.push(self.special_item(open)?);
+            }
+            Some('[') => loop {
+                self.skip_spaces();
+                let item = self.position;
+                if !self.consume('[') {
+                    return Err(syntax(item, "expected '[' in a structured reference"));
+                }
+                if self.consume('#') {
+                    if columns.is_some() {
+                        return Err(syntax(item, "special items must come before the column"));
+                    }
+                    specials.push(self.special_item(open)?);
+                } else if columns.is_some() {
+                    return Err(syntax(
+                        item,
+                        "a structured reference selects one column or column range",
+                    ));
+                } else {
+                    self.position = item;
+                    columns = Some(self.column_item()?);
+                }
+                self.skip_spaces();
+                if self.consume(']') {
+                    break;
+                }
+                if !self.consume(',') {
+                    return Err(syntax(
+                        self.position,
+                        "expected ',' or ']' in a structured reference",
+                    ));
+                }
+            },
+            _ => {
+                self.position = after_open;
+                let name = self.table_name_part(open)?;
+                columns = Some((name.clone(), name));
+            }
+        }
+        let rows = match specials.as_slice() {
+            [] | [TableRows::Data] => TableRows::Data,
+            [rows] => *rows,
+            [TableRows::Headers, TableRows::Data] => TableRows::HeadersData,
+            [TableRows::Data, TableRows::Totals] => TableRows::DataTotals,
+            _ => {
+                return Err(syntax(
+                    open,
+                    "table items combine only as [#Headers],[#Data] or [#Data],[#Totals]",
+                ))
+            }
+        };
+        Ok(TableReference {
+            table: table.to_owned(),
+            rows,
+            columns,
+        })
+    }
+
+    /// A bracketed column, or a column range `[First]:[Last]`, with the
+    /// position at the first `[`.
+    fn column_item(&mut self) -> Result<(String, String), ParseError> {
+        let open = self.position;
+        self.position += 1;
+        let first = self.table_name_part(open)?;
+        self.skip_spaces();
+        if !self.consume(':') {
+            return Ok((first.clone(), first));
+        }
+        self.skip_spaces();
+        let second = self.position;
+        if !self.consume('[') || self.peek() == Some('#') {
+            return Err(syntax(second, "expected a bracketed column after ':'"));
+        }
+        Ok((first, self.table_name_part(second)?))
+    }
+
+    /// A special item's name after its `#`, through the closing `]`.
+    fn special_item(&mut self, open: usize) -> Result<TableRows, ParseError> {
+        let start = self.position;
+        let name = self.table_name_part(open)?;
+        [
+            ("All", TableRows::All),
+            ("Data", TableRows::Data),
+            ("Headers", TableRows::Headers),
+            ("Totals", TableRows::Totals),
+            ("This Row", TableRows::ThisRow),
+        ]
+        .into_iter()
+        .find(|(spelling, _)| spelling.eq_ignore_ascii_case(&name))
+        .map(|(_, rows)| rows)
+        .ok_or_else(|| syntax(start - 1, format!("unknown table item #{name}")))
+    }
+
+    /// Text through the next unescaped `]`, which is consumed. A `'` escapes
+    /// the character after it, so `'[`, `']`, `'#`, and `''` stand for `[`,
+    /// `]`, `#`, and `'` in a column name.
+    fn table_name_part(&mut self, open: usize) -> Result<String, ParseError> {
+        let mut name = String::new();
+        loop {
+            let Some(ch) = self.peek() else {
+                return Err(syntax(open, "unterminated structured reference"));
+            };
+            self.position += ch.len_utf8();
+            match ch {
+                ']' => return Ok(name),
+                '[' => {
+                    return Err(syntax(
+                        self.position - 1,
+                        "write '[ for a '[' in a column name",
+                    ))
+                }
+                '\'' => {
+                    let Some(escaped) = self.peek() else {
+                        return Err(syntax(open, "unterminated structured reference"));
+                    };
+                    self.position += escaped.len_utf8();
+                    name.push(escaped);
+                }
+                _ => name.push(ch),
+            }
         }
     }
 }
@@ -320,6 +502,7 @@ impl<'a> Parser<'a> {
             }
             TokenKind::Text(text) => Ok(Expr::Literal(Value::Text(text))),
             TokenKind::Error(error) => Ok(Expr::Literal(Value::Error(error))),
+            TokenKind::Table(reference) => Ok(Expr::Table(reference)),
             TokenKind::BraceOpen => self.array(token.start),
             TokenKind::Open => {
                 let expression = self.expression(0)?;
@@ -547,4 +730,25 @@ fn valid_row(row: u32) -> bool {
 }
 fn valid_column(column: u32) -> bool {
     (1..=MAX_COLUMN).contains(&column)
+}
+
+/// The rectangle an A1 cell or range covers; `None` for whole rows or
+/// columns, mixed endpoints, and positions outside the worksheet.
+pub(super) fn cell_area(text: &str) -> Option<CellArea> {
+    let (first, last) = text.split_once(':').unwrap_or((text, text));
+    let (Endpoint::Cell(r1, c1), Endpoint::Cell(r2, c2)) = (endpoint(first)?, endpoint(last)?)
+    else {
+        return None;
+    };
+    let area = CellArea {
+        first_row: r1.min(r2),
+        first_column: c1.min(c2),
+        last_row: r1.max(r2),
+        last_column: c1.max(c2),
+    };
+    let valid = valid_row(area.first_row)
+        && valid_row(area.last_row)
+        && valid_column(area.first_column)
+        && valid_column(area.last_column);
+    valid.then_some(area)
 }

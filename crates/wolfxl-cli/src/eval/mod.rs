@@ -5,10 +5,15 @@
 //! Range operands are not implicitly intersected or broadcast by operators.
 //! Array constants such as `{1,2;3,4}` evaluate to arrays, and functions that
 //! take ranges (aggregates, criteria, lookups, `NPV`, `IRR`) accept them too.
+//! Structured references such as `Sales[Amount]` or `Sales[[#Totals],[Amount]]`
+//! resolve through [`DataSource::table`] to the rectangle they select when the
+//! formula is evaluated, so they work wherever a range does.
 
 mod parser;
 mod runtime;
 
+#[cfg(test)]
+mod table_tests;
 #[cfg(test)]
 mod tests;
 
@@ -97,6 +102,51 @@ pub trait DataSource {
     fn date1904(&self) -> bool {
         false
     }
+
+    /// The worksheet table named `name`, ignoring case as [`names_match`]
+    /// does. Sources without tables have none.
+    fn table(&self, _name: &str) -> Option<TableInfo<'_>> {
+        None
+    }
+}
+
+/// One-based bounds of a rectangle of cells, inclusive.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CellArea {
+    pub first_row: u32,
+    pub first_column: u32,
+    pub last_row: u32,
+    pub last_column: u32,
+}
+
+/// A worksheet table that structured references select from.
+#[derive(Clone, Copy, Debug)]
+pub struct TableInfo<'a> {
+    /// Canonical name, as `sheet_names` returns it, of the sheet holding the
+    /// table.
+    pub sheet: &'a str,
+    /// The whole table, header and totals rows included.
+    pub area: CellArea,
+    /// Header rows at the top of `area`: 0 or 1.
+    pub header_rows: u32,
+    /// Totals rows at the bottom of `area`: 0 or 1.
+    pub totals_rows: u32,
+    /// Column names, left to right.
+    pub columns: &'a [String],
+}
+
+/// Whether two table or column names are equal ignoring case, as Excel
+/// compares them.
+pub fn names_match(left: &str, right: &str) -> bool {
+    left.chars()
+        .flat_map(char::to_lowercase)
+        .eq(right.chars().flat_map(char::to_lowercase))
+}
+
+/// The rectangle an A1 cell or range such as `C2:F15` covers, as table parts
+/// store it; `None` for anything else.
+pub fn cell_area(text: &str) -> Option<CellArea> {
+    parser::cell_area(text)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -300,6 +350,9 @@ const MAX_COLUMN: u32 = 16_384;
 enum Expr {
     Literal(Value),
     Reference(Reference),
+    /// A structured reference, resolved against the source's tables when it
+    /// is evaluated.
+    Table(TableReference),
     Unary {
         negative: bool,
         operand: Box<Expr>,
@@ -361,4 +414,33 @@ enum Area {
         first: u32,
         last: u32,
     },
+}
+
+/// A structured reference such as `Sales[[#Data],[Q1]:[Q4]]`.
+#[derive(Clone, Debug, PartialEq)]
+struct TableReference {
+    table: String,
+    rows: TableRows,
+    /// First and last selected column names as written; `None` selects every
+    /// column.
+    columns: Option<(String, String)>,
+}
+
+/// The rows a structured reference selects: its special items.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TableRows {
+    /// `[#All]`: header, data, and totals rows.
+    All,
+    /// `[#Data]`, or no special item: the data body.
+    Data,
+    /// `[#Headers]`.
+    Headers,
+    /// `[#Totals]`.
+    Totals,
+    /// `[#Headers],[#Data]`.
+    HeadersData,
+    /// `[#Data],[#Totals]`.
+    DataTotals,
+    /// `[#This Row]` or `@`, which needs the formula's own row.
+    ThisRow,
 }
