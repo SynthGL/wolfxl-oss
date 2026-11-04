@@ -25,9 +25,11 @@
 //! - XLSX, XLSM, and XLAM cells hash their stored values (cached results for
 //!   formula cells) exactly as written, so a number-format change leaves the
 //!   fingerprint alone, and every formula adds an `F` line.
-//! - XLS, XLSB, and ODS cells hash their stored values. Dates and times the
-//!   reader types from number formats hash as 1900-system Excel serial
-//!   numbers; a date outside Excel's serial range hashes as ISO 8601 text.
+//! - XLS, XLSB, and ODS cells hash their stored values (cached results for
+//!   formula cells) without formula lines, so neither a number format nor
+//!   the workbook's date system changes how a number hashes. ODS stores date
+//!   and date-time values as ISO 8601 text; those hash as 1900-system Excel
+//!   serial numbers, or as their text outside Excel's serial range.
 //! - CSV, TSV, and TXT fields hash as their source text (type `s`), so the
 //!   fingerprint is lossless. The single synthetic sheet is named after the
 //!   file, so its `S` line carries an empty name and a renamed copy keeps its
@@ -41,13 +43,13 @@ use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
 
-use anyhow::{anyhow, Context, Result};
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Timelike};
+use anyhow::{Context, Result};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use wolfxl_core::{CellValue, SourceFormat, Workbook};
-use wolfxl_reader::{CellValue as NativeValue, NativeXlsxBook};
+use wolfxl_reader::{CellDataType, CellValue as NativeValue};
 
+use crate::input::{iso_serial, RawBook};
 use crate::{FingerprintArgs, VerifyArgs};
 
 /// Stream format version, the first stream line and the fingerprint prefix.
@@ -146,108 +148,56 @@ fn compute(path: &Path) -> Result<Fingerprint> {
         Workbook::open(path).with_context(|| format!("opening {}", path.display()))?;
     let names = workbook.sheet_names().to_vec();
     let mut stream = Stream::new();
-    match workbook.format() {
-        SourceFormat::Xlsx => {
-            let book = NativeXlsxBook::open_path(path)
-                .map_err(|error| anyhow!("opening {}: {error}", path.display()))?;
-            for name in &names {
-                stream.sheet(name);
-                ooxml_sheet(&mut stream, &book, name)?;
+    let Some(book) = RawBook::open(&workbook)? else {
+        for name in &names {
+            let sheet = workbook
+                .sheet(name)
+                .with_context(|| format!("loading sheet {name:?}"))?;
+            stream.sheet("");
+            for (row_index, row) in sheet.rows().iter().enumerate() {
+                for (column_index, cell) in row.iter().enumerate() {
+                    // Delimited fields are source text or empty.
+                    if let CellValue::String(text) = &cell.value {
+                        stream.value(&sheet.cell_address(row_index, column_index), "s", text);
+                    }
+                }
             }
         }
-        format => {
-            let delimited = format == SourceFormat::Csv;
-            for name in &names {
-                let sheet = workbook
-                    .sheet(name)
-                    .with_context(|| format!("loading sheet {name:?}"))?;
-                stream.sheet(if delimited { "" } else { name });
-                for (row_index, row) in sheet.rows().iter().enumerate() {
-                    for (column_index, cell) in row.iter().enumerate() {
-                        if let Some((kind, text)) = typed(&cell.value) {
-                            stream.value(&sheet.cell_address(row_index, column_index), kind, &text);
-                        }
+        return Ok(stream.finish());
+    };
+    let ooxml = workbook.format() == SourceFormat::Xlsx;
+    for name in &names {
+        stream.sheet(name);
+        let cells = book.cells(name)?;
+        for cell in &cells {
+            let (kind, text) = match &cell.value {
+                NativeValue::Empty => continue,
+                // OOXML `t="d"` text hashes as written.
+                NativeValue::String(text)
+                    if !ooxml && cell.data_type == CellDataType::DateIso =>
+                {
+                    match iso_serial(text) {
+                        Some(serial) => ("n", Cow::Owned(number_text(serial))),
+                        None => ("s", Cow::Borrowed(text.as_str())),
                     }
+                }
+                NativeValue::String(text) => ("s", Cow::Borrowed(text.as_str())),
+                NativeValue::SharedString(text) => ("s", Cow::Borrowed(&**text)),
+                NativeValue::Number(number) => ("n", Cow::Owned(number_text(*number))),
+                NativeValue::Bool(flag) => ("b", Cow::Borrowed(bool_text(*flag))),
+                NativeValue::Error(literal) => ("e", Cow::Borrowed(literal.as_str())),
+            };
+            stream.value(&a1(cell.row, cell.col), kind, &text);
+        }
+        if ooxml {
+            for cell in &cells {
+                if let Some(formula) = &cell.formula {
+                    stream.formula(&a1(cell.row, cell.col), formula);
                 }
             }
         }
     }
     Ok(stream.finish())
-}
-
-/// Stream one OOXML worksheet's stored values, then its formulas.
-fn ooxml_sheet(stream: &mut Stream, book: &NativeXlsxBook, name: &str) -> Result<()> {
-    let mut cells = book
-        .worksheet(name)
-        .map_err(|error| anyhow!("loading sheet {name:?}: {error}"))?
-        .cells;
-    cells.sort_unstable_by_key(|cell| (cell.row, cell.col));
-    for cell in &cells {
-        let (kind, text) = match &cell.value {
-            NativeValue::Empty => continue,
-            NativeValue::String(text) => ("s", Cow::Borrowed(text.as_str())),
-            NativeValue::SharedString(text) => ("s", Cow::Borrowed(&**text)),
-            NativeValue::Number(number) => ("n", Cow::Owned(number_text(*number))),
-            NativeValue::Bool(flag) => ("b", Cow::Borrowed(bool_text(*flag))),
-            NativeValue::Error(literal) => ("e", Cow::Borrowed(literal.as_str())),
-        };
-        stream.value(&a1(cell.row, cell.col), kind, &text);
-    }
-    for cell in &cells {
-        if let Some(formula) = &cell.formula {
-            stream.formula(&a1(cell.row, cell.col), formula);
-        }
-    }
-    Ok(())
-}
-
-/// The stream type and value text of a reader-typed cell; `None` when empty.
-fn typed(value: &CellValue) -> Option<(&'static str, Cow<'_, str>)> {
-    Some(match value {
-        CellValue::Empty => return None,
-        CellValue::String(text) => ("s", Cow::Borrowed(text.as_str())),
-        CellValue::Int(number) => ("n", Cow::Owned(number.to_string())),
-        CellValue::Float(number) => ("n", Cow::Owned(number_text(*number))),
-        CellValue::Bool(flag) => ("b", Cow::Borrowed(bool_text(*flag))),
-        CellValue::Error(literal) => ("e", Cow::Borrowed(literal.as_str())),
-        CellValue::Date(date) => match date_serial(*date) {
-            Some(serial) => ("n", Cow::Owned(number_text(serial))),
-            None => ("s", Cow::Owned(date.to_string())),
-        },
-        CellValue::DateTime(moment) => match date_serial(moment.date()) {
-            Some(serial) => (
-                "n",
-                Cow::Owned(number_text(serial + day_fraction(moment.time()))),
-            ),
-            None => ("s", Cow::Owned(iso_datetime(moment))),
-        },
-        CellValue::Time(time) => ("n", Cow::Owned(number_text(day_fraction(*time)))),
-    })
-}
-
-/// Whole-day 1900-system Excel serial of a date, or `None` outside Excel's
-/// 1900-01-01 through 9999-12-31 range. Serial 1 is 1900-01-01, and serials
-/// from 61 on count the nonexistent 1900-02-29 that Excel keeps as serial 60.
-pub(crate) fn date_serial(date: NaiveDate) -> Option<f64> {
-    let first = NaiveDate::from_ymd_opt(1900, 1, 1)?;
-    let last = NaiveDate::from_ymd_opt(9999, 12, 31)?;
-    if date < first || date > last {
-        return None;
-    }
-    let days = date.signed_duration_since(first).num_days() + 1;
-    Some((if days >= 60 { days + 1 } else { days }) as f64)
-}
-
-/// Fraction of a day elapsed at `time`: whole seconds since midnight plus the
-/// fractional second, over 86,400.
-pub(crate) fn day_fraction(time: NaiveTime) -> f64 {
-    let seconds = f64::from(time.num_seconds_from_midnight());
-    let fraction = f64::from(time.nanosecond()) / 1_000_000_000.0;
-    (seconds + fraction) / 86_400.0
-}
-
-fn iso_datetime(moment: &NaiveDateTime) -> String {
-    moment.format("%Y-%m-%dT%H:%M:%S%.f").to_string()
 }
 
 /// Canonical number text: integer digits for integral values (which matches
@@ -364,43 +314,12 @@ mod tests {
 
     #[test]
     fn numbers_share_one_canonical_text() {
-        let int_text = typed(&CellValue::Int(42)).map(|(_, text)| text.into_owned());
-        let float_text = typed(&CellValue::Float(42.0)).map(|(_, text)| text.into_owned());
-        assert_eq!(int_text.as_deref(), Some("42"));
-        assert_eq!(float_text, int_text);
+        assert_eq!(number_text(42.0), "42");
         assert_eq!(number_text(-0.0), "0");
         assert_eq!(number_text(0.1), "0.1");
+        assert_eq!(number_text(45_000.123_456_789), "45000.123456789");
         assert_eq!(number_text(1e21), "1000000000000000000000");
         assert_eq!(number_text(2f64.powi(53)), (1_i64 << 53).to_string());
-    }
-
-    #[test]
-    fn dates_hash_as_1900_system_serials_or_iso_text() {
-        let date = |year, month, day| NaiveDate::from_ymd_opt(year, month, day).unwrap();
-        assert_eq!(date_serial(date(1900, 1, 1)), Some(1.0));
-        assert_eq!(date_serial(date(1900, 2, 28)), Some(59.0));
-        assert_eq!(date_serial(date(1900, 3, 1)), Some(61.0));
-        assert_eq!(date_serial(date(2000, 1, 1)), Some(36_526.0));
-        assert_eq!(date_serial(date(9999, 12, 31)), Some(2_958_465.0));
-        assert_eq!(date_serial(date(1899, 12, 31)), None);
-
-        let noon = NaiveTime::from_hms_opt(12, 0, 0).unwrap();
-        assert_eq!(day_fraction(noon), 0.5);
-        let moment = date(2000, 1, 1).and_time(noon);
-        let text = |value| typed(&value).map(|(kind, text)| (kind, text.into_owned()));
-        assert_eq!(
-            text(CellValue::DateTime(moment)),
-            Some(("n", "36526.5".to_string()))
-        );
-        assert_eq!(
-            text(CellValue::Date(date(1899, 12, 31))),
-            Some(("s", "1899-12-31".to_string()))
-        );
-        assert_eq!(
-            text(CellValue::DateTime(date(1899, 12, 31).and_time(noon))),
-            Some(("s", "1899-12-31T12:00:00".to_string()))
-        );
-        assert_eq!(text(CellValue::Time(noon)), Some(("n", "0.5".to_string())));
     }
 
     #[test]

@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 
 use crate::filter::lenient_number;
+use crate::formula_data::rounded;
 
 use super::{
     Area, DataSource, ExcelError, Expr, Function, Operator, Reference, Value, MAX_COLUMN, MAX_ROW,
@@ -86,16 +87,10 @@ impl<S: DataSource> Context<'_, S> {
                 for argument in arguments {
                     // Read reference arguments directly rather than materializing large ranges.
                     let result = if let Expr::Reference(reference) = argument {
-                        self.resolve(reference).and_then(|area| {
-                            if !area.is_empty() {
-                                for row in area.first_row..=area.last_row {
-                                    for column in area.first_column..=area.last_column {
-                                        aggregate.add(self.cell(area.sheet, row, column), true)?;
-                                    }
-                                }
-                            }
-                            Ok(())
-                        })
+                        match self.resolve(reference) {
+                            Ok(area) => self.add_area(&mut aggregate, &area),
+                            Err(error) => aggregate.add(Value::Error(error), true),
+                        }
                     } else {
                         aggregate.add(self.evaluate(argument), false)
                     };
@@ -106,6 +101,17 @@ impl<S: DataSource> Context<'_, S> {
                 aggregate.finish()
             }
         }
+    }
+
+    fn add_area(&self, aggregate: &mut Aggregate, area: &Resolved<'_>) -> Result<(), ExcelError> {
+        if !area.is_empty() {
+            for row in area.first_row..=area.last_row {
+                for column in area.first_column..=area.last_column {
+                    aggregate.add(self.cell(area.sheet, row, column), true)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     fn cell(&self, sheet: &str, row: u32, column: u32) -> Value {
@@ -213,10 +219,13 @@ fn condition(value: Value) -> Result<bool, ExcelError> {
 fn text(value: Value) -> Result<String, ExcelError> {
     match value {
         Value::Text(text) => Ok(text),
-        Value::Number(number) => Ok(if number == 0.0 {
-            "0".to_owned()
-        } else {
-            number.to_string()
+        Value::Number(number) => Ok({
+            let number = rounded(number);
+            if number == 0.0 {
+                "0".to_owned()
+            } else {
+                number.to_string()
+            }
         }),
         Value::Boolean(value) => Ok(if value { "TRUE" } else { "FALSE" }.to_owned()),
         Value::Blank => Ok(String::new()),
@@ -308,6 +317,7 @@ impl Aggregate {
 
     fn add(&mut self, value: Value, referenced: bool) -> Result<(), ExcelError> {
         let value = match value {
+            Value::Error(_) if matches!(self.function, Function::Count) => return Ok(()),
             Value::Error(error) => return Err(error),
             Value::Array(rows) => {
                 for row in rows {

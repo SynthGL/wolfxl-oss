@@ -47,6 +47,12 @@
   and `(75.00)` as numbers, using the same parser as `--where`. Arithmetic
   text coercion accepts those spellings too. Stored Excel text cells stay
   text, and range aggregations continue to ignore them.
+- `COUNT` skips error values in references and direct arguments, while the
+  other aggregate functions propagate them. Formula concatenation formats
+  numbers with the same 15-significant-digit rounding as scalar output.
+- Formula references and fingerprints read raw stored numbers in XLS, XLSB,
+  and ODS books, preserving fractional serials and the stored date system
+  independently of number formats.
 - `wolfxl peek --add NAME=FORMULA` appends formula columns filled down from
   the first data row with `$` anchoring, computed before `--where` and
   `--select` and available in `--interactive`. A name that collides with a

@@ -9,6 +9,11 @@
 //! [`Input::sheet`] types their fields the way Excel's text import does:
 //! decimal numbers become numbers and `TRUE`/`FALSE` become booleans, so
 //! aggregations and profiles see values rather than strings.
+//!
+//! Spreadsheet files also expose their stored cells through [`RawBook`]: the
+//! core reader types numbers from their number formats and date system, which
+//! rounds date-times to whole seconds and shifts 1904-system serials, so
+//! fingerprints and formulas read the native readers' cells instead.
 
 use std::fs;
 use std::io::Read;
@@ -16,8 +21,13 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail, Context, Result};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use clap::ValueEnum;
 use wolfxl_core::{Cell, CellValue, Sheet, SourceFormat, Workbook};
+use wolfxl_reader::{
+    Cell as RawCell, CellValue as RawValue, NativeOdsBook, NativeXlsBook, NativeXlsbBook,
+    NativeXlsxBook,
+};
 
 /// Input format named by `--from`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
@@ -111,10 +121,6 @@ impl Input {
         }
     }
 
-    pub(crate) fn is_delimited(&self) -> bool {
-        self.delimited
-    }
-
     pub(crate) fn sheet_names(&self) -> &[String] {
         self.workbook.sheet_names()
     }
@@ -163,6 +169,94 @@ impl Input {
             .collect();
         Ok(Sheet::from_rows(sheet.name, rows))
     }
+
+    /// The stored cells of a spreadsheet file, or `None` for delimited text.
+    pub(crate) fn raw_book(&self) -> Result<Option<RawBook>> {
+        RawBook::open(&self.workbook)
+    }
+}
+
+/// A spreadsheet file opened with its native reader, whose cells hold the
+/// numbers, text, booleans, errors, and formulas exactly as stored.
+pub(crate) enum RawBook {
+    Xlsx(Box<NativeXlsxBook>),
+    Xls(Box<NativeXlsBook>),
+    Xlsb(Box<NativeXlsbBook>),
+    Ods(Box<NativeOdsBook>),
+}
+
+impl RawBook {
+    /// Reopen `workbook`'s file natively; `None` for delimited text, which
+    /// has no stored types.
+    pub(crate) fn open(workbook: &Workbook) -> Result<Option<Self>> {
+        let path = workbook.path();
+        let opening =
+            |error: &dyn std::fmt::Display| anyhow!("opening {}: {error}", path.display());
+        Ok(Some(match workbook.format() {
+            SourceFormat::Xlsx => {
+                Self::Xlsx(Box::new(NativeXlsxBook::open_path(path).map_err(|e| opening(&e))?))
+            }
+            SourceFormat::Xls => {
+                Self::Xls(Box::new(NativeXlsBook::open_path(path).map_err(|e| opening(&e))?))
+            }
+            SourceFormat::Xlsb => {
+                Self::Xlsb(Box::new(NativeXlsbBook::open_path(path).map_err(|e| opening(&e))?))
+            }
+            SourceFormat::Ods => {
+                Self::Ods(Box::new(NativeOdsBook::open_path(path).map_err(|e| opening(&e))?))
+            }
+            SourceFormat::Csv => return Ok(None),
+        }))
+    }
+
+    /// Sheet `name`'s cells that hold a value or a formula, row-major.
+    pub(crate) fn cells(&self, name: &str) -> Result<Vec<RawCell>> {
+        let loading =
+            |error: &dyn std::fmt::Display| anyhow!("loading sheet {name:?}: {error}");
+        let mut cells = match self {
+            Self::Xlsx(book) => book.worksheet(name).map_err(|e| loading(&e))?,
+            Self::Xls(book) => book.worksheet(name).map_err(|e| loading(&e))?,
+            Self::Xlsb(book) => book.worksheet(name).map_err(|e| loading(&e))?,
+            Self::Ods(book) => book.worksheet(name).map_err(|e| loading(&e))?,
+        }
+        .cells;
+        cells.retain(|cell| cell.formula.is_some() || !matches!(cell.value, RawValue::Empty));
+        cells.sort_unstable_by_key(|cell| (cell.row, cell.col));
+        Ok(cells)
+    }
+}
+
+/// 1900-system Excel serial of an ISO 8601 date or date-time that a reader
+/// stored as text (ODS date values, OOXML `t="d"` cells), or `None` for other
+/// text and for dates outside Excel's 1900-01-01 through 9999-12-31 range.
+pub(crate) fn iso_serial(text: &str) -> Option<f64> {
+    let moment = NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S%.f")
+        .or_else(|_| NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S"))
+        .or_else(|_| {
+            NaiveDate::parse_from_str(text, "%Y-%m-%d").map(|date| date.and_time(NaiveTime::MIN))
+        })
+        .ok()?;
+    Some(date_serial(moment.date())? + day_fraction(moment.time()))
+}
+
+/// Whole-day serial of a date, or `None` outside Excel's range. Serial 1 is
+/// 1900-01-01, and serials from 61 on count the nonexistent 1900-02-29 that
+/// Excel keeps as serial 60.
+fn date_serial(date: NaiveDate) -> Option<f64> {
+    let first = NaiveDate::from_ymd_opt(1900, 1, 1)?;
+    let last = NaiveDate::from_ymd_opt(9999, 12, 31)?;
+    if date < first || date > last {
+        return None;
+    }
+    let days = date.signed_duration_since(first).num_days() + 1;
+    Some((if days >= 60 { days + 1 } else { days }) as f64)
+}
+
+/// Fraction of a day elapsed at `time`, fractional seconds included.
+fn day_fraction(time: NaiveTime) -> f64 {
+    let seconds = f64::from(time.num_seconds_from_midnight());
+    let fraction = f64::from(time.nanosecond()) / 1_000_000_000.0;
+    (seconds + fraction) / 86_400.0
 }
 
 /// Excel's text-import typing of one delimited field.
@@ -277,5 +371,23 @@ mod tests {
                 "{text}"
             );
         }
+    }
+
+    #[test]
+    fn iso_dates_become_1900_system_serials_inside_excels_range() {
+        let date = |year, month, day| NaiveDate::from_ymd_opt(year, month, day).unwrap();
+        assert_eq!(date_serial(date(1900, 1, 1)), Some(1.0));
+        assert_eq!(date_serial(date(1900, 2, 28)), Some(59.0));
+        assert_eq!(date_serial(date(1900, 3, 1)), Some(61.0));
+        assert_eq!(date_serial(date(2000, 1, 1)), Some(36_526.0));
+        assert_eq!(date_serial(date(9999, 12, 31)), Some(2_958_465.0));
+        assert_eq!(date_serial(date(1899, 12, 31)), None);
+
+        assert_eq!(iso_serial("2000-01-01"), Some(36_526.0));
+        assert_eq!(iso_serial("2000-01-01T12:00:00"), Some(36_526.5));
+        assert_eq!(iso_serial("2000-01-01T00:00:00.5"), Some(36_526.0 + 0.5 / 86_400.0));
+        assert_eq!(iso_serial("1899-12-31T12:00:00"), None);
+        assert_eq!(iso_serial("PT12H30M00S"), None);
+        assert_eq!(iso_serial("total"), None);
     }
 }

@@ -1,8 +1,13 @@
 //! Stored-value evaluation, delimited typing, arrays, and the 0 / 1 / 2 contract.
 
+use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
 use assert_cmd::Command;
+use zip::write::SimpleFileOptions;
+use zip::ZipWriter;
+
+mod xlsb;
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name)
@@ -32,6 +37,49 @@ fn json(args: &[&str], stdin: Option<&str>) -> serde_json::Value {
     let mut args = args.to_vec();
     args.push("--json");
     serde_json::from_str(&value(&args, stdin)).expect("calc JSON parses")
+}
+
+/// Text output of a formula over workbook bytes piped as `--from format`.
+fn piped(formula: &str, format: &str, bytes: Vec<u8>) -> String {
+    let out = Command::cargo_bin("wolfxl")
+        .expect("wolfxl bin built")
+        .args(["calc", formula, "--from", format])
+        .write_stdin(bytes)
+        .output()
+        .expect("run wolfxl calc");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "wolfxl calc {formula}: stderr={stderr}");
+    String::from_utf8(out.stdout).expect("utf-8 stdout")
+}
+
+/// A date-time serial whose fraction of a second a whole-second
+/// conversion would drop.
+const SERIAL: f64 = 45_000.123_456_789;
+
+/// An XLSX workbook in the 1904 date system whose sheet `Data` stores
+/// `SERIAL` in B2 under the built-in `m/d/yy h:mm` format and in C2 as General.
+fn xlsx_1904() -> Vec<u8> {
+    let types = r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>"#;
+    let root = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#;
+    let workbook = r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><workbookPr date1904="1"/><sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>"#;
+    let rels = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>"#;
+    let styles = r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="22" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>"#;
+    let sheet = format!(
+        r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="2"><c r="B2" s="1"><v>{SERIAL}</v></c><c r="C2"><v>{SERIAL}</v></c></row></sheetData></worksheet>"#
+    );
+    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+    for (name, text) in [
+        ("[Content_Types].xml", types),
+        ("_rels/.rels", root),
+        ("xl/workbook.xml", workbook),
+        ("xl/_rels/workbook.xml.rels", rels),
+        ("xl/styles.xml", styles),
+        ("xl/worksheets/sheet1.xml", sheet.as_str()),
+    ] {
+        writer.start_file(name, SimpleFileOptions::default()).expect("start member");
+        writer.write_all(text.as_bytes()).expect("write member");
+    }
+    writer.finish().expect("finish package").into_inner()
 }
 
 #[test]
@@ -162,4 +210,20 @@ fn money_ledger_csv_accounting_negatives_participate_in_sums() {
     let ledger = "Amount\n100.00\n250.50\n(75.00)\n";
     assert_eq!(value(&["SUM(A:A)", "--from", "csv"], Some(ledger)), "275.5\n");
     assert_eq!(value(&["COUNT(A:A)", "--from", "csv"], Some(ledger)), "3\n");
+}
+
+#[test]
+fn xlsb_date_cells_evaluate_their_stored_1904_serials() {
+    let book = || {
+        xlsb::book(true, &[(2, 2, xlsb::DATE_TIME, SERIAL), (2, 3, xlsb::GENERAL, SERIAL)])
+    };
+    assert_eq!(piped("=B2", "xlsb", book()), "45000.123456789\n");
+    assert_eq!(piped("=B2=C2", "xlsb", book()), "TRUE\n");
+    assert_eq!(piped("=SUM(B:C)-2*C2", "xlsb", book()), "0\n");
+}
+
+#[test]
+fn xlsx_date_cells_evaluate_their_stored_1904_serials() {
+    assert_eq!(piped("=B2", "xlsx", xlsx_1904()), "45000.123456789\n");
+    assert_eq!(piped("=B2=C2", "xlsx", xlsx_1904()), "TRUE\n");
 }

@@ -10,8 +10,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use assert_cmd::Command;
+use sha2::{Digest, Sha256};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
+
+mod xlsb;
 
 static NEXT_TEMP: AtomicUsize = AtomicUsize::new(0);
 
@@ -191,6 +194,19 @@ fn edited(text: &str, from: &str, to: &str) -> String {
     text.replace(from, to)
 }
 
+/// The fingerprint of a stream given as its lines, without their LFs.
+fn stream_fingerprint(lines: &[&str]) -> String {
+    let stream: String = lines.iter().map(|line| format!("{line}\n")).collect();
+    format!(
+        "wxf1:{}",
+        base16ct::lower::encode_string(&Sha256::digest(stream))
+    )
+}
+
+/// A date-time serial whose fraction of a second a whole-second
+/// conversion would drop.
+const SERIAL: f64 = 45_000.123_456_789;
+
 /// The fixture with members written in reverse order and stored uncompressed.
 fn rezipped_fixture(directory: &TempDir, name: &str) -> PathBuf {
     let source = fixture("sample-financials.xlsx");
@@ -308,6 +324,28 @@ fn number_format_change_keeps_the_fingerprint() {
     let sheet = edited(&sheet, r#"<c r="G1">"#, r#"<c r="G1" s="1">"#);
     let styled = workbook(&directory, "styled.xlsx", &sheet);
     assert_eq!(fingerprint(&styled), SHEET_FINGERPRINT);
+}
+
+#[test]
+fn xlsb_date_format_keeps_the_stored_number_fingerprint() {
+    let directory = TempDir::new("xlsb-format");
+    let expected = stream_fingerprint(&["wxf1", "S\tData", "V\tA1\tn\t45000.123456789"]);
+    for (name, format) in [("general.xlsb", xlsb::GENERAL), ("dated.xlsb", xlsb::DATE_TIME)] {
+        let path = directory.path(name);
+        fs::write(&path, xlsb::book(false, &[(1, 1, format, SERIAL)])).unwrap();
+        assert_eq!(fingerprint(&path), expected, "{name}");
+    }
+}
+
+#[test]
+fn xlsb_1904_date_hashes_its_stored_serial() {
+    let directory = TempDir::new("xlsb-1904");
+    let path = directory.path("mac.xlsb");
+    fs::write(&path, xlsb::book(true, &[(1, 1, xlsb::DATE_TIME, SERIAL)])).unwrap();
+    assert_eq!(
+        fingerprint(&path),
+        stream_fingerprint(&["wxf1", "S\tData", "V\tA1\tn\t45000.123456789"])
+    );
 }
 
 #[test]

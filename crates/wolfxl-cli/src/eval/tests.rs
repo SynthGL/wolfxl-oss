@@ -237,6 +237,20 @@ fn concatenation_coerces_scalars() {
 }
 
 #[test]
+fn concatenation_formats_numbers_with_display_rounding() {
+    assert_cases(&[
+        ("=\"x\"&(0.1+0.2)", Value::Text("x0.3".into())),
+        ("=1/3&\"\"", Value::Text("0.333333333333333".into())),
+    ]);
+    let mut source = MemorySource::fixture();
+    source.sheets[0].cells.insert((2, 2), Value::Number(3.0));
+    assert_eq!(
+        source.value("=B2*1.1&\" USD\""),
+        Value::Text("3.3 USD".into())
+    );
+}
+
+#[test]
 fn comparisons_use_type_order_and_case_insensitive_text() {
     assert_cases(&[
         ("=2<\"1\"", Value::Boolean(true)),
@@ -300,6 +314,32 @@ fn count_reference_and_scalar_rules() {
 }
 
 #[test]
+fn count_ignores_errors_in_reference_direct_and_computed_arguments() {
+    assert_cases(&[
+        ("=COUNT(1,#N/A)", Value::Number(1.0)),
+        ("=COUNT(1/0)", Value::Number(0.0)),
+        ("=COUNT(#N/A,#REF!)", Value::Number(0.0)),
+        ("=COUNT(C1)", Value::Number(0.0)),
+        ("=COUNT(C1,C2)", Value::Number(0.0)),
+        ("=COUNT(IF(TRUE,C1,0))", Value::Number(0.0)),
+        ("=COUNT(A1:C2)", Value::Number(3.0)),
+    ]);
+    let mut source = MemorySource::fixture();
+    source.sheets[0].cells.insert((2, 3), Value::Number(5.0));
+    assert_eq!(source.value("=COUNT(C1:C2)"), Value::Number(1.0));
+    assert_eq!(source.value("=SUM(C1:C2)"), Value::Error(ExcelError::Na));
+}
+
+#[test]
+fn count_ignores_unresolvable_sheet_references() {
+    assert_cases(&[
+        ("=COUNT(Missing!A1)", Value::Number(0.0)),
+        ("=COUNT(1,Missing!A1)", Value::Number(1.0)),
+        ("=SUM(Missing!A1)", Value::Error(ExcelError::Ref)),
+    ]);
+}
+
+#[test]
 fn min_and_max_reference_and_scalar_rules() {
     assert_cases(&[
         ("=MIN(A1:A6)", Value::Number(2.0)),
@@ -322,7 +362,7 @@ fn min_and_max_reference_and_scalar_rules() {
 #[test]
 fn all_aggregates_propagate_errors_in_reference_and_direct_arguments() {
     let source = MemorySource::fixture();
-    for function in ["SUM", "AVERAGE", "COUNT", "MIN", "MAX"] {
+    for function in ["SUM", "AVERAGE", "MIN", "MAX"] {
         for arguments in [
             "A1:C2",
             "C1",

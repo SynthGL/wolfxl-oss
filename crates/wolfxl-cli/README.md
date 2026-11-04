@@ -121,8 +121,9 @@ input, which needs `--from` as described above.
   cached result, and `calc` never recalculates it. Delimited fields are typed
   as described in
   [Standard input and delimited fields](#standard-input-and-delimited-fields),
-  and dates and times read as 1900-system serial numbers. References use the
-  sheet's own addresses, so a table that starts at `C3` is read at `C3`.
+  and date-formatted numbers retain their stored numeric serials without
+  converting between date systems or rounding to whole seconds. References
+  use the sheet's own addresses, so a table that starts at `C3` is read at `C3`.
 - **Built-in engine.** The evaluator covers arithmetic (`+`, `-`, `*`, `/`,
   `^`, unary minus, and postfix `%`), comparison (`=`, `<>`, `<`, `>`, `<=`,
   `>=`), and `&` concatenation over numbers, strings, `TRUE`/`FALSE`, and
@@ -130,14 +131,15 @@ input, which needs `--from` as described above.
   sheet-qualified references such as `'P&L'!B3`, and ranges such as `B2:D10`,
   `B:B`, and `2:2`; whole columns and rows stop at the sheet's used extent.
 - **Functions.** The only functions are `SUM`, `AVERAGE`, `COUNT`, `MIN`,
-  `MAX`, and `IF`, which evaluates only the branch it returns. A formula
-  that names any other function exits 2, naming it and pointing to
-  [`wolfxl list-functions`](#function-registry).
+  `MAX`, and `IF`, which evaluates only the branch it returns. `COUNT`
+  ignores errors, including computed errors; the other aggregates propagate
+  errors. A formula naming any other function exits 2, naming it and pointing
+  to [`wolfxl list-functions`](#function-registry).
 - **Semantics.** Arithmetic uses `f64`. Arithmetic text-to-number coercion
   accepts the same decimal, exponent, and money spellings as `--where`.
-  Text comparisons ignore case by
-  Unicode lowercase ordering rather than locale-specific collation, and `&`
-  joins numbers in plain decimal form rather than with cell number formats.
+  Text comparisons ignore case by Unicode lowercase ordering rather than
+  locale-specific collation, and `&` joins numbers in plain decimal form
+  with up to 15 significant digits rather than with cell number formats.
   A range is an array: operators do not intersect or broadcast it, and
   results never spill.
 
@@ -468,9 +470,9 @@ the same double; negative zero is written `0`. Formula text has no leading
 
 - XLSX, XLSM, and XLAM cells contribute their stored values (cached results
   for formula cells) exactly as written, and every formula adds an `F` line.
-- XLS, XLSB, and ODS cells contribute their stored values only. Dates and
-  times typed from a number format are written as 1900-system Excel serial
-  numbers; a date outside that range is written as ISO 8601 text.
+- XLS, XLSB, and ODS cells contribute their raw stored values only.
+  Date-formatted numbers retain the exact stored numeric value, independent
+  of the number format and workbook date system.
 - CSV, TSV, and TXT fields contribute their source text with type `s`, so
   `7` and `7.0` fingerprint differently. The single sheet of a delimited file
   is named after the file, so its `S` line carries an empty name and a renamed
