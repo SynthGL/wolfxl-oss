@@ -4,6 +4,8 @@ use std::process::ExitCode;
 use clap::{Parser, ValueEnum};
 
 mod commands;
+#[allow(dead_code)]
+mod eval;
 mod render;
 
 /// Fast, agent-friendly spreadsheet previews.
