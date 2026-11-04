@@ -1,5 +1,9 @@
 use quick_xml::{events::Event, Reader};
-use wolfxl_formula::{reference::parse_ref, tokenizer::render, RefKind, TokenKind, TokenSubKind};
+use wolfxl_formula::{
+    reference::{parse_ref, strip_sheet_prefix, SheetPrefix},
+    tokenizer::render,
+    RefKind, TokenKind, TokenSubKind,
+};
 
 use crate::EditError;
 
@@ -138,12 +142,27 @@ pub(crate) fn rename(formula: &str, old: &str, new: &str) -> Result<String, Edit
             {
                 s.name
             }
+            RefKind::Name(_) => return rename_qualified_name(value, old, new),
             _ => return value.to_owned(),
         };
         wolfxl_formula::rename_sheet(&format!("={value}"), &old_case, new)
             .trim_start_matches('=')
             .to_owned()
     })
+}
+
+/// Rename the sheet prefix of a sheet-qualified defined name such as `Data!LocalRate`.
+fn rename_qualified_name(value: &str, old: &str, new: &str) -> String {
+    match strip_sheet_prefix(value) {
+        (Some(prefix), name) if !name.is_empty() && prefix.name.eq_ignore_ascii_case(old) => {
+            let prefix = SheetPrefix {
+                name: new.to_owned(),
+                quoted: prefix.quoted,
+            };
+            format!("{}{name}", prefix.render())
+        }
+        _ => value.to_owned(),
+    }
 }
 
 pub(crate) fn shift_defined_names(

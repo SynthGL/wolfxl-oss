@@ -807,9 +807,11 @@ the file has changed on disk since the server last wrote it.
 **What an edit changes.** Edits rewrite only the package parts they touch;
 every other part of the file, such as images, embedded objects, and VBA
 projects, is carried over byte for byte. Written formulas are stored without a
-cached result, and the workbook is marked for a full recalculation, so Excel
-computes them when it opens the file. Until then, `read_range` reports their
-values as `null` and `calc` reads those cells as blank.
+cached result. When an edit writes a formula, or the workbook already holds
+formulas whose cached results the edit could make stale, the workbook is
+marked for a full recalculation, so Excel computes them when it opens the
+file. Until then, `read_range` reports new formulas as `null`, existing
+formulas keep their old cached values, and `calc` reads both as stored.
 
 ## Format Support
 

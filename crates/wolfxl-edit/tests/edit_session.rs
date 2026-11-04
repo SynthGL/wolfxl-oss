@@ -68,6 +68,39 @@ fn parts(bytes: &[u8]) -> BTreeMap<String, Vec<u8>> {
     }
     parts
 }
+fn repack(entries: BTreeMap<String, Vec<u8>>) -> Vec<u8> {
+    let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
+    for (name, bytes) in entries {
+        archive
+            .start_file(name, SimpleFileOptions::default())
+            .unwrap();
+        archive.write_all(&bytes).unwrap();
+    }
+    archive.finish().unwrap().into_inner()
+}
+/// The fixture package without its calculation chain, and optionally without formulas.
+fn package_without_calc_chain(keep_formulas: bool) -> Vec<u8> {
+    let mut entries = parts(&package());
+    let mut strip = |name: &str, pattern: &str| {
+        let text = String::from_utf8(entries.remove(name).unwrap()).unwrap();
+        assert!(text.contains(pattern), "{name} lacks {pattern}");
+        entries.insert(name.into(), text.replace(pattern, "").into_bytes());
+    };
+    if !keep_formulas {
+        strip("xl/worksheets/sheet1.xml", "<f>A2+Other!A2</f>");
+        strip("xl/worksheets/sheet2.xml", "<f>Data!A2+A2+'Data'!$A$2</f>");
+    }
+    strip(
+        "xl/_rels/workbook.xml.rels",
+        r#"<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain" Target="calcChain.xml"/>"#,
+    );
+    strip(
+        "[Content_Types].xml",
+        r#"<Override PartName="/xl/calcChain.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/>"#,
+    );
+    entries.remove("xl/calcChain.xml").unwrap();
+    repack(entries)
+}
 fn xml(bytes: &[u8], name: &str) -> String {
     String::from_utf8(parts(bytes).remove(name).unwrap()).unwrap()
 }
@@ -174,11 +207,53 @@ fn values_clear_formula_and_part_hashes() {
 }
 
 #[test]
-fn scalar_writes_only_touch_one_part() {
-    let original = package();
+fn scalar_writes_request_recalculation_when_formulas_exist() {
+    // With and without a calculation chain: Data!B2 caches A2+Other!A2, so
+    // value edits and clears must not leave that cached 13 standing.
+    for original in [package(), package_without_calc_chain(true)] {
+        let mut session = EditSession::from_bytes(original.clone()).unwrap();
+        session
+            .write_cells(
+                "Data",
+                &[
+                    edit("A2", EditValue::Number(42.0)),
+                    edit("C4", EditValue::Clear),
+                ],
+            )
+            .unwrap();
+        let bytes = session.to_bytes().unwrap();
+        assert!(xml(&bytes, "xl/workbook.xml").contains("fullCalcOnLoad=\"1\""));
+        assert!(!parts(&bytes).contains_key("xl/calcChain.xml"));
+        preserved(
+            &original,
+            &bytes,
+            &[
+                "xl/worksheets/sheet1.xml",
+                "xl/workbook.xml",
+                "xl/_rels/workbook.xml.rels",
+                "[Content_Types].xml",
+                "xl/calcChain.xml",
+            ],
+        );
+        assert_eq!(
+            cell(&book(&session), "Data", "A2").value,
+            CellValue::Number(42.0)
+        );
+    }
+}
+
+#[test]
+fn scalar_writes_without_formulas_only_touch_one_part() {
+    let original = package_without_calc_chain(false);
     let mut session = EditSession::from_bytes(original.clone()).unwrap();
     session
-        .write_cells("Data", &[edit("A1", EditValue::Number(42.0))])
+        .write_cells(
+            "Data",
+            &[
+                edit("A1", EditValue::Number(42.0)),
+                edit("C4", EditValue::Clear),
+            ],
+        )
         .unwrap();
     preserved(
         &original,
@@ -289,6 +364,21 @@ fn add_sheet_at_position_and_rename_quoted_references() {
         .contains(quick_xml::escape::escape("'O''Brien Data'!$A$2").as_ref()));
     assert!(xml(&renamed, "docProps/app.xml")
         .contains(quick_xml::escape::escape("O'Brien Data").as_ref()));
+}
+
+#[test]
+fn rename_sheet_rewrites_sheet_qualified_defined_names() {
+    let mut entries = parts(&package());
+    entries.insert(
+        "xl/worksheets/sheet2.xml".into(),
+        br#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><f>Data!Local+data!Local+Other!OtherLocal+Amount</f><v>22</v></c></row></sheetData></worksheet>"#.to_vec(),
+    );
+    let mut session = EditSession::from_bytes(repack(entries)).unwrap();
+    session.rename_sheet("Data", "New Data").unwrap();
+    assert_eq!(
+        cell(&book(&session), "Other", "A1").formula.as_deref(),
+        Some("'New Data'!Local+'New Data'!Local+Other!OtherLocal+Amount")
+    );
 }
 
 #[test]
@@ -416,14 +506,7 @@ fn table_formulas_shift_with_sheet_scope_without_touching_foreign_references() {
     let mut entries = parts(&package());
     entries.insert("xl/worksheets/_rels/sheet1.xml.rels".into(), br#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="table" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/></Relationships>"#.to_vec());
     entries.insert("xl/tables/table1.xml".into(), br#"<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1" name="T" displayName="T" ref="A1:B4"><autoFilter ref="A1:B4"/><tableColumns count="2"><tableColumn id="1" name="X"><calculatedColumnFormula>A2+Other!A2</calculatedColumnFormula></tableColumn><tableColumn id="2" name="Y"><totalsRowFormula>SUM(A2:A4)+Other!A2</totalsRowFormula></tableColumn></tableColumns></table>"#.to_vec());
-    let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
-    for (name, bytes) in entries {
-        archive
-            .start_file(name, SimpleFileOptions::default())
-            .unwrap();
-        archive.write_all(&bytes).unwrap();
-    }
-    let mut session = EditSession::from_bytes(archive.finish().unwrap().into_inner()).unwrap();
+    let mut session = EditSession::from_bytes(repack(entries)).unwrap();
     session.insert_rows("Data", 2, 1).unwrap();
     let table = xml(&session.to_bytes().unwrap(), "xl/tables/table1.xml");
     assert!(table.contains("ref=\"A1:B5\""));

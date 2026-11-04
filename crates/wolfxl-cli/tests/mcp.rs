@@ -882,7 +882,7 @@ fn write_cells_writes_every_value_kind_and_reads_back() {
 }
 
 #[test]
-fn number_only_edit_preserves_every_other_part_byte_for_byte() {
+fn number_only_edit_preserves_other_parts_and_requests_recalculation() {
     let directory = TempDir::new("preserve");
     let path = workbook(&directory, "book.xlsx");
     let original = members(&path);
@@ -899,10 +899,16 @@ fn number_only_edit_preserves_every_other_part_byte_for_byte() {
         "same package members"
     );
     for (name, bytes) in &original {
-        if name != "xl/worksheets/sheet1.xml" {
+        if name != "xl/worksheets/sheet1.xml" && name != "xl/workbook.xml" {
             assert_eq!(&after[name], bytes, "{name} is untouched");
         }
     }
+    // Summary!B1 caches SUM(Data!C2:C4), which this edit makes stale.
+    let workbook_xml = String::from_utf8(after["xl/workbook.xml"].clone()).unwrap();
+    assert!(
+        workbook_xml.contains(r#"fullCalcOnLoad="1""#),
+        "{workbook_xml}"
+    );
     assert_cells(&session.values(&path, "Data", "C4"), json!([[80]]));
 }
 

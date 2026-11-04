@@ -77,7 +77,9 @@
   and `--read-only` hides the editing tools.
 - New `wolfxl-edit` crate: byte-preserving edit sessions for existing
   workbooks. Parts an edit does not touch keep their exact bytes; formula
-  writes mark the workbook for recalculation on open. The Python package's
+  writes, and any write to a workbook that holds formulas, mark the workbook
+  for recalculation on open. Renaming a sheet also renames sheet-qualified
+  defined names such as `Data!Rate`. The Python package's
   modify mode now shares its sheet patcher.
 - Prebuilt `wolfxl` binaries for Linux (x86_64, arm64, static musl), macOS
   (x86_64, arm64), and Windows (x86_64) on GitHub Releases under

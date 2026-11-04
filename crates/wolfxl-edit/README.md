@@ -24,8 +24,9 @@ References use A1 notation. Row and column positions are one-based; an optional
 new-sheet position is zero-based. Clears retain existing cell styles. Number
 formats retain other style components and reuse equivalent formats.
 
-Formula writes and structural changes request full recalculation on open and
-remove a stale calculation chain. New formulas have no cached result. This
+Formula writes, structural changes, and any cell write to a workbook that
+already holds formulas request full recalculation on open and remove a stale
+calculation chain. New formulas have no cached result. This
 crate edits package XML; it does not calculate formulas or render workbooks.
 
 The `sheet_patcher` and `rich_text` modules provide the same shared XML helpers

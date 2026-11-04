@@ -222,7 +222,9 @@ impl EditSession {
         let new =
             sheet_patcher::patch_worksheet(&self.xml(&path)?, &patches).map_err(EditError::Xml)?;
         let mut changes = BTreeMap::from([(path, new.into_bytes())]);
-        let removed = if formula {
+        // Any edit can change a formula's precedent, so stale cached results
+        // must be recalculated whenever the workbook holds formulas.
+        let removed = if formula || self.has_formulas()? {
             self.recalculation(&mut changes)?
         } else {
             Vec::new()
@@ -477,6 +479,20 @@ impl EditSession {
         }
         Ok(removed)
     }
+    /// Whether the package holds any cell formula whose cached result an edit could make stale.
+    fn has_formulas(&self) -> Result<bool, EditError> {
+        if self.contains("xl/calcChain.xml") {
+            return Ok(true);
+        }
+        for sheet in &self.sheets {
+            if let Some(bytes) = self.part(&sheet.path)? {
+                if has_formula_element(&bytes)? {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
     fn formula_parts(&self) -> Vec<String> {
         self.names
             .iter()
@@ -706,6 +722,22 @@ fn valid_xml_text(text: &str) -> Result<(), EditError> {
         ))
     } else {
         Ok(())
+    }
+}
+
+/// Whether worksheet XML contains a cell formula element, including shared-formula children.
+fn has_formula_element(xml: &[u8]) -> Result<bool, EditError> {
+    let mut reader = quick_xml::Reader::from_reader(xml);
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf)? {
+            Event::Start(e) | Event::Empty(e) if e.local_name().as_ref().as_bytes() == b"f" => {
+                return Ok(true)
+            }
+            Event::Eof => return Ok(false),
+            _ => {}
+        }
+        buf.clear();
     }
 }
 
