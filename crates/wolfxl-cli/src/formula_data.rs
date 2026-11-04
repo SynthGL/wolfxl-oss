@@ -29,9 +29,17 @@ impl SheetData {
         let extent = if width == 0 {
             Extent::default()
         } else {
-            Extent { rows: origin.0 + rows.len() as u32, columns: origin.1 + width as u32 }
+            Extent {
+                rows: origin.0 + rows.len() as u32,
+                columns: origin.1 + width as u32,
+            }
         };
-        Self { origin, rows, extent, overrides: HashMap::new() }
+        Self {
+            origin,
+            rows,
+            extent,
+            overrides: HashMap::new(),
+        }
     }
 }
 
@@ -139,13 +147,19 @@ impl DataSource for WorkbookData {
     }
 
     fn cell_value(&self, sheet: &str, row: u32, column: u32) -> Value {
-        let Some(data) = self.sheets.get(sheet) else { return Value::Blank };
+        let Some(data) = self.sheets.get(sheet) else {
+            return Value::Blank;
+        };
         if let Some(value) = data.overrides.get(&(row, column)) {
             return value.clone();
         }
         let (origin_row, origin_column) = data.origin;
-        let Some(row) = row.checked_sub(origin_row + 1) else { return Value::Blank };
-        let Some(column) = column.checked_sub(origin_column + 1) else { return Value::Blank };
+        let Some(row) = row.checked_sub(origin_row + 1) else {
+            return Value::Blank;
+        };
+        let Some(column) = column.checked_sub(origin_column + 1) else {
+            return Value::Blank;
+        };
         data.rows
             .get(row as usize)
             .and_then(|row| row.get(column as usize))
@@ -154,13 +168,19 @@ impl DataSource for WorkbookData {
     }
 
     fn used_extent(&self, sheet: &str) -> Extent {
-        self.sheets.get(sheet).map_or(Extent::default(), |data| data.extent)
+        self.sheets
+            .get(sheet)
+            .map_or(Extent::default(), |data| data.extent)
     }
 }
 
 pub(crate) fn normalize_formula(formula: &str) -> String {
     let formula = formula.trim();
-    if formula.starts_with('=') { formula.to_owned() } else { format!("={formula}") }
+    if formula.starts_with('=') {
+        formula.to_owned()
+    } else {
+        format!("={formula}")
+    }
 }
 
 pub(crate) fn parse_error(formula: &str, error: eval::ParseError) -> anyhow::Error {
@@ -186,7 +206,11 @@ pub(crate) fn text_value(value: &Value) -> String {
         Value::Blank => String::new(),
         Value::Number(number) if number.is_finite() => {
             let number = rounded(*number);
-            if number == 0.0 { "0".to_owned() } else { number.to_string() }
+            if number == 0.0 {
+                "0".to_owned()
+            } else {
+                number.to_string()
+            }
         }
         Value::Number(_) => "#NUM!".to_owned(),
         Value::Text(text) => text.clone(),

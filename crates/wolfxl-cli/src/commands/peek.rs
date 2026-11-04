@@ -230,9 +230,11 @@ fn interactive(
         current,
         Grid::new(sheet, width, None),
     );
-    tui::run(app, |name| match tab_sheet(&mut input, name, columns, &args.filters, &args.select) {
-        Ok((sheet, note)) => Grid::new(&sheet, width, note),
-        Err(error) => Grid::unavailable(name, format!("not loaded: {error:#}")),
+    tui::run(app, |name| {
+        match tab_sheet(&mut input, name, columns, &args.filters, &args.select) {
+            Ok((sheet, note)) => Grid::new(&sheet, width, note),
+            Err(error) => Grid::unavailable(name, format!("not loaded: {error:#}")),
+        }
     })
     .map_err(Failure::Other)
 }
@@ -324,7 +326,11 @@ mod tests {
         )
         .expect("loads");
         assert_eq!(note, None);
-        let expected = [["Account", "Growth"], ["Revenue", "25000"], ["COGS", "18000"]];
+        let expected = [
+            ["Account", "Growth"],
+            ["Revenue", "25000"],
+            ["COGS", "18000"],
+        ];
         assert_eq!(shown(&sheet), expected);
     }
 
@@ -350,7 +356,10 @@ mod tests {
             note.as_deref(),
             Some("unfiltered: this sheet lacks a --where/--select column")
         );
-        assert_eq!(sheet.headers(), ["Account", "Jan", "Feb", "Mar", "Q1", "Growth"]);
+        assert_eq!(
+            sheet.headers(),
+            ["Account", "Jan", "Feb", "Mar", "Q1", "Growth"]
+        );
         assert_eq!(sheet.rows().len(), 4);
     }
 

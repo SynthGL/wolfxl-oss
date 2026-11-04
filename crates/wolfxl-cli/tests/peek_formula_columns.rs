@@ -188,7 +188,14 @@ gear,0,2,3,ERROR: #DIV/0!
     assert_eq!(document["data"][2][4], "#DIV/0!");
     // An error in an earlier added column propagates through a later one.
     assert_eq!(
-        items(&["--add", "Unit=D2/B2", "--add", "Twice=E2*2", "--select", "Twice"]),
+        items(&[
+            "--add",
+            "Unit=D2/B2",
+            "--add",
+            "Twice=E2*2",
+            "--select",
+            "Twice"
+        ]),
         "Twice\n0.1\n0.4\nERROR: #DIV/0!\n"
     );
 }
@@ -426,7 +433,9 @@ fn workbook(directory: &TempDir, sheets: &[(&str, &str)]) -> PathBuf {
     let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     for (name, text) in &members {
-        writer.start_file(name.as_str(), options).expect("start member");
+        writer
+            .start_file(name.as_str(), options)
+            .expect("start member");
         writer.write_all(text.as_bytes()).expect("write member");
     }
     let bytes = writer.finish().expect("finish package").into_inner();
@@ -642,7 +651,17 @@ fn money_deals_csv_columns_and_filters_use_the_same_numbers() {
         "Rep,Margin\nana,3500\nbea,-1500\n"
     );
     assert_eq!(
-        piped_csv(deals, &["--add", "Margin=C2-B2", "--where", "Revenue>=$10,000", "--select", "Rep,Margin"]),
+        piped_csv(
+            deals,
+            &[
+                "--add",
+                "Margin=C2-B2",
+                "--where",
+                "Revenue>=$10,000",
+                "--select",
+                "Rep,Margin"
+            ]
+        ),
         "Rep,Margin\nana,3500\n"
     );
 }
@@ -661,10 +680,18 @@ fn money_text_in_xlsx_stays_text_in_ranges_but_coerces_in_arithmetic() {
     let directory = TempDir::new("money-text");
     let data = r#"<row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>$1,200</t></is></c></row><row r="3"><c r="A3" t="inlineStr"><is><t>(75.00)</t></is></c></row>"#;
     let path = workbook(&directory, &[("Money", data)]);
-    let output = ok(&[
-        path.to_str().unwrap(), "-e", "json",
-        "--add", "Total=SUM(A:A)", "--add", "Numeric=A2+0",
-    ], None);
+    let output = ok(
+        &[
+            path.to_str().unwrap(),
+            "-e",
+            "json",
+            "--add",
+            "Total=SUM(A:A)",
+            "--add",
+            "Numeric=A2+0",
+        ],
+        None,
+    );
     let document = json(&output);
     assert_eq!(document["data"][0][0], "$1,200");
     assert_eq!(document["data"][1][0], "(75.00)");

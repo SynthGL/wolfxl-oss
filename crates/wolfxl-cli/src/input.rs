@@ -193,26 +193,25 @@ impl RawBook {
         let opening =
             |error: &dyn std::fmt::Display| anyhow!("opening {}: {error}", path.display());
         Ok(Some(match workbook.format() {
-            SourceFormat::Xlsx => {
-                Self::Xlsx(Box::new(NativeXlsxBook::open_path(path).map_err(|e| opening(&e))?))
-            }
-            SourceFormat::Xls => {
-                Self::Xls(Box::new(NativeXlsBook::open_path(path).map_err(|e| opening(&e))?))
-            }
-            SourceFormat::Xlsb => {
-                Self::Xlsb(Box::new(NativeXlsbBook::open_path(path).map_err(|e| opening(&e))?))
-            }
-            SourceFormat::Ods => {
-                Self::Ods(Box::new(NativeOdsBook::open_path(path).map_err(|e| opening(&e))?))
-            }
+            SourceFormat::Xlsx => Self::Xlsx(Box::new(
+                NativeXlsxBook::open_path(path).map_err(|e| opening(&e))?,
+            )),
+            SourceFormat::Xls => Self::Xls(Box::new(
+                NativeXlsBook::open_path(path).map_err(|e| opening(&e))?,
+            )),
+            SourceFormat::Xlsb => Self::Xlsb(Box::new(
+                NativeXlsbBook::open_path(path).map_err(|e| opening(&e))?,
+            )),
+            SourceFormat::Ods => Self::Ods(Box::new(
+                NativeOdsBook::open_path(path).map_err(|e| opening(&e))?,
+            )),
             SourceFormat::Csv => return Ok(None),
         }))
     }
 
     /// Sheet `name`'s cells that hold a value or a formula, row-major.
     pub(crate) fn cells(&self, name: &str) -> Result<Vec<RawCell>> {
-        let loading =
-            |error: &dyn std::fmt::Display| anyhow!("loading sheet {name:?}: {error}");
+        let loading = |error: &dyn std::fmt::Display| anyhow!("loading sheet {name:?}: {error}");
         let mut cells = match self {
             Self::Xlsx(book) => book.worksheet(name).map_err(|e| loading(&e))?,
             Self::Xls(book) => book.worksheet(name).map_err(|e| loading(&e))?,
@@ -385,7 +384,10 @@ mod tests {
 
         assert_eq!(iso_serial("2000-01-01"), Some(36_526.0));
         assert_eq!(iso_serial("2000-01-01T12:00:00"), Some(36_526.5));
-        assert_eq!(iso_serial("2000-01-01T00:00:00.5"), Some(36_526.0 + 0.5 / 86_400.0));
+        assert_eq!(
+            iso_serial("2000-01-01T00:00:00.5"),
+            Some(36_526.0 + 0.5 / 86_400.0)
+        );
         assert_eq!(iso_serial("1899-12-31T12:00:00"), None);
         assert_eq!(iso_serial("PT12H30M00S"), None);
         assert_eq!(iso_serial("total"), None);

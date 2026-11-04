@@ -30,28 +30,42 @@ pub(crate) fn run(args: CalcArgs) -> ExitCode {
         format!("{document}\n")
     } else {
         match &value {
-            Value::Array(rows) => rows.iter().map(|row| {
-                let fields: Vec<String> = row.iter().map(|value| csv_field(&text_value(value))).collect();
-                format!("{}\n", fields.join(","))
-            }).collect(),
+            Value::Array(rows) => rows
+                .iter()
+                .map(|row| {
+                    let fields: Vec<String> = row
+                        .iter()
+                        .map(|value| csv_field(&text_value(value)))
+                        .collect();
+                    format!("{}\n", fields.join(","))
+                })
+                .collect(),
             value => format!("{}\n", text_value(value)),
         }
     };
     let mut stdout = std::io::stdout().lock();
-    if let Err(error) = stdout.write_all(document.as_bytes()).and_then(|()| stdout.flush()) {
+    if let Err(error) = stdout
+        .write_all(document.as_bytes())
+        .and_then(|()| stdout.flush())
+    {
         if error.kind() != std::io::ErrorKind::BrokenPipe {
             eprintln!("error: writing result: {error}");
             return ExitCode::from(2);
         }
     }
-    if matches!(value, Value::Error(_)) { ExitCode::from(1) } else { ExitCode::SUCCESS }
+    if matches!(value, Value::Error(_)) {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 fn evaluate(args: &CalcArgs, formula: &str) -> Result<(String, Value)> {
     let mut input = input::open(args.file.as_deref(), args.from)?;
     let current = input.sheet_name(args.sheet.as_deref())?;
     let data = WorkbookData::load(&mut input)?;
-    let value = eval::evaluate(formula, &data, &current).map_err(|error| parse_error(formula, error))?;
+    let value =
+        eval::evaluate(formula, &data, &current).map_err(|error| parse_error(formula, error))?;
     Ok((current, value))
 }
 
@@ -78,9 +92,11 @@ fn json_value(value: &Value) -> JsonValue {
             }
         }
         Value::Boolean(boolean) => JsonValue::Bool(*boolean),
-        Value::Array(rows) => JsonValue::Array(rows.iter().map(|row| {
-            JsonValue::Array(row.iter().map(json_value).collect())
-        }).collect()),
+        Value::Array(rows) => JsonValue::Array(
+            rows.iter()
+                .map(|row| JsonValue::Array(row.iter().map(json_value).collect()))
+                .collect(),
+        ),
         other => JsonValue::String(text_value(other)),
     }
 }

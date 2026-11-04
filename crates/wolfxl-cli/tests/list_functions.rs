@@ -59,7 +59,10 @@ fn entries(document: &Value) -> Vec<(String, String)> {
 }
 
 fn names(document: &Value) -> Vec<String> {
-    entries(document).into_iter().map(|(name, _)| name).collect()
+    entries(document)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect()
 }
 
 fn total(document: &Value) -> usize {
@@ -223,7 +226,13 @@ fn check_all_supported_exits_0() {
     let document = json(&["--check", "sum,Average", "--check", " if "]);
     assert_eq!(
         keys(&document),
-        ["checked", "contract_version", "results", "supported", "total"]
+        [
+            "checked",
+            "contract_version",
+            "results",
+            "supported",
+            "total"
+        ]
     );
     assert_eq!(document["contract_version"], 1);
     assert_eq!(total(&document), REGISTRY.len());

@@ -20,7 +20,10 @@ pub fn book(date1904: bool, cells: &[(u32, u32, u32, f64)]) -> Vec<u8> {
     let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
     let options = SimpleFileOptions::default();
     for (name, bytes) in [
-        ("xl/_rels/workbook.bin.rels", WORKBOOK_RELS.as_bytes().to_vec()),
+        (
+            "xl/_rels/workbook.bin.rels",
+            WORKBOOK_RELS.as_bytes().to_vec(),
+        ),
         ("xl/workbook.bin", workbook(date1904)),
         ("xl/styles.bin", styles()),
         ("xl/worksheets/sheet1.bin", sheet(cells)),

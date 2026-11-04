@@ -173,9 +173,7 @@ fn compute(path: &Path) -> Result<Fingerprint> {
             let (kind, text) = match &cell.value {
                 NativeValue::Empty => continue,
                 // OOXML `t="d"` text hashes as written.
-                NativeValue::String(text)
-                    if !ooxml && cell.data_type == CellDataType::DateIso =>
-                {
+                NativeValue::String(text) if !ooxml && cell.data_type == CellDataType::DateIso => {
                     match iso_serial(text) {
                         Some(serial) => ("n", Cow::Owned(number_text(serial))),
                         None => ("s", Cow::Borrowed(text.as_str())),

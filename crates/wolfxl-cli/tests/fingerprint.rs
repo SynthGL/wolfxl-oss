@@ -330,7 +330,10 @@ fn number_format_change_keeps_the_fingerprint() {
 fn xlsb_date_format_keeps_the_stored_number_fingerprint() {
     let directory = TempDir::new("xlsb-format");
     let expected = stream_fingerprint(&["wxf1", "S\tData", "V\tA1\tn\t45000.123456789"]);
-    for (name, format) in [("general.xlsb", xlsb::GENERAL), ("dated.xlsb", xlsb::DATE_TIME)] {
+    for (name, format) in [
+        ("general.xlsb", xlsb::GENERAL),
+        ("dated.xlsb", xlsb::DATE_TIME),
+    ] {
         let path = directory.path(name);
         fs::write(&path, xlsb::book(false, &[(1, 1, format, SERIAL)])).unwrap();
         assert_eq!(fingerprint(&path), expected, "{name}");

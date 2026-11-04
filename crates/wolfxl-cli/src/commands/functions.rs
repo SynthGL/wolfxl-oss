@@ -239,7 +239,10 @@ mod tests {
     #[test]
     fn every_category_round_trips_ignoring_case() {
         for function in FUNCTIONS {
-            assert_eq!(parse_category(function.category).unwrap(), function.category);
+            assert_eq!(
+                parse_category(function.category).unwrap(),
+                function.category
+            );
             assert_eq!(
                 parse_category(&function.category.to_ascii_uppercase()).unwrap(),
                 function.category
