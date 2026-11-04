@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/wolfxl-core", "crates/wolfxl-cli", "crates/wolfxl-writer", "crates/wolfxl-rels", "crates/wolfxl-reader", "crates/wolfxl-merger", "crates/wolfxl-formula", "crates/wolfxl-structural", "crates/wolfxl-classify", "crates/wolfxl-pivot", "crates/wolfxl-autofilter"]
+members = ["crates/wolfxl-core", "crates/wolfxl-cli", "crates/wolfxl-writer", "crates/wolfxl-rels", "crates/wolfxl-reader", "crates/wolfxl-merger", "crates/wolfxl-formula", "crates/wolfxl-structural", "crates/wolfxl-classify", "crates/wolfxl-pivot", "crates/wolfxl-autofilter", "crates/wolfxl-edit"]
 
 [workspace.package]
 edition = "2021"
@@ -62,6 +62,7 @@ wolfxl-structural = { path = "crates/wolfxl-structural", version = "0.1" }
 wolfxl-classify = { path = "crates/wolfxl-classify", version = "0.1" }
 wolfxl-pivot = { path = "crates/wolfxl-pivot", version = "2.0.0" }
 wolfxl-autofilter = { path = "crates/wolfxl-autofilter", version = "2.0.0" }
+wolfxl-edit = { path = "crates/wolfxl-edit", version = "0.1" }
 tempfile.workspace = true
 
 [build-dependencies]

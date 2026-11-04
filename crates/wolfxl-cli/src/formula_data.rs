@@ -12,6 +12,8 @@ use crate::input::{delimited_value, iso_serial, Input};
 
 pub(crate) struct WorkbookData {
     sheets: BTreeMap<String, SheetData>,
+    /// Date functions read and write serials in the 1904 date system.
+    date1904: bool,
 }
 
 /// One sheet's non-blank values keyed by one-based `(row, column)`, plus the
@@ -60,7 +62,8 @@ impl WorkbookData {
             };
             sheets.insert(name, data);
         }
-        Ok(Self { sheets })
+        let date1904 = book.as_ref().is_some_and(|book| book.date1904());
+        Ok(Self { sheets, date1904 })
     }
 
     /// Coordinates are one-based, like the evaluator's references. The value
@@ -143,6 +146,10 @@ impl DataSource for WorkbookData {
             .get(sheet)
             .map_or(Extent::default(), |data| data.extent)
     }
+
+    fn date1904(&self) -> bool {
+        self.date1904
+    }
 }
 
 pub(crate) fn normalize_formula(formula: &str) -> String {
@@ -222,6 +229,7 @@ mod tests {
     fn book(cells: Vec<RawCell>) -> WorkbookData {
         WorkbookData {
             sheets: BTreeMap::from([("Data".to_owned(), stored_sheet(cells))]),
+            date1904: false,
         }
     }
 

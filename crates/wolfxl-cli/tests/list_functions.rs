@@ -5,14 +5,84 @@ use assert_cmd::Command;
 use serde_json::{json, Value};
 
 /// The built-in evaluator's registry, sorted by name.
-const REGISTRY: [(&str, &str); 6] = [
+const REGISTRY: [(&str, &str); 67] = [
+    ("ABS", "math"),
+    ("AND", "logical"),
     ("AVERAGE", "statistical"),
+    ("AVERAGEIF", "statistical"),
+    ("AVERAGEIFS", "statistical"),
+    ("CHOOSE", "lookup"),
+    ("CONCATENATE", "text"),
     ("COUNT", "statistical"),
+    ("COUNTA", "statistical"),
+    ("COUNTIF", "statistical"),
+    ("COUNTIFS", "statistical"),
+    ("DATE", "date"),
+    ("DAY", "date"),
+    ("DAYS", "date"),
+    ("DB", "financial"),
+    ("EDATE", "date"),
+    ("EOMONTH", "date"),
+    ("EXACT", "text"),
+    ("FIND", "text"),
+    ("FV", "financial"),
+    ("HLOOKUP", "lookup"),
+    ("HOUR", "date"),
     ("IF", "logical"),
-    ("MAX", "math"),
-    ("MIN", "math"),
+    ("IFERROR", "logical"),
+    ("INDEX", "lookup"),
+    ("INT", "math"),
+    ("IRR", "financial"),
+    ("LEFT", "text"),
+    ("LEN", "text"),
+    ("LOWER", "text"),
+    ("MATCH", "lookup"),
+    ("MAX", "statistical"),
+    ("MAXIFS", "statistical"),
+    ("MID", "text"),
+    ("MIN", "statistical"),
+    ("MINIFS", "statistical"),
+    ("MINUTE", "date"),
+    ("MOD", "math"),
+    ("MONTH", "date"),
+    ("NOT", "logical"),
+    ("NOW", "date"),
+    ("NPV", "financial"),
+    ("OFFSET", "lookup"),
+    ("OR", "logical"),
+    ("PMT", "financial"),
+    ("POWER", "math"),
+    ("PV", "financial"),
+    ("REPT", "text"),
+    ("RIGHT", "text"),
+    ("ROUND", "math"),
+    ("ROUNDDOWN", "math"),
+    ("ROUNDUP", "math"),
+    ("SECOND", "date"),
+    ("SIGN", "math"),
+    ("SLN", "financial"),
+    ("SQRT", "math"),
+    ("SUBSTITUTE", "text"),
     ("SUM", "math"),
+    ("SUMIF", "math"),
+    ("SUMIFS", "math"),
+    ("TEXT", "text"),
+    ("TODAY", "date"),
+    ("TRIM", "text"),
+    ("UPPER", "text"),
+    ("VLOOKUP", "lookup"),
+    ("XLOOKUP", "lookup"),
+    ("YEAR", "date"),
 ];
+
+/// The registry names in `category`, in listing order.
+fn in_category(category: &str) -> Vec<&'static str> {
+    REGISTRY
+        .iter()
+        .filter(|(_, listed)| *listed == category)
+        .map(|(name, _)| *name)
+        .collect()
+}
 
 struct Run {
     code: i32,
@@ -115,16 +185,17 @@ fn full_listing_counts_and_sorts_the_whole_registry() {
 fn text_listing_aligns_names_and_ends_with_the_count() {
     let run = list_functions(&[]);
     assert_eq!(run.code, 0, "stderr={}", run.stderr);
-    assert_eq!(
-        run.stdout,
-        "AVERAGE  statistical\n\
-         COUNT    statistical\n\
-         IF       logical\n\
-         MAX      math\n\
-         MIN      math\n\
-         SUM      math\n\
-         6 functions\n"
-    );
+    let mut expected: String = REGISTRY
+        .iter()
+        .map(|(name, category)| format!("{name:<11}  {category}\n"))
+        .collect();
+    expected.push_str("67 functions\n");
+    assert_eq!(run.stdout, expected);
+    assert!(run.stdout.starts_with(
+        "ABS          math\n\
+         AND          logical\n\
+         AVERAGE      statistical\n"
+    ));
     assert!(run.stderr.is_empty(), "stderr={}", run.stderr);
 }
 
@@ -139,20 +210,49 @@ fn category_filter_ignores_case() {
     assert_eq!(upper["category"], "math");
     let listed = entries(&lower);
     assert!(listed.iter().all(|(_, category)| category == "math"));
-    assert_eq!(names(&lower), ["MAX", "MIN", "SUM"]);
-    assert_eq!(lower["count"], 3);
+    assert_eq!(
+        names(&lower),
+        [
+            "ABS",
+            "INT",
+            "MOD",
+            "POWER",
+            "ROUND",
+            "ROUNDDOWN",
+            "ROUNDUP",
+            "SIGN",
+            "SQRT",
+            "SUM",
+            "SUMIF",
+            "SUMIFS"
+        ]
+    );
+    assert_eq!(lower["count"], 12);
     assert_eq!(total(&lower), REGISTRY.len());
     assert_eq!(lower["search"], Value::Null);
 
-    let statistical = json(&["--category", "Statistical"]);
-    assert_eq!(names(&statistical), ["AVERAGE", "COUNT"]);
+    for category in [
+        "date",
+        "financial",
+        "logical",
+        "lookup",
+        "statistical",
+        "text",
+    ] {
+        let upper = category.to_uppercase();
+        assert_eq!(
+            names(&json(&["--category", upper.as_str()])),
+            in_category(category),
+            "{category}"
+        );
+    }
     let logical = json(&["--category", "LOGICAL"]);
-    assert_eq!(names(&logical), ["IF"]);
+    assert_eq!(names(&logical), ["AND", "IF", "IFERROR", "NOT", "OR"]);
 }
 
 #[test]
 fn unknown_category_exits_2_and_names_the_valid_ones() {
-    let expected = "unknown category \"astrology\"; valid categories: logical, math, statistical";
+    let expected = "unknown category \"astrology\"; valid categories: date, financial, logical, lookup, math, statistical, text";
     for args in [
         &["--category", "astrology"][..],
         &["--category", "astrology", "--json"][..],
@@ -168,34 +268,55 @@ fn unknown_category_exits_2_and_names_the_valid_ones() {
     }
 
     // Spreadsheet categories without a built-in function are not valid here.
-    let run = list_functions(&["--category", "lookup"]);
+    let run = list_functions(&["--category", "engineering"]);
     assert_eq!(run.code, 2);
     assert!(run.stdout.is_empty(), "stdout={}", run.stdout);
 }
 
 #[test]
 fn search_matches_a_case_insensitive_substring() {
-    let document = json(&["--search", "m"]);
-    assert_eq!(names(&document), ["MAX", "MIN", "SUM"]);
-    assert_eq!(document["search"], "m");
+    let document = json(&["--search", "look"]);
+    assert_eq!(names(&document), ["HLOOKUP", "VLOOKUP", "XLOOKUP"]);
+    assert_eq!(document["search"], "look");
     assert_eq!(document["category"], Value::Null);
     assert_eq!(document["count"], 3);
     assert_eq!(total(&document), REGISTRY.len());
 
-    assert_eq!(names(&json(&["--search", "Ou"])), ["COUNT"]);
-    assert_eq!(names(&json(&["--search", "ave"])), ["AVERAGE"]);
-    assert_eq!(names(&json(&["--search", "I"])), ["IF", "MIN"]);
+    assert_eq!(
+        names(&json(&["--search", "Ou"])),
+        [
+            "COUNT",
+            "COUNTA",
+            "COUNTIF",
+            "COUNTIFS",
+            "HOUR",
+            "ROUND",
+            "ROUNDDOWN",
+            "ROUNDUP"
+        ]
+    );
+    assert_eq!(
+        names(&json(&["--search", "ave"])),
+        ["AVERAGE", "AVERAGEIF", "AVERAGEIFS"]
+    );
+    assert_eq!(
+        names(&json(&["--search", "IFS"])),
+        ["AVERAGEIFS", "COUNTIFS", "MAXIFS", "MINIFS", "SUMIFS"]
+    );
 }
 
 #[test]
 fn category_and_search_combine() {
     let document = json(&["--category", "math", "--search", "a"]);
-    assert_eq!(names(&document), ["MAX"]);
+    assert_eq!(names(&document), ["ABS"]);
     assert_eq!(document["category"], "math");
     assert_eq!(document["search"], "a");
 
     let document = json(&["--category", "statistical", "--search", "N"]);
-    assert_eq!(names(&document), ["COUNT"]);
+    assert_eq!(
+        names(&document),
+        ["COUNT", "COUNTA", "COUNTIF", "COUNTIFS", "MIN", "MINIFS"]
+    );
 
     let document = json(&["--category", "logical", "--search", "sum"]);
     assert!(names(&document).is_empty());
@@ -209,15 +330,24 @@ fn filtered_text_listing_reports_matches_out_of_total() {
     assert_eq!(run.code, 0, "stderr={}", run.stderr);
     assert_eq!(run.stdout, format!("0 of {all} functions\n"));
 
-    let run = list_functions(&["--search", "sum"]);
+    let run = list_functions(&["--search", "sqrt"]);
     assert_eq!(run.code, 0);
-    assert_eq!(run.stdout, format!("SUM  math\n1 of {all} functions\n"));
+    assert_eq!(run.stdout, format!("SQRT  math\n1 of {all} functions\n"));
 
-    let run = list_functions(&["--category", "statistical"]);
+    let run = list_functions(&["--search", "sum"]);
     assert_eq!(run.code, 0);
     assert_eq!(
         run.stdout,
-        format!("AVERAGE  statistical\nCOUNT    statistical\n2 of {all} functions\n")
+        format!("SUM     math\nSUMIF   math\nSUMIFS  math\n3 of {all} functions\n")
+    );
+
+    let run = list_functions(&["--category", "logical"]);
+    assert_eq!(run.code, 0);
+    assert_eq!(
+        run.stdout,
+        format!(
+            "AND      logical\nIF       logical\nIFERROR  logical\nNOT      logical\nOR       logical\n5 of {all} functions\n"
+        )
     );
 }
 
@@ -270,7 +400,7 @@ fn every_listed_function_checks_as_supported() {
 
 #[test]
 fn check_reports_unsupported_with_exit_1() {
-    let document = json_with_code(&["--check", "if,xlookup,Stdev.S,NOTAFUNCTION"], 1);
+    let document = json_with_code(&["--check", "if,lookup,Stdev.S,NOTAFUNCTION"], 1);
     assert_eq!(document["contract_version"], 1);
     assert_eq!(document["checked"], 4);
     assert_eq!(document["supported"], 1);
@@ -278,7 +408,7 @@ fn check_reports_unsupported_with_exit_1() {
         document["results"],
         json!([
             {"name": "IF", "status": "supported", "category": "logical"},
-            {"name": "XLOOKUP", "status": "unsupported", "category": null},
+            {"name": "LOOKUP", "status": "unsupported", "category": null},
             {"name": "STDEV.S", "status": "unsupported", "category": null},
             {"name": "NOTAFUNCTION", "status": "unsupported", "category": null},
         ])
@@ -286,20 +416,20 @@ fn check_reports_unsupported_with_exit_1() {
 
     let unsupported_only = list_functions(&["--check", "NOTAFUNCTION"]);
     assert_eq!(unsupported_only.code, 1);
-    let unsupported_only = list_functions(&["--check", "vlookup", "--json"]);
+    let unsupported_only = list_functions(&["--check", "sumproduct", "--json"]);
     assert_eq!(unsupported_only.code, 1);
     assert!(unsupported_only.stderr.is_empty());
 }
 
 #[test]
 fn check_text_output_aligns_statuses_and_counts_supported() {
-    let run = list_functions(&["--check", "sum,xlookup,nope"]);
+    let run = list_functions(&["--check", "sum,lookup,nope"]);
     assert_eq!(run.code, 1, "stderr={}", run.stderr);
     assert_eq!(
         run.stdout,
-        "SUM      supported (math)\n\
-         XLOOKUP  unsupported\n\
-         NOPE     unsupported\n\
+        "SUM     supported (math)\n\
+         LOOKUP  unsupported\n\
+         NOPE    unsupported\n\
          1 of 3 supported\n"
     );
 

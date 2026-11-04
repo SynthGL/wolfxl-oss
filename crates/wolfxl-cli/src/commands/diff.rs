@@ -66,6 +66,13 @@ pub(crate) fn run(args: DiffArgs) -> ExitCode {
     }
 }
 
+/// The `--format json` report for one reconciliation, built without writing
+/// anything. Unmatched rows and differences are part of a successful report;
+/// only usage, input, column, and key failures are errors.
+pub(crate) fn structured(args: &DiffArgs) -> Result<Value> {
+    Ok(reconcile(args)?.json())
+}
+
 /// One loaded side of the comparison.
 struct Side {
     label: &'static str,

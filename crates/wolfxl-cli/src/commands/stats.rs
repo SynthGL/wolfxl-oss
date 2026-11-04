@@ -31,7 +31,7 @@ use std::io::Write;
 use std::process::ExitCode;
 
 use anyhow::{bail, Context, Result};
-use serde_json::Value;
+use serde_json::{json, Map, Value};
 use wolfxl_core::{Cell, CellValue, Sheet};
 
 use crate::filter::{cell_number, resolve_column, Condition};
@@ -45,6 +45,31 @@ const MAX_EXACT_INTEGER: f64 = 9_007_199_254_740_992.0;
 const KINDS: [&str; 5] = ["number", "text", "bool", "date", "error"];
 /// Numeric summary fields, in output order.
 const SUMMARY: [&str; 5] = ["sum", "mean", "min", "max", "stddev"];
+/// Top-level `--export json` keys, in output order.
+const JSON_KEYS: [&str; 4] = ["contract_version", "sheet", "rows", "columns"];
+/// Column profile keys in output order. Each nested object (`types`,
+/// `numeric`, and the `top` entries) lists its keys in this relative order.
+const PROFILE_KEYS: [&str; 19] = [
+    "header",
+    "non_empty",
+    "blank",
+    "types",
+    "number",
+    "text",
+    "bool",
+    "date",
+    "error",
+    "distinct",
+    "numeric",
+    "value",
+    "count",
+    "sum",
+    "mean",
+    "min",
+    "max",
+    "stddev",
+    "top",
+];
 /// Box and CSV layout: one row per profiled column.
 const TABLE_HEADERS: [&str; 16] = [
     "column",
@@ -100,6 +125,11 @@ pub(crate) fn run(args: StatsArgs) -> ExitCode {
         }
     }
     ExitCode::SUCCESS
+}
+
+/// The `--export json` report for one sheet, built without writing anything.
+pub(crate) fn structured(args: &StatsArgs) -> Result<Value> {
+    Ok(build(args)?.json())
 }
 
 /// Type bucket of a non-blank cell, indexing [`KINDS`].
@@ -274,41 +304,35 @@ impl Profile {
         row
     }
 
-    /// One inline JSON object with keys in a fixed order.
-    fn json(&self) -> String {
-        let kinds: Vec<String> = KINDS
+    /// The JSON profile object.
+    fn json(&self) -> Value {
+        let types: Map<String, Value> = KINDS
             .iter()
             .zip(self.kinds)
-            .map(|(kind, count)| format!("\"{kind}\": {count}"))
+            .map(|(kind, count)| ((*kind).to_string(), Value::from(count)))
             .collect();
-        let summary: Vec<String> = SUMMARY
-            .iter()
-            .zip(self.summary)
-            .map(|(field, number)| {
-                format!("\"{field}\": {}", number.map_or(Value::Null, json_number))
-            })
-            .collect();
-        let top: Vec<String> = self
+        let mut numeric = Map::new();
+        numeric.insert("count".to_string(), Value::from(self.numeric));
+        numeric.extend(SUMMARY.iter().zip(self.summary).map(|(field, number)| {
+            (
+                (*field).to_string(),
+                number.map_or(Value::Null, json_number),
+            )
+        }));
+        let top: Vec<Value> = self
             .top
             .iter()
-            .map(|(text, count)| {
-                format!(
-                    "{{\"value\": {}, \"count\": {count}}}",
-                    Value::String(text.clone())
-                )
-            })
+            .map(|(text, count)| json!({"value": text, "count": count}))
             .collect();
-        format!(
-            "{{\"header\": {}, \"non_empty\": {}, \"blank\": {}, \"types\": {{{}}}, \"distinct\": {}, \"numeric\": {{\"count\": {}, {}}}, \"top\": [{}]}}",
-            Value::String(self.header.clone()),
-            self.non_empty(),
-            self.blank,
-            kinds.join(", "),
-            self.distinct,
-            self.numeric,
-            summary.join(", "),
-            top.join(", ")
-        )
+        json!({
+            "header": self.header,
+            "non_empty": self.non_empty(),
+            "blank": self.blank,
+            "types": types,
+            "distinct": self.distinct,
+            "numeric": numeric,
+            "top": top,
+        })
     }
 }
 
@@ -333,27 +357,67 @@ impl Report {
         Sheet::from_rows(format!("{} (stats)", self.sheet), grid)
     }
 
+    /// The JSON report object.
+    fn json(&self) -> Value {
+        let columns: Vec<Value> = self.columns.iter().map(Profile::json).collect();
+        json!({
+            "contract_version": CONTRACT_VERSION,
+            "sheet": self.sheet,
+            "rows": self.rows,
+            "columns": columns,
+        })
+    }
+
     /// Pretty top-level object with one inline column object per line.
     fn write_json<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        let document = self.json();
         writeln!(w, "{{")?;
-        writeln!(w, "  \"contract_version\": {CONTRACT_VERSION},")?;
-        writeln!(w, "  \"sheet\": {},", Value::String(self.sheet.clone()))?;
-        writeln!(w, "  \"rows\": {},", self.rows)?;
-        if self.columns.is_empty() {
-            writeln!(w, "  \"columns\": []")?;
-        } else {
-            writeln!(w, "  \"columns\": [")?;
-            for (index, profile) in self.columns.iter().enumerate() {
-                let comma = if index + 1 == self.columns.len() {
-                    ""
-                } else {
-                    ","
-                };
-                writeln!(w, "    {}{comma}", profile.json())?;
+        for (index, key) in JSON_KEYS.iter().enumerate() {
+            let comma = if index + 1 == JSON_KEYS.len() {
+                ""
+            } else {
+                ","
+            };
+            let name = Value::from(*key);
+            match &document[*key] {
+                Value::Array(columns) if *key == "columns" && !columns.is_empty() => {
+                    writeln!(w, "  {name}: [")?;
+                    for (index, column) in columns.iter().enumerate() {
+                        let separator = if index + 1 == columns.len() { "" } else { "," };
+                        writeln!(w, "    {}{separator}", inline(column))?;
+                    }
+                    writeln!(w, "  ]{comma}")?;
+                }
+                value => writeln!(w, "  {name}: {}{comma}", inline(value))?,
             }
-            writeln!(w, "  ]")?;
         }
         writeln!(w, "}}")
+    }
+}
+
+/// Inline JSON text with `", "` and `": "` separators and object keys in
+/// [`PROFILE_KEYS`] order.
+fn inline(value: &Value) -> String {
+    match value {
+        Value::Array(items) => {
+            let items: Vec<String> = items.iter().map(inline).collect();
+            format!("[{}]", items.join(", "))
+        }
+        Value::Object(object) => {
+            let mut entries: Vec<(&String, &Value)> = object.iter().collect();
+            entries.sort_by_key(|(key, _)| {
+                PROFILE_KEYS
+                    .iter()
+                    .position(|known| *known == key.as_str())
+                    .unwrap_or(PROFILE_KEYS.len())
+            });
+            let entries: Vec<String> = entries
+                .into_iter()
+                .map(|(key, value)| format!("{}: {}", Value::from(key.as_str()), inline(value)))
+                .collect();
+            format!("{{{}}}", entries.join(", "))
+        }
+        scalar => scalar.to_string(),
     }
 }
 
@@ -515,6 +579,26 @@ mod tests {
                 ("a".to_string(), 2),
                 ("c".to_string(), 1)
             ]
+        );
+    }
+
+    #[test]
+    fn json_profiles_print_inline_with_keys_in_contract_order() {
+        let mut tally = Tally::default();
+        for text in ["b", "a", "b", " "] {
+            let value = CellValue::String(text.to_string());
+            tally.add(&value, &value);
+        }
+        let profile = tally.finish("h".to_string(), 5);
+        assert_eq!(
+            inline(&profile.json()),
+            concat!(
+                r#"{"header": "h", "non_empty": 3, "blank": 1, "#,
+                r#""types": {"number": 0, "text": 3, "bool": 0, "date": 0, "error": 0}, "#,
+                r#""distinct": 2, "#,
+                r#""numeric": {"count": 0, "sum": null, "mean": null, "min": null, "max": null, "stddev": null}, "#,
+                r#""top": [{"value": "b", "count": 2}, {"value": "a", "count": 1}]}"#,
+            )
         );
     }
 }

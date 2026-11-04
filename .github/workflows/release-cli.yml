@@ -1,0 +1,259 @@
+name: Release CLI binaries
+
+on:
+  push:
+    tags: ['wolfxl-cli-v*']
+  # Pull requests that can change the released binary build the full target
+  # matrix without publishing anything.
+  pull_request:
+    paths:
+      - '.github/workflows/release-cli.yml'
+      - 'install.sh'
+      - 'install.ps1'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain*'
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+      tag: ${{ steps.package.outputs.tag }}
+      commit: ${{ steps.package.outputs.commit }}
+    steps:
+      - name: Validate requested tag
+        if: github.event_name != 'pull_request'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^wolfxl-cli-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid CLI tag: $TAG" >&2
+            exit 1
+          fi
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.ref }}
+          persist-credentials: false
+      - name: Verify tag matches package version
+        id: package
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import subprocess
+          import tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path('crates/wolfxl-cli/Cargo.toml').read_text())['package']['version']
+          tag = f'wolfxl-cli-v{version}'
+          if os.environ['GITHUB_EVENT_NAME'] != 'pull_request' and os.environ['TAG'] != tag:
+              raise SystemExit(f'Tag {os.environ["TAG"]} does not match package version {version}')
+          commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'version={version}\ntag={tag}\ncommit={commit}\n')
+          PY
+
+  build:
+    needs: prepare
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - runner: ubuntu-24.04
+            target: aarch64-unknown-linux-musl
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+    env:
+      TARGET: ${{ matrix.target }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - name: Install Linux cross compiler
+        if: runner.os == 'Linux'
+        # Zig bundles musl and cross linkers for both architectures without Docker.
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zigbuild"
+          "$RUNNER_TEMP/zigbuild/bin/pip" install cargo-zigbuild==0.24.0 ziglang==0.13.0
+          echo "$RUNNER_TEMP/zigbuild/bin" >> "$GITHUB_PATH"
+      - name: Build static Linux executable
+        if: runner.os == 'Linux'
+        run: |
+          cargo zigbuild -p wolfxl-cli --release --locked --target "$TARGET"
+          if readelf -l "target/$TARGET/release/wolfxl" | grep -q INTERP; then
+            echo 'Linux executable unexpectedly requires a dynamic loader' >&2
+            exit 1
+          fi
+      - name: Build macOS executable
+        if: runner.os == 'macOS'
+        run: cargo build -p wolfxl-cli --release --locked --target "$TARGET"
+      - name: Build Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RUSTFLAGS: '-C target-feature=+crt-static'
+        run: |
+          cargo build -p wolfxl-cli --release --locked --target $env:TARGET
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Package Unix archive
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p package dist
+          cp "target/$TARGET/release/wolfxl" LICENSE package/
+          cp crates/wolfxl-cli/README.md package/README.md
+          tar -czf "dist/wolfxl-cli-$VERSION-$TARGET.tar.gz" -C package wolfxl LICENSE README.md
+      - name: Test Unix installer and checksum refusal
+        if: runner.os != 'Windows'
+        env:
+          WOLFXL_VERSION: ${{ needs.prepare.outputs.version }}
+          WOLFXL_INSTALL_DIR: ${{ runner.temp }}/installed
+          WOLFXL_RELEASE_BASE_URL: http://127.0.0.1:8765
+        run: |
+          stage="$RUNNER_TEMP/releases/wolfxl-cli-v$VERSION"
+          mkdir -p "$stage"
+          cp dist/* "$stage/"
+          python3 - "$stage" <<'PY'
+          import hashlib
+          import sys
+          from pathlib import Path
+          stage = Path(sys.argv[1])
+          asset, = stage.glob('*.tar.gz')
+          (stage / 'SHA256SUMS').write_text(f'{hashlib.sha256(asset.read_bytes()).hexdigest()}  {asset.name}\n')
+          PY
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP/releases" &
+          server=$!
+          trap 'kill "$server"' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS "$WOLFXL_RELEASE_BASE_URL/" > /dev/null; then break; fi
+            echo "Waiting for staged releases ($attempt)"
+            sleep 1
+          done
+          # The ARM Linux artifact is cross-compiled on an x86_64 runner.
+          if [[ "$TARGET" != aarch64-unknown-linux-musl ]]; then
+            sh install.sh
+            cmp package/wolfxl "$WOLFXL_INSTALL_DIR/wolfxl"
+            "$WOLFXL_INSTALL_DIR/wolfxl" --version
+            printf 'tampered' >> "$stage/$(basename dist/*)"
+            if sh install.sh > "$RUNNER_TEMP/tamper.log" 2>&1; then
+              echo 'Installer accepted a corrupt archive' >&2
+              exit 1
+            fi
+            grep -q 'SHA256 mismatch' "$RUNNER_TEMP/tamper.log"
+            cmp package/wolfxl "$WOLFXL_INSTALL_DIR/wolfxl"
+          fi
+      - name: Package Windows archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package, dist | Out-Null
+          Copy-Item "target/$env:TARGET/release/wolfxl.exe", LICENSE package/
+          Copy-Item crates/wolfxl-cli/README.md package/README.md
+          Compress-Archive -Path package/* -DestinationPath "dist/wolfxl-cli-$env:VERSION-$env:TARGET.zip"
+      - name: Test Windows installer and checksum refusal
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WOLFXL_VERSION: ${{ needs.prepare.outputs.version }}
+          WOLFXL_INSTALL_DIR: ${{ runner.temp }}/installed
+          WOLFXL_RELEASE_BASE_URL: http://127.0.0.1:8765
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'releases'
+          $stage = Join-Path $root "wolfxl-cli-v$env:VERSION"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item dist/* $stage/
+          $archive = Get-ChildItem "$stage/*.zip"
+          $digest = (Get-FileHash $archive.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$digest  $($archive.Name)" | Set-Content "$stage/SHA256SUMS" -Encoding ascii
+          $server = Start-Process python -ArgumentList @('-m', 'http.server', '8765', '--bind', '127.0.0.1', '--directory', "`"$root`"") -PassThru -NoNewWindow
+          try {
+            for ($attempt = 0; $attempt -lt 30; $attempt++) {
+              try { Invoke-WebRequest -UseBasicParsing $env:WOLFXL_RELEASE_BASE_URL | Out-Null; break } catch { Start-Sleep 1 }
+            }
+            & ./install.ps1
+            & "$env:WOLFXL_INSTALL_DIR/wolfxl.exe" --version
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $installedHash = (Get-FileHash "$env:WOLFXL_INSTALL_DIR/wolfxl.exe").Hash
+            if ($installedHash -ne (Get-FileHash package/wolfxl.exe).Hash) { throw 'Installed executable differs' }
+            # Use two API pages to prove discovery is CLI-specific and paginates.
+            function Invoke-RestMethod {
+              param($Uri, $Headers)
+              if ($Uri -match 'page=1$') {
+                $items = @(1..100 | ForEach-Object {
+                  [pscustomobject]@{ tag_name = "v2.0.$_"; draft = $false; prerelease = $false; published_at = '2026-01-01T00:00:00Z' }
+                })
+                Write-Output -NoEnumerate $items
+              } elseif ($Uri -match 'page=2$') {
+                Write-Output -NoEnumerate @([pscustomobject]@{
+                  tag_name = "wolfxl-cli-v$env:VERSION"; draft = $false; prerelease = $false; published_at = '2026-01-01T00:00:00Z'
+                })
+              } else { throw "Unexpected API URL: $Uri" }
+            }
+            $env:WOLFXL_VERSION = ''
+            try { & ./install.ps1 } finally {
+              Remove-Item Function:Invoke-RestMethod
+              $env:WOLFXL_VERSION = $env:VERSION
+            }
+            Add-Content -LiteralPath $archive.FullName -Value 'tampered'
+            $refused = $false
+            try { & ./install.ps1 } catch {
+              if ($_ -notmatch 'SHA256 mismatch') { throw }
+              $refused = $true
+            }
+            if (-not $refused) { throw 'Installer accepted a corrupt archive' }
+            if ($installedHash -ne (Get-FileHash "$env:WOLFXL_INSTALL_DIR/wolfxl.exe").Hash) { throw 'Failed install changed executable' }
+          } finally { Stop-Process -Id $server.Id }
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: cli-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    if: github.event_name != 'pull_request'
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: cli-*
+          path: dist
+          merge-multiple: true
+      - name: Publish CLI release without replacing Latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          cd dist
+          sha256sum wolfxl-cli-*.tar.gz wolfxl-cli-*.zip > SHA256SUMS
+          jq -n --arg tag "$TAG" --arg version "$VERSION" \
+            '{tag_name: $tag, name: ("wolfxl-cli " + $version), draft: true, generate_release_notes: true, make_latest: "false", prerelease: ($version | contains("-"))}' > "$RUNNER_TEMP/release.json"
+          release_id=$(gh api --method POST "repos/$GH_REPO/releases" --input "$RUNNER_TEMP/release.json" --jq .id)
+          gh release upload "$TAG" ./*.tar.gz ./*.zip SHA256SUMS
+          gh api --method PATCH "repos/$GH_REPO/releases/$release_id" -F draft=false -f make_latest=false

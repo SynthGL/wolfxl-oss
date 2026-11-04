@@ -13,6 +13,7 @@ quick-xml.workspace = true
 tempfile.workspace = true
 zip.workspace = true
 wolfxl-rels = { path = "../wolfxl-rels", version = "0.1" }
+wolfxl-edit = { path = "../wolfxl-edit", version = "0.1" }
 # Used for the ECMA-376 §18.3.1.99 child-element ordering table referenced
 # from `emit/sheet_xml.rs` section comments. The writer does not call
 # `merge_blocks` — it has full model state and emits everything in one

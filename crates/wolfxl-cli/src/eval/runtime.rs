@@ -7,6 +7,16 @@ use super::{
     Area, DataSource, ExcelError, Expr, Function, Operator, Reference, Value, MAX_COLUMN, MAX_ROW,
 };
 
+mod criteria;
+mod dates;
+mod financial;
+mod format;
+mod lookup;
+mod text;
+
+/// A computed worksheet value or the error it evaluates to.
+type Outcome = Result<Value, ExcelError>;
+
 struct Context<'a, S> {
     source: &'a S,
     current_sheet: &'a str,
@@ -17,34 +27,226 @@ pub(super) fn evaluate(expression: &Expr, source: &impl DataSource, current_shee
         source,
         current_sheet,
     }
-    .evaluate(expression)
+    .value(expression)
 }
 
-impl<S: DataSource> Context<'_, S> {
-    fn evaluate(&self, expression: &Expr) -> Value {
-        match expression {
-            Expr::Literal(value) => value.clone(),
-            Expr::Reference(reference) => match self.resolve(reference) {
-                Ok(area) if area.single => self.cell(area.sheet, area.first_row, area.first_column),
-                Ok(area) => {
-                    let mut rows = Vec::new();
-                    if !area.is_empty() {
-                        for row in area.first_row..=area.last_row {
-                            let values = (area.first_column..=area.last_column)
-                                .map(|column| self.cell(area.sheet, row, column))
-                                .collect();
-                            rows.push(values);
-                        }
-                    }
-                    Value::Array(rows)
-                }
-                Err(error) => Value::Error(error),
+/// A rectangle of cells, zero-based offsets from `first_row` and
+/// `first_column`. Whole-row and whole-column references keep their full
+/// worksheet size; reads past the used extent see blanks.
+#[derive(Clone, Copy, Debug)]
+struct Range<'a> {
+    sheet: &'a str,
+    first_row: u32,
+    first_column: u32,
+    rows: u32,
+    columns: u32,
+    /// Written as a single cell, so it evaluates to a scalar.
+    single: bool,
+    /// Written as whole rows or columns, so it evaluates to the used part.
+    whole: bool,
+}
+
+/// What an argument evaluates to before ranges are read: a reference keeps
+/// its position so functions such as `OFFSET` and `SUMIF` can use it.
+enum Operand<'a> {
+    Range(Range<'a>),
+    Value(Value),
+}
+
+/// A rectangular argument: a range or an array of values.
+#[derive(Clone)]
+enum Grid<'a> {
+    Range(Range<'a>),
+    Array(Vec<Vec<Value>>),
+}
+
+impl Grid<'_> {
+    /// Declared rows and columns.
+    fn size(&self) -> (u32, u32) {
+        match self {
+            Self::Range(range) => (range.rows, range.columns),
+            Self::Array(rows) => (
+                rows.len() as u32,
+                rows.first().map_or(0, |row| row.len() as u32),
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Statistic {
+    Sum,
+    Average,
+    Count,
+    CountA,
+    Min,
+    Max,
+}
+
+impl<'a, S: DataSource> Context<'a, S> {
+    /// Evaluate to a value, reading ranges into arrays.
+    fn value(&self, expression: &Expr) -> Value {
+        let operand = self.operand(expression);
+        self.read(operand)
+    }
+
+    /// Evaluate to a scalar: a one-value array yields that value and any
+    /// larger array is `#VALUE!`.
+    fn scalar(&self, expression: &Expr) -> Value {
+        match self.operand(expression) {
+            Operand::Range(range) if range.rows == 1 && range.columns == 1 => {
+                self.cell(range.sheet, range.first_row, range.first_column)
+            }
+            Operand::Range(_) => Value::Error(ExcelError::Value),
+            Operand::Value(Value::Array(rows)) => match <[Vec<Value>; 1]>::try_from(rows) {
+                Ok([row]) => match <[Value; 1]>::try_from(row) {
+                    Ok([value]) => value,
+                    Err(_) => Value::Error(ExcelError::Value),
+                },
+                Err(_) => Value::Error(ExcelError::Value),
             },
-            Expr::Unary { negative, operand } => match number(self.evaluate(operand)) {
+            Operand::Value(value) => value,
+        }
+    }
+
+    fn number(&self, expression: &Expr) -> Result<f64, ExcelError> {
+        number(self.scalar(expression))
+    }
+
+    /// The numeric argument at `index`, or `default` when it is omitted. An
+    /// empty argument is a blank, so it counts as 0.
+    fn number_or(&self, arguments: &[Expr], index: usize, default: f64) -> Result<f64, ExcelError> {
+        arguments
+            .get(index)
+            .map_or(Ok(default), |argument| self.number(argument))
+    }
+
+    /// Like [`Self::number_or`], but an empty argument also takes `default`.
+    fn number_or_default(
+        &self,
+        arguments: &[Expr],
+        index: usize,
+        default: f64,
+    ) -> Result<f64, ExcelError> {
+        supplied(arguments, index).map_or(Ok(default), |argument| self.number(argument))
+    }
+
+    fn text(&self, expression: &Expr) -> Result<String, ExcelError> {
+        text(self.scalar(expression))
+    }
+
+    /// The argument as a range or array; errors propagate and scalars become
+    /// one-value arrays.
+    fn grid(&self, expression: &Expr) -> Result<Grid<'a>, ExcelError> {
+        match self.operand(expression) {
+            Operand::Range(range) => Ok(Grid::Range(range)),
+            Operand::Value(Value::Array(rows)) => Ok(Grid::Array(rows)),
+            Operand::Value(Value::Error(error)) => Err(error),
+            Operand::Value(value) => Ok(Grid::Array(vec![vec![value]])),
+        }
+    }
+
+    /// The value at a zero-based offset; positions outside the grid are blank.
+    fn at(&self, grid: &Grid<'_>, row: u32, column: u32) -> Value {
+        match grid {
+            Grid::Range(range) if row < range.rows && column < range.columns => self.cell(
+                range.sheet,
+                range.first_row + row,
+                range.first_column + column,
+            ),
+            Grid::Range(_) => Value::Blank,
+            Grid::Array(rows) => rows
+                .get(row as usize)
+                .and_then(|values| values.get(column as usize))
+                .cloned()
+                .unwrap_or(Value::Blank),
+        }
+    }
+
+    /// Rows and columns that can hold values: a range is cut at the used
+    /// extent, since every cell beyond it is blank.
+    fn live(&self, grid: &Grid<'_>) -> (u32, u32) {
+        match grid {
+            Grid::Range(range) => self.live_range(range),
+            array => array.size(),
+        }
+    }
+
+    fn live_range(&self, range: &Range<'_>) -> (u32, u32) {
+        let extent = self.source.used_extent(range.sheet);
+        (
+            range
+                .rows
+                .min(extent.rows.saturating_sub(range.first_row - 1)),
+            range
+                .columns
+                .min(extent.columns.saturating_sub(range.first_column - 1)),
+        )
+    }
+
+    /// Every live value of a grid in row-major order.
+    fn values(
+        &self,
+        grid: &Grid<'_>,
+        mut visit: impl FnMut(Value) -> Result<(), ExcelError>,
+    ) -> Result<(), ExcelError> {
+        let (rows, columns) = self.live(grid);
+        for row in 0..rows {
+            for column in 0..columns {
+                visit(self.at(grid, row, column))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn read(&self, operand: Operand<'_>) -> Value {
+        match operand {
+            Operand::Value(value) => value,
+            Operand::Range(range) if range.single => {
+                self.cell(range.sheet, range.first_row, range.first_column)
+            }
+            Operand::Range(range) => {
+                let (rows, columns) = if range.whole {
+                    self.live_range(&range)
+                } else {
+                    (range.rows, range.columns)
+                };
+                if rows == 0 || columns == 0 {
+                    return Value::Array(Vec::new());
+                }
+                Value::Array(
+                    (0..rows)
+                        .map(|row| {
+                            (0..columns)
+                                .map(|column| {
+                                    self.cell(
+                                        range.sheet,
+                                        range.first_row + row,
+                                        range.first_column + column,
+                                    )
+                                })
+                                .collect()
+                        })
+                        .collect(),
+                )
+            }
+        }
+    }
+
+    fn operand(&self, expression: &Expr) -> Operand<'a> {
+        let value = match expression {
+            Expr::Literal(value) => value.clone(),
+            Expr::Reference(reference) => {
+                return match self.resolve(reference) {
+                    Ok(range) => Operand::Range(range),
+                    Err(error) => Operand::Value(Value::Error(error)),
+                }
+            }
+            Expr::Unary { negative, operand } => match self.number(operand) {
                 Ok(value) => finite(if *negative { -value } else { value }),
                 Err(error) => Value::Error(error),
             },
-            Expr::Percent(operand) => match number(self.evaluate(operand)) {
+            Expr::Percent(operand) => match self.number(operand) {
                 Ok(value) => finite(value / 100.0),
                 Err(error) => Value::Error(error),
             },
@@ -53,65 +255,243 @@ impl<S: DataSource> Context<'_, S> {
                 left,
                 right,
             } => {
-                let left = self.evaluate(left);
+                let left = self.value(left);
                 if matches!(left, Value::Error(_)) {
-                    return left;
+                    return Operand::Value(left);
                 }
-                let right = self.evaluate(right);
+                let right = self.value(right);
                 if matches!(right, Value::Error(_)) {
-                    return right;
+                    return Operand::Value(right);
                 }
                 binary(*operator, left, right)
             }
             Expr::Call {
-                function: Function::If,
-                arguments,
-            } => match condition(self.evaluate(&arguments[0])) {
-                Ok(selected) => {
-                    let index = if selected { 1 } else { 2 };
-                    let Some(branch) = arguments.get(index) else {
-                        return Value::Boolean(false);
-                    };
-                    match self.evaluate(branch) {
-                        Value::Blank => Value::Number(0.0),
-                        value => value,
-                    }
-                }
-                Err(error) => Value::Error(error),
-            },
-            Expr::Call {
                 function,
                 arguments,
-            } => {
-                let mut aggregate = Aggregate::new(*function);
-                for argument in arguments {
-                    // Read reference arguments directly rather than materializing large ranges.
-                    let result = if let Expr::Reference(reference) = argument {
-                        match self.resolve(reference) {
-                            Ok(area) => self.add_area(&mut aggregate, &area),
-                            Err(error) => aggregate.add(Value::Error(error), true),
-                        }
-                    } else {
-                        aggregate.add(self.evaluate(argument), false)
-                    };
-                    if let Err(error) = result {
-                        return Value::Error(error);
-                    }
+            } => return self.call(*function, arguments),
+            Expr::Missing => Value::Blank,
+        };
+        Operand::Value(value)
+    }
+
+    fn call(&self, function: Function, arguments: &[Expr]) -> Operand<'a> {
+        use Function::*;
+        let outcome = match function {
+            If => return self.branch(arguments),
+            IfError => return self.if_error(arguments),
+            Choose => return self.choose(arguments),
+            Index => return self.index(arguments),
+            Offset => return self.offset(arguments),
+            XLookup => return self.xlookup(arguments),
+            Sum => self.aggregate(Statistic::Sum, arguments),
+            Average => self.aggregate(Statistic::Average, arguments),
+            Count => self.aggregate(Statistic::Count, arguments),
+            CountA => self.aggregate(Statistic::CountA, arguments),
+            Min => self.aggregate(Statistic::Min, arguments),
+            Max => self.aggregate(Statistic::Max, arguments),
+            And | Or => self.logical(function == And, arguments),
+            Not => condition(self.scalar(&arguments[0])).map(|value| Value::Boolean(!value)),
+            Abs => self.number(&arguments[0]).map(|value| finite(value.abs())),
+            Int => self
+                .number(&arguments[0])
+                .map(|value| finite(value.floor())),
+            Sign => self.number(&arguments[0]).map(|value| {
+                Value::Number(if value > 0.0 {
+                    1.0
+                } else if value < 0.0 {
+                    -1.0
+                } else {
+                    0.0
+                })
+            }),
+            Sqrt => self.number(&arguments[0]).map(|value| {
+                if value < 0.0 {
+                    Value::Error(ExcelError::Num)
+                } else {
+                    finite(value.sqrt())
                 }
-                aggregate.finish()
+            }),
+            Mod => self.modulo(arguments),
+            Power => self.number(&arguments[0]).and_then(|base| {
+                let exponent = self.number(&arguments[1])?;
+                Ok(binary(
+                    Operator::Power,
+                    Value::Number(base),
+                    Value::Number(exponent),
+                ))
+            }),
+            Round => self.round(arguments, Rounding::Nearest),
+            RoundDown => self.round(arguments, Rounding::Down),
+            RoundUp => self.round(arguments, Rounding::Up),
+            CountIf => self.count_if(arguments),
+            CountIfs => self.conditional(function, arguments),
+            SumIf => self.sum_if(arguments, false),
+            AverageIf => self.sum_if(arguments, true),
+            SumIfs | AverageIfs | MinIfs | MaxIfs => self.conditional(function, arguments),
+            Match => self.match_position(arguments),
+            VLookup => self.table_lookup(arguments, true),
+            HLookup => self.table_lookup(arguments, false),
+            Pmt => self.pmt(arguments),
+            Pv => self.pv(arguments),
+            Fv => self.fv(arguments),
+            Npv => self.npv(arguments),
+            Irr => self.irr(arguments),
+            Sln => self.sln(arguments),
+            Db => self.db(arguments),
+            Concatenate => self.concatenate(arguments),
+            Exact => self.exact(arguments),
+            Find => self.find(arguments),
+            Left => self.left(arguments),
+            Right => self.right(arguments),
+            Mid => self.mid(arguments),
+            Len => self.len(arguments),
+            Lower => self
+                .text(&arguments[0])
+                .map(|text| Value::Text(text.to_lowercase())),
+            Upper => self
+                .text(&arguments[0])
+                .map(|text| Value::Text(text.to_uppercase())),
+            Rept => self.rept(arguments),
+            Substitute => self.substitute(arguments),
+            Trim => self.trim(arguments),
+            Text => self.format_text(arguments),
+            Date => self.date(arguments),
+            Year | Month | Day => self.date_part(function, arguments),
+            Hour | Minute | Second => self.time_part(function, arguments),
+            Days => self.days(arguments),
+            EDate => self.edate(arguments, false),
+            EoMonth => self.edate(arguments, true),
+            Today => Ok(self.today(false)),
+            Now => Ok(self.today(true)),
+        };
+        Operand::Value(outcome.unwrap_or_else(Value::Error))
+    }
+
+    /// A function result: a single cell or one-value array reads as its
+    /// value, with blank as zero, while larger ranges and arrays stay whole.
+    fn result(&self, operand: Operand<'a>) -> Operand<'a> {
+        let value = match operand {
+            Operand::Range(range) if range.single => {
+                self.cell(range.sheet, range.first_row, range.first_column)
             }
+            Operand::Value(Value::Array(mut rows)) if rows.len() == 1 && rows[0].len() == 1 => {
+                rows[0].pop().expect("one value")
+            }
+            Operand::Value(value) => value,
+            range => return range,
+        };
+        Operand::Value(match value {
+            Value::Blank => Value::Number(0.0),
+            value => value,
+        })
+    }
+
+    fn branch(&self, arguments: &[Expr]) -> Operand<'a> {
+        match condition(self.scalar(&arguments[0])) {
+            Ok(selected) => match arguments.get(if selected { 1 } else { 2 }) {
+                Some(branch) => self.result(self.operand(branch)),
+                None => Operand::Value(Value::Boolean(false)),
+            },
+            Err(error) => Operand::Value(Value::Error(error)),
         }
     }
 
-    fn add_area(&self, aggregate: &mut Aggregate, area: &Resolved<'_>) -> Result<(), ExcelError> {
-        if !area.is_empty() {
-            for row in area.first_row..=area.last_row {
-                for column in area.first_column..=area.last_column {
-                    aggregate.add(self.cell(area.sheet, row, column), true)?;
+    fn if_error(&self, arguments: &[Expr]) -> Operand<'a> {
+        let first = self.result(self.operand(&arguments[0]));
+        if matches!(first, Operand::Value(Value::Error(_))) {
+            self.result(self.operand(&arguments[1]))
+        } else {
+            first
+        }
+    }
+
+    fn choose(&self, arguments: &[Expr]) -> Operand<'a> {
+        let index = match self.number(&arguments[0]) {
+            Ok(index) => index.trunc(),
+            Err(error) => return Operand::Value(Value::Error(error)),
+        };
+        if index < 1.0 || index >= arguments.len() as f64 {
+            return Operand::Value(Value::Error(ExcelError::Value));
+        }
+        self.result(self.operand(&arguments[index as usize]))
+    }
+
+    fn aggregate(&self, statistic: Statistic, arguments: &[Expr]) -> Outcome {
+        let mut aggregate = Aggregate::new(statistic);
+        for argument in arguments {
+            match self.operand(argument) {
+                // Read references cell by cell rather than materializing them.
+                Operand::Range(range) => {
+                    self.values(&Grid::Range(range), |value| aggregate.add(value, true))?
                 }
+                Operand::Value(value) => aggregate.add(value, false)?,
             }
         }
-        Ok(())
+        Ok(aggregate.finish())
+    }
+
+    /// `AND` and `OR`: referenced text and blanks are skipped, and with no
+    /// logical values at all the result is `#VALUE!`.
+    fn logical(&self, all: bool, arguments: &[Expr]) -> Outcome {
+        let mut seen = false;
+        let mut result = all;
+        let mut visit = |value: Value, referenced: bool| {
+            let truth = match value {
+                Value::Boolean(value) => value,
+                Value::Number(value) => value != 0.0,
+                Value::Error(error) => return Err(error),
+                Value::Text(text) if !referenced => {
+                    if text.eq_ignore_ascii_case("TRUE") {
+                        true
+                    } else if text.eq_ignore_ascii_case("FALSE") {
+                        false
+                    } else {
+                        return Err(ExcelError::Value);
+                    }
+                }
+                _ => return Ok(()),
+            };
+            seen = true;
+            if all {
+                result &= truth;
+            } else {
+                result |= truth;
+            }
+            Ok(())
+        };
+        for argument in arguments {
+            match self.operand(argument) {
+                Operand::Range(range) => {
+                    self.values(&Grid::Range(range), |value| visit(value, true))?
+                }
+                Operand::Value(Value::Array(rows)) => {
+                    for value in rows.into_iter().flatten() {
+                        visit(value, true)?;
+                    }
+                }
+                Operand::Value(value) => visit(value, false)?,
+            }
+        }
+        if seen {
+            Ok(Value::Boolean(result))
+        } else {
+            Err(ExcelError::Value)
+        }
+    }
+
+    fn modulo(&self, arguments: &[Expr]) -> Outcome {
+        let dividend = self.number(&arguments[0])?;
+        let divisor = self.number(&arguments[1])?;
+        if divisor == 0.0 {
+            return Err(ExcelError::Div0);
+        }
+        Ok(finite(dividend - divisor * (dividend / divisor).floor()))
+    }
+
+    fn round(&self, arguments: &[Expr], mode: Rounding) -> Outcome {
+        let number = self.number(&arguments[0])?;
+        let digits = self.number(&arguments[1])?;
+        Ok(finite(round_decimal(number, digits, mode)))
     }
 
     fn cell(&self, sheet: &str, row: u32, column: u32) -> Value {
@@ -122,68 +502,38 @@ impl<S: DataSource> Context<'_, S> {
         }
     }
 
-    fn resolve(&self, reference: &Reference) -> Result<Resolved<'_>, ExcelError> {
+    fn resolve(&self, reference: &Reference) -> Result<Range<'a>, ExcelError> {
         let requested = reference.sheet.as_deref().unwrap_or(self.current_sheet);
         let sheet = self
             .source
             .sheet_names()
             .find(|name| name.eq_ignore_ascii_case(requested))
             .ok_or(ExcelError::Ref)?;
-        let mut area = Resolved {
-            sheet,
-            first_row: 1,
-            last_row: 0,
-            first_column: 1,
-            last_column: 0,
-            single: matches!(reference.area, Area::Cell { .. }),
-        };
-        match reference.area {
-            Area::Cell { row, column } => {
-                area.first_row = row;
-                area.last_row = row;
-                area.first_column = column;
-                area.last_column = column;
-            }
+        let (first_row, first_column, rows, columns) = match reference.area {
+            Area::Cell { row, column } => (row, column, 1, 1),
             Area::Cells {
                 first_row,
                 last_row,
                 first_column,
                 last_column,
-            } => {
-                area.first_row = first_row;
-                area.last_row = last_row;
-                area.first_column = first_column;
-                area.last_column = last_column;
-            }
-            Area::Columns { first, last } => {
-                let extent = self.source.used_extent(sheet);
-                area.last_row = extent.rows.min(MAX_ROW);
-                area.first_column = first;
-                area.last_column = last.min(extent.columns).min(MAX_COLUMN);
-            }
-            Area::Rows { first, last } => {
-                let extent = self.source.used_extent(sheet);
-                area.first_row = first;
-                area.last_row = last.min(extent.rows).min(MAX_ROW);
-                area.last_column = extent.columns.min(MAX_COLUMN);
-            }
-        }
-        Ok(area)
-    }
-}
-
-struct Resolved<'a> {
-    sheet: &'a str,
-    first_row: u32,
-    last_row: u32,
-    first_column: u32,
-    last_column: u32,
-    single: bool,
-}
-
-impl Resolved<'_> {
-    fn is_empty(&self) -> bool {
-        self.first_row > self.last_row || self.first_column > self.last_column
+            } => (
+                first_row,
+                first_column,
+                last_row - first_row + 1,
+                last_column - first_column + 1,
+            ),
+            Area::Columns { first, last } => (1, first, MAX_ROW, last - first + 1),
+            Area::Rows { first, last } => (first, 1, last - first + 1, MAX_COLUMN),
+        };
+        Ok(Range {
+            sheet,
+            first_row,
+            first_column,
+            rows,
+            columns,
+            single: matches!(reference.area, Area::Cell { .. }),
+            whole: matches!(reference.area, Area::Columns { .. } | Area::Rows { .. }),
+        })
     }
 }
 
@@ -193,6 +543,13 @@ fn finite(number: f64) -> Value {
     } else {
         Value::Error(ExcelError::Num)
     }
+}
+
+/// The argument at `index`, or `None` when it is omitted or left empty.
+fn supplied(arguments: &[Expr], index: usize) -> Option<&Expr> {
+    arguments
+        .get(index)
+        .filter(|argument| !matches!(argument, Expr::Missing))
 }
 
 fn number(value: Value) -> Result<f64, ExcelError> {
@@ -219,18 +576,21 @@ fn condition(value: Value) -> Result<bool, ExcelError> {
 fn text(value: Value) -> Result<String, ExcelError> {
     match value {
         Value::Text(text) => Ok(text),
-        Value::Number(number) => Ok({
-            let number = rounded(number);
-            if number == 0.0 {
-                "0".to_owned()
-            } else {
-                number.to_string()
-            }
-        }),
+        Value::Number(number) => Ok(general(number)),
         Value::Boolean(value) => Ok(if value { "TRUE" } else { "FALSE" }.to_owned()),
         Value::Blank => Ok(String::new()),
         Value::Error(error) => Err(error),
         Value::Array(_) => Err(ExcelError::Value),
+    }
+}
+
+/// A number as text, with at most 15 significant digits.
+fn general(number: f64) -> String {
+    let number = rounded(number);
+    if number == 0.0 {
+        "0".to_owned()
+    } else {
+        number.to_string()
     }
 }
 
@@ -296,8 +656,59 @@ fn compare(left: &Value, right: &Value) -> Result<Ordering, ExcelError> {
     Ok(ordering)
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Rounding {
+    /// Halves away from zero.
+    Nearest,
+    /// Toward zero.
+    Down,
+    /// Away from zero.
+    Up,
+}
+
+/// Round to `digits` decimal places (negative digits round left of the
+/// point) as Excel does: on the 15-significant-digit decimal form of the
+/// number, so `2.675` rounds to `2.68` even though its binary value is lower.
+fn round_decimal(number: f64, digits: f64, mode: Rounding) -> f64 {
+    if number == 0.0 || !number.is_finite() {
+        return number;
+    }
+    // Beyond these bounds every finite double is either kept or lost whole.
+    let digits = digits.trunc().clamp(-400.0, 400.0) as i32;
+    let decimal = format!("{:.14e}", number.abs());
+    let (mantissa, exponent) = decimal.split_once('e').expect("exponent notation");
+    let exponent: i32 = exponent.parse().expect("integer exponent");
+    let significant: Vec<u8> = mantissa
+        .bytes()
+        .filter(u8::is_ascii_digit)
+        .map(|digit| digit - b'0')
+        .collect();
+    // The leading digit has place value 10^exponent.
+    let keep = exponent + 1 + digits;
+    if keep >= significant.len() as i32 {
+        return rounded(number);
+    }
+    let (kept, dropped) = significant.split_at(keep.max(0) as usize);
+    let up = match mode {
+        Rounding::Nearest => keep >= 0 && dropped[0] >= 5,
+        Rounding::Down => false,
+        Rounding::Up => dropped.iter().any(|&digit| digit != 0),
+    };
+    let mut integer = kept
+        .iter()
+        .fold(0_u64, |integer, &digit| integer * 10 + u64::from(digit));
+    integer += u64::from(up);
+    if integer == 0 {
+        return 0.0;
+    }
+    let magnitude: f64 = format!("{integer}e{}", -digits)
+        .parse()
+        .expect("decimal number");
+    magnitude.copysign(number)
+}
+
 struct Aggregate {
-    function: Function,
+    statistic: Statistic,
     count: u64,
     sum: f64,
     minimum: f64,
@@ -305,9 +716,9 @@ struct Aggregate {
 }
 
 impl Aggregate {
-    fn new(function: Function) -> Self {
+    fn new(statistic: Statistic) -> Self {
         Self {
-            function,
+            statistic,
             count: 0,
             sum: 0.0,
             minimum: f64::INFINITY,
@@ -316,50 +727,49 @@ impl Aggregate {
     }
 
     fn add(&mut self, value: Value, referenced: bool) -> Result<(), ExcelError> {
-        let value = match value {
-            Value::Error(_) if matches!(self.function, Function::Count) => return Ok(()),
-            Value::Error(error) => return Err(error),
-            Value::Array(rows) => {
-                for row in rows {
-                    for value in row {
-                        self.add(value, true)?;
-                    }
-                }
+        if let Value::Array(rows) = value {
+            for value in rows.into_iter().flatten() {
+                self.add(value, true)?;
+            }
+            return Ok(());
+        }
+        let value = match (self.statistic, value) {
+            (Statistic::CountA, Value::Blank) => return Ok(()),
+            (Statistic::CountA, _) => {
+                self.count += 1;
                 return Ok(());
             }
-            Value::Number(value) => value,
-            Value::Blank => return Ok(()),
-            Value::Text(_) | Value::Boolean(_) if referenced => return Ok(()),
-            Value::Text(text) if matches!(self.function, Function::Count) => {
-                let Some(value) = lenient_number(&text) else {
-                    return Ok(());
-                };
-                value
-            }
-            value => number(value)?,
+            (Statistic::Count, Value::Error(_)) => return Ok(()),
+            (_, Value::Error(error)) => return Err(error),
+            (_, Value::Number(value)) => value,
+            (_, Value::Blank) => return Ok(()),
+            (_, Value::Text(_) | Value::Boolean(_)) if referenced => return Ok(()),
+            (Statistic::Count, Value::Text(text)) => match lenient_number(&text) {
+                Some(value) => value,
+                None => return Ok(()),
+            },
+            (_, value) => number(value)?,
         };
         self.count += 1;
         // Do not compute unrelated statistics for COUNT, MIN, or MAX.
-        match self.function {
-            Function::Sum | Function::Average => self.sum += value,
-            Function::Min => self.minimum = self.minimum.min(value),
-            Function::Max => self.maximum = self.maximum.max(value),
-            Function::Count => {}
-            Function::If => unreachable!(),
+        match self.statistic {
+            Statistic::Sum | Statistic::Average => self.sum += value,
+            Statistic::Min => self.minimum = self.minimum.min(value),
+            Statistic::Max => self.maximum = self.maximum.max(value),
+            Statistic::Count | Statistic::CountA => {}
         }
         Ok(())
     }
 
     fn finish(self) -> Value {
-        match self.function {
-            Function::Count => Value::Number(self.count as f64),
-            Function::Sum => finite(self.sum),
-            Function::Average if self.count == 0 => Value::Error(ExcelError::Div0),
-            Function::Average => finite(self.sum / self.count as f64),
-            Function::Min | Function::Max if self.count == 0 => Value::Number(0.0),
-            Function::Min => finite(self.minimum),
-            Function::Max => finite(self.maximum),
-            Function::If => unreachable!(),
+        match self.statistic {
+            Statistic::Count | Statistic::CountA => Value::Number(self.count as f64),
+            Statistic::Sum => finite(self.sum),
+            Statistic::Average if self.count == 0 => Value::Error(ExcelError::Div0),
+            Statistic::Average => finite(self.sum / self.count as f64),
+            Statistic::Min | Statistic::Max if self.count == 0 => Value::Number(0.0),
+            Statistic::Min => finite(self.minimum),
+            Statistic::Max => finite(self.maximum),
         }
     }
 }

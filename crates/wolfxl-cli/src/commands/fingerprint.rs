@@ -44,7 +44,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result};
-use serde_json::json;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use wolfxl_core::{CellValue, SourceFormat, Workbook};
 use wolfxl_reader::{CellDataType, CellValue as NativeValue};
@@ -67,6 +67,23 @@ impl Fingerprint {
     fn text(&self) -> String {
         format!("{VERSION}:{}", self.hex)
     }
+
+    /// The `--json` report document.
+    fn json(&self) -> Value {
+        json!({
+            "fingerprint": self.text(),
+            "version": VERSION,
+            "sheets": self.sheets,
+            "cells": self.cells,
+            "formulas": self.formulas,
+        })
+    }
+}
+
+/// The `fingerprint --json` report for `path`, computed without writing
+/// anything.
+pub(crate) fn structured(path: &Path) -> Result<Value> {
+    Ok(compute(path)?.json())
 }
 
 pub(crate) fn fingerprint(args: FingerprintArgs) -> ExitCode {
@@ -78,14 +95,7 @@ pub(crate) fn fingerprint(args: FingerprintArgs) -> ExitCode {
         }
     };
     let document = if args.json {
-        let document = json!({
-            "fingerprint": fingerprint.text(),
-            "version": VERSION,
-            "sheets": fingerprint.sheets,
-            "cells": fingerprint.cells,
-            "formulas": fingerprint.formulas,
-        });
-        format!("{document}\n")
+        format!("{}\n", fingerprint.json())
     } else {
         format!("{}\n", fingerprint.text())
     };

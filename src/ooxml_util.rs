@@ -151,17 +151,7 @@ pub fn join_and_normalize(base_dir: &str, target: &str) -> String {
     normalize_zip_path(&combined)
 }
 
-pub fn attr_value(e: &BytesStart<'_>, key: &[u8]) -> Option<String> {
-    for a in e.attributes().with_checks(false).flatten() {
-        if a.key.as_ref().as_bytes() == key {
-            if let Ok(v) = quick_xml::escape::unescape(&a.value) {
-                return Some(v.to_string());
-            }
-            return Some(a.value.into_owned());
-        }
-    }
-    None
-}
+pub use wolfxl_edit::ooxml_util::attr_value;
 
 fn relationship_id_attr(e: &BytesStart<'_>) -> Option<String> {
     attr_value(e, b"r:id").or_else(|| attr_value_by_suffix(e, b":id"))

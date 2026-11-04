@@ -4,7 +4,9 @@ version = "2.0.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "OOXML pivot-cache and pivot-table model + emit. Pure Rust, no PyO3 — used by both the wolfxl patcher (modify mode) and the native writer (write mode). See Plans/rfcs/047-pivot-caches.md and 048-pivot-tables.md."
+description = "Pure Rust OOXML pivot cache and pivot table parsing and serialization"
+keywords = ["excel", "xlsx", "spreadsheet", "ooxml", "pivot"]
+categories = ["encoding", "parser-implementations"]
 
 [dependencies]
 quick-xml.workspace = true
