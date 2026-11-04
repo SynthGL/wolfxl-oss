@@ -10,6 +10,11 @@
 //! Format choices (integer grouping, two-decimal floats, ISO dates, JSON shape)
 //! are locked in by golden tests in `tests/cli.rs` so token-cost benchmarks in
 //! the `spreadsheet-peek` skill stay reproducible.
+//!
+//! With [`RenderOptions::addresses`], `boxed`, `text`, and `markdown` also
+//! label the table with the sheet's own coordinates: a line of column letters
+//! above the header (`+` for a computed column) and each row's sheet row
+//! number on its left. Without it every shape renders exactly as before.
 
 use std::io::Write;
 
@@ -17,24 +22,39 @@ use serde_json::Value;
 use unicode_width::UnicodeWidthStr;
 use wolfxl_core::{classify_format, format_cell, Cell, CellValue, FormatCategory, Sheet};
 
+use crate::input::Provenance;
+
 pub struct RenderOptions<'a> {
     pub max_rows: Option<usize>,
     pub max_columns: Option<usize>,
     pub max_width: usize,
     pub all_sheets: &'a [String],
+    /// Sheet coordinates of every row and column of the rendered sheet, for
+    /// the address labels; `None` renders no labels.
+    pub addresses: Option<&'a Provenance>,
 }
 
-pub fn text<W: Write>(w: &mut W, sheet: &Sheet, _opts: &RenderOptions) -> std::io::Result<()> {
+pub fn text<W: Write>(w: &mut W, sheet: &Sheet, opts: &RenderOptions) -> std::io::Result<()> {
     // `-n` caps box-mode only; text/csv/json emit the full sheet so the
     // benchmark can pipe through `head` reproducibly. Header row is emitted
     // as raw strings (no int-grouping) — header text should round-trip even
     // when a header literal happens to be numeric.
-    writeln!(w, "{}", sheet.headers().join("\t"))?;
-    for row in sheet.rows().iter().skip(1) {
+    let headers = sheet.headers();
+    if let Some(provenance) = opts.addresses {
+        writeln!(
+            w,
+            "\t{}",
+            column_labels(provenance, headers.len()).join("\t")
+        )?;
+    }
+    write_row_label(w, opts.addresses, 0, "\t")?;
+    writeln!(w, "{}", headers.join("\t"))?;
+    for (index, row) in sheet.rows().iter().enumerate().skip(1) {
         let cells: Vec<String> = row
             .iter()
             .map(|c| display_sheet_cell(sheet, c, true))
             .collect();
+        write_row_label(w, opts.addresses, index, "\t")?;
         writeln!(w, "{}", cells.join("\t"))?;
     }
     Ok(())
@@ -55,20 +75,39 @@ pub fn csv<W: Write>(w: &mut W, sheet: &Sheet, _opts: &RenderOptions) -> std::io
     Ok(())
 }
 
-pub fn markdown<W: Write>(w: &mut W, sheet: &Sheet, _opts: &RenderOptions) -> std::io::Result<()> {
+pub fn markdown<W: Write>(w: &mut W, sheet: &Sheet, opts: &RenderOptions) -> std::io::Result<()> {
     let headers: Vec<String> = sheet.headers().iter().map(|h| markdown_escape(h)).collect();
     if headers.is_empty() {
         writeln!(w, "(empty sheet)")?;
         return Ok(());
     }
-    writeln!(w, "| {} |", headers.join(" | "))?;
-    writeln!(w, "|{}|", vec!["---"; headers.len()].join("|"))?;
-    for row in sheet.rows().iter().skip(1) {
+    match opts.addresses {
+        // The column letters become the table's header, so the sheet's
+        // header row follows as the first body row, numbered like the rest.
+        Some(provenance) => {
+            let letters = column_labels(provenance, headers.len());
+            writeln!(w, "|  | {} |", letters.join(" | "))?;
+            writeln!(w, "|{}|", vec!["---"; headers.len() + 1].join("|"))?;
+            writeln!(
+                w,
+                "| {} | {} |",
+                row_label(provenance, 0),
+                headers.join(" | ")
+            )?;
+        }
+        None => {
+            writeln!(w, "| {} |", headers.join(" | "))?;
+            writeln!(w, "|{}|", vec!["---"; headers.len()].join("|"))?;
+        }
+    }
+    for (index, row) in sheet.rows().iter().enumerate().skip(1) {
         let cells: Vec<String> = row
             .iter()
             .map(|c| markdown_escape(&display_sheet_cell(sheet, c, true)))
             .collect();
-        writeln!(w, "| {} |", cells.join(" | "))?;
+        write!(w, "| ")?;
+        write_row_label(w, opts.addresses, index, " | ")?;
+        writeln!(w, "{} |", cells.join(" | "))?;
     }
     Ok(())
 }
@@ -154,27 +193,46 @@ pub fn boxed<W: Write>(w: &mut W, sheet: &Sheet, opts: &RenderOptions) -> std::i
     }
 
     let cap_total = effective_row_cap(sheet, opts);
-    let display_rows: Vec<Vec<String>> = sheet
-        .rows()
-        .iter()
-        .take(cap_total)
-        .map(|row| {
+    let gutter = usize::from(opts.addresses.is_some());
+    let mut display_rows: Vec<Vec<String>> = Vec::with_capacity(cap_total + gutter);
+    if let Some(provenance) = opts.addresses {
+        let mut letters = Vec::with_capacity(total_cols + 1);
+        letters.push(String::new());
+        letters.extend(column_labels(provenance, total_cols));
+        display_rows.push(letters);
+    }
+    for (index, row) in sheet.rows().iter().take(cap_total).enumerate() {
+        let mut cells = Vec::with_capacity(total_cols + gutter);
+        if let Some(provenance) = opts.addresses {
+            cells.push(row_label(provenance, index));
+        }
+        cells.extend(
             row.iter()
-                .map(|c| truncate(&display_sheet_cell(sheet, c, true), opts.max_width))
-                .collect()
-        })
-        .collect();
+                .map(|c| truncate(&display_sheet_cell(sheet, c, true), opts.max_width)),
+        );
+        display_rows.push(cells);
+    }
 
-    let widths = column_widths(&display_rows, total_cols);
+    let widths = column_widths(&display_rows, total_cols + gutter);
+    if gutter == 1 {
+        // Row numbers sit right-aligned, like numbers in a column.
+        for row in display_rows.iter_mut().skip(1) {
+            if let Some(label) = row.first_mut() {
+                *label = format!("{label:>width$}", width = widths[0]);
+            }
+        }
+    }
 
+    // The header row, and the column letters above it, are centered and
+    // ruled off from the body.
+    let heading = gutter + 1;
     write_box_border(w, &widths, BorderStyle::Top)?;
-    if let Some(header) = display_rows.first() {
-        write_box_row(w, header, &widths, true)?;
+    for row in display_rows.iter().take(heading) {
+        write_box_row(w, row, &widths, true)?;
         write_box_border(w, &widths, BorderStyle::Mid)?;
     }
-    let body = display_rows.iter().skip(1);
-    let body_count = display_rows.len().saturating_sub(1);
-    for (i, row) in body.enumerate() {
+    let body_count = display_rows.len().saturating_sub(heading);
+    for (i, row) in display_rows.iter().skip(heading).enumerate() {
         write_box_row(w, row, &widths, false)?;
         if i + 1 < body_count {
             write_box_border(w, &widths, BorderStyle::Mid)?;
@@ -279,6 +337,37 @@ fn effective_row_cap(sheet: &Sheet, opts: &RenderOptions) -> usize {
         // box renderer counts the header row inside the cap, so `-n 5`
         // shows 1 header + 5 data rows.
         Some(n) => (n + 1).min(total),
+    }
+}
+
+/// Sheet column letters of the first `columns` columns, `+` for computed
+/// ones.
+fn column_labels(provenance: &Provenance, columns: usize) -> Vec<String> {
+    (0..columns)
+        .map(|column| provenance.column_label(column))
+        .collect()
+}
+
+/// Sheet row number of `sheet.rows()` row `index`, the header included;
+/// blank for a row the provenance does not cover.
+fn row_label(provenance: &Provenance, index: usize) -> String {
+    provenance
+        .rows
+        .get(index)
+        .map_or_else(String::new, u32::to_string)
+}
+
+/// With address labels on, row `index`'s sheet row number followed by
+/// `separator`; nothing otherwise.
+fn write_row_label<W: Write>(
+    w: &mut W,
+    addresses: Option<&Provenance>,
+    index: usize,
+    separator: &str,
+) -> std::io::Result<()> {
+    match addresses {
+        Some(provenance) => write!(w, "{}{separator}", row_label(provenance, index)),
+        None => Ok(()),
     }
 }
 
@@ -513,18 +602,122 @@ mod tests {
     fn markdown_empty_sheet_is_explicit() {
         let sheet = Sheet::from_rows("Blank".to_string(), Vec::new());
         let mut out = Vec::new();
-        markdown(
-            &mut out,
-            &sheet,
-            &RenderOptions {
-                max_rows: Some(5),
-                max_columns: None,
-                max_width: 20,
-                all_sheets: &[],
-            },
-        )
-        .unwrap();
+        markdown(&mut out, &sheet, &options(None)).unwrap();
         assert_eq!(String::from_utf8(out).unwrap(), "(empty sheet)\n");
+    }
+
+    fn options(addresses: Option<&Provenance>) -> RenderOptions<'_> {
+        RenderOptions {
+            max_rows: Some(5),
+            max_columns: None,
+            max_width: 20,
+            all_sheets: &[],
+            addresses,
+        }
+    }
+
+    /// `City`, `Pop`, and a computed `Share` after a filter dropped sheet
+    /// rows 4 through 11 and a selection moved `Pop` (sheet column F) next
+    /// to `City` (column C).
+    fn filtered() -> (Sheet, Provenance) {
+        let text = |text: &str| Cell {
+            value: CellValue::String(text.to_owned()),
+            number_format: None,
+        };
+        let int = |n: i64| Cell {
+            value: CellValue::Int(n),
+            number_format: None,
+        };
+        let sheet = Sheet::from_rows(
+            "Cities".to_string(),
+            vec![
+                vec![text("City"), text("Pop"), text("Share")],
+                vec![text("Oslo"), int(700_000), int(1)],
+                vec![text("Lima"), int(9_000), int(2)],
+            ],
+        );
+        let provenance = Provenance {
+            rows: vec![2, 3, 12],
+            columns: vec![Some(3), Some(6), None],
+        };
+        (sheet, provenance)
+    }
+
+    fn rendered(
+        render: fn(&mut Vec<u8>, &Sheet, &RenderOptions) -> std::io::Result<()>,
+        sheet: &Sheet,
+        addresses: Option<&Provenance>,
+    ) -> String {
+        let mut out = Vec::new();
+        render(&mut out, sheet, &options(addresses)).unwrap();
+        String::from_utf8(out).unwrap()
+    }
+
+    #[test]
+    fn addresses_label_text_with_source_coordinates() {
+        let (sheet, provenance) = filtered();
+        assert_eq!(
+            rendered(text, &sheet, Some(&provenance)),
+            "\tC\tF\t+\n2\tCity\tPop\tShare\n3\tOslo\t700,000\t1\n12\tLima\t9,000\t2\n"
+        );
+        assert_eq!(
+            rendered(text, &sheet, None),
+            "City\tPop\tShare\nOslo\t700,000\t1\nLima\t9,000\t2\n",
+            "no labels without addresses"
+        );
+    }
+
+    #[test]
+    fn addresses_label_markdown_with_source_coordinates() {
+        let (sheet, provenance) = filtered();
+        assert_eq!(
+            rendered(markdown, &sheet, Some(&provenance)),
+            "\
+|  | C | F | + |
+|---|---|---|---|
+| 2 | City | Pop | Share |
+| 3 | Oslo | 700,000 | 1 |
+| 12 | Lima | 9,000 | 2 |
+"
+        );
+        assert_eq!(
+            rendered(markdown, &sheet, None),
+            "\
+| City | Pop | Share |
+|---|---|---|
+| Oslo | 700,000 | 1 |
+| Lima | 9,000 | 2 |
+"
+        );
+    }
+
+    #[test]
+    fn addresses_label_the_box_with_source_coordinates() {
+        let (sheet, provenance) = filtered();
+        let labelled = rendered(boxed, &sheet, Some(&provenance));
+        let table = "\
+┌────┬──────┬─────────┬───────┐
+│    │  C   │    F    │   +   │
+├────┼──────┼─────────┼───────┤
+│  2 │ City │   Pop   │ Share │
+├────┼──────┼─────────┼───────┤
+│  3 │ Oslo │ 700,000 │ 1     │
+├────┼──────┼─────────┼───────┤
+│ 12 │ Lima │ 9,000   │ 2     │
+└────┴──────┴─────────┴───────┘
+";
+        assert!(labelled.ends_with(table), "{labelled}");
+        let plain = rendered(boxed, &sheet, None);
+        let table = "\
+┌──────┬─────────┬───────┐
+│ City │   Pop   │ Share │
+├──────┼─────────┼───────┤
+│ Oslo │ 700,000 │ 1     │
+├──────┼─────────┼───────┤
+│ Lima │ 9,000   │ 2     │
+└──────┴─────────┴───────┘
+";
+        assert!(plain.ends_with(table), "{plain}");
     }
 
     #[test]

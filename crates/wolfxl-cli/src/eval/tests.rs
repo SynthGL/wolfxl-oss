@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 
 use super::{evaluate, parse, DataSource, ExcelError, Extent, ParseError, Value, FUNCTIONS};
 
+mod functions;
+
 #[derive(Default)]
 struct Sheet {
     name: String,
@@ -309,7 +311,7 @@ fn money_text_coerces_with_the_row_filter_parser() {
         ("=\"1,234.5e2\"+0", Value::Number(123450.0)),
         ("=\"$1,20\"+0", Value::Error(ExcelError::Value)),
         ("=\"$1,200 trailing\"+0", Value::Error(ExcelError::Value)),
-        ("=\"25%\"+0", Value::Error(ExcelError::Value)),
+        ("=\"25%\"+0", Value::Number(0.25)),
     ]);
 }
 
@@ -546,7 +548,10 @@ fn range_results_retain_two_dimensional_shape() {
         Value::Array(vec![vec![Value::Number(2.0)]])
     );
     assert_eq!(source.value("=SUM(A1:B2)"), Value::Number(-2.0));
-    assert_eq!(source.value("=A1:A2+1"), Value::Error(ExcelError::Value));
+    assert_eq!(
+        source.value("=A1:A2+1"),
+        Value::Array(vec![vec![Value::Number(3.0)], vec![Value::Number(4.0)]])
+    );
     assert_eq!(source.value("=IF(TRUE,A1:B2,1/0)"), expected);
 }
 
@@ -668,9 +673,11 @@ fn function_registry_lists_exact_supported_surface() {
         ("AVERAGEIF", "statistical"),
         ("AVERAGEIFS", "statistical"),
         ("CHOOSE", "lookup"),
+        ("CONCAT", "text"),
         ("CONCATENATE", "text"),
         ("COUNT", "statistical"),
         ("COUNTA", "statistical"),
+        ("COUNTBLANK", "statistical"),
         ("COUNTIF", "statistical"),
         ("COUNTIFS", "statistical"),
         ("DATE", "date"),
@@ -680,35 +687,54 @@ fn function_registry_lists_exact_supported_surface() {
         ("EDATE", "date"),
         ("EOMONTH", "date"),
         ("EXACT", "text"),
+        ("FILTER", "lookup"),
         ("FIND", "text"),
         ("FV", "financial"),
         ("HLOOKUP", "lookup"),
         ("HOUR", "date"),
         ("IF", "logical"),
         ("IFERROR", "logical"),
+        ("IFNA", "logical"),
+        ("IFS", "logical"),
         ("INDEX", "lookup"),
         ("INT", "math"),
         ("IRR", "financial"),
+        ("LARGE", "statistical"),
         ("LEFT", "text"),
         ("LEN", "text"),
         ("LOWER", "text"),
         ("MATCH", "lookup"),
         ("MAX", "statistical"),
         ("MAXIFS", "statistical"),
+        ("MEDIAN", "statistical"),
         ("MID", "text"),
         ("MIN", "statistical"),
         ("MINIFS", "statistical"),
         ("MINUTE", "date"),
         ("MOD", "math"),
+        ("MODE", "statistical"),
+        ("MODE.SNGL", "statistical"),
         ("MONTH", "date"),
+        ("NETWORKDAYS", "date"),
         ("NOT", "logical"),
         ("NOW", "date"),
+        ("NPER", "financial"),
         ("NPV", "financial"),
         ("OFFSET", "lookup"),
         ("OR", "logical"),
+        ("PERCENTILE", "statistical"),
+        ("PERCENTILE.EXC", "statistical"),
+        ("PERCENTILE.INC", "statistical"),
         ("PMT", "financial"),
         ("POWER", "math"),
         ("PV", "financial"),
+        ("QUARTILE", "statistical"),
+        ("QUARTILE.EXC", "statistical"),
+        ("QUARTILE.INC", "statistical"),
+        ("RANK", "statistical"),
+        ("RANK.AVG", "statistical"),
+        ("RANK.EQ", "statistical"),
+        ("RATE", "financial"),
         ("REPT", "text"),
         ("RIGHT", "text"),
         ("ROUND", "math"),
@@ -717,17 +743,36 @@ fn function_registry_lists_exact_supported_surface() {
         ("SECOND", "date"),
         ("SIGN", "math"),
         ("SLN", "financial"),
+        ("SMALL", "statistical"),
+        ("SORT", "lookup"),
         ("SQRT", "math"),
+        ("STDEV", "statistical"),
+        ("STDEV.P", "statistical"),
+        ("STDEV.S", "statistical"),
+        ("STDEVP", "statistical"),
         ("SUBSTITUTE", "text"),
+        ("SUBTOTAL", "math"),
         ("SUM", "math"),
         ("SUMIF", "math"),
         ("SUMIFS", "math"),
+        ("SUMPRODUCT", "math"),
+        ("SWITCH", "logical"),
         ("TEXT", "text"),
+        ("TEXTJOIN", "text"),
         ("TODAY", "date"),
         ("TRIM", "text"),
+        ("UNIQUE", "lookup"),
         ("UPPER", "text"),
+        ("VALUE", "text"),
+        ("VAR", "statistical"),
+        ("VAR.P", "statistical"),
+        ("VAR.S", "statistical"),
+        ("VARP", "statistical"),
         ("VLOOKUP", "lookup"),
+        ("WORKDAY", "date"),
+        ("XIRR", "financial"),
         ("XLOOKUP", "lookup"),
+        ("XNPV", "financial"),
         ("YEAR", "date"),
     ];
     assert_eq!(
@@ -1072,6 +1117,9 @@ fn financial_functions_match_published_examples() {
             0.086_63,
             1e-5,
         ),
+        ("=IRR({-70000,12000,15000},-0.1)", -0.443_507, 1e-6),
+        // Convergence does not depend on the size of the cash flows.
+        ("=IRR({-1E-12,2E-12})", 1.0, 1e-9),
         ("=SLN(30000,7500,10)", 2250.0, 0.0),
         ("=DB(1000000,100000,6,1,7)", 186_083.33, 0.01),
         ("=DB(1000000,100000,6,2,7)", 259_639.42, 0.01),

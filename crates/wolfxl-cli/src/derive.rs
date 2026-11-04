@@ -27,7 +27,7 @@ use wolfxl_formula::{translate, RefDelta, TokenizeError, MAX_COL};
 use crate::commands::peek::detached;
 use crate::eval::{ExcelError, Formula, Value};
 use crate::formula_data::{normalize_formula, parse_formula, text_value, WorkbookData};
-use crate::input::Input;
+use crate::input::{Input, Provenance};
 
 /// Why formula columns could not be added.
 pub(crate) enum Failure {
@@ -71,6 +71,7 @@ impl Columns {
         input: &mut Input,
         target: &str,
         raw: &Sheet,
+        provenance: &Provenance,
     ) -> Result<Sheet, Failure> {
         let columns = &self.0;
         let headers = raw.headers();
@@ -91,7 +92,8 @@ impl Columns {
         }
 
         let width = raw.rows().iter().map(Vec::len).max().unwrap_or(0);
-        let (origin_row, origin_column) = raw.origin();
+        let origin_row = provenance.rows.first().copied().unwrap_or(1) - 1;
+        let origin_column = provenance.columns.first().copied().flatten().unwrap_or(1) - 1;
         // 0-based sheet column of the first added column.
         let first_free = u64::from(origin_column) + width as u64;
         if first_free + columns.len() as u64 > u64::from(MAX_COL) {

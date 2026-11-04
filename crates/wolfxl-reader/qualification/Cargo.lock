@@ -137,7 +137,7 @@ checksum = "54ec2755506471f54baf5e4bb5499d8e510cc1caf271270e778a736bd2d7336c"
 
 [[package]]
 name = "wolfxl-formula"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "wolfxl-reader"

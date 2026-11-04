@@ -34,7 +34,7 @@ Add that directory to your `PATH` if prompted. The Unix installer requires
 `curl`, `tar`, and `sha256sum` or `shasum`. Windows requires PowerShell 5.1 or
 newer.
 
-Set `WOLFXL_VERSION` to a CLI version, such as `0.11.0`, to pin the download
+Set `WOLFXL_VERSION` to a CLI version, such as `0.11.1`, to pin the download
 and skip version discovery. Set `WOLFXL_INSTALL_DIR` to choose a different
 destination. For a release mirror, `WOLFXL_RELEASE_BASE_URL` overrides
 `https://github.com/SynthGL/wolfxl-oss/releases/download`; the mirror must serve
@@ -151,11 +151,15 @@ are distinct fields for `--rows`, `--values`, `--where`, `--select`, and
 `--key`. Data fields arrive as text. `pivot` and `stats` trim surrounding
 whitespace and read `TRUE` and `FALSE` in any letter case as booleans, and
 plain decimals as numbers: an optional sign, digits with an optional decimal
-point (`42`, `-1.5`, `.5`), and an optional exponent (`-1.5e3`). `calc` and
-the formulas of `peek --add` also read whole-field money spellings as
-numbers, using the same parser as `--where`: leading signs and currency
-symbols, grouped thousands commas (`$1,200.00`), and accounting negatives
-(`(75.00)`). Other text, including hex (`0x10`), `inf`, and `NaN`, stays text.
+point (`42`, `-1.5`, `.5`), and an optional exponent (`-1.5e3`). `calc`, the
+formulas of `peek --add`, and the aggregates of `pivot` and `stats` also read
+whole-field money spellings as numbers, using the same parser as `--where`:
+leading signs and currency symbols, grouped thousands commas (`$1,200.00`),
+and accounting negatives (`(75.00)`). For `calc` and `peek --add`, a field in
+ISO date form (`2008-01-01`, `2008-01-01T12:00:00`) is the date's serial
+number, as Excel's text import reads it, so `XIRR` and the date functions take
+a column of ISO dates. Other text, including hex (`0x10`), `inf`, and `NaN`,
+stays text.
 Text cells stored in an Excel workbook stay text, even when they look like
 money; range functions such as `SUM` ignore them. `peek` output and filters,
 `diff`, and `fingerprint` work from the source text, so `007` and `1,200`
@@ -187,38 +191,93 @@ input, which needs `--from` as described above.
   error literals such as `#N/A`. It reads A1 references with or without `$`,
   sheet-qualified references such as `'P&L'!B3`, and ranges such as `B2:D10`,
   `B:B`, and `2:2`; whole columns and rows stop at the sheet's used extent.
-- **Functions.** 67 functions in seven categories:
+- **Functions.** 107 functions in seven categories:
   - `math`: `ABS`, `INT`, `MOD`, `POWER`, `ROUND`, `ROUNDDOWN`, `ROUNDUP`,
-    `SIGN`, `SQRT`, `SUM`, `SUMIF`, `SUMIFS`
+    `SIGN`, `SQRT`, `SUBTOTAL`, `SUM`, `SUMIF`, `SUMIFS`, `SUMPRODUCT`
   - `statistical`: `AVERAGE`, `AVERAGEIF`, `AVERAGEIFS`, `COUNT`, `COUNTA`,
-    `COUNTIF`, `COUNTIFS`, `MAX`, `MAXIFS`, `MIN`, `MINIFS`
-  - `logical`: `AND`, `IF`, `IFERROR`, `NOT`, `OR`
-  - `lookup`: `CHOOSE`, `HLOOKUP`, `INDEX`, `MATCH`, `OFFSET`, `VLOOKUP`,
-    `XLOOKUP`
-  - `text`: `CONCATENATE`, `EXACT`, `FIND`, `LEFT`, `LEN`, `LOWER`, `MID`,
-    `REPT`, `RIGHT`, `SUBSTITUTE`, `TEXT`, `TRIM`, `UPPER`
+    `COUNTBLANK`, `COUNTIF`, `COUNTIFS`, `LARGE`, `MAX`, `MAXIFS`, `MEDIAN`,
+    `MIN`, `MINIFS`, `MODE`, `MODE.SNGL`, `PERCENTILE`, `PERCENTILE.EXC`,
+    `PERCENTILE.INC`, `QUARTILE`, `QUARTILE.EXC`, `QUARTILE.INC`, `RANK`,
+    `RANK.AVG`, `RANK.EQ`, `SMALL`, `STDEV`, `STDEV.P`, `STDEV.S`, `STDEVP`,
+    `VAR`, `VAR.P`, `VAR.S`, `VARP`
+  - `logical`: `AND`, `IF`, `IFERROR`, `IFNA`, `IFS`, `NOT`, `OR`, `SWITCH`
+  - `lookup`: `CHOOSE`, `FILTER`, `HLOOKUP`, `INDEX`, `MATCH`, `OFFSET`,
+    `SORT`, `UNIQUE`, `VLOOKUP`, `XLOOKUP`
+  - `text`: `CONCAT`, `CONCATENATE`, `EXACT`, `FIND`, `LEFT`, `LEN`, `LOWER`,
+    `MID`, `REPT`, `RIGHT`, `SUBSTITUTE`, `TEXT`, `TEXTJOIN`, `TRIM`, `UPPER`,
+    `VALUE`
   - `date`: `DATE`, `DAY`, `DAYS`, `EDATE`, `EOMONTH`, `HOUR`, `MINUTE`,
-    `MONTH`, `NOW`, `SECOND`, `TODAY`, `YEAR`
-  - `financial`: `DB`, `FV`, `IRR`, `NPV`, `PMT`, `PV`, `SLN`
+    `MONTH`, `NETWORKDAYS`, `NOW`, `SECOND`, `TODAY`, `WORKDAY`, `YEAR`
+  - `financial`: `DB`, `FV`, `IRR`, `NPER`, `NPV`, `PMT`, `PV`, `RATE`,
+    `SLN`, `XIRR`, `XNPV`
 
-  `IF`, `IFERROR`, and `CHOOSE` evaluate only the argument they return.
-  `COUNT` ignores errors, including computed errors; the other aggregates
-  propagate errors. Criteria in `COUNTIF`, `SUMIF`, and the other `*IF` and
-  `*IFS` functions take an optional comparison prefix (`">100"`, `"<>West"`)
+  `IF`, `IFERROR`, `IFNA`, `IFS`, `SWITCH`, and `CHOOSE` evaluate only the
+  argument they return. `COUNT` ignores errors, including computed errors;
+  the other aggregates propagate errors. The statistical functions read
+  numbers the way `SUM` does: ranges skip text, booleans, and blanks.
+  Criteria in `COUNTIF`, `SUMIF`, and the other `*IF` and `*IFS` functions
+  take an optional comparison prefix (`">100"`, `"<>West"`)
   and the `*`, `?`, and `~` wildcards. `MATCH`, `VLOOKUP`, `HLOOKUP`, and
   `XLOOKUP` take Excel's match modes. `TEXT` covers number, percent,
   scientific, and date and time format codes. `TODAY` and `NOW` read the
   local clock. An empty argument counts as a blank, so `MATCH(x,A:A,)` is an
   exact match, while `XLOOKUP` and `OFFSET` give empty optional arguments
-  their defaults. A formula naming any other function exits 2, naming it and
-  pointing to [`wolfxl list-functions`](#function-registry).
+  their defaults. Names stored with the `_xlfn.` or `_xlws.` prefix, such as
+  `_xlfn.STDEV.S`, resolve to the same functions. A formula naming any other
+  function exits 2, naming it and pointing to
+  [`wolfxl list-functions`](#function-registry).
+- **Arrays.** Operators work element by element when an operand is a range
+  or array, as in Excel: `=B2:B10*C2:C10` is an array of products,
+  `=SUMPRODUCT((A2:A10="North")*C2:C10)` and `=SUMPRODUCT(--(C2:C10>100))`
+  count and sum by condition, and `=FILTER(A2:A10,C2:C10>100)` keeps the
+  matching rows. A scalar pairs with every element, and a single row or column
+  repeats to match the other operand; positions outside both shapes are
+  `#N/A`. Ranges are not implicitly intersected, and results never spill.
+- **`SUBTOTAL`.** Function numbers 1 to 11 and 101 to 111 select `AVERAGE`,
+  `COUNT`, `COUNTA`, `MAX`, `MIN`, `PRODUCT`, `STDEV`, `STDEVP`, `SUM`,
+  `VAR`, and `VARP`. Cells that themselves hold a `SUBTOTAL` formula, such as
+  a table's totals row, are skipped, so `=SUBTOTAL(109,F3:F15)` over a column
+  ending in its own total does not count it twice.
 - **Semantics.** Arithmetic uses `f64`. Arithmetic text-to-number coercion
   accepts the same decimal, exponent, and money spellings as `--where`.
   Text comparisons ignore case by Unicode lowercase ordering rather than
   locale-specific collation, and `&` joins numbers in plain decimal form
   with up to 15 significant digits rather than with cell number formats.
-  A range is an array: operators do not intersect or broadcast it, and
-  results never spill.
+- **Structured references.** Formulas can name a workbook table from any
+  sheet: `Sales[Amount]` is the column's data rows, without the header or
+  totals row; `Sales[]` and `Sales[#Data]` are every data row;
+  `Sales[#All]`, `Sales[#Headers]`, and `Sales[#Totals]` select those rows;
+  `Sales[[#Headers],[#Data],[Amount]]` and `Sales[[#Data],[#Totals],[Amount]]`
+  combine them; and `Sales[[#Data],[Q1]:[Q4]]` spans a column range. Each
+  resolves to the cells it covers when the formula is evaluated, so it works
+  wherever a range does: `SUM(Sales[Amount])`, `Sales[[#Totals],[Amount]]`,
+  `INDEX(Sales[Amount],2)`. Table, column, and item names ignore case, and
+  within a column name `'` escapes `[`, `]`, `#`, and `'`, as in
+  `Sales[Q1 '[est']]`. Tables come from the table parts of `.xlsx`, `.xlsm`,
+  and `.xlsb` workbooks and resolve by the name stored in the table part;
+  other inputs have none. A table missing from the workbook's table parts,
+  an unknown column, and `#Headers` or `#Totals` of a table without that row
+  are `#REF!`. Unlike Excel, `Sales[@Amount]` and `[#This Row]` are
+  `#VALUE!`, because a formula evaluated here has no row of its own. A
+  bracketed column without a table name, such as `[Amount]`, and item
+  combinations Excel rejects, such as `[#Headers],[#Totals]`, exit 2.
+- **Differences from Excel.**
+  - `FILTER` with no match and no `if_empty` argument, and `UNIQUE` with
+    nothing to return, give `#VALUE!` where Excel gives `#CALC!`.
+  - Blank cells stay blank inside array results (`FILTER`, `UNIQUE`, `SORT`,
+    and bare ranges) instead of becoming 0.
+  - `SUBTOTAL` 101 to 111 skip hidden rows only in `.xlsx`, `.xlsm`, and
+    `.xlsb` workbooks; other formats record no hidden rows. Rows hidden by a
+    filter and rows hidden by hand are not told apart, so 1 to 11 include
+    both and 101 to 111 skip both, where Excel's 1 to 11 skip filtered rows.
+  - `VALUE` reads numbers, percentages, `m/d/y`, `y-m-d`, `d-Mon-y`,
+    `Mon d, y`, and `Mon y` dates, and `h:mm[:ss]` times with optional
+    `AM`/`PM`, in US order only. A date without a year, such as `"3/14"`, is
+    `#VALUE!` rather than a date in the current year.
+  - `RATE` and `XIRR` start from the guess with Newton's method and, when
+    that does not converge, search rates from -0.99 to 10 for the sign
+    change nearest the guess, so they can return a root where Excel returns
+    `#NUM!`.
 
 Scalars print as text with up to 15 significant digits, `TRUE` or `FALSE`
 for booleans, an empty line for a blank, and the literal for an Excel error.
@@ -257,13 +316,13 @@ wolfxl list-functions --check NAME[,NAME...] [--json]
 
 ```text
 $ wolfxl list-functions
-ABS          math
-AND          logical
-AVERAGE      statistical
+ABS             math
+AND             logical
+AVERAGE         statistical
 ...
-XLOOKUP      lookup
-YEAR         date
-67 functions
+XNPV            financial
+YEAR            date
+107 functions
 ```
 
 - **Categories.** The registry's categories are `date`, `financial`,
@@ -283,7 +342,7 @@ YEAR         date
 filters (`null` when absent), with `category` in its registry spelling.
 
 ```json
-{"contract_version": 1, "total": 67, "count": 3, "category": "lookup", "search": "look",
+{"contract_version": 1, "total": 107, "count": 3, "category": "lookup", "search": "look",
  "functions": [{"name": "HLOOKUP", "category": "lookup"}, {"name": "VLOOKUP", "category": "lookup"},
                {"name": "XLOOKUP", "category": "lookup"}]}
 ```
@@ -307,7 +366,7 @@ With `--json`, `total` is the size of the registry, `checked` counts the names,
 `supported` the supported ones, and `category` is `null` for an unsupported name:
 
 ```json
-{"contract_version": 1, "total": 67, "checked": 2, "supported": 1, "results": [
+{"contract_version": 1, "total": 107, "checked": 2, "supported": 1, "results": [
   {"name": "SUM", "status": "supported", "category": "math"},
   {"name": "LOOKUP", "status": "unsupported", "category": null}
 ]}
@@ -324,7 +383,10 @@ JSON is printed on one line; it is wrapped above for reading.
 ## Row filters and column selection
 
 `wolfxl peek` reads a path, or standard input when the file is `-` (see
-above). The first row of the sheet is the header row.
+above). By default the first used row supplies the headers. `--header-row N`
+instead uses sheet row N and discards preceding rows. N is an absolute,
+one-based sheet row, not an offset into the used range; an out-of-range N
+exits 2 and reports the used rows. This also applies to `stats` and `pivot`.
 
 `--where COLUMN<op>VALUE` keeps the data rows that satisfy the condition;
 the header row is always kept. Repeat `--where` to require every condition
@@ -335,16 +397,32 @@ column name are ignored; the value is used as written.
 
 - When the value reads as a number, the comparison is numeric. Money
   spellings count on both sides: `$1,200.00`, `1,200`, and the accounting
-  negative `(500.00)`. A cell that holds no number fails every numeric
-  comparison except `!=`.
+  negative `(500.00)`. A trailing percent divides by 100: `12%` is `0.12`,
+  `-3.5%` is `-0.035`, `(12%)` is `-0.12`, and `1,200%` is `12`.
+  This same rule types delimited fields for `calc` and `--add`; malformed
+  grouping (`1,23,4`) and mixed text remain text. Source spelling, including
+  leading zeroes, is preserved in `peek` output.
+  A cell that holds no number fails every numeric comparison except `!=`.
 - Any other value compares as text, ignoring case, against the cell's
   displayed value: strings as stored, numbers in plain notation, booleans as
   `TRUE` or `FALSE`. `<` and `>` order text lexically.
 - `~` always tests text: the cell contains the value, ignoring case.
 
 `--select A,B` prints only the named columns, in the order given. A filter
-may test a column that `--select` leaves out. Column names match a header
-exactly first, then by a unique case-insensitive match.
+may test a column that `--select` leaves out. Column resolution first accepts
+a unique exact header, then a sheet column letter inside the original used
+range (`C`, `F`, `AA`), then a unique case-insensitive header. Duplicate
+header names are refused with their header-cell addresses: use a letter to
+disambiguate, such as `--header-row 2 --select C,F` when both C2 and I2
+contain `City`. Letters always refer to the original sheet, even after
+selection reorders columns; computed columns are selected by their names.
+
+`--addresses` labels box, text, and markdown previews with sheet column
+letters above the headers and sheet row numbers on the left. Filtering
+retains original row numbers and selection retains original letters, so
+these labels are valid `wolfxl calc` coordinates. Computed `--add` columns
+are marked `+`: they have no stored sheet address. CSV and JSON reject
+`--addresses` with exit 2 rather than changing their machine-readable shape.
 
 Filtering and selection run before `--max-rows` and `--max-columns` and apply
 to every export format. Without `--where` or `--select`, output is unchanged.
@@ -366,8 +444,9 @@ are FORMULA evaluated on every data row. Repeat `--add` for more columns.
 The argument splits at its first `=`, so `Margin=C2-B2` and `Margin==C2-B2`
 are the same formula.
 
-Write the formula for the first data row, the row under the header (row 2
-for a sheet that starts in A1). Each later row gets it filled down the way a
+Write the formula for the first data row, the row under the chosen header
+(row 2 for a sheet that starts in A1, or row N+1 with `--header-row N`).
+Each later row gets it filled down the way a
 spreadsheet fills a formula: relative row references move with the row,
 `$`-anchored rows stay put, and columns never move. `C2-B2` on row 5 reads
 `C5-B5`, and `SUM($B$2:B2)` is a running total. References to other sheets
@@ -386,10 +465,12 @@ rows below in its own column read as blank.
 
 Results print the way `wolfxl calc` prints a scalar: text with up to 15
 significant digits, also in JSON, and `TRUE`/`FALSE` for booleans. A blank
-result leaves the cell empty, and a range result such as `B2:C2` is
-`#VALUE!`, since ranges are not intersected with the row. An Excel error
-such as `#DIV/0!` stays in its cell, shown as `ERROR: #DIV/0!` in the text
-views and as `"#DIV/0!"` in JSON, and `--where 'Unit=#DIV/0!'` finds it.
+result leaves the cell empty, and an array result, such as the range
+`B2:C2` or a `FILTER`, `UNIQUE`, or `SORT` call, is `#VALUE!`, since
+ranges are not intersected with the row and results do not spill. An
+Excel error such as `#DIV/0!` stays in its cell, shown as `ERROR: #DIV/0!`
+in the text views and as `"#DIV/0!"` in JSON, and `--where 'Unit=#DIV/0!'`
+finds it.
 
 Formula columns are computed over the whole sheet before `--where` and
 `--select`, so filters can test added columns, `--select` can show them,
@@ -412,6 +493,11 @@ terminal grid instead of printing it. The header row stays frozen at the
 top, and the last line is a status line showing the file, the sheet and its
 position among the workbook's sheets, the cursor's row and column, the
 current sort, the search and its match count, and notes.
+The cursor also shows its original sheet address (for example `F3`), retained
+through filtering, selection, and sorting; computed columns have no address.
+Status notices and cursor position take priority over the path and sheet
+description. Long paths elide leading directories first, and notices that
+cannot fit end with `…`.
 
 | Key | Action |
 |---|---|
@@ -456,17 +542,22 @@ panic.
 
 ```text
 wolfxl pivot FILE --rows R[,R2] [--column C] --values AGG:FIELD[,AGG:FIELD]
-             [--sheet S] [--from FMT] [-e box|csv|json]
+             [--sheet S] [--header-row N] [--from FMT] [-e box|csv|json]
 ```
 
 `wolfxl pivot` groups the data rows of one sheet (the first unless `--sheet`
-names another) and aggregates value fields per group. Row 1 holds the
-headers. `FILE` of `-` reads standard input, which needs `--from`;
+names another) and aggregates value fields per group. The first used row
+holds headers unless `--header-row N` selects another absolute sheet row
+and discards rows above it. Out-of-range N exits 2 with the used row range.
+`FILE` of `-` reads standard input, which needs `--from`;
 delimited fields are typed as described in
 [Standard input and delimited fields](#standard-input-and-delimited-fields).
-Fields are header names, matched exactly and then case-insensitively when
-exactly one header matches. `--rows` and `--values` take comma-separated
-lists or repeat. Fully blank rows are skipped.
+Fields in `--rows`, `--column`, and `--values` accept unique exact headers,
+then original sheet column letters, then unique case-insensitive headers.
+Duplicate names are refused with their header-cell addresses; use a letter.
+`--rows` and `--values` take comma-separated lists or repeat. Fully blank
+rows are skipped. A stored totals row is ordinary input data, not an Excel
+table total to exclude automatically.
 
 | Aggregation | Result |
 |---|---|
@@ -476,7 +567,9 @@ lists or repeat. Fully blank rows are skipped.
 | `min` | Smallest numeric cell |
 | `max` | Largest numeric cell |
 
-Numeric cells are stored numbers. Text, booleans, dates, and errors are
+Numeric cells are stored numbers and text in the money spellings that
+`--where` and `stats` read, such as `$1,200.00`, `1,200`, and `(500.00)`.
+Other text, booleans, dates, and errors are
 skipped by `sum`, `avg`, `min`, and `max`, and a group without numeric cells
 leaves those aggregates blank (`null` in JSON). Each `--rows` field becomes a
 key column; an empty key prints as `(blank)`. Keys of a field sort
@@ -668,18 +761,24 @@ still go to stderr.
 ## Column profiles
 
 ```text
-wolfxl stats FILE [--sheet S] [--from FMT] [--where EXPR]... [--select A,B]
+wolfxl stats FILE [--sheet S] [--header-row N] [--from FMT] [--where EXPR]... [--select A,B]
              [--top N] [-e box|csv|json]
 ```
 
 `wolfxl stats` profiles each column of one sheet, the first unless
-`--sheet` names another. Row 1 holds the headers, and every header cell is
-one column. `FILE` of `-` reads standard input, which needs `--from`; for a
+`--sheet` names another. The first used row holds headers, or `--header-row N`
+selects absolute sheet row N and discards preceding rows. An N outside the
+used range exits 2 naming the used rows. Every header cell is one column.
+`FILE` of `-` reads standard input, which needs `--from`; for a
 path, `--from` overrides the extension. `--where` and `--select` work as in
 `wolfxl peek`: conditions keep the data rows they accept, `--select`
 profiles the named columns in the order given, and a condition may test a
 column the selection leaves out. Without `--select`, columns appear in
 sheet order. Every data row counts, including fully blank ones.
+Column names resolve as for `peek`: unique exact header, original sheet
+letter, then unique case-insensitive header; duplicate names report their
+header-cell addresses. Stored totals rows count as data, so profiling a
+table including its total can count those values twice.
 
 Each profile reports:
 

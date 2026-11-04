@@ -7,7 +7,39 @@
 - `wolfxl-cli` 0.10.0 adds analyst commands backed by `wolfxl-core` 0.9.0
   and the new MIT `wolfxl-reader`, `wolfxl-formula`, and `wolfxl-rels` crates.
   `wolfxl-cli` 0.11.0 adds the full formula function set, the `wolfxl mcp`
-  server with workbook editing, and prebuilt binaries.
+  server with workbook editing, and prebuilt binaries. `wolfxl-cli` 0.11.1
+  adds table references, 40 more functions, and header-row selection for
+  sheets with a title above the table.
+- `calc`, `peek --add`, and the MCP `calc` tool evaluate Excel structured
+  references: `Table[Column]`, `Table[]`, `[#All]`, `[#Data]`, `[#Headers]`,
+  and `[#Totals]` and their combinations, and column ranges such as
+  `Table[[#Data],[Q1]:[Q4]]`, with escaped column names. They resolve
+  against the workbook's tables from any sheet. Unknown tables or columns
+  evaluate to `#REF!`; `[@Column]` and `[#This Row]` evaluate to `#VALUE!`.
+- `calc` and `peek --add` gain 40 functions (107 in total): `MEDIAN`,
+  `MODE`/`MODE.SNGL`, `STDEV`/`STDEV.S`/`STDEV.P`/`STDEVP`,
+  `VAR`/`VAR.S`/`VAR.P`/`VARP`, `PERCENTILE`/`.INC`/`.EXC`,
+  `QUARTILE`/`.INC`/`.EXC`, `RANK`/`RANK.EQ`/`RANK.AVG`, `LARGE`, `SMALL`,
+  `COUNTBLANK`, `SUMPRODUCT`, `SUBTOTAL`, `IFS`, `SWITCH`, `IFNA`, `CONCAT`,
+  `TEXTJOIN`, `VALUE`, `NETWORKDAYS`, `WORKDAY`, `XNPV`, `XIRR`, `RATE`,
+  `NPER`, `UNIQUE`, `FILTER`, and `SORT`.
+- `SUBTOTAL` skips cells that themselves hold `SUBTOTAL` formulas, such as a
+  table's totals row, and function numbers 101 to 111 skip hidden rows in
+  `.xlsx`, `.xlsm`, and `.xlsb` workbooks.
+- Operators work element by element over ranges and arrays
+  (`=B2:B10*C2:C10`, `=SUMPRODUCT((A2:A10="North")*C2:C10)`). A single row
+  or column repeats to match the other operand, and positions outside both
+  shapes are `#N/A`.
+- `peek`, `stats`, and `pivot` take `--header-row N` for sheets whose header
+  is not row 1, and accept sheet column letters wherever they accept a
+  header name. A header name shared by several columns exits 2 naming the
+  cells and asking for a letter.
+- `peek --addresses` labels box, text, and Markdown previews with sheet
+  column letters and row numbers. The interactive viewer shows the cursor's
+  source cell address through sorting, and keeps sort notices whole on
+  narrow terminals.
+- Numeric filters and formula imports accept trailing percentages (`12%` is
+  0.12); `peek` still prints the source spelling.
 - `wolfxl peek --where COLUMN<op>VALUE` keeps the data rows that satisfy every
   condition (`=`, `!=`, `<`, `>`, `<=`, `>=`, `~` contains), comparing money
   spellings such as `$1,200.00` and `(500.00)` numerically. `--select A,B`
@@ -88,7 +120,7 @@
 
 ### Changed
 
-- Bumped `wolfxl-cli` to `0.11.0`.
+- Bumped `wolfxl-cli` to `0.11.1`.
 - Updated the CLI to use `wolfxl-core` 0.9.0 and the MIT reader crates.
 - Preserve exact CSV/TSV header names when resolving pivot fields, matching
   the existing filters, selectors, keyed diffs, and column profiles.
@@ -99,6 +131,23 @@
   spool limits reported as exit-2 input failures.
 - Sanitize and display-width-bound interactive status metadata and load
   errors while keeping cursor coordinates visible on narrow terminals.
+
+### Fixed
+
+- `RATE`, `IRR`, and `XIRR` converge on the rate itself rather than on a
+  near-zero balance, so scaling every cash flow by a constant keeps the rate
+  (`RATE(1,0,1E-12,-2E-12)` is 1) and balances that only approach zero are
+  `#NUM!` (`RATE(360,0,100)`). When Newton's method does not settle, the
+  fallback searches outward from the guess, so a column of cash flows with no
+  rate is `#NUM!` after a few hundred passes over the flows.
+- `wolfxl-formula` 0.1.1 tokenizes escaped brackets in structured references
+  (`Sales[Cost '[USD']]`) as one reference, so `wolfxl peek --add` accepts them.
+- `wolfxl pivot` aggregates money-spelled text (`$12,500.00`, `(500.00)`)
+  as numbers, the same reading `stats` and `--where` use, instead of leaving
+  `sum`, `avg`, `min`, and `max` blank.
+- `calc` and `peek --add` read ISO date fields of delimited input
+  (`2008-01-01`) as date serials, as Excel's text import does, so
+  `XIRR(B2:B6,A2:A6)` works on a CSV of dated cash flows.
 
 ### Removed
 

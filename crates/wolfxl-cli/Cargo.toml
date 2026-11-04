@@ -1,6 +1,6 @@
 [package]
 name = "wolfxl-cli"
-version = "0.11.0"
+version = "0.11.1"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -31,7 +31,7 @@ path = "src/main.rs"
 [dependencies]
 wolfxl-core = { path = "../wolfxl-core", version = "0.9" }
 wolfxl-reader = { path = "../wolfxl-reader", version = "0.1" }
-wolfxl-formula = { path = "../wolfxl-formula", version = "0.1" }
+wolfxl-formula = { path = "../wolfxl-formula", version = "0.1.1" }
 wolfxl-edit = { path = "../wolfxl-edit", version = "0.1" }
 clap = { version = "4", features = ["derive"] }
 anyhow.workspace = true

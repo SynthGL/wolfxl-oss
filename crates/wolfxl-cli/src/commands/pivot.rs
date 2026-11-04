@@ -7,9 +7,10 @@
 //! contributes one key column; `--column` spreads its distinct values across
 //! columns and adds a grand-total column. A grand-total row closes the table.
 //!
-//! Aggregation follows the stored cell types: `Int` and `Float` cells are
-//! numeric, everything else (text, booleans, dates, errors) is skipped by
-//! `sum`, `avg`, `min`, and `max`, and every non-empty cell is counted by
+//! Aggregation reads numbers the way `--where` and `stats` do: `Int` and
+//! `Float` cells and text in money spellings (`$1,200.00`, `(500.00)`) are
+//! numeric; everything else (other text, booleans, dates, errors) is skipped
+//! by `sum`, `avg`, `min`, and `max`, and every non-empty cell is counted by
 //! `count`. Totals recompute the aggregation over all contributing rows.
 //!
 //! Keys sort numerically when every non-blank key of a field is numeric,
@@ -23,10 +24,11 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::process::ExitCode;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use wolfxl_core::{Cell, CellValue, Sheet};
 
+use crate::filter::{cell_number, resolve_column};
 use crate::render::{self, RenderOptions};
 use crate::{input, PivotArgs, PivotFormat};
 
@@ -61,6 +63,7 @@ pub(crate) fn run(args: PivotArgs) -> ExitCode {
         max_columns: None,
         max_width: usize::MAX,
         all_sheets: &sheet_names,
+        addresses: None,
     };
     let mut document = Vec::new();
     let rendered = match args.export {
@@ -137,10 +140,8 @@ impl Acc {
             return;
         }
         self.count += 1;
-        let number = match value {
-            CellValue::Int(integer) => *integer as f64,
-            CellValue::Float(float) => *float,
-            _ => return,
+        let Some(number) = cell_number(value) else {
+            return;
         };
         if self.numbers == 0 {
             self.min = number;
@@ -387,22 +388,23 @@ fn build(args: &PivotArgs) -> Result<(Table, Vec<String>)> {
     let sheet_names = input.sheet_names().to_vec();
     // Header names keep their source spelling (`001` stays distinct from
     // `1`); the data rows below are typed for grouping and aggregation.
-    let headers = input.raw_sheet(&sheet_name)?.headers();
-    let sheet = input.sheet(&sheet_name)?;
+    let (raw, provenance) = input::header_sheet(input.raw_sheet(&sheet_name)?, args.header_row)?;
+    let headers = raw.headers();
+    let (sheet, _) = input::header_sheet(input.sheet(&sheet_name)?, args.header_row)?;
 
     let row_columns = args
         .rows
         .iter()
-        .map(|field| resolve(&headers, field))
+        .map(|field| resolve_column(&headers, &provenance, field))
         .collect::<Result<Vec<_>>>()?;
     let column = args
         .column
         .as_deref()
-        .map(|field| resolve(&headers, field))
+        .map(|field| resolve_column(&headers, &provenance, field))
         .transpose()?;
     let values = specs
         .iter()
-        .map(|&(agg, field)| resolve(&headers, field).map(|index| (agg, index)))
+        .map(|&(agg, field)| resolve_column(&headers, &provenance, field).map(|index| (agg, index)))
         .collect::<Result<Vec<_>>>()?;
     let width = values.len();
 
@@ -549,42 +551,6 @@ fn parse_value(entry: &str) -> Result<(Agg, &str)> {
         anyhow!("unknown aggregation {agg:?} in {entry:?}; expected sum, count, avg, min, or max")
     })?;
     Ok((agg, field))
-}
-
-/// Exact header match, then a unique case-insensitive one.
-fn resolve(headers: &[String], name: &str) -> Result<usize> {
-    match positions(headers, |header| header == name).as_slice() {
-        [only] => return Ok(*only),
-        [] => {}
-        many => bail!(
-            "header {name:?} appears {} times; rename the duplicate columns",
-            many.len()
-        ),
-    }
-    let folded = name.to_lowercase();
-    match positions(headers, |header| header.to_lowercase() == folded).as_slice() {
-        [only] => Ok(*only),
-        [] => bail!("unknown header {name:?}; headers: {}", headers.join(", ")),
-        many => {
-            let names: Vec<String> = many
-                .iter()
-                .map(|&index| format!("{:?}", headers[index]))
-                .collect();
-            bail!(
-                "header {name:?} matches {} without case; use the exact header",
-                names.join(", ")
-            )
-        }
-    }
-}
-
-fn positions(headers: &[String], matches: impl Fn(&str) -> bool) -> Vec<usize> {
-    headers
-        .iter()
-        .enumerate()
-        .filter(|(_, header)| matches(header.as_str()))
-        .map(|(index, _)| index)
-        .collect()
 }
 
 fn aggregates<'a>(

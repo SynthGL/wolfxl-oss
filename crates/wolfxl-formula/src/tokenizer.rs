@@ -409,6 +409,9 @@ impl<'a> Tokenizer<'a> {
         let mut i = start;
         while i < self.bytes.len() {
             match self.bytes[i] {
+                // Inside a structured reference `'` escapes the next
+                // character, so `Sales[Cost '[USD']]` holds one column name.
+                b'\'' if depth > 0 => i += 1,
                 b'[' => depth += 1,
                 b']' => {
                     depth -= 1;
@@ -782,6 +785,29 @@ mod tokenizer_tests {
         assert_eq!(toks[0].subkind, TokenSubKind::Range);
         assert_eq!(toks[0].value, "Table1[[#This Row], [Col1]]");
         assert_eq!(render(&toks), f);
+    }
+
+    #[test]
+    fn escaped_brackets_in_table_ref() {
+        // `'` escapes `[`, `]`, `#`, and `'` inside a structured reference,
+        // so an unbalanced escaped bracket stays inside one token.
+        for (f, reference) in [
+            ("=SUM(Sales[Cost '[USD])", "Sales[Cost '[USD]"),
+            ("=SUM(Sales[Cost ']USD])", "Sales[Cost ']USD]"),
+            (
+                "=Sales[[#Data],[Q1 ']]:[Q2]]+1",
+                "Sales[[#Data],[Q1 ']]:[Q2]]",
+            ),
+        ] {
+            let toks = t(f);
+            let token = toks.iter().find(|tok| tok.value.starts_with("Sales"));
+            assert_eq!(token.map(|tok| tok.value.as_str()), Some(reference), "{f}");
+            assert_eq!(render(&toks), f);
+        }
+        assert!(matches!(
+            tokenize("=Sales[Cost '[USD"),
+            Err(TokenizeError::UnterminatedBracket { offset: 6 })
+        ));
     }
 
     #[test]

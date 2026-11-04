@@ -285,6 +285,30 @@ fn file_input_reads_a_csv_path_and_groups_thousands() {
 }
 
 #[test]
+fn money_spelled_values_aggregate_as_numbers() {
+    // `n/a` is counted but not summed; accounting negatives subtract.
+    let csv = "Rep,Revenue\nAna,\"$12,500.00\"\nAna,(500.00)\nBen,\"1,200\"\nBen,n/a\n";
+    let out = piped(
+        csv,
+        &[
+            "--rows",
+            "Rep",
+            "--values",
+            "sum:Revenue,count:Revenue,min:Revenue",
+            "-e",
+            "csv",
+        ],
+    );
+    assert_eq!(
+        out,
+        "Rep,sum:Revenue,count:Revenue,min:Revenue\n\
+         Ana,\"12,000\",2,-500\n\
+         Ben,\"1,200\",2,\"1,200\"\n\
+         Total,\"13,200\",4,-500\n"
+    );
+}
+
+#[test]
 fn piped_tsv_and_default_box_output() {
     let tsv = "Region\tAmount\nEast\t3\nWest\t4\nEast\t5\n";
     let run = pivot(
@@ -390,7 +414,7 @@ fn unknown_headers_and_aggregations_exit_two() {
         ],
         Some(SALES),
     );
-    assert!(stderr.contains("unknown header \"Nope\""), "{stderr}");
+    assert!(stderr.contains("unknown column \"Nope\""), "{stderr}");
     assert!(stderr.contains("Region, Year, Amount"), "{stderr}");
 
     let stderr = refused(
@@ -407,7 +431,7 @@ fn unknown_headers_and_aggregations_exit_two() {
         ],
         Some(SALES),
     );
-    assert!(stderr.contains("unknown header \"Month\""), "{stderr}");
+    assert!(stderr.contains("unknown column \"Month\""), "{stderr}");
 
     let stderr = refused(
         &[
@@ -421,7 +445,7 @@ fn unknown_headers_and_aggregations_exit_two() {
         ],
         Some(SALES),
     );
-    assert!(stderr.contains("unknown header \"Price\""), "{stderr}");
+    assert!(stderr.contains("unknown column \"Price\""), "{stderr}");
 
     let stderr = refused(
         &[
@@ -463,7 +487,10 @@ fn malformed_and_ambiguous_requests_exit_two() {
         ],
         Some("Region,REGION,Amount\na,b,1\n"),
     );
-    assert!(stderr.contains("use the exact header"), "{stderr}");
+    assert!(
+        stderr.contains("A1 and B1") && stderr.contains("column letter"),
+        "{stderr}"
+    );
 
     let stderr = refused(
         &["-", "--rows", "Region", "--values", "sum:Amount"],

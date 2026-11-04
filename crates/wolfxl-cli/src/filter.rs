@@ -16,14 +16,15 @@ use std::cmp::Ordering;
 use anyhow::{anyhow, bail, Result};
 use wolfxl_core::CellValue;
 
-use crate::input::delimited_value;
+use crate::input::{delimited_value, Provenance};
 
 /// Currency symbols accepted before the digits.
 const CURRENCY: [char; 4] = ['$', '€', '£', '¥'];
 
 /// Read money-style text as a number: surrounding spaces, one sign or
-/// accounting parentheses, one leading currency symbol, and comma thousands
-/// separators in groups of three. Returns `None` for any other text.
+/// accounting parentheses, one leading currency symbol, comma thousands
+/// separators in groups of three, and an optional trailing percent (÷100).
+/// Returns `None` for any other text.
 pub(crate) fn lenient_number(text: &str) -> Option<f64> {
     let mut body = text.trim();
     let mut negative = false;
@@ -44,6 +45,10 @@ pub(crate) fn lenient_number(text: &str) -> Option<f64> {
         body = rest.trim_start();
     }
     body = body.strip_prefix(CURRENCY).unwrap_or(body).trim_start();
+    let percent = body.ends_with('%');
+    if percent {
+        body = body.strip_suffix('%')?.trim_end();
+    }
     if body.starts_with(['+', '-']) {
         return None;
     }
@@ -64,11 +69,12 @@ pub(crate) fn lenient_number(text: &str) -> Option<f64> {
         body.to_string()
     };
     let signed = if negative { format!("-{plain}") } else { plain };
-    match delimited_value(&signed) {
-        CellValue::Int(integer) => Some(integer as f64),
-        CellValue::Float(float) => Some(float),
-        _ => None,
-    }
+    let number = match delimited_value(&signed) {
+        CellValue::Int(integer) => integer as f64,
+        CellValue::Float(float) => float,
+        _ => return None,
+    };
+    Some(if percent { number / 100.0 } else { number })
 }
 
 /// Numeric view of a cell: numbers as stored, text through [`lenient_number`].
@@ -228,40 +234,63 @@ fn cell_text(value: &CellValue) -> Cow<'_, str> {
     }
 }
 
-/// Column index of header `name`: the first exact match, else the only
-/// case-insensitive match. Errors name the available headers.
-pub(crate) fn resolve_column(headers: &[String], name: &str) -> Result<usize> {
-    if let Some(index) = headers.iter().position(|header| header == name) {
-        return Ok(index);
+/// Resolve a unique exact header, a sheet column letter, then a unique
+/// case-insensitive header. Duplicate names identify their source header cells.
+pub(crate) fn resolve_column(
+    headers: &[String],
+    provenance: &Provenance,
+    name: &str,
+) -> Result<usize> {
+    let positions = |matches: &dyn Fn(&str) -> bool| {
+        headers
+            .iter()
+            .enumerate()
+            .filter(|(_, header)| matches(header))
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>()
+    };
+    let ambiguous = |matches: &[usize]| {
+        let cells = matches
+            .iter()
+            .map(|&index| {
+                provenance
+                    .address(0, index)
+                    .unwrap_or_else(|| format!("computed column {}", index + 1))
+            })
+            .collect::<Vec<_>>();
+        anyhow!(
+            "ambiguous column {name:?}: {}; use a column letter (several headers match)",
+            cells.join(" and ")
+        )
+    };
+    match positions(&|header| header == name).as_slice() {
+        [only] => return Ok(*only),
+        [] => {}
+        many => return Err(ambiguous(many)),
     }
-    let folded = |text: &str| {
-        text.chars()
-            .flat_map(char::to_lowercase)
-            .collect::<String>()
-    };
-    let wanted = folded(name);
-    let mut matches = headers
-        .iter()
-        .enumerate()
-        .filter(|(_, header)| folded(header.as_str()) == wanted)
-        .map(|(index, _)| index);
-    let available = || {
-        if headers.is_empty() {
-            "(none)".to_string()
-        } else {
-            headers.join(", ")
+    if !name.is_empty() && name.bytes().all(|byte| byte.is_ascii_alphabetic()) {
+        let column = name.bytes().try_fold(0_u32, |column, byte| {
+            column
+                .checked_mul(26)?
+                .checked_add(u32::from(byte.to_ascii_uppercase() - b'A' + 1))
+        });
+        if let Some(index) = column.and_then(|column| {
+            provenance
+                .columns
+                .iter()
+                .position(|candidate| *candidate == Some(column))
+        }) {
+            return Ok(index);
         }
-    };
-    match (matches.next(), matches.next()) {
-        (Some(index), None) => Ok(index),
-        (Some(_), Some(_)) => bail!(
-            "ambiguous column {name:?}: several headers match case-insensitively; available headers: {}",
-            available()
-        ),
-        (None, _) => bail!(
+    }
+    let wanted = name.to_lowercase();
+    match positions(&|header| header.to_lowercase() == wanted).as_slice() {
+        [only] => Ok(*only),
+        [] => bail!(
             "unknown column {name:?}; available headers: {}",
-            available()
+            headers.join(", ")
         ),
+        many => Err(ambiguous(many)),
     }
 }
 
@@ -281,6 +310,12 @@ mod tests {
             ("€12", 12.0),
             ("1,234,567.8", 1_234_567.8),
             ("+7", 7.0),
+            ("12%", 0.12),
+            ("-3.5%", -0.035),
+            ("(12%)", -0.12),
+            ("1,200%", 12.0),
+            ("01", 1.0),
+            ("01%", 0.01),
         ] {
             assert_eq!(lenient_number(text), Some(expected), "{text}");
         }
@@ -289,7 +324,22 @@ mod tests {
     #[test]
     fn malformed_spellings_stay_text() {
         for text in [
-            "", "abc", "1,20", "12,3456", ",100", "1.000,5", "(-5)", "$-5", "TRUE", "1e", "$", "()",
+            "",
+            "abc",
+            "1,20",
+            "12,3456",
+            ",100",
+            "1.000,5",
+            "(-5)",
+            "$-5",
+            "TRUE",
+            "1e",
+            "$",
+            "()",
+            "1,23,4",
+            "1,23,4%",
+            "12%%",
+            "12% growth",
         ] {
             assert_eq!(lenient_number(text), None, "{text}");
         }
@@ -363,11 +413,19 @@ mod tests {
     #[test]
     fn headers_resolve_exactly_then_by_unique_case_insensitive_match() {
         let headers = headers_of(&["id", "ID", "Region"]);
-        assert_eq!(resolve_column(&headers, "ID").unwrap(), 1);
-        assert_eq!(resolve_column(&headers, "region").unwrap(), 2);
-        let ambiguous = resolve_column(&headers, "Id").unwrap_err().to_string();
+        let provenance = Provenance {
+            rows: vec![1],
+            columns: vec![Some(1), Some(2), Some(3)],
+        };
+        assert_eq!(resolve_column(&headers, &provenance, "ID").unwrap(), 1);
+        assert_eq!(resolve_column(&headers, &provenance, "region").unwrap(), 2);
+        let ambiguous = resolve_column(&headers, &provenance, "Id")
+            .unwrap_err()
+            .to_string();
         assert!(ambiguous.contains("several headers"), "{ambiguous}");
-        let unknown = resolve_column(&headers, "Rep").unwrap_err().to_string();
+        let unknown = resolve_column(&headers, &provenance, "Rep")
+            .unwrap_err()
+            .to_string();
         assert!(
             unknown.contains("available headers: id, ID, Region"),
             "{unknown}"
