@@ -24,7 +24,7 @@ const CURRENCY: [char; 4] = ['$', '€', '£', '¥'];
 /// Read money-style text as a number: surrounding spaces, one sign or
 /// accounting parentheses, one leading currency symbol, comma thousands
 /// separators in groups of three, and an optional trailing percent (÷100).
-/// Returns `None` for any other text, retaining leading-zero identifiers.
+/// Returns `None` for any other text.
 pub(crate) fn lenient_number(text: &str) -> Option<f64> {
     let mut body = text.trim();
     let mut negative = false;
@@ -259,7 +259,7 @@ pub(crate) fn resolve_column(
             })
             .collect::<Vec<_>>();
         anyhow!(
-            "column {name:?} is ambiguous: {}; use a column letter (several headers match)",
+            "ambiguous column {name:?}: {}; use a column letter (several headers match)",
             cells.join(" and ")
         )
     };
@@ -314,6 +314,8 @@ mod tests {
             ("-3.5%", -0.035),
             ("(12%)", -0.12),
             ("1,200%", 12.0),
+            ("01", 1.0),
+            ("01%", 0.01),
         ] {
             assert_eq!(lenient_number(text), Some(expected), "{text}");
         }
@@ -338,8 +340,6 @@ mod tests {
             "1,23,4%",
             "12%%",
             "12% growth",
-            "01",
-            "01%",
         ] {
             assert_eq!(lenient_number(text), None, "{text}");
         }

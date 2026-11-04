@@ -359,7 +359,8 @@ column name are ignored; the value is used as written.
   negative `(500.00)`. A trailing percent divides by 100: `12%` is `0.12`,
   `-3.5%` is `-0.035`, `(12%)` is `-0.12`, and `1,200%` is `12`.
   This same rule types delimited fields for `calc` and `--add`; malformed
-  grouping (`1,23,4`), mixed text, and leading-zero identifiers remain text.
+  grouping (`1,23,4`) and mixed text remain text. Source spelling, including
+  leading zeroes, is preserved in `peek` output.
   A cell that holds no number fails every numeric comparison except `!=`.
 - Any other value compares as text, ignoring case, against the cell's
   displayed value: strings as stored, numbers in plain notation, booleans as

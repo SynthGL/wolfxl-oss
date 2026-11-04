@@ -76,12 +76,12 @@ fn absolute_headers_and_sheet_letters_filter_both_tables_without_mixing_them() {
     assert_eq!(
         names,
         [
-            "Shanghai",
-            "Karachi",
-            "Beijing",
-            "Sao Paulo",
-            "Delhi",
-            "Lagos",
+            "Shanghai, China",
+            "Karachi, Pakistan",
+            "Beijing, China",
+            "São Paulo, Brazil",
+            "Delhi, India",
+            "Lagos, Nigeria",
             "Total"
         ]
     );
@@ -173,7 +173,7 @@ fn profiles_and_pivots_include_the_stored_total_as_data() {
         ],
     ));
     assert!(out.starts_with("City,sum:Population\n"), "{out}");
-    assert!(out.contains("Shanghai,\"24,256,800\""), "{out}");
+    assert!(out.contains("\"Shanghai, China\",\"24,256,800\""), "{out}");
     assert!(out.ends_with("Total,\"397,811,400\"\n"), "{out}");
 }
 
@@ -189,7 +189,7 @@ fn address_previews_keep_original_rows_reordered_columns_and_computed_markers() 
                 "--add",
                 "Double=F3*2",
                 "--where",
-                "C=Karachi",
+                "C~Karachi",
                 "--select",
                 "Double,F,C",
                 "-e",
@@ -424,6 +424,7 @@ fn percent_filters_use_the_same_numeric_rule_on_cells_and_conditions() {
         ("Rate=-3.5%", "negative,-3.5%"),
         ("Rate=-0.12", "accounting,(12%)"),
         ("Rate=12", "grouped,\"1,200%\""),
+        ("Rate=0.01", "identifier,01%"),
     ] {
         let out = success(run(
             "peek",
@@ -435,7 +436,7 @@ fn percent_filters_use_the_same_numeric_rule_on_cells_and_conditions() {
 }
 
 #[test]
-fn calc_percent_imports_numbers_but_preserves_malformed_and_identifier_text() {
+fn calc_percent_imports_numbers_but_preserves_malformed_and_mixed_text() {
     for (formula, expected) in [
         ("B2", "0.12"),
         ("B3", "-0.035"),
@@ -443,7 +444,7 @@ fn calc_percent_imports_numbers_but_preserves_malformed_and_identifier_text() {
         ("B5", "12"),
         ("B6", "1,23,4%"),
         ("B7", "12% growth"),
-        ("B8", "01%"),
+        ("B8", "0.01"),
         ("SUM(B2:B5)", "11.965"),
     ] {
         let out = success(run(

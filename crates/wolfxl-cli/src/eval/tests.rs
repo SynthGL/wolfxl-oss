@@ -309,7 +309,7 @@ fn money_text_coerces_with_the_row_filter_parser() {
         ("=\"1,234.5e2\"+0", Value::Number(123450.0)),
         ("=\"$1,20\"+0", Value::Error(ExcelError::Value)),
         ("=\"$1,200 trailing\"+0", Value::Error(ExcelError::Value)),
-        ("=\"25%\"+0", Value::Error(ExcelError::Value)),
+        ("=\"25%\"+0", Value::Number(0.25)),
     ]);
 }
 

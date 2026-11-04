@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::process::ExitCode;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use wolfxl_core::{Cell, CellValue, Sheet};
 
