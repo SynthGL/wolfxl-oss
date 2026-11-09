@@ -59,7 +59,7 @@ jobs:
           docker run --rm --platform "$platform" \
             -v "$PWD:/work:ro" -w /work ${{ matrix.libc.image }} \
             sh -c 'python -m pip install --require-hashes -r runtime-requirements.txt && python .github/scripts/hashed_artifact_requirements.py --output /tmp/wheel-requirements.txt "dist/*cp312-cp312-${{ matrix.libc.name }}*.whl" && python -m pip install --require-hashes --no-deps -r /tmp/wheel-requirements.txt && python tests/community_wheel_smoke.py'
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wheels-linux-${{ matrix.target }}-${{ matrix.libc.name }}
           path: dist/*.whl
@@ -112,7 +112,7 @@ jobs:
           python3.12 .github/scripts/hashed_artifact_requirements.py --output artifact-requirements.txt "dist/*cp312-cp312-macosx*.whl"
           python3.12 -m pip install --require-hashes --no-deps -r artifact-requirements.txt
           python3.12 tests/community_wheel_smoke.py
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wheels-macos-${{ matrix.target }}
           path: dist/*.whl
@@ -176,7 +176,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           py -3.12 tests/community_wheel_smoke.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wheels-windows-x86_64
           path: dist/*.whl
@@ -208,7 +208,7 @@ jobs:
           python .github/scripts/hashed_artifact_requirements.py --output artifact-requirements.txt "dist/*.tar.gz"
           python -m pip install --require-hashes --no-deps --no-build-isolation -r artifact-requirements.txt
           python tests/community_wheel_smoke.py
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: source-distribution
           path: dist/*.tar.gz
