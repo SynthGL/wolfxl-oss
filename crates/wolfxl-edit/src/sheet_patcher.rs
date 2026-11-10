@@ -11,6 +11,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
+use std::iter::Peekable;
 
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Reader as XmlReader;
@@ -106,6 +107,7 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
         row_patches.entry(p.row).or_default().insert(p.col, p);
     }
     let patch_bounds = bounds_for_patches(patches);
+    let existing_cells = existing_patched_cells(xml, &row_patches)?;
 
     let mut reader = XmlReader::from_str(xml);
     reader.config_mut().trim_text(false);
@@ -119,7 +121,7 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
     let mut col_styles: Vec<(u32, u32, u32)> = Vec::new();
     let mut current_row: Option<u32> = None;
     let mut current_row_style: Option<u32> = None;
-    let mut current_row_cols_seen: BTreeSet<u32> = BTreeSet::new();
+    let mut current_row_patches = None;
     let mut rows_seen: BTreeSet<u32> = BTreeSet::new();
     let mut skip_until_cell_end = false; // skip children of a cell being replaced
     let mut worksheet_prefix: Option<String> = None;
@@ -165,7 +167,9 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
 
                     current_row = Some(row_num);
                     current_row_style = row_style(e);
-                    current_row_cols_seen.clear();
+                    current_row_patches = row_patches
+                        .get(&row_num)
+                        .map(|patches| patches.values().copied().peekable());
                     rows_seen.insert(row_num);
                     let row_start = rewrite_row_spans(
                         e,
@@ -177,7 +181,17 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                     let cell_ref = attr_value(e, b"r").unwrap_or_default();
                     let (_, col) = parse_cell_ref(&cell_ref);
 
-                    current_row_cols_seen.insert(col);
+                    if let Some(pending) = current_row_patches.as_mut() {
+                        write_new_cells_before(
+                            &mut writer,
+                            pending,
+                            col,
+                            &existing_cells,
+                            current_row_style,
+                            &col_styles,
+                            worksheet_prefix.as_deref(),
+                        )?;
+                    }
 
                     if let Some(row_map) = current_row.and_then(|r| row_patches.get(&r)) {
                         if let Some(patch) = row_map.get(&col) {
@@ -267,7 +281,17 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                     let cell_ref = attr_value(e, b"r").unwrap_or_default();
                     let (_, col) = parse_cell_ref(&cell_ref);
 
-                    current_row_cols_seen.insert(col);
+                    if let Some(pending) = current_row_patches.as_mut() {
+                        write_new_cells_before(
+                            &mut writer,
+                            pending,
+                            col,
+                            &existing_cells,
+                            current_row_style,
+                            &col_styles,
+                            worksheet_prefix.as_deref(),
+                        )?;
+                    }
 
                     if let Some(row_map) = current_row.and_then(|r| row_patches.get(&r)) {
                         if let Some(patch) = row_map.get(&col) {
@@ -321,21 +345,17 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                     in_cols = false;
                     write_event(&mut writer, Event::End(e.to_owned()))?;
                 } else if tag == b"row" && in_sheet_data {
-                    // Before closing row, insert any new cells for this row
-                    if let Some(r) = current_row {
-                        if let Some(row_map) = row_patches.get(&r) {
-                            for (&col, patch) in row_map.iter() {
-                                if !current_row_cols_seen.contains(&col) {
-                                    let cell_ref = col_row_to_a1(col, r);
-                                    write_new_cell(
-                                        &mut writer,
-                                        &cell_ref,
-                                        patch,
-                                        current_row_style.or_else(|| col_style(&col_styles, col)),
-                                        worksheet_prefix.as_deref(),
-                                    )?;
-                                }
-                            }
+                    // Write any remaining new cells after the existing cells.
+                    if let Some(pending) = current_row_patches.take() {
+                        for patch in pending {
+                            let cell_ref = col_row_to_a1(patch.col, patch.row);
+                            write_new_cell(
+                                &mut writer,
+                                &cell_ref,
+                                patch,
+                                current_row_style.or_else(|| col_style(&col_styles, patch.col)),
+                                worksheet_prefix.as_deref(),
+                            )?;
                         }
                     }
                     current_row = None;
@@ -1013,6 +1033,78 @@ fn col_style(col_styles: &[(u32, u32, u32)], col: u32) -> Option<u32> {
         .map(|&(_, _, style)| style)
 }
 
+/// Merge pending insertions before an existing cell, consuming its patch too.
+///
+/// The caller handles a patch at `col` as a replacement, not a new cell.
+fn write_new_cells_before<'a, W: Write>(
+    writer: &mut XmlWriter<W>,
+    pending: &mut Peekable<impl Iterator<Item = &'a CellPatch>>,
+    col: u32,
+    existing_cells: &BTreeSet<(u32, u32)>,
+    row_style: Option<u32>,
+    col_styles: &[(u32, u32, u32)],
+    prefix: Option<&str>,
+) -> Result<(), String> {
+    while let Some(patch) = pending.next_if(|patch| patch.col <= col) {
+        // Older WolfXL output may contain an existing cell later, out of order.
+        // Such cells must still be updated in place, never inserted twice.
+        if patch.col < col && !existing_cells.contains(&(patch.row, patch.col)) {
+            let cell_ref = col_row_to_a1(patch.col, patch.row);
+            write_new_cell(
+                writer,
+                &cell_ref,
+                patch,
+                row_style.or_else(|| col_style(col_styles, patch.col)),
+                prefix,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// Find patch targets already present, even in rows damaged by older writers.
+///
+/// Only patched coordinates are retained, so memory is bounded by patch count.
+/// This extra scan is needed only on the general (non-splice) patching path.
+fn existing_patched_cells(
+    xml: &str,
+    row_patches: &BTreeMap<u32, BTreeMap<u32, &CellPatch>>,
+) -> Result<BTreeSet<(u32, u32)>, String> {
+    let mut reader = XmlReader::from_str(xml);
+    let mut in_sheet_data = false;
+    let mut current_row = None;
+    let mut cells = BTreeSet::new();
+    loop {
+        match reader
+            .read_event()
+            .map_err(|e| format!("XML parse error: {e}"))?
+        {
+            Event::Start(e) if e.local_name().as_ref() == "sheetData" => in_sheet_data = true,
+            Event::End(e) if e.local_name().as_ref() == "sheetData" => {
+                in_sheet_data = false;
+                current_row = None;
+            }
+            Event::Start(e) if in_sheet_data && e.local_name().as_ref() == "row" => {
+                let row = attr_value(&e, b"r")
+                    .and_then(|r| r.parse::<u32>().ok())
+                    .unwrap_or(0);
+                current_row = row_patches.get(&row).map(|patches| (row, patches));
+            }
+            Event::End(e) if e.local_name().as_ref() == "row" => current_row = None,
+            Event::Start(e) | Event::Empty(e) if e.local_name().as_ref() == "c" => {
+                if let Some((row, patches)) = current_row {
+                    let (_, col) = parse_cell_ref(&attr_value(&e, b"r").unwrap_or_default());
+                    if patches.contains_key(&col) {
+                        cells.insert((row, col));
+                    }
+                }
+            }
+            Event::Eof => return Ok(cells),
+            _ => {}
+        }
+    }
+}
+
 /// Write a brand-new cell element (insertion, not replacement).
 ///
 /// `inherited_style` is the row or column style the absent cell had; it is
@@ -1461,6 +1553,135 @@ mod tests {
         let pos_r3 = result.find("r=\"A3\"").unwrap();
         assert!(pos_r1 < pos_r2);
         assert!(pos_r2 < pos_r3);
+    }
+
+    fn element_refs(xml: &str, tag: &[u8]) -> Vec<String> {
+        let mut reader = XmlReader::from_str(xml);
+        let mut refs = Vec::new();
+        loop {
+            match reader.read_event().unwrap() {
+                Event::Start(e) | Event::Empty(e) if e.local_name().as_ref().as_bytes() == tag => {
+                    refs.push(attr_value(&e, b"r").expect("fixture element has a reference"));
+                }
+                Event::Eof => return refs,
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn new_cells_are_merged_in_numeric_column_order() {
+        for prefix in ["", "x:"] {
+            for (empty, replace_existing) in
+                [(false, false), (false, true), (true, false), (true, true)]
+            {
+                let cells = ["C1", "Z1", "AB1"]
+                    .map(|cell_ref| {
+                        if empty {
+                            format!(r#"<{prefix}c r="{cell_ref}" s="2"/>"#)
+                        } else {
+                            format!(
+                                r#"<{prefix}c r="{cell_ref}" s="2"><{prefix}v>1</{prefix}v></{prefix}c>"#
+                            )
+                        }
+                    })
+                    .join("");
+                let xml = format!(
+                    r#"<{prefix}worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><{prefix}sheetData><{prefix}row r="1">{cells}</{prefix}row></{prefix}sheetData></{prefix}worksheet>"#
+                );
+                // Include existing-cell edits and insertions before, between, and
+                // after existing cells. Queue order must not affect XML order.
+                let patches: Vec<_> = [16384, 29, 28, 27, 26, 25, 4, 3, 2, 1]
+                    .into_iter()
+                    .filter(|col| replace_existing || ![3, 26, 28].contains(col))
+                    .map(|col| {
+                        let mut patch = string_patch(1, col);
+                        if col == 2 {
+                            patch.value = None;
+                            patch.style_index = Some(4);
+                        }
+                        patch
+                    })
+                    .collect();
+                let result = patch_worksheet(&xml, &patches).unwrap();
+                assert_eq!(
+                    element_refs(&result, b"c"),
+                    ["A1", "B1", "C1", "D1", "Y1", "Z1", "AA1", "AB1", "AC1", "XFD1"],
+                    "prefix={prefix:?}, empty={empty}, replace_existing={replace_existing}: {result}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn out_of_order_existing_cells_are_not_duplicated() {
+        for existing_b1 in [r#"<c r="B1" s="2"><v>2</v></c>"#, r#"<c r="B1" s="2"/>"#] {
+            let xml = format!(
+                r#"<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c><c r="C1"><v>3</v></c>{existing_b1}</row></sheetData></worksheet>"#
+            );
+            for style_only in [false, true] {
+                let mut patch = string_patch(1, 2);
+                if style_only {
+                    patch.value = None;
+                    patch.style_index = Some(4);
+                }
+                // Force the general path even for an existing-cell value edit.
+                let result = patch_worksheet(&xml, &[patch, string_patch(2, 1)]).unwrap();
+                assert_eq!(
+                    element_refs(&result, b"c"),
+                    ["A1", "C1", "B1", "A2"],
+                    "style_only={style_only}: {result}"
+                );
+                if style_only {
+                    assert!(result.contains(r#"<c r="B1" s="4""#), "{result}");
+                    assert_eq!(
+                        result.contains("<v>2</v>"),
+                        existing_b1.contains("<v>2</v>"),
+                        "{result}"
+                    );
+                } else {
+                    assert!(
+                        result.contains(r#"<c r="B1" s="2" t="str"><v>new</v></c>"#),
+                        "{result}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn new_rows_and_their_cells_are_merged_in_numeric_order() {
+        for original_rows in [
+            r#"<row r="3"><c r="C3"><v>3</v></c></row><row r="10"><c r="C10"><v>10</v></c></row>"#,
+            r#"<row r="3"/><row r="10"/>"#,
+            "",
+        ] {
+            let xml = format!("<worksheet><sheetData>{original_rows}</sheetData></worksheet>");
+            let rows = [1, 2, 3, 4, 5, 9, 10, 11, 100, 1048576];
+            let patches: Vec<_> = rows
+                .iter()
+                .rev()
+                .flat_map(|&row| [28, 27, 1].map(|col| string_patch(row, col)))
+                .collect();
+            let result = patch_worksheet(&xml, &patches).unwrap();
+            assert_eq!(
+                element_refs(&result, b"row"),
+                rows.map(|row| row.to_string()),
+                "{result}"
+            );
+            let expected: Vec<_> = rows
+                .iter()
+                .flat_map(|row| {
+                    let mut refs = vec![format!("A{row}")];
+                    if original_rows.contains(&format!(r#"r="C{row}""#)) {
+                        refs.push(format!("C{row}"));
+                    }
+                    refs.extend([format!("AA{row}"), format!("AB{row}")]);
+                    refs
+                })
+                .collect();
+            assert_eq!(element_refs(&result, b"c"), expected, "{result}");
+        }
     }
 
     #[test]
