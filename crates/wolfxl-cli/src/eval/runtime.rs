@@ -13,8 +13,11 @@ mod criteria;
 mod dates;
 mod financial;
 mod format;
+mod information;
 mod logic;
 mod lookup;
+mod math;
+mod random;
 mod statistics;
 mod text;
 
@@ -292,6 +295,12 @@ impl<'a, S: DataSource> Context<'a, S> {
     fn call(&self, function: Function, arguments: &[Expr]) -> Operand<'a> {
         use Function::*;
         let outcome = match function {
+            Acos | Asin | Atan | Atan2 | Cos | Sin | Tan | Degrees | Radians | Pi | Exp | Ln
+            | Log | Log10 | Ceiling | Floor | Trunc | Product => self.math(function, arguments),
+            IsBlank | IsError | IsNa | IsNumber | IsText | Na => {
+                self.information(function, arguments)
+            }
+            Rand | RandBetween => self.random(function, arguments),
             If => return self.branch(arguments),
             IfError => return self.if_error(arguments),
             Choose => return self.choose(arguments),

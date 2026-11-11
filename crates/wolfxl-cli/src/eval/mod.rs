@@ -169,6 +169,8 @@ pub fn cell_area(text: &str) -> Option<CellArea> {
 pub struct FunctionInfo {
     pub name: &'static str,
     pub category: &'static str,
+    /// Recalculate on each evaluation, independently of stored workbook values.
+    pub volatile: bool,
 }
 
 /// Most arguments a worksheet function call accepts.
@@ -180,7 +182,11 @@ macro_rules! functions {
     ($($variant:ident $name:literal $category:literal $min:literal..=$max:expr;)*) => {
         /// Stable registry for discovery by callers, sorted by name.
         pub const FUNCTIONS: &[FunctionInfo] = &[
-            $(FunctionInfo { name: $name, category: $category },)*
+            $(FunctionInfo {
+                name: $name,
+                category: $category,
+                volatile: matches!(Function::$variant, Function::Rand | Function::RandBetween | Function::Now | Function::Today | Function::Offset),
+            },)*
         ];
 
         #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -223,13 +229,19 @@ macro_rules! functions {
 
 functions! {
     Abs "ABS" "math" 1..=1;
+    Acos "ACOS" "math" 1..=1;
     And "AND" "logical" 1..=MAX_ARGUMENTS;
+    Asin "ASIN" "math" 1..=1;
+    Atan "ATAN" "math" 1..=1;
+    Atan2 "ATAN2" "math" 2..=2;
     Average "AVERAGE" "statistical" 0..=MAX_ARGUMENTS;
     AverageIf "AVERAGEIF" "statistical" 2..=3;
     AverageIfs "AVERAGEIFS" "statistical" 3..=MAX_ARGUMENTS;
+    Ceiling "CEILING" "math" 2..=2;
     Choose "CHOOSE" "lookup" 2..=MAX_ARGUMENTS;
     Concat "CONCAT" "text" 1..=MAX_ARGUMENTS;
     Concatenate "CONCATENATE" "text" 1..=MAX_ARGUMENTS;
+    Cos "COS" "math" 1..=1;
     Count "COUNT" "statistical" 0..=MAX_ARGUMENTS;
     CountA "COUNTA" "statistical" 1..=MAX_ARGUMENTS;
     CountBlank "COUNTBLANK" "statistical" 1..=1;
@@ -239,11 +251,14 @@ functions! {
     Day "DAY" "date" 1..=1;
     Days "DAYS" "date" 2..=2;
     Db "DB" "financial" 4..=5;
+    Degrees "DEGREES" "math" 1..=1;
     EDate "EDATE" "date" 2..=2;
     EoMonth "EOMONTH" "date" 2..=2;
     Exact "EXACT" "text" 2..=2;
+    Exp "EXP" "math" 1..=1;
     Filter "FILTER" "lookup" 2..=3;
     Find "FIND" "text" 2..=3;
+    Floor "FLOOR" "math" 2..=2;
     Fv "FV" "financial" 3..=5;
     HLookup "HLOOKUP" "lookup" 3..=4;
     Hour "HOUR" "date" 1..=1;
@@ -254,9 +269,17 @@ functions! {
     Index "INDEX" "lookup" 2..=3;
     Int "INT" "math" 1..=1;
     Irr "IRR" "financial" 1..=2;
+    IsBlank "ISBLANK" "information" 1..=1;
+    IsError "ISERROR" "information" 1..=1;
+    IsNa "ISNA" "information" 1..=1;
+    IsNumber "ISNUMBER" "information" 1..=1;
+    IsText "ISTEXT" "information" 1..=1;
     Large "LARGE" "statistical" 2..=2;
     Left "LEFT" "text" 1..=2;
     Len "LEN" "text" 1..=1;
+    Ln "LN" "math" 1..=1;
+    Log "LOG" "math" 1..=2;
+    Log10 "LOG10" "math" 1..=1;
     Lower "LOWER" "text" 1..=1;
     Match "MATCH" "lookup" 2..=3;
     Max "MAX" "statistical" 0..=MAX_ARGUMENTS;
@@ -270,6 +293,7 @@ functions! {
     Mode "MODE" "statistical" 1..=MAX_ARGUMENTS;
     ModeSngl "MODE.SNGL" "statistical" 1..=MAX_ARGUMENTS;
     Month "MONTH" "date" 1..=1;
+    Na "NA" "information" 0..=0;
     NetworkDays "NETWORKDAYS" "date" 2..=3;
     Not "NOT" "logical" 1..=1;
     Now "NOW" "date" 0..=0;
@@ -280,12 +304,17 @@ functions! {
     Percentile "PERCENTILE" "statistical" 2..=2;
     PercentileExc "PERCENTILE.EXC" "statistical" 2..=2;
     PercentileInc "PERCENTILE.INC" "statistical" 2..=2;
+    Pi "PI" "math" 0..=0;
     Pmt "PMT" "financial" 3..=5;
     Power "POWER" "math" 2..=2;
+    Product "PRODUCT" "math" 1..=MAX_ARGUMENTS;
     Pv "PV" "financial" 3..=5;
     Quartile "QUARTILE" "statistical" 2..=2;
     QuartileExc "QUARTILE.EXC" "statistical" 2..=2;
     QuartileInc "QUARTILE.INC" "statistical" 2..=2;
+    Radians "RADIANS" "math" 1..=1;
+    Rand "RAND" "math" 0..=0;
+    RandBetween "RANDBETWEEN" "math" 2..=2;
     Rank "RANK" "statistical" 2..=3;
     RankAvg "RANK.AVG" "statistical" 2..=3;
     RankEq "RANK.EQ" "statistical" 2..=3;
@@ -297,6 +326,7 @@ functions! {
     RoundUp "ROUNDUP" "math" 2..=2;
     Second "SECOND" "date" 1..=1;
     Sign "SIGN" "math" 1..=1;
+    Sin "SIN" "math" 1..=1;
     Sln "SLN" "financial" 3..=3;
     Small "SMALL" "statistical" 2..=2;
     Sort "SORT" "lookup" 1..=4;
@@ -312,10 +342,12 @@ functions! {
     SumIfs "SUMIFS" "math" 3..=MAX_ARGUMENTS;
     SumProduct "SUMPRODUCT" "math" 1..=MAX_ARGUMENTS;
     Switch "SWITCH" "logical" 3..=MAX_ARGUMENTS;
+    Tan "TAN" "math" 1..=1;
     Text "TEXT" "text" 2..=2;
     TextJoin "TEXTJOIN" "text" 3..=MAX_ARGUMENTS;
     Today "TODAY" "date" 0..=0;
     Trim "TRIM" "text" 1..=1;
+    Trunc "TRUNC" "math" 1..=2;
     Unique "UNIQUE" "lookup" 1..=3;
     Upper "UPPER" "text" 1..=1;
     NumberValue "VALUE" "text" 1..=1;

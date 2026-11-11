@@ -594,7 +594,7 @@ fn malformed_formulas_exit_two_naming_the_argument() {
 fn unsupported_functions_exit_two_naming_the_argument_and_function() {
     for (spec, function) in [
         ("Size=IF(B2>=100,PROPER(A2),\"small\")", "PROPER"),
-        ("Log=IF(B2>0,LOG10(B2),\"-\")", "LOG10"),
+        ("Distinct=COUNTUNIQUE(A2:A4)", "COUNTUNIQUE"),
         ("Pivot=GETPIVOTDATA(\"Qty\",A1)", "GETPIVOTDATA"),
     ] {
         let stderr = refused(&["--add", "Margin=B2*C2-D2", "--add", spec]);

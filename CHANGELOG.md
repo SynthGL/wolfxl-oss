@@ -4,6 +4,13 @@
 
 ### Added
 
+- `calc` and `peek --add` gain 26 native-Excel-backed math and information
+  functions (133 in total): `ACOS`, `ASIN`, `ATAN`, `ATAN2`, `COS`, `SIN`,
+  `TAN`, `DEGREES`, `RADIANS`, `PI`, `EXP`, `LN`, `LOG`, `LOG10`,
+  `CEILING`, `FLOOR`, `TRUNC`, `PRODUCT`, `RAND`, `RANDBETWEEN`, `ISBLANK`,
+  `ISERROR`, `ISNA`, `ISNUMBER`, `ISTEXT`, and `NA`. Information predicates
+  preserve array shape. Function discovery JSON includes volatility metadata;
+  fingerprint and verify continue using stored workbook values.
 - Generate a text-redacted diagnostic ZIP with `python -m wolfxl.report FILE`
   and attach it using the new "Workbook fails to load" issue form. Reports include
   bounded package inventories, part sizes, standard element counts, XML skeletons,

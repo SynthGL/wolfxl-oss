@@ -475,3 +475,21 @@ fn mismatched_operand_shapes_fill_with_na() {
     assert_eq!(run.code, 1, "stderr={}", run.stderr);
     assert!(run.stdout.contains("#VALUE!"), "{}", run.stdout);
 }
+
+#[test]
+fn deliberately_unsupported_sheets_names_exit_two() {
+    for name in [
+        "ARRAYFORMULA",
+        "SPARKLINE",
+        "SPLIT",
+        "REGEXMATCH",
+        "COUNTUNIQUE",
+        "AVG",
+    ] {
+        let formula = format!("={name}(A1)");
+        let run = calc(&[&formula, "--from", "csv"], Some("1\n"));
+        assert_eq!(run.code, 2, "{name}: {}", run.stderr);
+        assert!(run.stdout.is_empty(), "{name}: {}", run.stdout);
+        assert!(run.stderr.contains(name), "{name}: {}", run.stderr);
+    }
+}

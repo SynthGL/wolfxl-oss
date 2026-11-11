@@ -443,3 +443,27 @@ fn unreadable_input_exits_two() {
     assert_eq!(run.code, 2);
     assert!(run.stderr.starts_with("error: "), "stderr={}", run.stderr);
 }
+
+#[test]
+fn random_formulas_hash_stored_values_without_recalculation() {
+    let directory = TempDir::new("random-cache");
+    let sheet = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><f>RAND()</f><v>0.25</v></c><c r="B1"><f>RANDBETWEEN(1,10)</f><v>7</v></c></row></sheetData></worksheet>"#;
+    let path = workbook(&directory, "random.xlsx", sheet);
+    let expected = stream_fingerprint(&[
+        "wxf1",
+        "S\tData",
+        "V\tA1\tn\t0.25",
+        "V\tB1\tn\t7",
+        "F\tA1\tRAND()",
+        "F\tB1\tRANDBETWEEN(1,10)",
+    ]);
+    assert_eq!(fingerprint(&path), expected);
+    let verified = verify(&path, &expected);
+    assert_eq!(verified.code, 0, "{}", verified.stderr);
+    let changed = workbook(
+        &directory,
+        "changed.xlsx",
+        &sheet.replace("<v>7</v>", "<v>8</v>"),
+    );
+    assert_eq!(verify(&changed, &expected).code, 1);
+}
