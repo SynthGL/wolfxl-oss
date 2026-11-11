@@ -107,6 +107,7 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
         row_patches.entry(p.row).or_default().insert(p.col, p);
     }
     let patch_bounds = bounds_for_patches(patches);
+    let bom_offset = utf8_bom_offset(xml);
 
     let mut reader = XmlReader::from_str(xml);
     reader.config_mut().trim_text(false);
@@ -127,7 +128,7 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
     let mut worksheet_prefix: Option<String> = None;
 
     loop {
-        let event_start = reader.buffer_position() as usize;
+        let event_start = bom_offset + reader.buffer_position() as usize;
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
                 let local = e.local_name();
@@ -172,7 +173,12 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                     current_row_patches =
                         patches_for_row.map(|patches| patches.values().copied().peekable());
                     current_row_existing = match patches_for_row {
-                        Some(patches) => existing_patched_cols(&xml[event_start..], patches)?,
+                        Some(patches) => {
+                            let row_xml = xml
+                                .get(event_start..)
+                                .ok_or("row offset is not a character boundary")?;
+                            existing_patched_cols(row_xml, patches)?
+                        }
                         None => BTreeSet::new(),
                     };
                     rows_seen.insert(row_num);
@@ -431,6 +437,7 @@ fn patch_existing_value_cells_spliced(
         target_rows.insert(patch.row);
     }
 
+    let bom_offset = utf8_bom_offset(xml);
     let mut reader = XmlReader::from_str(xml);
     reader.config_mut().trim_text(false);
     let mut writer = XmlWriter::new(Vec::with_capacity(xml.len()));
@@ -444,7 +451,7 @@ fn patch_existing_value_cells_spliced(
     let mut worksheet_prefix: Option<String> = None;
 
     loop {
-        let event_start = reader.buffer_position() as usize;
+        let event_start = bom_offset + reader.buffer_position() as usize;
         // A slice reader borrows from `xml`, avoiding a copy and owned event for
         // every element in the prefix before a late edit.
         match reader.read_event() {
@@ -514,7 +521,7 @@ fn patch_existing_value_cells_spliced(
                             patch,
                             worksheet_prefix.as_deref(),
                         )?;
-                        copied_through = reader.buffer_position() as usize;
+                        copied_through = bom_offset + reader.buffer_position() as usize;
                         if patched.len() == patch_map.len() {
                             append_xml_span(&mut writer, xml, copied_through, xml.len())?;
                             return String::from_utf8(writer.into_inner())
@@ -527,7 +534,7 @@ fn patch_existing_value_cells_spliced(
             Ok(Event::End(_)) => {
                 if replaced_cell_depth == Some(depth) {
                     replaced_cell_depth = None;
-                    copied_through = reader.buffer_position() as usize;
+                    copied_through = bom_offset + reader.buffer_position() as usize;
                     if patched.len() == patch_map.len() {
                         append_xml_span(&mut writer, xml, copied_through, xml.len())?;
                         return String::from_utf8(writer.into_inner())
@@ -1099,6 +1106,17 @@ fn existing_patched_cols(
     }
 }
 
+/// Length of a leading UTF-8 byte-order mark.
+///
+/// The XML reader skips the mark without counting it in `buffer_position()`.
+fn utf8_bom_offset(xml: &str) -> usize {
+    if xml.starts_with('\u{FEFF}') {
+        3
+    } else {
+        0
+    }
+}
+
 /// Write a brand-new cell element (insertion, not replacement).
 ///
 /// `inherited_style` is the row or column style the absent cell had; it is
@@ -1385,6 +1403,23 @@ mod tests {
     }
 
     #[test]
+    fn test_existing_value_splices_allow_a_byte_order_mark() {
+        let xml = r#"<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c></row></sheetData></worksheet>"#;
+        let patch = [CellPatch {
+            row: 1,
+            col: 2,
+            value: Some(CellValue::Number(42.0)),
+            style_index: None,
+        }];
+        let plain = patch_worksheet(xml, &patch).unwrap();
+        assert!(plain.contains(r#"<c r="B1"><v>42</v></c>"#), "{plain}");
+        assert_eq!(
+            patch_worksheet(&format!("\u{FEFF}{xml}"), &patch).unwrap(),
+            format!("\u{FEFF}{plain}")
+        );
+    }
+
+    #[test]
     fn test_existing_value_splices_skip_cell_like_extensions() {
         let xml = "<worksheet><sheetData><row r='1'><ext><c r='B1'><v>extension</v></c></ext><c r='B1'><v>2</v></c></row></sheetData></worksheet>";
         let patch = CellPatch {
@@ -1651,6 +1686,18 @@ mod tests {
         assert_eq!(
             element_refs(&result, b"c"),
             ["A1", "B1", "B2", "C2", "A2"],
+            "{result}"
+        );
+    }
+
+    #[test]
+    fn row_read_ahead_allows_a_byte_order_mark() {
+        // The reader skips the mark without counting it in its offsets.
+        let xml = "\u{FEFF}<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><v>1</v></c></row>日x<row r=\"2\"><c r=\"C2\"><v>3</v></c><c r=\"A2\"><v>1</v></c></row></sheetData></worksheet>";
+        let result = patch_worksheet(xml, &[string_patch(2, 1), string_patch(2, 2)]).unwrap();
+        assert_eq!(
+            element_refs(&result, b"c"),
+            ["A1", "B2", "C2", "A2"],
             "{result}"
         );
     }
