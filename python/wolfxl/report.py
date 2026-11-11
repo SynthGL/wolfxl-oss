@@ -54,7 +54,7 @@ class _ReportLimit(ValueError):
     pass
 
 
-def _error(exc: Exception) -> dict:
+def _error(exc: BaseException) -> dict:
     """Keep stack locations, never str(exc), source snippets or locals."""
     return {
         "type": type(exc).__name__,
@@ -168,7 +168,8 @@ def write_report(filename: str | Path, output: str | Path = "workbook-report.zip
                         skeletons[skeleton_name] = xml
                         part["skeleton"] = skeleton_name
                         part["elements"] = counts
-                    except (expat.ExpatError, _ReportLimit, BadZipFile, RuntimeError) as exc:
+                    except Exception as exc:
+                        # Damaged member data raises codec errors outside OSError.
                         safe_to_load = False
                         part["error"] = _error(exc)
                         if isinstance(exc, expat.ExpatError):
@@ -184,7 +185,10 @@ def write_report(filename: str | Path, output: str | Path = "workbook-report.zip
                 workbook = load_workbook(filename)
                 workbook.close()
             manifest["load"] = {"status": "loaded"}
-        except Exception as exc:
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException as exc:
+            # A native reader panic reaches Python as a BaseException subclass.
             manifest["load"] = {"status": "error", **_error(exc)}
     else:
         manifest["load"]["reason"] = "Package inspection failed or exceeded a stated limit."

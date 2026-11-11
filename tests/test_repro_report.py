@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 from xml.etree import ElementTree
-from zipfile import ZipFile
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
 
@@ -112,6 +112,39 @@ def test_unsafe_xml_retains_inventory_and_safe_error_without_loading(tmp_path, x
     assert report["load"]["status"] == "not_attempted"
     assert report["parts"][0]["error"]["type"] in {"ExpatError", "_ReportLimit", "ReportLimit"}
     assert set(contents) == {"report.json"}
+
+
+def test_corrupt_compressed_part_is_recorded_without_loading(tmp_path):
+    source = tmp_path / "damaged.xlsx"
+    with ZipFile(source, "w", compression=ZIP_DEFLATED) as archive:
+        archive.writestr("xl/workbook.xml", f"<workbook>{SECRET * 64}</workbook>")
+        info = archive.getinfo("xl/workbook.xml")
+    data = bytearray(source.read_bytes())
+    start = info.header_offset + 30 + len(info.filename)
+    # 0xFF opens a deflate block of the reserved type, which no decoder accepts.
+    data[start : start + info.compress_size] = b"\xff" * info.compress_size
+    source.write_bytes(data)
+    report, contents = _read_bundle(write_report(source, tmp_path / "report.zip"))
+    assert report["parts"][0]["name"] == "xl/workbook.xml"
+    assert report["parts"][0]["error"]["trace"]
+    assert report["load"]["status"] == "not_attempted"
+    assert set(contents) == {"report.json"}
+
+
+def test_native_panic_in_loader_is_recorded_without_its_message(tmp_path, monkeypatch):
+    source = tmp_path / "workbook.xlsx"
+    _private_workbook(source)
+
+    class PanicException(BaseException):
+        pass
+
+    def panicking_loader(*args, **kwargs):
+        raise PanicException(f"index out of bounds in {SECRET}")
+
+    monkeypatch.setattr(wolfxl, "load_workbook", panicking_loader)
+    report, _ = _read_bundle(write_report(source, tmp_path / "report.zip"))
+    assert report["load"]["status"] == "error"
+    assert report["load"]["type"] == "PanicException"
 
 
 def test_invalid_zip_produces_redacted_error_bundle(tmp_path):
