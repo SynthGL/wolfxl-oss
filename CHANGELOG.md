@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Modify-mode saves (`load_workbook(..., modify=True)`) that add cells or
+  restyle existing cells no longer read the whole sheet a second time. 2.0.37
+  added that pass to keep new cells in column order; the saver now reads ahead
+  only the rows being changed, with the same output (#121).
+
 ## 2.0.37 - 2026-11-11
 
 ### Added

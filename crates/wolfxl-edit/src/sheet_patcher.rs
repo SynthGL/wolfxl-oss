@@ -107,7 +107,6 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
         row_patches.entry(p.row).or_default().insert(p.col, p);
     }
     let patch_bounds = bounds_for_patches(patches);
-    let existing_cells = existing_patched_cells(xml, &row_patches)?;
 
     let mut reader = XmlReader::from_str(xml);
     reader.config_mut().trim_text(false);
@@ -122,11 +121,13 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
     let mut current_row: Option<u32> = None;
     let mut current_row_style: Option<u32> = None;
     let mut current_row_patches = None;
+    let mut current_row_existing: BTreeSet<u32> = BTreeSet::new();
     let mut rows_seen: BTreeSet<u32> = BTreeSet::new();
     let mut skip_until_cell_end = false; // skip children of a cell being replaced
     let mut worksheet_prefix: Option<String> = None;
 
     loop {
+        let event_start = reader.buffer_position() as usize;
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
                 let local = e.local_name();
@@ -167,9 +168,13 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
 
                     current_row = Some(row_num);
                     current_row_style = row_style(e);
-                    current_row_patches = row_patches
-                        .get(&row_num)
-                        .map(|patches| patches.values().copied().peekable());
+                    let patches_for_row = row_patches.get(&row_num);
+                    current_row_patches =
+                        patches_for_row.map(|patches| patches.values().copied().peekable());
+                    current_row_existing = match patches_for_row {
+                        Some(patches) => existing_patched_cols(&xml[event_start..], patches)?,
+                        None => BTreeSet::new(),
+                    };
                     rows_seen.insert(row_num);
                     let row_start = rewrite_row_spans(
                         e,
@@ -186,7 +191,7 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                             &mut writer,
                             pending,
                             col,
-                            &existing_cells,
+                            &current_row_existing,
                             current_row_style,
                             &col_styles,
                             worksheet_prefix.as_deref(),
@@ -286,7 +291,7 @@ pub fn patch_worksheet(xml: &str, patches: &[CellPatch]) -> Result<String, Strin
                             &mut writer,
                             pending,
                             col,
-                            &existing_cells,
+                            &current_row_existing,
                             current_row_style,
                             &col_styles,
                             worksheet_prefix.as_deref(),
@@ -1040,7 +1045,7 @@ fn write_new_cells_before<'a, W: Write>(
     writer: &mut XmlWriter<W>,
     pending: &mut Peekable<impl Iterator<Item = &'a CellPatch>>,
     col: u32,
-    existing_cells: &BTreeSet<(u32, u32)>,
+    existing_cols: &BTreeSet<u32>,
     row_style: Option<u32>,
     col_styles: &[(u32, u32, u32)],
     prefix: Option<&str>,
@@ -1048,7 +1053,7 @@ fn write_new_cells_before<'a, W: Write>(
     while let Some(patch) = pending.next_if(|patch| patch.col <= col) {
         // Older WolfXL output may contain an existing cell later, out of order.
         // Such cells must still be updated in place, never inserted twice.
-        if patch.col < col && !existing_cells.contains(&(patch.row, patch.col)) {
+        if patch.col < col && !existing_cols.contains(&patch.col) {
             let cell_ref = col_row_to_a1(patch.col, patch.row);
             write_new_cell(
                 writer,
@@ -1062,44 +1067,33 @@ fn write_new_cells_before<'a, W: Write>(
     Ok(())
 }
 
-/// Find patch targets already present, even in rows damaged by older writers.
+/// Find the patched columns already present in one row.
 ///
-/// Only patched coordinates are retained, so memory is bounded by patch count.
-/// This extra scan is needed only on the general (non-splice) patching path.
-fn existing_patched_cells(
-    xml: &str,
-    row_patches: &BTreeMap<u32, BTreeMap<u32, &CellPatch>>,
-) -> Result<BTreeSet<(u32, u32)>, String> {
-    let mut reader = XmlReader::from_str(xml);
-    let mut in_sheet_data = false;
-    let mut current_row = None;
-    let mut cells = BTreeSet::new();
+/// `row_xml` starts at the row's own start tag. Older WolfXL output may hold a
+/// cell later in its row, out of column order, so a row is read ahead before
+/// any insertion is merged into it. Only rows with patches are read twice.
+fn existing_patched_cols(
+    row_xml: &str,
+    patches: &BTreeMap<u32, &CellPatch>,
+) -> Result<BTreeSet<u32>, String> {
+    let mut reader = XmlReader::from_str(row_xml);
+    let mut cols = BTreeSet::new();
     loop {
         match reader
             .read_event()
             .map_err(|e| format!("XML parse error: {e}"))?
         {
-            Event::Start(e) if e.local_name().as_ref() == "sheetData" => in_sheet_data = true,
-            Event::End(e) if e.local_name().as_ref() == "sheetData" => {
-                in_sheet_data = false;
-                current_row = None;
-            }
-            Event::Start(e) if in_sheet_data && e.local_name().as_ref() == "row" => {
-                let row = attr_value(&e, b"r")
-                    .and_then(|r| r.parse::<u32>().ok())
-                    .unwrap_or(0);
-                current_row = row_patches.get(&row).map(|patches| (row, patches));
-            }
-            Event::End(e) if e.local_name().as_ref() == "row" => current_row = None,
             Event::Start(e) | Event::Empty(e) if e.local_name().as_ref() == "c" => {
-                if let Some((row, patches)) = current_row {
-                    let (_, col) = parse_cell_ref(&attr_value(&e, b"r").unwrap_or_default());
-                    if patches.contains_key(&col) {
-                        cells.insert((row, col));
+                let (_, col) = parse_cell_ref(&attr_value(&e, b"r").unwrap_or_default());
+                if patches.contains_key(&col) {
+                    cols.insert(col);
+                    if cols.len() == patches.len() {
+                        return Ok(cols);
                     }
                 }
             }
-            Event::Eof => return Ok(cells),
+            Event::End(e) if e.local_name().as_ref() == "row" => return Ok(cols),
+            Event::Eof => return Ok(cols),
             _ => {}
         }
     }
@@ -1647,6 +1641,18 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn row_read_ahead_is_scoped_to_its_own_row() {
+        // B1 exists in another row and A2 sits out of order after multi-byte text.
+        let xml = r#"<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>日本語 é</t></is></c><c r="B1"><v>1</v></c></row><row r="2"><c r="C2"><v>3</v></c><c r="A2"><v>1</v></c></row></sheetData></worksheet>"#;
+        let result = patch_worksheet(xml, &[string_patch(2, 1), string_patch(2, 2)]).unwrap();
+        assert_eq!(
+            element_refs(&result, b"c"),
+            ["A1", "B1", "B2", "C2", "A2"],
+            "{result}"
+        );
     }
 
     #[test]
