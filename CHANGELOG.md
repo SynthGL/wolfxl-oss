@@ -147,6 +147,12 @@
 
 ### Fixed
 
+- Cells added to an existing row in modify mode
+  (`load_workbook(..., modify=True)`) are saved in column order. Writing `B1`
+  into a row that held `A1` and `C1` used to save the cells as `A1`, `C1`,
+  `B1`; Excel reported the workbook as damaged and its repair discarded the
+  new value (#114, #115). Cells that an earlier version already saved out of
+  order are updated in place and are not reordered.
 - `RATE`, `IRR`, and `XIRR` converge on the rate itself rather than on a
   near-zero balance, so scaling every cash flow by a constant keeps the rate
   (`RATE(1,0,1E-12,-2E-12)` is 1) and balances that only approach zero are
