@@ -28,7 +28,7 @@ deployment guidance.
 ## Install
 
 ```bash
-python -m pip install wolfxl==2.0.37
+python -m pip install wolfxl==2.0.38
 ```
 
 Requires Python 3.11 or newer CPython with a published wheel, or a Rust

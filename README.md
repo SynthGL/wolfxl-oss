@@ -173,7 +173,7 @@ Step-by-step guide: [openpyxl migration](https://wolfxl.com/openpyxl-migration).
 Install the current Community release:
 
 ```bash
-python -m pip install wolfxl==2.0.37
+python -m pip install wolfxl==2.0.38
 ```
 
 For the standalone spreadsheet inspection and analysis CLI, install a prebuilt

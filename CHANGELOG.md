@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 2.0.38 - 2026-11-11
+
 ### Fixed
 
 - Modify-mode saves (`load_workbook(..., modify=True)`) that add cells or
@@ -10,6 +12,10 @@
   only the rows being changed, with the same output (#121).
 - The worksheet patcher no longer writes malformed XML when it changes a cell
   value in a sheet part that starts with a UTF-8 byte-order mark (#121).
+
+### Changed
+
+- Bumped `wolfxl-cli` to `0.11.3` and `wolfxl-edit` to `0.1.2`.
 
 ## 2.0.37 - 2026-11-11
 
