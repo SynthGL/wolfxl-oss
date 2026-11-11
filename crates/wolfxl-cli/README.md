@@ -191,9 +191,13 @@ input, which needs `--from` as described above.
   error literals such as `#N/A`. It reads A1 references with or without `$`,
   sheet-qualified references such as `'P&L'!B3`, and ranges such as `B2:D10`,
   `B:B`, and `2:2`; whole columns and rows stop at the sheet's used extent.
-- **Functions.** 107 functions in seven categories:
-  - `math`: `ABS`, `INT`, `MOD`, `POWER`, `ROUND`, `ROUNDDOWN`, `ROUNDUP`,
-    `SIGN`, `SQRT`, `SUBTOTAL`, `SUM`, `SUMIF`, `SUMIFS`, `SUMPRODUCT`
+- **Functions.** 133 functions in eight categories:
+  - `math`: `ABS`, `ACOS`, `ASIN`, `ATAN`, `ATAN2`, `CEILING`, `COS`,
+    `DEGREES`, `EXP`, `FLOOR`, `INT`, `LN`, `LOG`, `LOG10`, `MOD`, `PI`,
+    `POWER`, `PRODUCT`, `RADIANS`, `RAND`, `RANDBETWEEN`, `ROUND`,
+    `ROUNDDOWN`, `ROUNDUP`, `SIGN`, `SIN`, `SQRT`, `SUBTOTAL`, `SUM`,
+    `SUMIF`, `SUMIFS`, `SUMPRODUCT`, `TAN`, `TRUNC`
+  - `information`: `ISBLANK`, `ISERROR`, `ISNA`, `ISNUMBER`, `ISTEXT`, `NA`
   - `statistical`: `AVERAGE`, `AVERAGEIF`, `AVERAGEIFS`, `COUNT`, `COUNTA`,
     `COUNTBLANK`, `COUNTIF`, `COUNTIFS`, `LARGE`, `MAX`, `MAXIFS`, `MEDIAN`,
     `MIN`, `MINIFS`, `MODE`, `MODE.SNGL`, `PERCENTILE`, `PERCENTILE.EXC`,
@@ -226,6 +230,26 @@ input, which needs `--from` as described above.
   `_xlfn.STDEV.S`, resolve to the same functions. A formula naming any other
   function exits 2, naming it and pointing to
   [`wolfxl list-functions`](#function-registry).
+- **Math and information.** Angles are in radians; `ATAN2(x, y)` follows
+  Excel's x-first argument order. `LOG` defaults to base 10. `CEILING`
+  and `FLOOR` use the legacy Excel sign rules; `TRUNC` cuts toward zero.
+  `PRODUCT` ignores text, booleans, and blanks in ranges and arrays, but
+  accepts numeric text and booleans supplied directly. `ISBLANK`,
+  `ISERROR`, `ISNA`, `ISNUMBER`, and `ISTEXT` inspect types without
+  coercion and preserve the shape of array arguments. `NA()` returns `#N/A`.
+  Numeric expectations and array elements come from the committed
+  [native Excel capture](tests/fixtures/math-information.oracle.json).
+- **Randomness.** `RAND()` returns a fresh non-cryptographic number in
+  [0, 1); `RANDBETWEEN(bottom, top)` returns an integer using Excel's
+  endpoint rounding. Ordered fractional bounds containing no integer yield
+  `CEILING(bottom, 1)`. Fingerprinting and verification always use the
+  workbook's stored values and formulas, without recalculating randomness.
+- **Google Sheets names.** `ARRAYFORMULA` (Sheets array evaluation),
+  `SPARKLINE` (in-cell chart rendering), `SPLIT` (Sheets splitting rules),
+  `REGEXMATCH` (Sheets regex dialect), `COUNTUNIQUE` (Sheets counting rules),
+  and `AVG` (non-Excel alias) are deliberately unsupported. Use an Excel
+  formula supported by the registry. A call to any of these names exits 2
+  with an unsupported-function diagnostic.
 - **Arrays.** Operators work element by element when an operand is a range
   or array, as in Excel: `=B2:B10*C2:C10` is an array of products,
   `=SUMPRODUCT((A2:A10="North")*C2:C10)` and `=SUMPRODUCT(--(C2:C10>100))`
@@ -317,16 +341,17 @@ wolfxl list-functions --check NAME[,NAME...] [--json]
 ```text
 $ wolfxl list-functions
 ABS             math
+ACOS            math
 AND             logical
 AVERAGE         statistical
 ...
 XNPV            financial
 YEAR            date
-107 functions
+133 functions
 ```
 
 - **Categories.** The registry's categories are `date`, `financial`,
-  `logical`, `lookup`, `math`, `statistical`, and `text`. `--category` keeps
+  `information`, `logical`, `lookup`, `math`, `statistical`, and `text`. `--category` keeps
   one of them, ignoring case and surrounding spaces, so `Math` works. Any
   other category exits 2 and lists the valid ones.
 - **Search.** `--search TEXT` keeps the functions whose name contains
@@ -339,12 +364,14 @@ YEAR            date
 
 `--json` prints one document. `total` is the size of the whole registry and
 `count` the number of listed entries; `category` and `search` echo the
-filters (`null` when absent), with `category` in its registry spelling.
+filters (`null` when absent), with `category` in its registry spelling. Each
+listing entry also has a `volatile` boolean. `RAND`, `RANDBETWEEN`, `NOW`,
+`TODAY`, and `OFFSET` are volatile.
 
 ```json
-{"contract_version": 1, "total": 107, "count": 3, "category": "lookup", "search": "look",
- "functions": [{"name": "HLOOKUP", "category": "lookup"}, {"name": "VLOOKUP", "category": "lookup"},
-               {"name": "XLOOKUP", "category": "lookup"}]}
+{"contract_version": 1, "total": 133, "count": 3, "category": "lookup", "search": "look",
+ "functions": [{"name": "HLOOKUP", "category": "lookup", "volatile": false}, {"name": "VLOOKUP", "category": "lookup", "volatile": false},
+               {"name": "XLOOKUP", "category": "lookup", "volatile": false}]}
 ```
 
 `--check` takes function names, comma-separated or repeated, and reports
@@ -366,7 +393,7 @@ With `--json`, `total` is the size of the registry, `checked` counts the names,
 `supported` the supported ones, and `category` is `null` for an unsupported name:
 
 ```json
-{"contract_version": 1, "total": 107, "checked": 2, "supported": 1, "results": [
+{"contract_version": 1, "total": 133, "checked": 2, "supported": 1, "results": [
   {"name": "SUM", "status": "supported", "category": "math"},
   {"name": "LOOKUP", "status": "unsupported", "category": null}
 ]}

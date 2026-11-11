@@ -18,3 +18,21 @@ reads stored values. The totals-row averages are the values Excel stores,
 which differ in the last bits from a left-to-right float sum.
 
 The other fixtures in this directory were authored for this crate.
+
+## Native math and information oracle
+
+`math-information.oracle.json` contains cached formula results saved by
+Microsoft Excel 16.113. Generate the input workbook with
+`capture_math_boundaries.py`, which extends `capture_math_information.py`
+with signed-zero and extreme-magnitude cases. After native Excel recalculation
+and save, use `extract_math_information.py` with the generated cases manifest,
+the native-save receipt, and the oracle output path. During extraction, the
+saved workbook digest is checked against the receipt; only portable provenance
+and formula results are retained.
+
+For `ATAN2(-1,-0)`, Excel saves the literal argument as zero and returns pi.
+The input spelling and saved `native_formula` are both recorded. A tiny
+nonzero negative y can round to negative pi, so signed-zero normalization
+must not change that result. For the recorded extreme `CEILING` and `FLOOR`
+cases, Excel returns `#NUM!` on quotient overflow and zero on quotient
+underflow. These native results deliberately remain unchanged.

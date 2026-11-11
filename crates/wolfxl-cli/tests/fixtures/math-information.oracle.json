@@ -1,0 +1,2370 @@
+{
+  "source": {
+    "application": "Microsoft Excel",
+    "version": "16.113",
+    "captured_at": "2026-11-04T12:24:10Z",
+    "input_sha256": "e66d70843b7734b0161b40b902cf94dbd1608c19416469b2ba695873502e9ef6",
+    "saved_sha256": "0c6d277ba53266c4bbd03a7ce78da63602e2ae2a9d77b0341707225e7afdd186",
+    "runner_sha256": "d82281c289dfd8756665db742c3b80cdfc9ab0c47b7b1913d92f1bfeced3a094"
+  },
+  "cases": [
+    {
+      "function": "ACOS",
+      "formula": "=ACOS(0.5)",
+      "expected": {
+        "type": "number",
+        "value": 1.0471975511965976
+      }
+    },
+    {
+      "function": "ACOS",
+      "formula": "=ACOS(1)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "ACOS",
+      "formula": "=ACOS(-1)",
+      "expected": {
+        "type": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "function": "ACOS",
+      "formula": "=ACOS(2)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "ACOS",
+      "formula": "=ACOS(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "ACOS",
+      "formula": "=ACOS(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "ACOS",
+      "formula": "=ACOS(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "ACOS",
+      "formula": "=ACOS(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "ACOS",
+      "formula": "=ACOS(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "ASIN",
+      "formula": "=ASIN(0.5)",
+      "expected": {
+        "type": "number",
+        "value": 0.5235987755982989
+      }
+    },
+    {
+      "function": "ASIN",
+      "formula": "=ASIN(1)",
+      "expected": {
+        "type": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "function": "ASIN",
+      "formula": "=ASIN(-1)",
+      "expected": {
+        "type": "number",
+        "value": -1.5707963267948966
+      }
+    },
+    {
+      "function": "ASIN",
+      "formula": "=ASIN(2)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "ASIN",
+      "formula": "=ASIN(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "ASIN",
+      "formula": "=ASIN(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "ASIN",
+      "formula": "=ASIN(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "ASIN",
+      "formula": "=ASIN(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "ASIN",
+      "formula": "=ASIN(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "ATAN",
+      "formula": "=ATAN(1)",
+      "expected": {
+        "type": "number",
+        "value": 0.7853981633974483
+      }
+    },
+    {
+      "function": "ATAN",
+      "formula": "=ATAN(0)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "ATAN",
+      "formula": "=ATAN(-1)",
+      "expected": {
+        "type": "number",
+        "value": -0.7853981633974483
+      }
+    },
+    {
+      "function": "ATAN",
+      "formula": "=ATAN(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "ATAN",
+      "formula": "=ATAN(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "ATAN",
+      "formula": "=ATAN(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "ATAN",
+      "formula": "=ATAN(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "ATAN",
+      "formula": "=ATAN(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(1,1)",
+      "expected": {
+        "type": "number",
+        "value": 0.7853981633974483
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(-1,0)",
+      "expected": {
+        "type": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(0,-1)",
+      "expected": {
+        "type": "number",
+        "value": -1.5707963267948966
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(0,0)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(-1,-0)",
+      "native_formula": "=ATAN2(-1,0)",
+      "expected": {
+        "type": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(-1,-1E-300)",
+      "expected": {
+        "type": "number",
+        "value": -3.141592653589793
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(\"x\",2)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(#N/A,2)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(#VALUE!,2)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(#NUM!,2)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "ATAN2",
+      "formula": "=ATAN2(#DIV/0!,2)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "COS",
+      "formula": "=COS(1)",
+      "expected": {
+        "type": "number",
+        "value": 0.5403023058681398
+      }
+    },
+    {
+      "function": "COS",
+      "formula": "=COS(0)",
+      "expected": {
+        "type": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "function": "COS",
+      "formula": "=COS(-1)",
+      "expected": {
+        "type": "number",
+        "value": 0.5403023058681398
+      }
+    },
+    {
+      "function": "COS",
+      "formula": "=COS(134217727)",
+      "expected": {
+        "type": "number",
+        "value": -0.2933884035556727
+      }
+    },
+    {
+      "function": "COS",
+      "formula": "=COS(134217728)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "COS",
+      "formula": "=COS(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "COS",
+      "formula": "=COS(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "COS",
+      "formula": "=COS(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "COS",
+      "formula": "=COS(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "COS",
+      "formula": "=COS(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "SIN",
+      "formula": "=SIN(1)",
+      "expected": {
+        "type": "number",
+        "value": 0.8414709848078965
+      }
+    },
+    {
+      "function": "SIN",
+      "formula": "=SIN(0)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "SIN",
+      "formula": "=SIN(-1)",
+      "expected": {
+        "type": "number",
+        "value": -0.8414709848078965
+      }
+    },
+    {
+      "function": "SIN",
+      "formula": "=SIN(134217727)",
+      "expected": {
+        "type": "number",
+        "value": -0.9559933287732995
+      }
+    },
+    {
+      "function": "SIN",
+      "formula": "=SIN(134217728)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "SIN",
+      "formula": "=SIN(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "SIN",
+      "formula": "=SIN(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "SIN",
+      "formula": "=SIN(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "SIN",
+      "formula": "=SIN(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "SIN",
+      "formula": "=SIN(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "TAN",
+      "formula": "=TAN(1)",
+      "expected": {
+        "type": "number",
+        "value": 1.557407724654902
+      }
+    },
+    {
+      "function": "TAN",
+      "formula": "=TAN(0)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "TAN",
+      "formula": "=TAN(-1)",
+      "expected": {
+        "type": "number",
+        "value": -1.557407724654902
+      }
+    },
+    {
+      "function": "TAN",
+      "formula": "=TAN(134217727)",
+      "expected": {
+        "type": "number",
+        "value": 3.2584564256367834
+      }
+    },
+    {
+      "function": "TAN",
+      "formula": "=TAN(134217728)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "TAN",
+      "formula": "=TAN(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "TAN",
+      "formula": "=TAN(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "TAN",
+      "formula": "=TAN(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "TAN",
+      "formula": "=TAN(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "TAN",
+      "formula": "=TAN(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "DEGREES",
+      "formula": "=DEGREES(1)",
+      "expected": {
+        "type": "number",
+        "value": 57.29577951308232
+      }
+    },
+    {
+      "function": "DEGREES",
+      "formula": "=DEGREES(0)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "DEGREES",
+      "formula": "=DEGREES(-1)",
+      "expected": {
+        "type": "number",
+        "value": -57.29577951308232
+      }
+    },
+    {
+      "function": "DEGREES",
+      "formula": "=DEGREES(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "DEGREES",
+      "formula": "=DEGREES(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "DEGREES",
+      "formula": "=DEGREES(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "DEGREES",
+      "formula": "=DEGREES(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "DEGREES",
+      "formula": "=DEGREES(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "RADIANS",
+      "formula": "=RADIANS(180)",
+      "expected": {
+        "type": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "function": "RADIANS",
+      "formula": "=RADIANS(0)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "RADIANS",
+      "formula": "=RADIANS(-90)",
+      "expected": {
+        "type": "number",
+        "value": -1.5707963267948966
+      }
+    },
+    {
+      "function": "RADIANS",
+      "formula": "=RADIANS(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "RADIANS",
+      "formula": "=RADIANS(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "RADIANS",
+      "formula": "=RADIANS(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "RADIANS",
+      "formula": "=RADIANS(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "RADIANS",
+      "formula": "=RADIANS(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "PI",
+      "formula": "=PI()",
+      "expected": {
+        "type": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "function": "EXP",
+      "formula": "=EXP(1)",
+      "expected": {
+        "type": "number",
+        "value": 2.718281828459045
+      }
+    },
+    {
+      "function": "EXP",
+      "formula": "=EXP(0)",
+      "expected": {
+        "type": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "function": "EXP",
+      "formula": "=EXP(-1)",
+      "expected": {
+        "type": "number",
+        "value": 0.36787944117144233
+      }
+    },
+    {
+      "function": "EXP",
+      "formula": "=EXP(710)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "EXP",
+      "formula": "=EXP(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "EXP",
+      "formula": "=EXP(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "EXP",
+      "formula": "=EXP(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "EXP",
+      "formula": "=EXP(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "EXP",
+      "formula": "=EXP(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "LN",
+      "formula": "=LN(2)",
+      "expected": {
+        "type": "number",
+        "value": 0.6931471805599453
+      }
+    },
+    {
+      "function": "LN",
+      "formula": "=LN(1)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "LN",
+      "formula": "=LN(0)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "LN",
+      "formula": "=LN(-1)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "LN",
+      "formula": "=LN(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "LN",
+      "formula": "=LN(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "LN",
+      "formula": "=LN(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "LN",
+      "formula": "=LN(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "LN",
+      "formula": "=LN(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(100)",
+      "expected": {
+        "type": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(8,2)",
+      "expected": {
+        "type": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(1)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(0)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(1,0)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(2,1)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(1,-2)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(100,)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "LOG",
+      "formula": "=LOG(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "LOG10",
+      "formula": "=LOG10(100)",
+      "expected": {
+        "type": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "function": "LOG10",
+      "formula": "=LOG10(1)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "LOG10",
+      "formula": "=LOG10(0)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "LOG10",
+      "formula": "=LOG10(-1)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "LOG10",
+      "formula": "=LOG10(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "LOG10",
+      "formula": "=LOG10(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "LOG10",
+      "formula": "=LOG10(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "LOG10",
+      "formula": "=LOG10(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "LOG10",
+      "formula": "=LOG10(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(2.3,0.2)",
+      "expected": {
+        "type": "number",
+        "value": 2.4000000000000004
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(-2.3,0.2)",
+      "expected": {
+        "type": "number",
+        "value": -2.2
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(-2.3,-0.2)",
+      "expected": {
+        "type": "number",
+        "value": -2.4000000000000004
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(2.3,-0.2)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(0,0)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(2,0)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(0,-2)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(0.3,0.1)",
+      "expected": {
+        "type": "number",
+        "value": 0.30000000000000004
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(1E300,1E-100)",
+      "native_formula": "=CEILING(1E+300,1E-100)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(-1E300,1E-100)",
+      "native_formula": "=CEILING(-1E+300,1E-100)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(-1E300,-1E-100)",
+      "native_formula": "=CEILING(-1E+300,-1E-100)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(1E-300,1E100)",
+      "native_formula": "=CEILING(1E-300,1E+100)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(-1E-300,1E100)",
+      "native_formula": "=CEILING(-1E-300,1E+100)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(-1E-300,-1E100)",
+      "native_formula": "=CEILING(-1E-300,-1E+100)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(\"x\",2)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(#N/A,2)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(#VALUE!,2)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(#NUM!,2)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "CEILING",
+      "formula": "=CEILING(#DIV/0!,2)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(2.3,0.2)",
+      "expected": {
+        "type": "number",
+        "value": 2.2
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(-2.3,0.2)",
+      "expected": {
+        "type": "number",
+        "value": -2.4000000000000004
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(-2.3,-0.2)",
+      "expected": {
+        "type": "number",
+        "value": -2.2
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(2.3,-0.2)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(0,0)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(2,0)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(0,-2)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(0.3,0.1)",
+      "expected": {
+        "type": "number",
+        "value": 0.30000000000000004
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(1E300,1E-100)",
+      "native_formula": "=FLOOR(1E+300,1E-100)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(-1E300,1E-100)",
+      "native_formula": "=FLOOR(-1E+300,1E-100)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(-1E300,-1E-100)",
+      "native_formula": "=FLOOR(-1E+300,-1E-100)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(1E-300,1E100)",
+      "native_formula": "=FLOOR(1E-300,1E+100)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(-1E-300,1E100)",
+      "native_formula": "=FLOOR(-1E-300,1E+100)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(-1E-300,-1E100)",
+      "native_formula": "=FLOOR(-1E-300,-1E+100)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(\"x\",2)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(#N/A,2)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(#VALUE!,2)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(#NUM!,2)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "FLOOR",
+      "formula": "=FLOOR(#DIV/0!,2)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "TRUNC",
+      "formula": "=TRUNC(8.9)",
+      "expected": {
+        "type": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "function": "TRUNC",
+      "formula": "=TRUNC(-8.9)",
+      "expected": {
+        "type": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "function": "TRUNC",
+      "formula": "=TRUNC(1.239,2)",
+      "expected": {
+        "type": "number",
+        "value": 1.23
+      }
+    },
+    {
+      "function": "TRUNC",
+      "formula": "=TRUNC(123,-1)",
+      "expected": {
+        "type": "number",
+        "value": 120.0
+      }
+    },
+    {
+      "function": "TRUNC",
+      "formula": "=TRUNC(0,400)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "TRUNC",
+      "formula": "=TRUNC(1,400)",
+      "expected": {
+        "type": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "function": "TRUNC",
+      "formula": "=TRUNC(123,-400)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "TRUNC",
+      "formula": "=TRUNC(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "TRUNC",
+      "formula": "=TRUNC(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "TRUNC",
+      "formula": "=TRUNC(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "TRUNC",
+      "formula": "=TRUNC(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "TRUNC",
+      "formula": "=TRUNC(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT(2,3)",
+      "expected": {
+        "type": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT(A1:A6)",
+      "expected": {
+        "type": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT(TRUE,\"3\",2)",
+      "expected": {
+        "type": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT({2,TRUE,\"3\"})",
+      "expected": {
+        "type": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT(A4)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT(,5)",
+      "expected": {
+        "type": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT(0,5)",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT(9E307,2)",
+      "native_formula": "=PRODUCT(9E+307,2)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT(\"x\")",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT(#N/A)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT(#VALUE!)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT(#NUM!)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "PRODUCT",
+      "formula": "=PRODUCT(#DIV/0!)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "RAND",
+      "formula": "=AND(RAND()>=0,RAND()<1)",
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "RANDBETWEEN",
+      "formula": "=RANDBETWEEN(4,4)",
+      "expected": {
+        "type": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "function": "RANDBETWEEN",
+      "formula": "=RANDBETWEEN(1.1,1.9)",
+      "expected": {
+        "type": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "function": "RANDBETWEEN",
+      "formula": "=RANDBETWEEN(-2.9,-1.1)",
+      "expected": {
+        "type": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "function": "RANDBETWEEN",
+      "formula": "=RANDBETWEEN(2,1)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "RANDBETWEEN",
+      "formula": "=AND(RANDBETWEEN(-2,2)>=-2,RANDBETWEEN(-2,2)<=2)",
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "RANDBETWEEN",
+      "formula": "=RANDBETWEEN(\"x\",2)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "RANDBETWEEN",
+      "formula": "=RANDBETWEEN(#N/A,2)",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "RANDBETWEEN",
+      "formula": "=RANDBETWEEN(#VALUE!,2)",
+      "expected": {
+        "type": "error",
+        "value": "#VALUE!"
+      }
+    },
+    {
+      "function": "RANDBETWEEN",
+      "formula": "=RANDBETWEEN(#NUM!,2)",
+      "expected": {
+        "type": "error",
+        "value": "#NUM!"
+      }
+    },
+    {
+      "function": "RANDBETWEEN",
+      "formula": "=RANDBETWEEN(#DIV/0!,2)",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=ISBLANK(A4)",
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=ISBLANK(0)",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=ISBLANK(\"\")",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=ISBLANK(#N/A)",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=SUM(--ISBLANK(A1:A4))",
+      "expected": {
+        "type": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=SUM(--ISBLANK({1,\"\";TRUE,#N/A}))",
+      "expected": {
+        "type": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=ISERROR(#N/A)",
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=ISERROR(1/0)",
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=ISERROR(\"#N/A\")",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=ISERROR(A4)",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=SUM(--ISERROR({1,#N/A;#VALUE!,#REF!}))",
+      "expected": {
+        "type": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=ISNA(#N/A)",
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=ISNA(#NUM!)",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=ISNA(\"#N/A\")",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=ISNA(A4)",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=SUM(--ISNA({#N/A,1;#DIV/0!,#N/A}))",
+      "expected": {
+        "type": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=ISNUMBER(1)",
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=ISNUMBER(\"1\")",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=ISNUMBER(TRUE)",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=ISNUMBER(A4)",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=ISNUMBER(#N/A)",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=SUM(--ISNUMBER(A1:A4))",
+      "expected": {
+        "type": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=ISTEXT(\"x\")",
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=ISTEXT(\"\")",
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=ISTEXT(1)",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=ISTEXT(TRUE)",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=ISTEXT(A4)",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=ISTEXT(#N/A)",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=SUM(--ISTEXT(A1:A4))",
+      "expected": {
+        "type": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "function": "NA",
+      "formula": "=NA()",
+      "expected": {
+        "type": "error",
+        "value": "#N/A"
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=INDEX(ISBLANK({1,\"\";TRUE,#N/A}),1,1)",
+      "array_formula": "=ISBLANK({1,\"\";TRUE,#N/A})",
+      "row": 1,
+      "column": 1,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=INDEX(ISBLANK({1,\"\";TRUE,#N/A}),1,2)",
+      "array_formula": "=ISBLANK({1,\"\";TRUE,#N/A})",
+      "row": 1,
+      "column": 2,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=INDEX(ISBLANK({1,\"\";TRUE,#N/A}),2,1)",
+      "array_formula": "=ISBLANK({1,\"\";TRUE,#N/A})",
+      "row": 2,
+      "column": 1,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=INDEX(ISBLANK({1,\"\";TRUE,#N/A}),2,2)",
+      "array_formula": "=ISBLANK({1,\"\";TRUE,#N/A})",
+      "row": 2,
+      "column": 2,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=INDEX(ISBLANK(A1:A4),1,1)",
+      "array_formula": "=ISBLANK(A1:A4)",
+      "row": 1,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=INDEX(ISBLANK(A1:A4),2,1)",
+      "array_formula": "=ISBLANK(A1:A4)",
+      "row": 2,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=INDEX(ISBLANK(A1:A4),3,1)",
+      "array_formula": "=ISBLANK(A1:A4)",
+      "row": 3,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISBLANK",
+      "formula": "=INDEX(ISBLANK(A1:A4),4,1)",
+      "array_formula": "=ISBLANK(A1:A4)",
+      "row": 4,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=INDEX(ISERROR({1,\"\";TRUE,#N/A}),1,1)",
+      "array_formula": "=ISERROR({1,\"\";TRUE,#N/A})",
+      "row": 1,
+      "column": 1,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=INDEX(ISERROR({1,\"\";TRUE,#N/A}),1,2)",
+      "array_formula": "=ISERROR({1,\"\";TRUE,#N/A})",
+      "row": 1,
+      "column": 2,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=INDEX(ISERROR({1,\"\";TRUE,#N/A}),2,1)",
+      "array_formula": "=ISERROR({1,\"\";TRUE,#N/A})",
+      "row": 2,
+      "column": 1,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=INDEX(ISERROR({1,\"\";TRUE,#N/A}),2,2)",
+      "array_formula": "=ISERROR({1,\"\";TRUE,#N/A})",
+      "row": 2,
+      "column": 2,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=INDEX(ISERROR(A1:A4),1,1)",
+      "array_formula": "=ISERROR(A1:A4)",
+      "row": 1,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=INDEX(ISERROR(A1:A4),2,1)",
+      "array_formula": "=ISERROR(A1:A4)",
+      "row": 2,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=INDEX(ISERROR(A1:A4),3,1)",
+      "array_formula": "=ISERROR(A1:A4)",
+      "row": 3,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISERROR",
+      "formula": "=INDEX(ISERROR(A1:A4),4,1)",
+      "array_formula": "=ISERROR(A1:A4)",
+      "row": 4,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=INDEX(ISNA({1,\"\";TRUE,#N/A}),1,1)",
+      "array_formula": "=ISNA({1,\"\";TRUE,#N/A})",
+      "row": 1,
+      "column": 1,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=INDEX(ISNA({1,\"\";TRUE,#N/A}),1,2)",
+      "array_formula": "=ISNA({1,\"\";TRUE,#N/A})",
+      "row": 1,
+      "column": 2,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=INDEX(ISNA({1,\"\";TRUE,#N/A}),2,1)",
+      "array_formula": "=ISNA({1,\"\";TRUE,#N/A})",
+      "row": 2,
+      "column": 1,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=INDEX(ISNA({1,\"\";TRUE,#N/A}),2,2)",
+      "array_formula": "=ISNA({1,\"\";TRUE,#N/A})",
+      "row": 2,
+      "column": 2,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=INDEX(ISNA(A1:A4),1,1)",
+      "array_formula": "=ISNA(A1:A4)",
+      "row": 1,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=INDEX(ISNA(A1:A4),2,1)",
+      "array_formula": "=ISNA(A1:A4)",
+      "row": 2,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=INDEX(ISNA(A1:A4),3,1)",
+      "array_formula": "=ISNA(A1:A4)",
+      "row": 3,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNA",
+      "formula": "=INDEX(ISNA(A1:A4),4,1)",
+      "array_formula": "=ISNA(A1:A4)",
+      "row": 4,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=INDEX(ISNUMBER({1,\"\";TRUE,#N/A}),1,1)",
+      "array_formula": "=ISNUMBER({1,\"\";TRUE,#N/A})",
+      "row": 1,
+      "column": 1,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=INDEX(ISNUMBER({1,\"\";TRUE,#N/A}),1,2)",
+      "array_formula": "=ISNUMBER({1,\"\";TRUE,#N/A})",
+      "row": 1,
+      "column": 2,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=INDEX(ISNUMBER({1,\"\";TRUE,#N/A}),2,1)",
+      "array_formula": "=ISNUMBER({1,\"\";TRUE,#N/A})",
+      "row": 2,
+      "column": 1,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=INDEX(ISNUMBER({1,\"\";TRUE,#N/A}),2,2)",
+      "array_formula": "=ISNUMBER({1,\"\";TRUE,#N/A})",
+      "row": 2,
+      "column": 2,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=INDEX(ISNUMBER(A1:A4),1,1)",
+      "array_formula": "=ISNUMBER(A1:A4)",
+      "row": 1,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=INDEX(ISNUMBER(A1:A4),2,1)",
+      "array_formula": "=ISNUMBER(A1:A4)",
+      "row": 2,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=INDEX(ISNUMBER(A1:A4),3,1)",
+      "array_formula": "=ISNUMBER(A1:A4)",
+      "row": 3,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISNUMBER",
+      "formula": "=INDEX(ISNUMBER(A1:A4),4,1)",
+      "array_formula": "=ISNUMBER(A1:A4)",
+      "row": 4,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=INDEX(ISTEXT({1,\"\";TRUE,#N/A}),1,1)",
+      "array_formula": "=ISTEXT({1,\"\";TRUE,#N/A})",
+      "row": 1,
+      "column": 1,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=INDEX(ISTEXT({1,\"\";TRUE,#N/A}),1,2)",
+      "array_formula": "=ISTEXT({1,\"\";TRUE,#N/A})",
+      "row": 1,
+      "column": 2,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=INDEX(ISTEXT({1,\"\";TRUE,#N/A}),2,1)",
+      "array_formula": "=ISTEXT({1,\"\";TRUE,#N/A})",
+      "row": 2,
+      "column": 1,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=INDEX(ISTEXT({1,\"\";TRUE,#N/A}),2,2)",
+      "array_formula": "=ISTEXT({1,\"\";TRUE,#N/A})",
+      "row": 2,
+      "column": 2,
+      "rows": 2,
+      "columns": 2,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=INDEX(ISTEXT(A1:A4),1,1)",
+      "array_formula": "=ISTEXT(A1:A4)",
+      "row": 1,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=INDEX(ISTEXT(A1:A4),2,1)",
+      "array_formula": "=ISTEXT(A1:A4)",
+      "row": 2,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": true
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=INDEX(ISTEXT(A1:A4),3,1)",
+      "array_formula": "=ISTEXT(A1:A4)",
+      "row": 3,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    {
+      "function": "ISTEXT",
+      "formula": "=INDEX(ISTEXT(A1:A4),4,1)",
+      "array_formula": "=ISTEXT(A1:A4)",
+      "row": 4,
+      "column": 1,
+      "rows": 4,
+      "columns": 1,
+      "expected": {
+        "type": "boolean",
+        "value": false
+      }
+    }
+  ]
+}

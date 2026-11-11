@@ -4,123 +4,150 @@
 use assert_cmd::Command;
 use serde_json::{json, Value};
 
-/// The built-in evaluator's registry, sorted by name.
-const REGISTRY: [(&str, &str); 107] = [
-    ("ABS", "math"),
-    ("AND", "logical"),
-    ("AVERAGE", "statistical"),
-    ("AVERAGEIF", "statistical"),
-    ("AVERAGEIFS", "statistical"),
-    ("CHOOSE", "lookup"),
-    ("CONCAT", "text"),
-    ("CONCATENATE", "text"),
-    ("COUNT", "statistical"),
-    ("COUNTA", "statistical"),
-    ("COUNTBLANK", "statistical"),
-    ("COUNTIF", "statistical"),
-    ("COUNTIFS", "statistical"),
-    ("DATE", "date"),
-    ("DAY", "date"),
-    ("DAYS", "date"),
-    ("DB", "financial"),
-    ("EDATE", "date"),
-    ("EOMONTH", "date"),
-    ("EXACT", "text"),
-    ("FILTER", "lookup"),
-    ("FIND", "text"),
-    ("FV", "financial"),
-    ("HLOOKUP", "lookup"),
-    ("HOUR", "date"),
-    ("IF", "logical"),
-    ("IFERROR", "logical"),
-    ("IFNA", "logical"),
-    ("IFS", "logical"),
-    ("INDEX", "lookup"),
-    ("INT", "math"),
-    ("IRR", "financial"),
-    ("LARGE", "statistical"),
-    ("LEFT", "text"),
-    ("LEN", "text"),
-    ("LOWER", "text"),
-    ("MATCH", "lookup"),
-    ("MAX", "statistical"),
-    ("MAXIFS", "statistical"),
-    ("MEDIAN", "statistical"),
-    ("MID", "text"),
-    ("MIN", "statistical"),
-    ("MINIFS", "statistical"),
-    ("MINUTE", "date"),
-    ("MOD", "math"),
-    ("MODE", "statistical"),
-    ("MODE.SNGL", "statistical"),
-    ("MONTH", "date"),
-    ("NETWORKDAYS", "date"),
-    ("NOT", "logical"),
-    ("NOW", "date"),
-    ("NPER", "financial"),
-    ("NPV", "financial"),
-    ("OFFSET", "lookup"),
-    ("OR", "logical"),
-    ("PERCENTILE", "statistical"),
-    ("PERCENTILE.EXC", "statistical"),
-    ("PERCENTILE.INC", "statistical"),
-    ("PMT", "financial"),
-    ("POWER", "math"),
-    ("PV", "financial"),
-    ("QUARTILE", "statistical"),
-    ("QUARTILE.EXC", "statistical"),
-    ("QUARTILE.INC", "statistical"),
-    ("RANK", "statistical"),
-    ("RANK.AVG", "statistical"),
-    ("RANK.EQ", "statistical"),
-    ("RATE", "financial"),
-    ("REPT", "text"),
-    ("RIGHT", "text"),
-    ("ROUND", "math"),
-    ("ROUNDDOWN", "math"),
-    ("ROUNDUP", "math"),
-    ("SECOND", "date"),
-    ("SIGN", "math"),
-    ("SLN", "financial"),
-    ("SMALL", "statistical"),
-    ("SORT", "lookup"),
-    ("SQRT", "math"),
-    ("STDEV", "statistical"),
-    ("STDEV.P", "statistical"),
-    ("STDEV.S", "statistical"),
-    ("STDEVP", "statistical"),
-    ("SUBSTITUTE", "text"),
-    ("SUBTOTAL", "math"),
-    ("SUM", "math"),
-    ("SUMIF", "math"),
-    ("SUMIFS", "math"),
-    ("SUMPRODUCT", "math"),
-    ("SWITCH", "logical"),
-    ("TEXT", "text"),
-    ("TEXTJOIN", "text"),
-    ("TODAY", "date"),
-    ("TRIM", "text"),
-    ("UNIQUE", "lookup"),
-    ("UPPER", "text"),
-    ("VALUE", "text"),
-    ("VAR", "statistical"),
-    ("VAR.P", "statistical"),
-    ("VAR.S", "statistical"),
-    ("VARP", "statistical"),
-    ("VLOOKUP", "lookup"),
-    ("WORKDAY", "date"),
-    ("XIRR", "financial"),
-    ("XLOOKUP", "lookup"),
-    ("XNPV", "financial"),
-    ("YEAR", "date"),
+/// The built-in evaluator's registry as `(name, category, volatile)`, sorted
+/// by name.
+const REGISTRY: [(&str, &str, bool); 133] = [
+    ("ABS", "math", false),
+    ("ACOS", "math", false),
+    ("AND", "logical", false),
+    ("ASIN", "math", false),
+    ("ATAN", "math", false),
+    ("ATAN2", "math", false),
+    ("AVERAGE", "statistical", false),
+    ("AVERAGEIF", "statistical", false),
+    ("AVERAGEIFS", "statistical", false),
+    ("CEILING", "math", false),
+    ("CHOOSE", "lookup", false),
+    ("CONCAT", "text", false),
+    ("CONCATENATE", "text", false),
+    ("COS", "math", false),
+    ("COUNT", "statistical", false),
+    ("COUNTA", "statistical", false),
+    ("COUNTBLANK", "statistical", false),
+    ("COUNTIF", "statistical", false),
+    ("COUNTIFS", "statistical", false),
+    ("DATE", "date", false),
+    ("DAY", "date", false),
+    ("DAYS", "date", false),
+    ("DB", "financial", false),
+    ("DEGREES", "math", false),
+    ("EDATE", "date", false),
+    ("EOMONTH", "date", false),
+    ("EXACT", "text", false),
+    ("EXP", "math", false),
+    ("FILTER", "lookup", false),
+    ("FIND", "text", false),
+    ("FLOOR", "math", false),
+    ("FV", "financial", false),
+    ("HLOOKUP", "lookup", false),
+    ("HOUR", "date", false),
+    ("IF", "logical", false),
+    ("IFERROR", "logical", false),
+    ("IFNA", "logical", false),
+    ("IFS", "logical", false),
+    ("INDEX", "lookup", false),
+    ("INT", "math", false),
+    ("IRR", "financial", false),
+    ("ISBLANK", "information", false),
+    ("ISERROR", "information", false),
+    ("ISNA", "information", false),
+    ("ISNUMBER", "information", false),
+    ("ISTEXT", "information", false),
+    ("LARGE", "statistical", false),
+    ("LEFT", "text", false),
+    ("LEN", "text", false),
+    ("LN", "math", false),
+    ("LOG", "math", false),
+    ("LOG10", "math", false),
+    ("LOWER", "text", false),
+    ("MATCH", "lookup", false),
+    ("MAX", "statistical", false),
+    ("MAXIFS", "statistical", false),
+    ("MEDIAN", "statistical", false),
+    ("MID", "text", false),
+    ("MIN", "statistical", false),
+    ("MINIFS", "statistical", false),
+    ("MINUTE", "date", false),
+    ("MOD", "math", false),
+    ("MODE", "statistical", false),
+    ("MODE.SNGL", "statistical", false),
+    ("MONTH", "date", false),
+    ("NA", "information", false),
+    ("NETWORKDAYS", "date", false),
+    ("NOT", "logical", false),
+    ("NOW", "date", true),
+    ("NPER", "financial", false),
+    ("NPV", "financial", false),
+    ("OFFSET", "lookup", true),
+    ("OR", "logical", false),
+    ("PERCENTILE", "statistical", false),
+    ("PERCENTILE.EXC", "statistical", false),
+    ("PERCENTILE.INC", "statistical", false),
+    ("PI", "math", false),
+    ("PMT", "financial", false),
+    ("POWER", "math", false),
+    ("PRODUCT", "math", false),
+    ("PV", "financial", false),
+    ("QUARTILE", "statistical", false),
+    ("QUARTILE.EXC", "statistical", false),
+    ("QUARTILE.INC", "statistical", false),
+    ("RADIANS", "math", false),
+    ("RAND", "math", true),
+    ("RANDBETWEEN", "math", true),
+    ("RANK", "statistical", false),
+    ("RANK.AVG", "statistical", false),
+    ("RANK.EQ", "statistical", false),
+    ("RATE", "financial", false),
+    ("REPT", "text", false),
+    ("RIGHT", "text", false),
+    ("ROUND", "math", false),
+    ("ROUNDDOWN", "math", false),
+    ("ROUNDUP", "math", false),
+    ("SECOND", "date", false),
+    ("SIGN", "math", false),
+    ("SIN", "math", false),
+    ("SLN", "financial", false),
+    ("SMALL", "statistical", false),
+    ("SORT", "lookup", false),
+    ("SQRT", "math", false),
+    ("STDEV", "statistical", false),
+    ("STDEV.P", "statistical", false),
+    ("STDEV.S", "statistical", false),
+    ("STDEVP", "statistical", false),
+    ("SUBSTITUTE", "text", false),
+    ("SUBTOTAL", "math", false),
+    ("SUM", "math", false),
+    ("SUMIF", "math", false),
+    ("SUMIFS", "math", false),
+    ("SUMPRODUCT", "math", false),
+    ("SWITCH", "logical", false),
+    ("TAN", "math", false),
+    ("TEXT", "text", false),
+    ("TEXTJOIN", "text", false),
+    ("TODAY", "date", true),
+    ("TRIM", "text", false),
+    ("TRUNC", "math", false),
+    ("UNIQUE", "lookup", false),
+    ("UPPER", "text", false),
+    ("VALUE", "text", false),
+    ("VAR", "statistical", false),
+    ("VAR.P", "statistical", false),
+    ("VAR.S", "statistical", false),
+    ("VARP", "statistical", false),
+    ("VLOOKUP", "lookup", false),
+    ("WORKDAY", "date", false),
+    ("XIRR", "financial", false),
+    ("XLOOKUP", "lookup", false),
+    ("XNPV", "financial", false),
+    ("YEAR", "date", false),
 ];
 
 /// The registry names in `category`, in listing order.
 fn in_category(category: &str) -> Vec<&'static str> {
     REGISTRY
         .iter()
-        .filter(|(_, listed)| *listed == category)
-        .map(|(name, _)| *name)
+        .filter(|(_, listed, _)| *listed == category)
+        .map(|(name, _, _)| *name)
         .collect()
 }
 
@@ -153,8 +180,8 @@ fn json(args: &[&str]) -> Value {
     json_with_code(args, 0)
 }
 
-/// `(name, category)` pairs of a listing document.
-fn entries(document: &Value) -> Vec<(String, String)> {
+/// `(name, category, volatile)` triples of a listing document.
+fn entries(document: &Value) -> Vec<(String, String, bool)> {
     document["functions"]
         .as_array()
         .expect("functions array")
@@ -163,6 +190,7 @@ fn entries(document: &Value) -> Vec<(String, String)> {
             (
                 entry["name"].as_str().expect("name").to_owned(),
                 entry["category"].as_str().expect("category").to_owned(),
+                entry["volatile"].as_bool().expect("volatile"),
             )
         })
         .collect()
@@ -171,7 +199,7 @@ fn entries(document: &Value) -> Vec<(String, String)> {
 fn names(document: &Value) -> Vec<String> {
     entries(document)
         .into_iter()
-        .map(|(name, _)| name)
+        .map(|(name, _, _)| name)
         .collect()
 }
 
@@ -212,9 +240,9 @@ fn full_listing_counts_and_sorts_the_whole_registry() {
         listed.windows(2).all(|pair| pair[0].0 < pair[1].0),
         "names are sorted and unique"
     );
-    let expected: Vec<(String, String)> = REGISTRY
+    let expected: Vec<(String, String, bool)> = REGISTRY
         .iter()
-        .map(|(name, category)| ((*name).to_owned(), (*category).to_owned()))
+        .map(|(name, category, volatile)| ((*name).to_owned(), (*category).to_owned(), *volatile))
         .collect();
     assert_eq!(listed, expected);
     assert_eq!(document["category"], Value::Null);
@@ -227,14 +255,14 @@ fn text_listing_aligns_names_and_ends_with_the_count() {
     assert_eq!(run.code, 0, "stderr={}", run.stderr);
     let mut expected: String = REGISTRY
         .iter()
-        .map(|(name, category)| format!("{name:<14}  {category}\n"))
+        .map(|(name, category, _)| format!("{name:<14}  {category}\n"))
         .collect();
-    expected.push_str("107 functions\n");
+    expected.push_str("133 functions\n");
     assert_eq!(run.stdout, expected);
     assert!(run.stdout.starts_with(
         "ABS             math\n\
-         AND             logical\n\
-         AVERAGE         statistical\n"
+         ACOS            math\n\
+         AND             logical\n"
     ));
     assert!(run.stderr.is_empty(), "stderr={}", run.stderr);
 }
@@ -249,33 +277,54 @@ fn category_filter_ignores_case() {
     assert_eq!(lower["category"], "math");
     assert_eq!(upper["category"], "math");
     let listed = entries(&lower);
-    assert!(listed.iter().all(|(_, category)| category == "math"));
+    assert!(listed.iter().all(|(_, category, _)| category == "math"));
     assert_eq!(
         names(&lower),
         [
             "ABS",
+            "ACOS",
+            "ASIN",
+            "ATAN",
+            "ATAN2",
+            "CEILING",
+            "COS",
+            "DEGREES",
+            "EXP",
+            "FLOOR",
             "INT",
+            "LN",
+            "LOG",
+            "LOG10",
             "MOD",
+            "PI",
             "POWER",
+            "PRODUCT",
+            "RADIANS",
+            "RAND",
+            "RANDBETWEEN",
             "ROUND",
             "ROUNDDOWN",
             "ROUNDUP",
             "SIGN",
+            "SIN",
             "SQRT",
             "SUBTOTAL",
             "SUM",
             "SUMIF",
             "SUMIFS",
-            "SUMPRODUCT"
+            "SUMPRODUCT",
+            "TAN",
+            "TRUNC"
         ]
     );
-    assert_eq!(lower["count"], 14);
+    assert_eq!(lower["count"], 34);
     assert_eq!(total(&lower), REGISTRY.len());
     assert_eq!(lower["search"], Value::Null);
 
     for category in [
         "date",
         "financial",
+        "information",
         "logical",
         "lookup",
         "statistical",
@@ -297,7 +346,7 @@ fn category_filter_ignores_case() {
 
 #[test]
 fn unknown_category_exits_2_and_names_the_valid_ones() {
-    let expected = "unknown category \"astrology\"; valid categories: date, financial, logical, lookup, math, statistical, text";
+    let expected = "unknown category \"astrology\"; valid categories: date, financial, information, logical, lookup, math, statistical, text";
     for args in [
         &["--category", "astrology"][..],
         &["--category", "astrology", "--json"][..],
@@ -361,7 +410,21 @@ fn search_matches_a_case_insensitive_substring() {
 #[test]
 fn category_and_search_combine() {
     let document = json(&["--category", "math", "--search", "a"]);
-    assert_eq!(names(&document), ["ABS", "SUBTOTAL"]);
+    assert_eq!(
+        names(&document),
+        [
+            "ABS",
+            "ACOS",
+            "ASIN",
+            "ATAN",
+            "ATAN2",
+            "RADIANS",
+            "RAND",
+            "RANDBETWEEN",
+            "SUBTOTAL",
+            "TAN"
+        ]
+    );
     assert_eq!(document["category"], "math");
     assert_eq!(document["search"], "a");
 
@@ -457,7 +520,7 @@ fn every_listed_function_checks_as_supported() {
     let document = json(&["--check", joined.as_str()]);
     assert_eq!(document["checked"], listed.len());
     assert_eq!(document["supported"], listed.len());
-    for (result, (name, category)) in document["results"]
+    for (result, (name, category, _)) in document["results"]
         .as_array()
         .expect("results array")
         .iter()
