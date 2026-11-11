@@ -34,7 +34,7 @@ Add that directory to your `PATH` if prompted. The Unix installer requires
 `curl`, `tar`, and `sha256sum` or `shasum`. Windows requires PowerShell 5.1 or
 newer.
 
-Set `WOLFXL_VERSION` to a CLI version, such as `0.11.1`, to pin the download
+Set `WOLFXL_VERSION` to a CLI version, such as `0.11.2`, to pin the download
 and skip version discovery. Set `WOLFXL_INSTALL_DIR` to choose a different
 destination. For a release mirror, `WOLFXL_RELEASE_BASE_URL` overrides
 `https://github.com/SynthGL/wolfxl-oss/releases/download`; the mirror must serve

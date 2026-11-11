@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 2.0.37 - 2026-11-11
+
 ### Added
 
 - `calc` and `peek --add` gain 26 native-Excel-backed math and information
@@ -133,7 +135,7 @@
 
 ### Changed
 
-- Bumped `wolfxl-cli` to `0.11.1`.
+- Bumped `wolfxl-cli` to `0.11.2` and `wolfxl-edit` to `0.1.1`.
 - Updated the CLI to use `wolfxl-core` 0.9.0 and the MIT reader crates.
 - Preserve exact CSV/TSV header names when resolving pivot fields, matching
   the existing filters, selectors, keyed diffs, and column profiles.
