@@ -4,6 +4,12 @@
 
 ### Added
 
+- Generate a text-redacted diagnostic ZIP with `python -m wolfxl.report FILE`
+  and attach it using the new "Workbook fails to load" issue form. Reports include
+  bounded package inventories, part sizes, standard element counts, XML skeletons,
+  sanitized stack traces and versions, without cell values, shared strings,
+  formulas, attribute values or binary contents. Review structure and sizes before
+  publishing. Existing output files are never overwritten.
 - `wolfxl-cli` 0.10.0 adds analyst commands backed by `wolfxl-core` 0.9.0
   and the new MIT `wolfxl-reader`, `wolfxl-formula`, and `wolfxl-rels` crates.
   `wolfxl-cli` 0.11.0 adds the full formula function set, the `wolfxl mcp`

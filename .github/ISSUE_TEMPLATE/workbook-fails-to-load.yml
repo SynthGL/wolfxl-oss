@@ -1,0 +1,48 @@
+name: Workbook fails to load
+description: Report an Excel workbook that WolfXL cannot load.
+title: "[Load failure]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Generate a diagnostic bundle in a writable directory:
+
+        `python -m wolfxl.report "workbook.xlsx"`
+
+        Use `--output new-report.zip` to choose another destination. Existing files
+        are never overwritten. Attach `workbook-report.zip` below after reviewing it.
+        No original workbook is required.
+
+        All XML text and attribute values, including cells, shared strings, formulas,
+        sheet names and relationship targets, are omitted. Binary contents, custom
+        part names, custom element names, exception messages and local paths are
+        omitted too. Package structure, part sizes, standard element counts, redacted
+        XML skeletons, stack locations and versions remain for diagnosis.
+
+        Bounded inspection may skip loading or omit a malformed part's skeleton.
+        The bundle is diagnostic data and cannot reproduce every content-dependent
+        failure. Review it before publishing; structure and sizes may be sensitive.
+        Do not attach confidential originals. For security issues, follow SECURITY.md.
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction and error
+      description: Include the call that failed and a sanitized error description.
+      placeholder: "wolfxl.load_workbook(...)"
+    validations:
+      required: true
+  - type: textarea
+    id: bundle
+    attributes:
+      label: Redacted diagnostic bundle
+      description: Attach the reviewed ZIP, or explain why it cannot be shared.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: WolfXL version, Python version, operating system and workbook producer.
+    validations:
+      required: true
